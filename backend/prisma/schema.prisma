@@ -1,11 +1,10 @@
-// Seasonedz Group backend — Prisma schema (Version 2, Milestone 10).
+// Seasonedz Group backend — Prisma schema (Version 2).
 //
-// SCHEMA DESIGN ONLY. No migrations have been run against a real
-// database, and none are run by this milestone — DATABASE_URL is
-// empty in local .env and no local Postgres instance is assumed to
-// exist. See backend/DATABASE_SCHEMA_PLAN.md for the full design
-// rationale (why order data is "snapshotted", how guest checkout maps
-// onto Customer/Order, how future PayFast/courier/auth plug in, etc).
+// Schema designed in Milestone 10; migrated against a real Postgres
+// (Supabase) database and seeded with starter data in Milestone 11.
+// See backend/DATABASE_SCHEMA_PLAN.md for the full design rationale
+// (why order data is "snapshotted", how guest checkout maps onto
+// Customer/Order, how future PayFast/courier/auth plug in, etc).
 //
 // Nothing here is wired up to the API yet — no routes, no controllers,
 // no frontend connection. That's later milestones.
@@ -15,8 +14,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================================================

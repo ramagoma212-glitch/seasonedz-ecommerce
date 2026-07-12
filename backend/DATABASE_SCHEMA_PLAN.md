@@ -1,12 +1,15 @@
-# Database Schema Plan (Version 2, Milestone 10)
+# Database Schema Plan (Version 2, Milestones 10-11)
 
 This document explains the design behind `backend/prisma/schema.prisma`
 — the reasoning, not just the field list. The schema itself is the
 source of truth for exact types/constraints; read this alongside it.
 
-**Status: schema design only.** Nothing in this document or the
-schema file is connected to a real database, an API route, or the
-frontend. No migrations have been run.
+**Status: schema migrated and seeded (Milestone 11).** The schema was
+designed in Milestone 10 and, as of Milestone 11, has been migrated
+against a real PostgreSQL database (hosted on Supabase) and seeded
+with a starter catalogue (6 categories, 10 products) mirroring the
+frontend's existing sample data. Nothing is connected to an API route
+or the frontend yet — see "What Is Not Built Yet" below.
 
 ---
 
@@ -131,11 +134,11 @@ demo message for a real POST request — no schema redesign needed.
 
 ## What Is Not Built Yet
 
-This milestone is schema design only. None of the following exist:
+The database itself is real as of Milestone 11 (migrated and seeded),
+but none of the following exist yet:
 
-- Any API route or controller that reads/writes these models.
-- Any database connection (`DATABASE_URL` is empty; no migrations
-  have been run).
+- Any API route or controller that reads/writes these models — the
+  Express app still only exposes `/api/health`.
 - Any connection from the frontend to the backend at all — the
   frontend continues to run entirely on its own static data and Local
   Storage, unaffected.
@@ -149,3 +152,23 @@ This milestone is schema design only. None of the following exist:
   reviews exist, but the reviews themselves (a future `Review` model
   with `productId`/`customerId`/`rating`/`comment`) are intentionally
   out of scope for this milestone.
+
+## Migration and Seed Data (Milestone 11)
+
+The schema is now applied to a real PostgreSQL database hosted on
+Supabase, via `npx prisma migrate dev` — the generated SQL lives in
+`backend/prisma/migrations/`. Supabase's pooled connection (used by
+the app at runtime, `DATABASE_URL`) doesn't support the DDL statements
+migrations need, so the schema's `datasource` block also sets
+`directUrl` from a second env var, `DIRECT_URL` (Supabase's direct,
+non-pooled connection) — Prisma uses `directUrl` automatically for
+migrations and `url` for everything else.
+
+`backend/prisma/seed.ts` populates a starter catalogue — 6 categories
+and 10 products — mirroring the sample data already shown on the
+frontend (`src/data/categories.js` / `src/data/products.js`), so the
+two stay conceptually in sync even though the frontend doesn't read
+from this database. It's re-runnable safely: categories and products
+are upserted by slug, tags are connected via `connectOrCreate`, and
+each product's images are replaced (not duplicated) on every run. Run
+it with `npm run seed` from `backend/`.

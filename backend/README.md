@@ -1,22 +1,23 @@
-# Seasonedz Group — Backend (Version 2 Foundation)
+# Seasonedz Group — Backend (Version 2)
 
-This is the backend API for the Seasonedz Group e-commerce website —
-currently the **foundational setup only**. It runs as a separate
-project alongside the existing frontend (see the root `README.md` for
-the frontend), with its own `package.json`, its own dependencies, and
-its own dev server.
+This is the backend API for the Seasonedz Group e-commerce website. It
+runs as a separate project alongside the existing frontend (see the
+root `README.md` for the frontend), with its own `package.json`, its
+own dependencies, and its own dev server.
 
-**Current status: foundation only.** There is no database connection,
-no real data models, no product/order APIs, and nothing here is
-connected to the frontend yet. The only working endpoint is a health
-check. See "What's Coming Later" below.
+**Current status: database schema migrated and seeded, no API routes
+yet.** A real PostgreSQL database (hosted on Supabase) now exists and
+holds a starter catalogue (6 categories, 10 products), but there are
+still no product/order API routes, and nothing here is connected to
+the frontend yet. The only working HTTP endpoint is a health check.
+See "What's Coming Later" below.
 
 ## Tech Stack
 
 - Node.js + Express
 - TypeScript (ES Modules, `NodeNext` module resolution)
-- Prisma installed and configured, planned for PostgreSQL — **no
-  models defined yet, no database connection made**
+- Prisma + PostgreSQL (hosted on Supabase) — schema migrated, seeded
+  with starter data, **no API routes built on top of it yet**
 
 ## Installing Dependencies
 
@@ -29,14 +30,23 @@ npm install
 
 ## Running Locally
 
-1. Copy the example environment file and adjust if needed (the
-   defaults work out of the box for local development):
+1. Copy the example environment file and fill in real values (a real
+   `DATABASE_URL`/`DIRECT_URL` are required from Milestone 11 onward —
+   see "Environment Variables" below):
 
    ```bash
    cp .env.example .env
    ```
 
-2. Start the dev server (auto-restarts on file changes):
+2. Apply the schema and seed starter data (only needed once, or after
+   a schema change):
+
+   ```bash
+   npx prisma migrate dev
+   npm run seed
+   ```
+
+3. Start the dev server (auto-restarts on file changes):
 
    ```bash
    npm run dev
@@ -50,6 +60,7 @@ npm install
 npm run build   # Compile TypeScript to dist/
 npm run start   # Run the compiled build (node dist/server.js)
 npm run lint    # Type-check without emitting (tsc --noEmit)
+npm run seed    # Re-run prisma/seed.ts (safe to re-run — upserts by slug)
 ```
 
 `lint` is a type-check rather than a full ESLint setup for now — kept
@@ -58,17 +69,21 @@ config can be added later without changing this script's name.
 
 ## Environment Variables
 
-Defined in `.env.example` (copy to `.env` for local use — `.env` is
-git-ignored and must never be committed):
+Defined in `.env.example` (copy to `.env` for local use, then fill in
+real values — `.env` is git-ignored and must never be committed):
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `NODE_ENV` | `development` or `production` | `development` |
 | `PORT` | Port the API listens on | `5000` |
-| `DATABASE_URL` | PostgreSQL connection string | *(empty — not required yet)* |
+| `DATABASE_URL` | PostgreSQL connection string used by the app at runtime (Supabase's pooled/pgbouncer connection) | *(empty in `.env.example` — must be a real value in `.env`)* |
+| `DIRECT_URL` | Direct (non-pooled) PostgreSQL connection, used only by Prisma Migrate (Supabase's pooler doesn't support migration DDL) | *(empty in `.env.example` — must be a real value in `.env`)* |
 | `FRONTEND_URL` | Allowed CORS origin | `http://localhost:5173` |
 
 All environment variables are read in one place: `src/config/env.ts`.
+`.env.example` intentionally ships with both database URLs empty —
+real Supabase credentials belong only in the git-ignored `.env`, never
+in a tracked template file.
 
 ## Available Routes
 
@@ -121,7 +136,9 @@ backend/
     utils/
       apiResponse.ts             Consistent success/error response helpers
   prisma/
-    schema.prisma               Placeholder — no models yet
+    schema.prisma               Full data model (see DATABASE_SCHEMA_PLAN.md)
+    seed.ts                      Starter categories/products (npm run seed)
+    migrations/                  Generated SQL migration history
   .env.example
   package.json
   tsconfig.json
@@ -129,11 +146,11 @@ backend/
 
 ## What's Coming Later
 
-This milestone is deliberately just the foundation. Future backend
-milestones will add, roughly in this order:
+Future backend milestones will add, roughly in this order:
 
-1. **Database schema** — real Prisma models (Product, Category, Order,
-   Customer, etc.) and a real PostgreSQL connection.
+1. ~~**Database schema** — real Prisma models (Product, Category,
+   Order, Customer, etc.) and a real PostgreSQL connection.~~ Done —
+   see `DATABASE_SCHEMA_PLAN.md`.
 2. **Product & category APIs** — read endpoints the frontend can
    eventually switch to instead of its static data files.
 3. **Order APIs** — real order creation/lookup, replacing the
@@ -145,5 +162,4 @@ milestones will add, roughly in this order:
    milestone.
 6. **Admin dashboard** for managing products, categories and orders.
 
-Nothing above exists yet — this README will be updated as each piece
-lands.
+This README will be updated as each piece lands.
