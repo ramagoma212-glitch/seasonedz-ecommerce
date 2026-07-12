@@ -1,10 +1,14 @@
 // Reusable product card. Used on the homepage, shop page, category
-// pages and (later) search results, so all product browsing surfaces
-// stay visually and behaviourally consistent.
+// pages and search results, so all product browsing surfaces stay
+// visually and behaviourally consistent.
 //
-// The Add to Cart and Wishlist buttons are visual only in this
-// milestone — clicking them shows a toast via the delegated click
-// handler set up in js/app.js. No data is saved anywhere yet.
+// Add to Cart and the wishlist heart are wired up via delegated click
+// handlers in js/app.js (data-action="add-to-cart" / "toggle-wishlist").
+// Every data-* attribute below is read back out in that handler, since
+// the click target only has the DOM to work with, not the original
+// product object.
+
+import { isInWishlist } from "../js/wishlist.js";
 
 const STOCK_STATUS_CLASS = {
   "In Stock": "in",
@@ -21,6 +25,7 @@ export function renderStars(rating) {
 
 export function renderProductCard(product) {
   const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
+  const wishlisted = isInWishlist(product.id);
 
   return `
     <article class="card product-card">
@@ -31,11 +36,17 @@ export function renderProductCard(product) {
         ${product.discountLabel ? `<span class="badge product-card__badge">${product.discountLabel}</span>` : ""}
         <button
           type="button"
-          class="product-card__wishlist"
-          data-action="add-to-wishlist"
-          data-product-name="${product.name}"
-          aria-label="Add ${product.name} to wishlist"
-        >&#9825;</button>
+          class="product-card__wishlist ${wishlisted ? "is-active" : ""}"
+          data-action="toggle-wishlist"
+          data-product-id="${product.id}"
+          data-slug="${product.slug}"
+          data-name="${product.name}"
+          data-price="${product.price}"
+          data-image="${product.image}"
+          data-category="${product.category}"
+          aria-pressed="${wishlisted}"
+          aria-label="${wishlisted ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`}"
+        >${wishlisted ? "&#9829;" : "&#9825;"}</button>
       </div>
 
       <div class="card__body product-card__body">
@@ -65,7 +76,11 @@ export function renderProductCard(product) {
             type="button"
             class="btn btn--primary btn--sm"
             data-action="add-to-cart"
-            data-product-name="${product.name}"
+            data-product-id="${product.id}"
+            data-slug="${product.slug}"
+            data-name="${product.name}"
+            data-price="${product.price}"
+            data-image="${product.image}"
           >Add to Cart</button>
         </div>
       </div>

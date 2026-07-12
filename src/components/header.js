@@ -3,15 +3,16 @@
 // Nav links and the search bar share one collapsible panel
 // (.site-header__collapsible) so both are reachable on mobile, opened
 // by the hamburger button (wired up in js/app.js).
-// Cart/wishlist counts are static placeholders until those features
-// are wired up in a later milestone.
+// Cart/wishlist badge counts start at 0 here and are kept in sync with
+// Local Storage by updateHeaderCounters() in js/app.js (the header is
+// only mounted once, so this markup itself never changes those numbers).
 
 export function renderHeader() {
   return `
     <header class="site-header">
       <div class="container site-header__inner">
         <a href="#/" class="logo">
-          <img src="/images/logo-placeholder.png" alt="Seasonedz Group logo" />
+          <img src="/images/logo-placeholder.jpeg" alt="Seasonedz Group logo" />
           <span class="logo__text">Seasonedz</span>
         </a>
 
@@ -42,11 +43,11 @@ export function renderHeader() {
         <div class="site-header__actions">
           <a class="icon-link" href="#/wishlist" aria-label="Wishlist">
             &hearts;
-            <span class="icon-link__badge">0</span>
+            <span class="icon-link__badge" data-badge="wishlist">0</span>
           </a>
           <a class="icon-link" href="#/cart" aria-label="Cart">
             &#128722;
-            <span class="icon-link__badge">0</span>
+            <span class="icon-link__badge" data-badge="cart">0</span>
           </a>
           <button type="button" class="mobile-toggle site-header__mobile-toggle" aria-label="Open menu">
             <span></span>

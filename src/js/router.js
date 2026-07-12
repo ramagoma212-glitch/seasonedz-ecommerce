@@ -84,7 +84,7 @@ function matchRoute(path) {
   return null;
 }
 
-function resolveRoute() {
+function renderCurrentRoute() {
   const main = document.getElementById("main-content");
   if (!main) return;
 
@@ -92,10 +92,23 @@ function resolveRoute() {
   const matched = matchRoute(path);
 
   main.innerHTML = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
+}
+
+function resolveRoute() {
+  renderCurrentRoute();
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
 export function initRouter() {
   window.addEventListener("hashchange", resolveRoute);
   resolveRoute();
+}
+
+// Re-renders the current route in place — used after a cart/wishlist
+// action changes Local Storage so the page (e.g. the cart page's item
+// list and totals) reflects the new state immediately. Unlike a real
+// navigation, this does not scroll back to the top, since the user is
+// mid-interaction on the page they're already looking at.
+export function rerenderCurrentRoute() {
+  renderCurrentRoute();
 }

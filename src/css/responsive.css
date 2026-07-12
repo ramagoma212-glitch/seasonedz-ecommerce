@@ -102,6 +102,22 @@
   .filter-panel__clear {
     grid-column: 1 / -1;
   }
+
+  .cart-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cart-item {
+    grid-template-columns: 64px 1fr auto;
+    grid-template-areas:
+      "image details remove"
+      "image quantity linetotal";
+    row-gap: var(--space-sm);
+  }
+
+  .cart-item__line-total {
+    justify-self: end;
+  }
 }
 
 /* ---- Mobile -------------------------------------------------------------- */

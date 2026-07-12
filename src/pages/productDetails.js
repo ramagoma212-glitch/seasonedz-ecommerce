@@ -4,6 +4,7 @@
 
 import { products } from "../data/products.js";
 import { renderProductCard, renderStars } from "../components/productCard.js";
+import { isInWishlist } from "../js/wishlist.js";
 
 function renderNotFound() {
   return `
@@ -63,6 +64,8 @@ export function renderProductDetails({ slug } = {}) {
   const product = products.find((item) => item.slug === slug);
   if (!product) return renderNotFound();
 
+  const wishlisted = isInWishlist(product.id);
+
   return `
     <section class="container product-details">
       <a class="product-details__back" href="#/shop">&larr; Back to Shop</a>
@@ -98,11 +101,31 @@ export function renderProductDetails({ slug } = {}) {
           </div>
 
           <div class="product-details__actions">
-            <button type="button" class="btn btn--primary btn--block" data-action="add-to-cart" data-product-name="${product.name}">
+            <button
+              type="button"
+              class="btn btn--primary btn--block"
+              data-action="add-to-cart"
+              data-product-id="${product.id}"
+              data-slug="${product.slug}"
+              data-name="${product.name}"
+              data-price="${product.price}"
+              data-image="${product.image}"
+            >
               Add to Cart
             </button>
-            <button type="button" class="btn btn--secondary btn--block" data-action="add-to-wishlist" data-product-name="${product.name}">
-              Add to Wishlist
+            <button
+              type="button"
+              class="btn btn--secondary btn--block ${wishlisted ? "is-active" : ""}"
+              data-action="toggle-wishlist"
+              data-product-id="${product.id}"
+              data-slug="${product.slug}"
+              data-name="${product.name}"
+              data-price="${product.price}"
+              data-image="${product.image}"
+              data-category="${product.category}"
+              aria-pressed="${wishlisted}"
+            >
+              ${wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
             </button>
           </div>
 
