@@ -7,12 +7,14 @@
 // Local Storage by updateHeaderCounters() in js/app.js (the header is
 // only mounted once, so this markup itself never changes those numbers).
 
+import { withBase } from "../js/paths.js";
+
 export function renderHeader() {
   return `
     <header class="site-header">
       <div class="container site-header__inner">
         <a href="#/" class="logo">
-          <img src="/images/logo-placeholder.jpeg" alt="Seasonedz Group logo" />
+          <img src="${withBase("/images/logo-placeholder.jpeg")}" alt="Seasonedz Group logo" />
           <span class="logo__text">Seasonedz</span>
         </a>
 

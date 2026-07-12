@@ -4,6 +4,8 @@
 // IDs are stable, slug-based strings rather than random/incrementing
 // numbers, so links and routes stay predictable.
 
+import { withBase } from "../js/paths.js";
+
 export const products = [
   {
     id: "abc-colouring-book-for-kids-with-fun-facts",
@@ -295,4 +297,8 @@ export const products = [
     isNewArrival: false,
     discountLabel: null,
   },
-];
+].map((product) => ({
+  ...product,
+  image: withBase(product.image),
+  gallery: product.gallery.map(withBase),
+}));

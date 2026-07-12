@@ -2,6 +2,8 @@
 // scope, but the data shape is defined here so future milestones can wire
 // up a blog listing/detail page without changing this file's structure.
 
+import { withBase } from "../js/paths.js";
+
 export const blogPosts = [
   {
     id: "post-1",
@@ -19,4 +21,4 @@ export const blogPosts = [
     image: "/images/product-2.jpg",
     date: "2026-02-02",
   },
-];
+].map((post) => ({ ...post, image: withBase(post.image) }));

@@ -7,6 +7,7 @@ import { categories } from "../data/categories.js";
 import { products } from "../data/products.js";
 import { renderCategoryCard } from "../components/categoryCard.js";
 import { renderProductCard } from "../components/productCard.js";
+import { withBase } from "../js/paths.js";
 
 const MAX_PER_ROW = 4;
 
@@ -34,7 +35,7 @@ export function renderHome() {
   return `
     <section class="container">
       <div class="hero">
-        <img class="hero__image" src="/images/hero-banner.jpg" alt="Seasonedz Group colouring books and school supplies" />
+        <img class="hero__image" src="${withBase("/images/hero-banner.jpg")}" alt="Seasonedz Group colouring books and school supplies" />
         <div class="hero__content">
           <h1 class="hero__title">Colour, Learn and Grow with Seasonedz</h1>
           <p class="hero__subtitle">

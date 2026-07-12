@@ -3,6 +3,7 @@
 // two data files can never drift out of sync as products are added.
 
 import { products } from "./products.js";
+import { withBase } from "../js/paths.js";
 
 function countProductsInCategory(categorySlug) {
   return products.filter((product) => product.categorySlug === categorySlug).length;
@@ -69,4 +70,4 @@ export const categories = [
       return countProductsInCategory("schools-and-wholesale");
     },
   },
-];
+].map((category) => ({ ...category, image: withBase(category.image) }));
