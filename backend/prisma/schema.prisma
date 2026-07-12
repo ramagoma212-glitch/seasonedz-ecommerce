@@ -1,13 +1,14 @@
-// Prisma schema placeholder for the Seasonedz Group backend (Version 2).
+// Seasonedz Group backend — Prisma schema (Version 2, Milestone 10).
 //
-// PLACEHOLDER — no models yet. Database schema design (Product,
-// Category, Order, Customer, etc.) is a future backend milestone.
-// This file exists now purely so Prisma is installed and correctly
-// configured ahead of that work.
+// SCHEMA DESIGN ONLY. No migrations have been run against a real
+// database, and none are run by this milestone — DATABASE_URL is
+// empty in local .env and no local Postgres instance is assumed to
+// exist. See backend/DATABASE_SCHEMA_PLAN.md for the full design
+// rationale (why order data is "snapshotted", how guest checkout maps
+// onto Customer/Order, how future PayFast/courier/auth plug in, etc).
 //
-// Planned provider: PostgreSQL. DATABASE_URL is read from the
-// environment (see .env.example) — no real database connection is
-// required or made in this milestone, and no migrations have been run.
+// Nothing here is wired up to the API yet — no routes, no controllers,
+// no frontend connection. That's later milestones.
 
 generator client {
   provider = "prisma-client-js"
@@ -18,4 +19,402 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Models will be added in a future milestone. None exist yet.
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  OUT_OF_STOCK
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  READY_FOR_DELIVERY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  PAYFAST
+  CASH_ON_DELIVERY
+  MANUAL
+}
+
+enum FulfilmentStatus {
+  NOT_STARTED
+  PACKING
+  READY
+  SHIPPED
+  DELIVERED
+  RETURNED
+}
+
+enum EnquiryType {
+  CONTACT
+  SCHOOL
+  WHOLESALE
+  DISTRIBUTOR
+}
+
+enum EnquiryStatus {
+  NEW
+  IN_REVIEW
+  RESPONDED
+  CLOSED
+}
+
+enum CustomerType {
+  GUEST
+  REGISTERED
+  SCHOOL
+  WHOLESALE
+  DISTRIBUTOR
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
+
+// ============================================================================
+// CATALOGUE: Category, Product, ProductImage, ProductTag
+// ============================================================================
+
+model Category {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  imageUrl    String?
+  isActive    Boolean @default(true)
+  sortOrder   Int     @default(0)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model Product {
+  id                String        @id @default(cuid())
+  name              String
+  slug              String        @unique
+  sku               String?       @unique
+  description       String?
+  shortDescription  String?
+  price             Decimal       @db.Decimal(10, 2)
+  oldPrice          Decimal?      @db.Decimal(10, 2)
+  // Internal cost, never exposed to the storefront — used for margin
+  // reporting once an admin dashboard exists.
+  costPrice         Decimal?      @db.Decimal(10, 2)
+  stockQuantity     Int           @default(0)
+  lowStockThreshold Int           @default(5)
+  status            ProductStatus @default(DRAFT)
+  ageRange          String?
+  // Flexible bag for feature bullet points etc. — deliberately loose
+  // (Json, not a separate table) since the exact shape may evolve.
+  features          Json?
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  images     ProductImage[]
+  tags       ProductTag[]
+  // Historical line items reference a product for convenience, but
+  // never depend on it still existing — see OrderItem below.
+  orderItems OrderItem[]
+
+  // Aggregate fields, recalculated whenever a future Review model is
+  // added and reviews are created/removed — not maintained by hand.
+  ratingAverage Decimal @default(0) @db.Decimal(3, 2)
+  reviewCount   Int     @default(0)
+
+  isFeatured    Boolean @default(false)
+  isBestSeller  Boolean @default(false)
+  isNewArrival  Boolean @default(false)
+  discountLabel String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([status])
+  @@index([isFeatured])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId])
+}
+
+model ProductTag {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+// ============================================================================
+// CUSTOMERS & ADDRESSES
+// ============================================================================
+
+// Represents both guest and (later) registered customers — `type`
+// distinguishes them. Deliberately has NO password/credential field:
+// Version 2 does not build login. When an auth milestone adds it, that
+// field must be a securely hashed credential, never plain text, and
+// should be designed as part of that milestone rather than bolted on
+// here.
+model Customer {
+  id        String       @id @default(cuid())
+  type      CustomerType @default(GUEST)
+  firstName String
+  lastName  String
+  email     String
+  phone     String?
+
+  orders    Order[]
+  addresses Address[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+// Saved addresses for a customer (useful once accounts exist so a
+// returning customer can pick a saved address at checkout). This is
+// separate from the delivery details actually stored on each Order —
+// see the note on Order below for why those are never a foreign key
+// to this table.
+model Address {
+  id            String    @id @default(cuid())
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  streetAddress String
+  suburb        String
+  city          String
+  province      String
+  postalCode    String
+  country       String    @default("South Africa")
+  deliveryNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+// ============================================================================
+// ORDERS
+// ============================================================================
+
+// Supports guest checkout (customerId is null) and future registered
+// checkout (customerId set) equally.
+//
+// IMPORTANT: customer name/contact details and the full delivery
+// address are stored directly on the order (not just via a relation),
+// and OrderItem stores a snapshot of the product's name/slug/price —
+// see DATABASE_SCHEMA_PLAN.md for the full rationale. In short: if a
+// customer edits their saved address, or a product's name/price
+// changes, or a product is deleted entirely, past orders must still
+// read back exactly as they were at the time of purchase.
+model Order {
+  id          String @id @default(cuid())
+  orderNumber String @unique
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  customerEmail     String
+  customerPhone     String
+  customerFirstName String
+  customerLastName  String
+
+  deliveryStreetAddress String
+  deliverySuburb        String
+  deliveryCity          String
+  deliveryProvince      String
+  deliveryPostalCode    String
+  deliveryCountry       String  @default("South Africa")
+  deliveryNotes         String?
+
+  status           OrderStatus      @default(PENDING)
+  paymentStatus    PaymentStatus    @default(PENDING)
+  fulfilmentStatus FulfilmentStatus @default(NOT_STARTED)
+  paymentMethod    PaymentMethod
+
+  subtotal      Decimal @db.Decimal(10, 2)
+  deliveryFee   Decimal @default(0) @db.Decimal(10, 2)
+  discountTotal Decimal @default(0) @db.Decimal(10, 2)
+  total         Decimal @db.Decimal(10, 2)
+
+  // Internal/admin notes — not shown to the customer.
+  notes String?
+
+  items    OrderItem[]
+  payment  Payment?
+  shipping Shipping?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerEmail])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// A snapshot of one product at the moment it was ordered — see the
+// note on Order above. productId is optional and nullable-on-delete
+// in spirit (a product can be removed from the catalogue later
+// without breaking historical orders), while productName/productSlug/
+// unitPrice/lineTotal always remain, sourced from the order itself
+// rather than a live join to Product.
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  productName String
+  productSlug String
+  sku         String?
+
+  quantity  Int
+  unitPrice Decimal @db.Decimal(10, 2)
+  lineTotal Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+// ============================================================================
+// PAYMENT & SHIPPING
+// ============================================================================
+
+// One payment record per order. Ready for a future PayFast
+// integration (provider/providerReference/paidAt/failureReason) but
+// nothing here calls PayFast or any other provider yet — this is
+// storage shape only.
+model Payment {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  method            PaymentMethod
+  status            PaymentStatus @default(PENDING)
+  amount            Decimal       @db.Decimal(10, 2)
+  provider          String?
+  providerReference String?
+  paidAt            DateTime?
+  failureReason     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One shipping record per order. Ready for a future courier
+// integration (courierName/trackingNumber/trackingUrl) but nothing
+// here calls a courier API yet — this is storage shape only, and
+// `status` is set manually until that integration exists.
+model Shipping {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status            FulfilmentStatus @default(NOT_STARTED)
+  courierName       String?
+  trackingNumber    String?
+  trackingUrl       String?
+  estimatedDelivery DateTime?
+  shippedAt         DateTime?
+  deliveredAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// ENQUIRIES
+// ============================================================================
+
+// One model backing all four demo forms on the frontend (Contact,
+// Schools, Wholesale, Distributor) — `type` distinguishes which form
+// it came from. Replaces those forms' current "doesn't send yet" demo
+// message once a real /api/enquiries endpoint exists in a later
+// milestone.
+model Enquiry {
+  id     String        @id @default(cuid())
+  type   EnquiryType
+  status EnquiryStatus @default(NEW)
+
+  name              String
+  email             String
+  phone             String?
+  companyName       String?
+  organisationType  String?
+  subject           String?
+  message           String
+  province          String?
+  city              String?
+  // Free text on purpose (e.g. "50-100 units", "a few hundred a
+  // year") — wholesale/distributor enquiries rarely give a precise
+  // number.
+  estimatedQuantity String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// FUTURE ADMIN
+// ============================================================================
+
+// Placeholder only. No authentication is built in Version 2 — there
+// is deliberately no password/credential field here. A future auth
+// milestone must add one as a securely hashed credential (e.g. bcrypt/
+// argon2), never plain text, designed as part of that milestone.
+model AdminUser {
+  id       String   @id @default(cuid())
+  name     String
+  email    String   @unique
+  role     UserRole @default(STAFF)
+  isActive Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
