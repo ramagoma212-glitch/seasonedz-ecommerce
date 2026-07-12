@@ -86,7 +86,7 @@
 
 .site-footer__inner {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: var(--space-xl);
   padding-block: var(--space-3xl) var(--space-xl);
 }

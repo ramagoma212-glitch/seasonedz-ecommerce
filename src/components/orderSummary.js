@@ -1,14 +1,36 @@
-// Order summary block: subtotal, delivery placeholder, order total.
-// Used by the cart page now. Checkout (Milestone 5) will likely reuse
-// this too, so it's kept deliberately small — no shipping form, no
-// coupon code, no payment details. Delivery is shown as "Calculated at
-// checkout" rather than a made-up number, since real shipping rates
-// aren't wired up yet.
+// Order summary block: optional itemised list, subtotal, delivery fee,
+// order total. Reused by the cart page, checkout page and order
+// confirmation page.
+//
+// Delivery fee is a flat placeholder (see calculateDeliveryFee in
+// cart.js — R80 standard, free from R700) until real courier
+// integration calculates actual rates.
 
-export function renderOrderSummary({ subtotal, showCheckoutButton = true }) {
+export function renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton = true, showItems = false, items = [] }) {
+  const total = subtotal + deliveryFee;
+
   return `
     <aside class="order-summary">
       <h3 class="order-summary__heading">Order Summary</h3>
+
+      ${
+        showItems && items.length
+          ? `
+            <div class="order-summary__items">
+              ${items
+                .map(
+                  (item) => `
+                    <div class="order-summary__item">
+                      <span>${item.name} &times; ${item.quantity}</span>
+                      <span>R${(item.price * item.quantity).toFixed(2)}</span>
+                    </div>
+                  `
+                )
+                .join("")}
+            </div>
+          `
+          : ""
+      }
 
       <div class="order-summary__row">
         <span>Subtotal</span>
@@ -16,11 +38,11 @@ export function renderOrderSummary({ subtotal, showCheckoutButton = true }) {
       </div>
       <div class="order-summary__row">
         <span>Delivery</span>
-        <span>Calculated at checkout</span>
+        <span>${deliveryFee === 0 ? "Free" : `R${deliveryFee.toFixed(2)}`}</span>
       </div>
       <div class="order-summary__row order-summary__row--total">
         <span>Order Total</span>
-        <span>R${subtotal.toFixed(2)}</span>
+        <span>R${total.toFixed(2)}</span>
       </div>
 
       ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="#/checkout">Proceed to Checkout</a>` : ""}

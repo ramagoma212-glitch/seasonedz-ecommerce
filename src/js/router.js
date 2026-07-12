@@ -8,6 +8,10 @@
 //  - dynamic segments, e.g. "/product/:slug" -> { slug: "..." }
 //  - a query string, e.g. "#/shop?category=bundles" -> params.query
 // Pages that don't need params simply ignore the argument.
+//
+// Milestone 7 adds a `title` per route, set on document.title on every
+// render — simple SEO/UX basics, not the fuller meta/OG/sitemap work
+// planned for Milestone 8.
 
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
@@ -23,34 +27,46 @@ import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
 import { renderFaq } from "../pages/faq.js";
 import { renderPolicies } from "../pages/policies.js";
+import { renderShippingPolicy } from "../pages/shippingPolicy.js";
+import { renderReturnsPolicy } from "../pages/returnsPolicy.js";
+import { renderPrivacyPolicy } from "../pages/privacyPolicy.js";
+import { renderTerms } from "../pages/terms.js";
+import { renderCookiesPolicy } from "../pages/cookiesPolicy.js";
+import { renderTestimonials } from "../pages/testimonials.js";
+import { renderSchools } from "../pages/schools.js";
+import { renderWholesale } from "../pages/wholesale.js";
+import { renderDistributor } from "../pages/distributor.js";
+import { renderBlog } from "../pages/blog.js";
+import { renderBlogPost } from "../pages/blogPost.js";
+import { renderNotFound } from "../pages/notFound.js";
 
 const routeDefs = [
-  { pattern: "/", render: renderHome },
-  { pattern: "/shop", render: renderShop },
-  { pattern: "/categories", render: renderCategories },
-  { pattern: "/product/:slug", render: renderProductDetails },
-  { pattern: "/search", render: renderSearchResults },
-  { pattern: "/cart", render: renderCartPage },
-  { pattern: "/wishlist", render: renderWishlistPage },
-  { pattern: "/checkout", render: renderCheckoutPage },
-  { pattern: "/order-confirmation", render: renderOrderConfirmation },
-  { pattern: "/track-order", render: renderTrackOrder },
-  { pattern: "/about", render: renderAbout },
-  { pattern: "/contact", render: renderContact },
-  { pattern: "/faq", render: renderFaq },
-  { pattern: "/policies", render: renderPolicies },
+  { pattern: "/", render: renderHome, title: "Home" },
+  { pattern: "/shop", render: renderShop, title: "Shop" },
+  { pattern: "/categories", render: renderCategories, title: "Categories" },
+  { pattern: "/product/:slug", render: renderProductDetails, title: "Product" },
+  { pattern: "/search", render: renderSearchResults, title: "Search" },
+  { pattern: "/cart", render: renderCartPage, title: "Your Cart" },
+  { pattern: "/wishlist", render: renderWishlistPage, title: "Your Wishlist" },
+  { pattern: "/checkout", render: renderCheckoutPage, title: "Checkout" },
+  { pattern: "/order-confirmation", render: renderOrderConfirmation, title: "Order Confirmation" },
+  { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order" },
+  { pattern: "/about", render: renderAbout, title: "About Us" },
+  { pattern: "/contact", render: renderContact, title: "Contact Us" },
+  { pattern: "/faq", render: renderFaq, title: "FAQ" },
+  { pattern: "/policies", render: renderPolicies, title: "Policies" },
+  { pattern: "/shipping-policy", render: renderShippingPolicy, title: "Shipping Policy" },
+  { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
+  { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },
+  { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },
+  { pattern: "/cookies-policy", render: renderCookiesPolicy, title: "Cookies Policy" },
+  { pattern: "/testimonials", render: renderTestimonials, title: "Testimonials" },
+  { pattern: "/schools", render: renderSchools, title: "Schools" },
+  { pattern: "/wholesale", render: renderWholesale, title: "Wholesale" },
+  { pattern: "/distributor", render: renderDistributor, title: "Become a Distributor" },
+  { pattern: "/blog", render: renderBlog, title: "Blog" },
+  { pattern: "/blog/:slug", render: renderBlogPost, title: "Blog" },
 ];
-
-function renderNotFound() {
-  return `
-    <section class="section container">
-      <div class="placeholder-panel">
-        <h2>Page not found</h2>
-        <p>The page you're looking for doesn't exist yet.</p>
-      </div>
-    </section>
-  `;
-}
 
 // Splits "#/product/abc?ref=home" into { path: "/product/abc", query: URLSearchParams }
 function parseHash() {
@@ -78,7 +94,7 @@ function matchRoute(path) {
       paramNames.forEach((name, index) => {
         params[name] = decodeURIComponent(match[index + 1]);
       });
-      return { render: route.render, params };
+      return { render: route.render, title: route.title, params };
     }
   }
   return null;
@@ -92,6 +108,7 @@ function renderCurrentRoute() {
   const matched = matchRoute(path);
 
   main.innerHTML = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
+  document.title = matched ? `${matched.title} | Seasonedz Group` : "Page Not Found | Seasonedz Group";
 }
 
 function resolveRoute() {

@@ -3,7 +3,9 @@
 // the router renders pages into, and wires up global UI behaviour:
 // the mobile menu toggle, the header search form, shop/search filter
 // and sort controls, the quantity selector on the product details page,
-// cart/wishlist actions, header badge counters, and toast feedback.
+// cart/wishlist actions, the guest checkout form, the order tracking
+// form, demo enquiry forms (contact/schools/wholesale/distributor),
+// header badge counters, and toast feedback.
 
 import { renderHeader } from "../components/header.js";
 import { renderFooter } from "../components/footer.js";
@@ -15,9 +17,14 @@ import {
   decreaseCartQuantity,
   updateCartQuantity,
   clearCart,
+  getCart,
+  getCartSubtotal,
   getCartItemCount,
+  calculateDeliveryFee,
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } from "./wishlist.js";
+import { validateCheckoutForm } from "./validation.js";
+import { createOrder } from "./orders.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -33,6 +40,9 @@ function mountApp() {
   setupFilterControls();
   setupCartQuantityInput();
   setupProductActions();
+  setupCheckoutForm();
+  setupTrackOrderForm();
+  setupDemoForms();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -229,6 +239,184 @@ function adjustQuantity(buttonEl, delta) {
 
   const current = parseInt(input.value, 10) || 1;
   input.value = Math.max(1, current + delta);
+}
+
+// Guest checkout form: validate on submit, show field-level errors,
+// clear a field's error as soon as the customer edits it, and create a
+// demo order on success. Delegated (like everything else here) since
+// the form only exists while #main-content is showing the checkout page.
+function setupCheckoutForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#checkout-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleCheckoutSubmit(form);
+  });
+
+  document.addEventListener("input", (event) => {
+    const form = event.target.closest("#checkout-form");
+    if (!form || !event.target.name) return;
+    clearFieldError(form, event.target.name);
+  });
+
+  document.addEventListener("change", (event) => {
+    const form = event.target.closest("#checkout-form");
+    if (!form || event.target.name !== "paymentMethod") return;
+    clearFieldError(form, "paymentMethod");
+  });
+}
+
+function clearFieldError(form, fieldName) {
+  const errorEl = form.querySelector(`[data-error-for="${fieldName}"]`);
+  if (errorEl) errorEl.textContent = "";
+
+  const groupEl = form.querySelector(`[data-field-group="${fieldName}"]`);
+  if (groupEl) {
+    groupEl.classList.remove("has-error");
+    return;
+  }
+
+  const inputEl = form.querySelector(`[name="${fieldName}"]`);
+  if (inputEl) {
+    inputEl.classList.remove("has-error");
+    inputEl.removeAttribute("aria-invalid");
+  }
+}
+
+function clearAllCheckoutErrors(form) {
+  form.querySelectorAll(".form-field__error").forEach((el) => (el.textContent = ""));
+  form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
+  form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+}
+
+function showCheckoutErrors(form, errors) {
+  Object.entries(errors).forEach(([field, message]) => {
+    const errorEl = form.querySelector(`[data-error-for="${field}"]`);
+    if (errorEl) errorEl.textContent = message;
+
+    const groupEl = form.querySelector(`[data-field-group="${field}"]`);
+    if (groupEl) {
+      groupEl.classList.add("has-error");
+      return;
+    }
+
+    const inputEl = form.querySelector(`[name="${field}"]`);
+    if (inputEl) {
+      inputEl.classList.add("has-error");
+      inputEl.setAttribute("aria-invalid", "true");
+    }
+  });
+}
+
+function focusFirstCheckoutError(form) {
+  const firstErrorEl = form.querySelector(".form-field__input.has-error, .payment-methods.has-error");
+  if (!firstErrorEl) return;
+
+  const focusTarget = firstErrorEl.matches(".payment-methods")
+    ? firstErrorEl.querySelector("input[type=radio]")
+    : firstErrorEl;
+
+  focusTarget?.focus();
+  firstErrorEl.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function handleCheckoutSubmit(form) {
+  clearAllCheckoutErrors(form);
+
+  const data = Object.fromEntries(new FormData(form).entries());
+  const { isValid, errors } = validateCheckoutForm(data);
+
+  if (!isValid) {
+    showCheckoutErrors(form, errors);
+    focusFirstCheckoutError(form);
+    return;
+  }
+
+  const items = getCart();
+  const subtotal = getCartSubtotal();
+  const deliveryFee = calculateDeliveryFee(subtotal);
+
+  const order = createOrder({
+    customer: {
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
+      email: data.email.trim(),
+      phone: data.phone.trim(),
+    },
+    deliveryAddress: {
+      street: data.street.trim(),
+      suburb: data.suburb.trim(),
+      city: data.city.trim(),
+      province: data.province,
+      postalCode: data.postalCode.trim(),
+    },
+    deliveryNotes: (data.deliveryNotes || "").trim(),
+    paymentMethod: data.paymentMethod,
+    items,
+    subtotal,
+    deliveryFee,
+  });
+
+  clearCart();
+  updateHeaderCounters();
+
+  window.location.hash = `/order-confirmation?order=${encodeURIComponent(order.orderNumber)}`;
+}
+
+// Order tracking form: submitting a non-empty order number navigates
+// to "#/track-order?order=..." — the page itself (a pure function of
+// the URL, like search) does the actual lookup and rendering. An empty
+// submission never navigates; it shows an inline error instead, the
+// same pattern the checkout form uses.
+function setupTrackOrderForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#track-order-form");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const input = form.querySelector("#orderNumber");
+    const value = (input?.value || "").trim();
+    const errorEl = form.querySelector('[data-error-for="orderNumber"]');
+
+    if (!value) {
+      if (errorEl) errorEl.textContent = "Please enter an order number.";
+      input?.classList.add("has-error");
+      input?.focus();
+      return;
+    }
+
+    window.location.hash = `/track-order?order=${encodeURIComponent(value)}`;
+  });
+
+  document.addEventListener("input", (event) => {
+    const form = event.target.closest("#track-order-form");
+    if (!form || event.target.id !== "orderNumber") return;
+
+    const errorEl = form.querySelector('[data-error-for="orderNumber"]');
+    if (errorEl) errorEl.textContent = "";
+    event.target.classList.remove("has-error");
+  });
+}
+
+// Contact/Schools/Wholesale/Distributor forms (see components/enquiryForm.js)
+// share one ".demo-form" class and never actually send anything — this
+// just reveals the "demo only" message already sitting in the form
+// markup, rather than posting anywhere.
+function setupDemoForms() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest(".demo-form");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const resultEl = form.querySelector(".demo-form__result");
+    if (resultEl) {
+      resultEl.hidden = false;
+      resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  });
 }
 
 function updateHeaderCounters() {

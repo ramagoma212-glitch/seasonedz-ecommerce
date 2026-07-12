@@ -9,7 +9,7 @@ import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 
 export function renderCartPage() {
-  const { items, subtotal } = getCartSummary();
+  const { items, subtotal, deliveryFee } = getCartSummary();
 
   if (!items.length) {
     return `
@@ -41,7 +41,7 @@ export function renderCartPage() {
           <a class="cart-page__continue" href="#/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal })}
+        ${renderOrderSummary({ subtotal, deliveryFee })}
       </div>
     </section>
   `;

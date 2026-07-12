@@ -1,5 +1,5 @@
-// Site footer component: company description, quick links, customer
-// service links, contact placeholder and copyright.
+// Site footer component: company description, quick links, business
+// links, customer service links, contact placeholder and copyright.
 
 export function renderFooter() {
   const year = new Date().getFullYear();
@@ -22,7 +22,18 @@ export function renderFooter() {
             <li><a href="#/shop">Shop</a></li>
             <li><a href="#/categories">Categories</a></li>
             <li><a href="#/about">About Us</a></li>
+            <li><a href="#/blog">Blog</a></li>
+            <li><a href="#/testimonials">Testimonials</a></li>
             <li><a href="#/contact">Contact</a></li>
+          </ul>
+        </div>
+
+        <div class="site-footer__col">
+          <h4 class="footer-heading">For Business</h4>
+          <ul class="footer-links">
+            <li><a href="#/schools">Schools</a></li>
+            <li><a href="#/wholesale">Wholesale</a></li>
+            <li><a href="#/distributor">Distributors</a></li>
           </ul>
         </div>
 
@@ -31,10 +42,11 @@ export function renderFooter() {
           <ul class="footer-links">
             <li><a href="#/track-order">Track Order</a></li>
             <li><a href="#/faq">FAQ</a></li>
-            <li><a href="#/policies">Shipping Policy</a></li>
-            <li><a href="#/policies">Returns Policy</a></li>
-            <li><a href="#/policies">Privacy Policy</a></li>
-            <li><a href="#/policies">Terms &amp; Conditions</a></li>
+            <li><a href="#/shipping-policy">Shipping Policy</a></li>
+            <li><a href="#/returns-policy">Returns Policy</a></li>
+            <li><a href="#/privacy-policy">Privacy Policy</a></li>
+            <li><a href="#/terms">Terms &amp; Conditions</a></li>
+            <li><a href="#/cookies-policy">Cookies Policy</a></li>
           </ul>
         </div>
 

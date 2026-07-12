@@ -198,7 +198,9 @@
 /* Card text stays left-aligned regardless of an ancestor page wrapper
    (e.g. .stub-page) setting text-align: center for its own heading/intro. */
 .category-card,
-.product-card {
+.product-card,
+.testimonial-card,
+.blog-card {
   text-align: left;
 }
 
@@ -690,4 +692,570 @@
 
 .order-summary .btn {
   margin-top: var(--space-lg);
+}
+
+.order-summary__items {
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+}
+
+.order-summary__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  padding-block: var(--space-xs);
+}
+
+/* ---- Form fields (checkout) ------------------------------------------------------ */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md) var(--space-lg);
+}
+
+.form-field--full {
+  grid-column: 1 / -1;
+}
+
+.form-field__label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-xs);
+}
+
+.form-field__required {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+.form-field__optional {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.form-field__input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+}
+
+.form-field__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(224, 122, 63, 0.15);
+}
+
+.form-field__input.has-error {
+  border-color: var(--color-error);
+}
+
+.form-field__textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-field__error {
+  display: block;
+  min-height: 1.2em;
+  margin-top: var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
+}
+
+/* ---- Payment methods -------------------------------------------------------------- */
+.payment-methods {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.checkout-section__label {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-md);
+  padding: 0;
+}
+
+.payment-method {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.payment-method:has(.payment-method__radio:checked) {
+  border-color: var(--color-primary);
+  background-color: var(--color-bg-alt);
+}
+
+.payment-method--disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.payment-method__radio {
+  margin-top: 3px;
+  accent-color: var(--color-primary);
+}
+
+.payment-method__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.payment-method__label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.payment-method__desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.payment-methods.has-error .payment-method {
+  border-color: var(--color-error);
+}
+
+/* ---- Demo notice --------------------------------------------------------------- */
+.demo-notice {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: flex-start;
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-secondary);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-block: var(--space-lg);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.demo-notice__icon {
+  font-size: var(--font-size-lg);
+  color: var(--color-secondary);
+  flex-shrink: 0;
+}
+
+.demo-notice strong {
+  color: var(--color-text);
+}
+
+/* ---- Track order form ------------------------------------------------------------- */
+.track-order-form {
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.track-order-form__row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.track-order-form__row .form-field__input {
+  flex: 1;
+}
+
+.track-order-form__hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-sm);
+}
+
+/* ---- Tracking progress / steps ------------------------------------------------------ */
+.tracking-progress {
+  margin-block: var(--space-lg) var(--space-xl);
+}
+
+.tracking-progress__bar {
+  height: 6px;
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin-bottom: var(--space-lg);
+}
+
+.tracking-progress__fill {
+  height: 100%;
+  background-color: var(--color-success);
+  border-radius: var(--radius-full);
+  transition: width var(--transition-base);
+}
+
+.tracking-steps {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.tracking-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  flex: 1;
+  text-align: center;
+}
+
+.tracking-step__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-alt);
+  border: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+}
+
+.tracking-step__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  max-width: 100px;
+}
+
+.tracking-step.is-complete .tracking-step__dot {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: var(--color-white);
+}
+
+.tracking-step.is-complete .tracking-step__label {
+  color: var(--color-text-light);
+}
+
+.tracking-step.is-current .tracking-step__dot {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+  box-shadow: 0 0 0 4px rgba(224, 122, 63, 0.15);
+}
+
+.tracking-step.is-current .tracking-step__label {
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+/* ---- Tracking result --------------------------------------------------------------- */
+.tracking-result {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  margin-top: var(--space-xl);
+}
+
+.tracking-result__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.tracking-result__label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+
+.tracking-result__message {
+  color: var(--color-text-light);
+  margin-top: var(--space-sm);
+}
+
+.tracking-result__grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-xl);
+  align-items: start;
+  margin-top: var(--space-xl);
+}
+
+/* ---- Info page prose body (About, Policies, Schools, Wholesale, Distributor) ---- */
+.info-page__body {
+  max-width: 70ch;
+  margin-inline: auto;
+  text-align: left;
+}
+
+.info-page__body h2 {
+  margin-top: var(--space-2xl);
+  margin-bottom: var(--space-md);
+}
+
+.info-page__body p {
+  margin-bottom: var(--space-md);
+}
+
+/* Inline links in prose (policy pages, FAQ answers) otherwise inherit
+   plain body text colour with no underline (see base.css's "a" reset)
+   and are indistinguishable from surrounding text — a real usability
+   problem, not just a visual nicety. */
+.info-page__body a,
+.faq-item__answer a,
+.blog-post__article a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.info-page__body a:hover,
+.faq-item__answer a:hover,
+.blog-post__article a:hover {
+  color: var(--color-primary-dark);
+}
+
+.info-page__body ul {
+  list-style: disc;
+  padding-left: var(--space-lg);
+  margin-bottom: var(--space-md);
+  color: var(--color-text-light);
+}
+
+.info-page__body ul li {
+  margin-bottom: var(--space-xs);
+}
+
+.about-trust {
+  margin-block: var(--space-2xl);
+}
+
+.info-page__cta {
+  max-width: 60ch;
+  margin-inline: auto;
+  text-align: center;
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-2xl);
+  border-top: 1px solid var(--color-border);
+}
+
+.info-page__cta h2 {
+  margin-top: 0;
+}
+
+.info-page__cta .btn {
+  margin-top: var(--space-sm);
+}
+
+/* ---- Contact / enquiry layout --------------------------------------------------- */
+.contact-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: var(--space-2xl);
+  text-align: left;
+  margin-top: var(--space-xl);
+}
+
+.contact-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.contact-detail {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-start;
+}
+
+.contact-detail__icon {
+  font-size: var(--font-size-xl);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.contact-detail h3 {
+  font-size: var(--font-size-base);
+  margin-bottom: 2px;
+}
+
+.contact-detail p {
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+}
+
+.contact-detail__note {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.contact-form {
+  max-width: 640px;
+  margin-inline: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+}
+
+.contact-layout .contact-form {
+  max-width: none;
+  margin-inline: 0;
+}
+
+.contact-form h3 {
+  margin-bottom: var(--space-lg);
+}
+
+.contact-form .form-field {
+  margin-bottom: var(--space-md);
+}
+
+.demo-form__result {
+  margin-top: var(--space-md);
+  padding: var(--space-md);
+  background-color: var(--color-bg-alt);
+  border-left: 4px solid var(--color-success);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+/* ---- FAQ accordion --------------------------------------------------------------- */
+.faq-page {
+  max-width: 800px;
+  margin-inline: auto;
+  text-align: left;
+  margin-top: var(--space-xl);
+}
+
+.faq-category {
+  margin-bottom: var(--space-2xl);
+}
+
+.faq-category__title {
+  margin-bottom: var(--space-md);
+  color: var(--color-secondary);
+}
+
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.faq-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  background-color: var(--color-surface);
+}
+
+.faq-item__question {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--color-text);
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.faq-item__question::-webkit-details-marker {
+  display: none;
+}
+
+.faq-item__question::after {
+  content: "+";
+  font-size: var(--font-size-lg);
+  color: var(--color-primary);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.faq-item[open] .faq-item__question::after {
+  transform: rotate(45deg);
+}
+
+.faq-item__answer {
+  margin-top: var(--space-sm);
+  color: var(--color-text-light);
+}
+
+/* ---- Policies hub cards ------------------------------------------------------------ */
+.policies-grid {
+  margin-top: var(--space-xl);
+}
+
+.policy-card .card__body {
+  padding: var(--space-xl) var(--space-lg);
+}
+
+/* ---- Testimonial card -------------------------------------------------------------- */
+.testimonials-grid {
+  margin-top: var(--space-xl);
+}
+
+.testimonial-card__category {
+  margin-bottom: var(--space-sm);
+}
+
+.testimonial-card__message {
+  margin-block: var(--space-md);
+  font-style: italic;
+  color: var(--color-text);
+}
+
+.testimonial-card__name {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.testimonial-card__role {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* ---- Blog card ---------------------------------------------------------------------- */
+.blog-grid {
+  margin-top: var(--space-xl);
+}
+
+.blog-card__meta {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: var(--space-xs);
+}
+
+.blog-card__excerpt {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin-bottom: var(--space-sm);
+}
+
+.blog-card__link {
+  font-weight: 600;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+}
+
+.blog-card__link:hover {
+  color: var(--color-primary-dark);
 }

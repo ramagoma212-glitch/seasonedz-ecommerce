@@ -11,6 +11,10 @@
   :root {
     --container-padding: 1.5rem;
   }
+
+  .site-footer__inner {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 /* ---- Tablet / small desktop ------------------------------------------------ */
@@ -29,6 +33,12 @@
 
   .product-details__actions {
     max-width: none;
+  }
+
+  .checkout-layout,
+  .order-confirmation__layout,
+  .tracking-result__grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -117,6 +127,51 @@
 
   .cart-item__line-total {
     justify-self: end;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-confirmation__actions {
+    flex-direction: column;
+  }
+
+  .order-confirmation__actions .btn {
+    width: 100%;
+  }
+
+  /* Six side-by-side step columns don't fit narrow screens — stack
+     them as a vertical list instead, dot-then-label per row. */
+  .tracking-steps {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-md);
+  }
+
+  .tracking-step {
+    flex-direction: row;
+    text-align: left;
+  }
+
+  .tracking-step__label {
+    max-width: none;
+  }
+
+  .track-order-form__row {
+    flex-direction: column;
+  }
+
+  .track-order-form__row .btn {
+    width: 100%;
+  }
+
+  .contact-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-layout .contact-form {
+    max-width: none;
   }
 }
 

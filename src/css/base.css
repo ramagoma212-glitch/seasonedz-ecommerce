@@ -27,7 +27,10 @@
 
   --color-text: #3b2a20;
   --color-text-light: #6b5b4e;
-  --color-text-muted: #9c8d80;
+  /* Darkened from the original #9c8d80 (Milestone 8 accessibility pass):
+     that shade only reached ~3.2:1 against white/cream, below the WCAG AA
+     4.5:1 minimum for normal text. This tone clears ~4.9:1 on both. */
+  --color-text-muted: #796b5e;
 
   --color-border: #e8d9c8;
   --color-white: #ffffff;

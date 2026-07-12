@@ -12,6 +12,16 @@ import { getStorageItem, setStorageItem, clearStorageItem } from "./storage.js";
 
 const CART_KEY = "seasonedz_cart";
 
+const STANDARD_DELIVERY_FEE = 80;
+const FREE_DELIVERY_THRESHOLD = 700;
+
+// Flat-rate placeholder delivery fee: R80 standard, free on orders of
+// R700 or more. This will be replaced by real courier-calculated rates
+// once courier integration exists — see the milestone roadmap.
+export function calculateDeliveryFee(subtotal) {
+  return subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
+}
+
 export function getCart() {
   return getStorageItem(CART_KEY, []);
 }
@@ -92,13 +102,16 @@ export function getCartSubtotal() {
   return getCart().reduce((total, item) => total + item.price * item.quantity, 0);
 }
 
-// Convenience bundle for pages that need the items, count and subtotal
-// together (avoids reading/looping over the cart three separate times).
+// Convenience bundle for pages that need the items, count, subtotal,
+// delivery fee and total together (avoids reading/looping over the
+// cart several separate times).
 export function getCartSummary() {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  return { items, itemCount, subtotal };
+  const deliveryFee = calculateDeliveryFee(subtotal);
+  const total = subtotal + deliveryFee;
+  return { items, itemCount, subtotal, deliveryFee, total };
 }
 
 export function isInCart(productId) {
