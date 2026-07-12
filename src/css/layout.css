@@ -1,0 +1,127 @@
+/* ==========================================================================
+   LAYOUT.CSS
+   Page-level structural layout: container, header, footer, grid shells.
+   ========================================================================== */
+
+.container {
+  width: 100%;
+  max-width: var(--container-width);
+  margin-inline: auto;
+  padding-inline: var(--container-padding);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#main-content {
+  flex: 1;
+}
+
+/* ---- Site header ---------------------------------------------------------- */
+.site-header {
+  height: var(--header-height);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.site-header__inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.site-header__logo {
+  flex-shrink: 0;
+}
+
+/* Groups nav + search together so both can be shown/hidden as one unit
+   on mobile (see responsive.css), while behaving as two independent
+   flex children of the header on desktop. */
+.site-header__collapsible {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex: 1;
+}
+
+.site-header__nav {
+  flex: 1;
+}
+
+.site-header__nav-list {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.site-header__search {
+  flex: 1;
+  max-width: 320px;
+}
+
+.site-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.site-header__actions .site-header__mobile-toggle {
+  display: none;
+}
+
+/* ---- Site footer ---------------------------------------------------------- */
+.site-footer {
+  background-color: var(--color-secondary-dark);
+  color: var(--color-white);
+  margin-top: var(--space-3xl);
+}
+
+.site-footer__inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-xl);
+  padding-block: var(--space-3xl) var(--space-xl);
+}
+
+.site-footer__bottom {
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-block: var(--space-md);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---- Generic section/grid shells ------------------------------------------ */
+.section {
+  padding-block: var(--space-3xl);
+}
+
+.section__header {
+  text-align: center;
+  margin-bottom: var(--space-2xl);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.grid--4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.grid--3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid--2 {
+  grid-template-columns: repeat(2, 1fr);
+}

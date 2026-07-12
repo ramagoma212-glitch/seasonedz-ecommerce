@@ -1,0 +1,301 @@
+/* ==========================================================================
+   PAGES.CSS
+   Page-specific styling. Milestone 1 only styles the homepage in depth;
+   other pages currently render a shared .placeholder-panel from
+   components.css.
+   ========================================================================== */
+
+/* ---- Hero ------------------------------------------------------------- */
+.hero {
+  position: relative;
+  background-color: var(--color-bg-alt);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-block: var(--space-xl);
+}
+
+.hero__image {
+  width: 100%;
+  height: 420px;
+  object-fit: cover;
+}
+
+.hero__content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-2xl);
+  background: linear-gradient(90deg, rgba(59, 42, 32, 0.55) 0%, rgba(59, 42, 32, 0.1) 70%);
+}
+
+.hero__title {
+  color: var(--color-white);
+  max-width: 20ch;
+}
+
+.hero__subtitle {
+  color: rgba(255, 255, 255, 0.9);
+  max-width: 45ch;
+  font-size: var(--font-size-md);
+}
+
+/* ---- Welcome message ------------------------------------------------------- */
+.welcome {
+  text-align: center;
+  max-width: 60ch;
+  margin-inline: auto;
+  padding-block: var(--space-2xl);
+}
+
+.welcome p {
+  font-size: var(--font-size-md);
+}
+
+/* ---- Schools & wholesale banner --------------------------------------------- */
+.wholesale-banner {
+  background-color: var(--color-secondary);
+  color: var(--color-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xl);
+  flex-wrap: wrap;
+}
+
+.wholesale-banner__text h2 {
+  color: var(--color-white);
+}
+
+.wholesale-banner__text p {
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: var(--space-sm);
+}
+
+/* ---- Trust section ----------------------------------------------------------- */
+.trust-item {
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.trust-item__icon {
+  font-size: var(--font-size-2xl);
+  margin-bottom: var(--space-sm);
+}
+
+.trust-item__title {
+  font-size: var(--font-size-base);
+  margin-bottom: var(--space-xs);
+}
+
+.trust-item__text {
+  font-size: var(--font-size-sm);
+}
+
+/* ---- Generic stub page (About, Contact, FAQ, Policies, etc.) ---------------- */
+.stub-page {
+  padding-block: var(--space-3xl);
+  text-align: center;
+}
+
+.stub-page__title {
+  margin-bottom: var(--space-md);
+}
+
+.stub-page__text {
+  max-width: 55ch;
+  margin-inline: auto;
+}
+
+/* ---- Shop page ---------------------------------------------------------------- */
+.shop-page .stub-page__text {
+  margin-bottom: var(--space-xl);
+}
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: var(--space-2xl);
+  text-align: left;
+  padding-bottom: var(--space-3xl);
+}
+
+.search-results__clear {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.search-results__clear:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.shop-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-lg);
+}
+
+.shop-toolbar__count {
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+}
+
+.shop-toolbar__sort {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-sm);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+/* ---- Product details page ------------------------------------------------------ */
+.product-details {
+  padding-bottom: var(--space-3xl);
+}
+
+.product-details__back {
+  display: inline-block;
+  margin-block: var(--space-lg);
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.product-details__back:hover {
+  color: var(--color-primary);
+}
+
+.product-details__layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2xl);
+  align-items: start;
+}
+
+.product-details__main-image {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+
+.product-details__thumbs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.product-details__thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+}
+
+.product-details__category {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.product-details__title {
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-md);
+}
+
+.product-details__price-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__price {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+.product-details__old-price {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  text-decoration: line-through;
+}
+
+.product-details__stock {
+  font-weight: 700;
+  color: var(--color-success);
+  margin-bottom: var(--space-md);
+}
+
+.product-details__short-desc {
+  margin-bottom: var(--space-lg);
+}
+
+.product-details__quantity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.product-details__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 320px;
+  margin-bottom: var(--space-lg);
+}
+
+.product-details__meta p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin-bottom: var(--space-xs);
+}
+
+.product-details__description {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-2xl);
+  max-width: 70ch;
+}
+
+.product-details__description h2 {
+  margin-bottom: var(--space-md);
+}
+
+.product-details__description h3 {
+  margin-top: var(--space-xl);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__features {
+  list-style: disc;
+  padding-left: var(--space-lg);
+  color: var(--color-text-light);
+}
+
+.product-details__features li {
+  margin-bottom: var(--space-xs);
+}
