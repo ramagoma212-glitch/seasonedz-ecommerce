@@ -1,0 +1,21 @@
+// Prisma schema placeholder for the Seasonedz Group backend (Version 2).
+//
+// PLACEHOLDER — no models yet. Database schema design (Product,
+// Category, Order, Customer, etc.) is a future backend milestone.
+// This file exists now purely so Prisma is installed and correctly
+// configured ahead of that work.
+//
+// Planned provider: PostgreSQL. DATABASE_URL is read from the
+// environment (see .env.example) — no real database connection is
+// required or made in this milestone, and no migrations have been run.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Models will be added in a future milestone. None exist yet.

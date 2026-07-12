@@ -21,6 +21,11 @@ See **`VERSION_1_RELEASE_NOTES.md`** for the full release summary and
 or placeholder area, with notes on what upgrading it later would
 involve.
 
+> **Version 2 backend work has started** in the `backend/` folder
+> (Node.js + Express + TypeScript, foundation only so far — see
+> `backend/README.md`). The frontend documented in this README is
+> unaffected and continues to run exactly as described below.
+
 ### Features Included in Version 1
 
 - Homepage, full product catalogue, categories, and product detail
