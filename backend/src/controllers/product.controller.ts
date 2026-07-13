@@ -14,19 +14,24 @@ export async function listProducts(req: Request, res: Response, next: NextFuncti
     const sort = parseSortParam(req.query.sort);
 
     const minPrice = parsePriceParam(req.query.minPrice, "minPrice");
-    if (minPrice.error) {
-      sendError(res, { message: minPrice.error, statusCode: 400 });
-      return;
-    }
-
     const maxPrice = parsePriceParam(req.query.maxPrice, "maxPrice");
+
+    // Collected (not returned on the first failure) so a request with
+    // both minPrice and maxPrice invalid gets told about both at once —
+    // same "errors" array shape as POST /api/orders validation.
+    const queryErrors: Array<{ field: string; message: string }> = [];
+    if (minPrice.error) {
+      queryErrors.push({ field: "minPrice", message: minPrice.error });
+    }
     if (maxPrice.error) {
-      sendError(res, { message: maxPrice.error, statusCode: 400 });
-      return;
+      queryErrors.push({ field: "maxPrice", message: maxPrice.error });
+    }
+    if (!minPrice.error && !maxPrice.error && minPrice.value !== undefined && maxPrice.value !== undefined && minPrice.value > maxPrice.value) {
+      queryErrors.push({ field: "maxPrice", message: "maxPrice must not be less than minPrice" });
     }
 
-    if (minPrice.value !== undefined && maxPrice.value !== undefined && minPrice.value > maxPrice.value) {
-      sendError(res, { message: "minPrice must not be greater than maxPrice", statusCode: 400 });
+    if (queryErrors.length > 0) {
+      sendError(res, { message: "Validation failed", errors: queryErrors, statusCode: 400 });
       return;
     }
 

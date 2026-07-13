@@ -1,10 +1,10 @@
-# API Routes (Version 2, Milestones 12-13)
+# API Routes (Version 2, Milestones 12-14)
 
 Product, Category and guest Order API, backed by the real Supabase
-database seeded in Milestone 11. **Nothing here is connected to the
-frontend yet** — the frontend continues to run entirely on its own
-static data and Local Storage. This document is the reference for
-what the API returns today.
+database seeded in Milestone 11, hardened in Milestone 14. **Nothing
+here is connected to the frontend yet** — the frontend continues to
+run entirely on its own static data and Local Storage. This document
+is the reference for what the API returns today.
 
 Base path for every route: `/api`.
 
@@ -15,11 +15,116 @@ Every response follows the same shape (`src/utils/apiResponse.ts`):
 - Success: `{ "success": true, "message": string, "data": ... }`
 - Error: `{ "success": false, "message": string, "errors"?: ... }`
 
+### Validation error format
+
+Every validation failure across the whole API — order body validation
+and product query validation alike — uses the same `errors` shape, an
+array of `{ field, message }`:
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": [
+    { "field": "customer.email", "message": "Please provide a valid email address." },
+    { "field": "maxPrice", "message": "maxPrice must not be less than minPrice." }
+  ]
+}
+```
+HTTP status: `400`. All matching problems are reported together in one
+response (e.g. two invalid query params, or every missing checkout
+field) rather than one-at-a-time.
+
+Product/order **business-rule** errors that aren't shape validation —
+unknown product slug, insufficient stock, "not found" lookups — are
+still a clean `400`/`404`, just as a single `message` with no `errors`
+array (they're reported as soon as the first problem is found, since
+there's nothing meaningful to report per-field).
+
+### Other error statuses
+
+| Status | Meaning | Example |
+|---|---|---|
+| `400` | Validation failure, business-rule failure (bad stock/price/product), or a malformed JSON body | Invalid email; insufficient stock; unparseable request body |
+| `404` | Route, product or order not found | `GET /api/products/not-a-real-product` |
+| `429` | Rate limit exceeded | See "Rate Limiting" below |
+| `500` | Unexpected server error — message is generic in production, the real error in development | — |
+
+A malformed JSON request body (e.g. truncated/invalid JSON) is caught
+specifically and returns `400` with `{ "message": "Request body must
+be valid JSON." }`, rather than falling through to a generic `500`.
+
+## Security & Rate Limiting
+
+- **Helmet** sets standard security headers on every response.
+- **CORS** only allows explicitly configured origins — never a
+  wildcard, in any environment. See "CORS" below.
+- **Body size limit**: `express.json()`/`express.urlencoded()` both
+  cap request bodies at `1mb`.
+- **Rate limiting** (`express-rate-limit`, in-memory — resets on
+  restart, not shared across multiple instances):
+  - General limit on all of `/api`: **100 requests / 15 minutes / IP**.
+  - Additional, stricter limit on `POST /api/orders`: **10 requests /
+    15 minutes / IP** (stacks on top of the general limit).
+  - Exceeding either returns a clean `429`:
+    `{ "success": false, "message": "Too many requests. Please try again later." }`.
+- **Environment variables are validated at startup** — `DATABASE_URL`,
+  `DIRECT_URL` and `FRONTEND_URL` are all required; the backend fails
+  immediately with a clear error naming the missing variable (never
+  its value) rather than starting in a broken or insecure state. See
+  `src/config/env.ts` and README.md's "Environment Variables" section.
+- **No secrets are ever included in a response or a log line** — error
+  logging (development only) prints the error object, never `env`/
+  `process.env` values.
+- **`costPrice` is never returned by any route** — every product/order
+  output is built field-by-field (never a raw spread of the Prisma
+  row), so an internal-only column can't leak just because it exists
+  on the model.
+
+## CORS
+
+Allowed origins come from two environment variables (`src/config/
+env.ts`):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `FRONTEND_URL` | Always | The primary allowed origin (local dev server, or the deployed frontend in production) |
+| `FRONTEND_PRODUCTION_URL` | Optional | A second allowed origin — e.g. the deployed GitHub Pages URL, so both a local dev frontend and the live site can call this API at once |
+
+Any request whose `Origin` header isn't one of these is not blocked
+outright at the server (a non-browser client can always set any Origin
+header — CORS can't stop that), but the response is sent **without**
+an `Access-Control-Allow-Origin` header, so a real browser refuses to
+let that origin's JavaScript read it. There is no wildcard fallback in
+any environment. Requests with no `Origin` header at all (curl,
+server-to-server calls, health checks) are always allowed — CORS only
+ever governs what a browser page is allowed to read.
+
+In production, `FRONTEND_URL` has no built-in default — it must be set
+explicitly to the real deployed frontend origin, or the backend fails
+to start.
+
 ## Health
 
 | Method | Route | Description |
 |---|---|---|
-| GET | `/api/health` | Simple status check (unchanged from Milestone 9) |
+| GET | `/api/health` | Status check — service name, version, environment, timestamp |
+
+Example response:
+
+```json
+{
+  "success": true,
+  "message": "Seasonedz API is running",
+  "data": {
+    "service": "seasonedz-backend",
+    "version": "0.1.0",
+    "environment": "development",
+    "timestamp": "2026-07-13T00:47:35.219Z"
+  }
+}
+```
+Never includes `DATABASE_URL`, `DIRECT_URL`, or any other secret.
 
 ## Product Routes
 
@@ -48,10 +153,19 @@ this milestone. Admin product management is a future milestone.
 | `sort` | see below | Defaults to `featured` |
 
 **Invalid values:** a non-numeric or negative `minPrice`/`maxPrice`
-returns a `400` error (a value that specific deserves an explicit
-error rather than being silently dropped). If both are given and
-`minPrice > maxPrice`, that's also a `400`. An unrecognised `sort` or
-`stock` value is **not** an error — it's treated as if the parameter
+returns a `400` using the standard validation error shape (see
+"Validation error format" above) — a value that specific deserves an
+explicit error rather than being silently dropped, e.g.:
+
+```json
+{ "success": false, "message": "Validation failed", "errors": [{ "field": "minPrice", "message": "minPrice must be a non-negative number" }] }
+```
+
+If both `minPrice` and `maxPrice` are invalid, both errors come back
+in the same `errors` array. If both are validly-formed numbers but
+`minPrice > maxPrice`, that's also a `400` (`field: "maxPrice"`). An
+unrecognised `sort` or `stock` value is **not** an error — it's
+treated as if the parameter
 were omitted, since a typo'd sort/stock value still produces a
 perfectly valid product list.
 
@@ -420,3 +534,14 @@ HTTP status: `404`.
   unhandled errors return a clean JSON 500 without leaking internals
   in production (`errorMiddleware`) — both were already in place from
   Milestone 9 and are unchanged here.
+- Rate limiting is in-memory (per process) — it resets on every
+  restart and isn't shared across multiple instances. Fine for this
+  single-process milestone; a real multi-instance deployment would
+  need a shared store (e.g. Redis) instead.
+- No enquiry API yet — the frontend's four demo forms (Contact,
+  Schools, Wholesale, Distributor) still show their "doesn't send yet"
+  message. The `Enquiry` model exists in the schema (Milestone 10) but
+  nothing reads/writes it yet.
+- No `/api/products`/`/api/orders` write (create/update/delete) or
+  bulk-admin routes — everything added through Milestone 14 is either
+  read-only or, for orders, guest-create-and-lookup only.
