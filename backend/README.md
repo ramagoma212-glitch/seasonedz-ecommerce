@@ -5,22 +5,27 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: read-only Product and Category API.** A real
-PostgreSQL database (hosted on Supabase) holds a starter catalogue (6
-categories, 10 products), and there are now read-only `/api/products`
-and `/api/categories` routes on top of it — see "Product & Category
-API" below and the full reference in `API_ROUTES.md`. There are still
-no order API routes, no write endpoints (create/update/delete), no
-authentication, and **nothing here is connected to the frontend yet**
-— it continues to run entirely on its own static data. See "What's
-Coming Later" below.
+**Current status: Product/Category API plus a guest Order API.** A
+real PostgreSQL database (hosted on Supabase) holds a starter
+catalogue (6 categories, 10 products). On top of it: read-only
+`/api/products` and `/api/categories` routes (Milestone 12), and now
+`/api/orders` for guest order creation and lookup (Milestone 13) — see
+the full reference in `API_ROUTES.md`. Order creation verifies every
+product and price server-side (never trusts a client-supplied price)
+and reduces stock inside a database transaction. There is still no
+write API for products/categories, no login, no admin dashboard, no
+real payment or courier integration, and **nothing here is connected
+to the frontend yet** — it continues to run entirely on its own static
+data and Local Storage, including checkout. See "What's Coming Later"
+below.
 
 ## Tech Stack
 
 - Node.js + Express
 - TypeScript (ES Modules, `NodeNext` module resolution)
 - Prisma + PostgreSQL (hosted on Supabase) — schema migrated, seeded
-  with starter data, read-only Product/Category API built on top of it
+  with starter data; read-only Product/Category API and a guest Order
+  API (server-side pricing, stock, and totals) built on top of it
 
 ## Installing Dependencies
 
@@ -100,12 +105,16 @@ in a tracked template file.
 | GET | `/api/products/:slug` | A single product by slug |
 | GET | `/api/categories` | List categories, each with a product count |
 | GET | `/api/categories/:slug/products` | A category plus its products |
+| POST | `/api/orders` | Create a guest order (server-verified pricing/stock) |
+| GET | `/api/orders/:orderNumber` | Look up an order by its order number |
+| GET | `/api/orders/:orderNumber/tracking` | A lighter-weight tracking view of an order |
 
 **Full reference — query parameters, sort values, stock-filter
 semantics, exact output shapes, and example responses — is in
-[`API_ROUTES.md`](./API_ROUTES.md).** All product/category routes are
-read-only (no create/update/delete yet) and public (no authentication
-yet).
+[`API_ROUTES.md`](./API_ROUTES.md).** Product/category routes are
+read-only (no create/update/delete yet); order routes are guest-only
+(no login, no admin order list yet). Every route here is public (no
+authentication yet).
 
 Example response (`GET /api/health`):
 
@@ -147,19 +156,26 @@ backend/
       health.routes.ts           GET /api/health
       product.routes.ts          /api/products routes
       category.routes.ts         /api/categories routes
+      order.routes.ts             /api/orders routes
     controllers/
       health.controller.ts       Health check handler
       product.controller.ts      Product route handlers (query parsing, responses)
       category.controller.ts     Category route handlers
+      order.controller.ts         Order route handlers (validation, responses)
     services/
       product.service.ts         Product Prisma queries + output shaping
       category.service.ts        Category Prisma queries + output shaping
+      order.service.ts            Product verification, order transaction, tracking
+    validators/
+      order.validator.ts          POST /api/orders request-shape validation
     middleware/
       notFound.middleware.ts     Clean JSON 404 for unmatched routes
       error.middleware.ts         Clean JSON error handler
     utils/
       apiResponse.ts             Consistent success/error response helpers
       query.ts                    Safe query-string parsing helpers
+      money.ts                    Delivery fee calculation (Decimal-safe)
+      orderNumber.ts               Unique SG-YYYY-XXXX order number generator
   prisma/
     schema.prisma               Full data model (see DATABASE_SCHEMA_PLAN.md)
     seed.ts                      Starter categories/products (npm run seed)
@@ -180,8 +196,10 @@ Future backend milestones will add, roughly in this order:
 2. ~~**Product & category APIs** — read endpoints the frontend can
    eventually switch to instead of its static data files.~~ Done — see
    `API_ROUTES.md`.
-3. **Order APIs** — real order creation/lookup, replacing the
-   frontend's Local Storage demo orders.
+3. ~~**Order APIs** — real order creation/lookup, replacing the
+   frontend's Local Storage demo orders.~~ Done — see `API_ROUTES.md`.
+   Guest checkout only; no admin order list or authenticated order
+   history yet.
 4. **Connecting the frontend** — swapping the frontend's static
    data/Local Storage for real API calls.
 5. **Payment integration** (PayFast), **courier integration**, and
