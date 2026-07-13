@@ -5,19 +5,22 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: database schema migrated and seeded, no API routes
-yet.** A real PostgreSQL database (hosted on Supabase) now exists and
-holds a starter catalogue (6 categories, 10 products), but there are
-still no product/order API routes, and nothing here is connected to
-the frontend yet. The only working HTTP endpoint is a health check.
-See "What's Coming Later" below.
+**Current status: read-only Product and Category API.** A real
+PostgreSQL database (hosted on Supabase) holds a starter catalogue (6
+categories, 10 products), and there are now read-only `/api/products`
+and `/api/categories` routes on top of it — see "Product & Category
+API" below and the full reference in `API_ROUTES.md`. There are still
+no order API routes, no write endpoints (create/update/delete), no
+authentication, and **nothing here is connected to the frontend yet**
+— it continues to run entirely on its own static data. See "What's
+Coming Later" below.
 
 ## Tech Stack
 
 - Node.js + Express
 - TypeScript (ES Modules, `NodeNext` module resolution)
 - Prisma + PostgreSQL (hosted on Supabase) — schema migrated, seeded
-  with starter data, **no API routes built on top of it yet**
+  with starter data, read-only Product/Category API built on top of it
 
 ## Installing Dependencies
 
@@ -90,8 +93,21 @@ in a tracked template file.
 | Method | Route | Description |
 |---|---|---|
 | GET | `/api/health` | Returns a simple JSON status check |
+| GET | `/api/products` | List products — supports `search`, `category`, `minPrice`, `maxPrice`, `ageRange`, `stock`, `tag`, `sort` |
+| GET | `/api/products/featured` | Featured products |
+| GET | `/api/products/best-sellers` | Best-selling products |
+| GET | `/api/products/new-arrivals` | Newest-arrival products |
+| GET | `/api/products/:slug` | A single product by slug |
+| GET | `/api/categories` | List categories, each with a product count |
+| GET | `/api/categories/:slug/products` | A category plus its products |
 
-Example response:
+**Full reference — query parameters, sort values, stock-filter
+semantics, exact output shapes, and example responses — is in
+[`API_ROUTES.md`](./API_ROUTES.md).** All product/category routes are
+read-only (no create/update/delete yet) and public (no authentication
+yet).
+
+Example response (`GET /api/health`):
 
 ```json
 {
@@ -125,20 +141,30 @@ backend/
     server.ts                  Starts the HTTP server
     config/
       env.ts                    Reads and validates environment variables
+      prisma.ts                  Shared PrismaClient instance
     routes/
       index.ts                  Mounts every route group under /api
       health.routes.ts           GET /api/health
+      product.routes.ts          /api/products routes
+      category.routes.ts         /api/categories routes
     controllers/
       health.controller.ts       Health check handler
+      product.controller.ts      Product route handlers (query parsing, responses)
+      category.controller.ts     Category route handlers
+    services/
+      product.service.ts         Product Prisma queries + output shaping
+      category.service.ts        Category Prisma queries + output shaping
     middleware/
       notFound.middleware.ts     Clean JSON 404 for unmatched routes
       error.middleware.ts         Clean JSON error handler
     utils/
       apiResponse.ts             Consistent success/error response helpers
+      query.ts                    Safe query-string parsing helpers
   prisma/
     schema.prisma               Full data model (see DATABASE_SCHEMA_PLAN.md)
     seed.ts                      Starter categories/products (npm run seed)
     migrations/                  Generated SQL migration history
+  API_ROUTES.md                 Full Product/Category API reference
   .env.example
   package.json
   tsconfig.json
@@ -151,8 +177,9 @@ Future backend milestones will add, roughly in this order:
 1. ~~**Database schema** — real Prisma models (Product, Category,
    Order, Customer, etc.) and a real PostgreSQL connection.~~ Done —
    see `DATABASE_SCHEMA_PLAN.md`.
-2. **Product & category APIs** — read endpoints the frontend can
-   eventually switch to instead of its static data files.
+2. ~~**Product & category APIs** — read endpoints the frontend can
+   eventually switch to instead of its static data files.~~ Done — see
+   `API_ROUTES.md`.
 3. **Order APIs** — real order creation/lookup, replacing the
    frontend's Local Storage demo orders.
 4. **Connecting the frontend** — swapping the frontend's static
