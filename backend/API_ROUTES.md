@@ -1,10 +1,11 @@
-# API Routes (Version 2, Milestones 12-14)
+# API Routes (Version 2, Milestones 12-15)
 
-Product, Category and guest Order API, backed by the real Supabase
-database seeded in Milestone 11, hardened in Milestone 14. **Nothing
-here is connected to the frontend yet** — the frontend continues to
-run entirely on its own static data and Local Storage. This document
-is the reference for what the API returns today.
+Product, Category, guest Order, and Enquiry API, backed by the real
+Supabase database seeded in Milestone 11, hardened in Milestone 14.
+**Nothing here is connected to the frontend yet** — the frontend
+continues to run entirely on its own static data, Local Storage, and
+demo "doesn't send yet" form messages. This document is the reference
+for what the API returns today.
 
 Base path for every route: `/api`.
 
@@ -66,7 +67,10 @@ be valid JSON." }`, rather than falling through to a generic `500`.
   - General limit on all of `/api`: **100 requests / 15 minutes / IP**.
   - Additional, stricter limit on `POST /api/orders`: **10 requests /
     15 minutes / IP** (stacks on top of the general limit).
-  - Exceeding either returns a clean `429`:
+  - Additional, separate limit on `POST /api/enquiries`: **10 requests
+    / 15 minutes / IP** — its own counter, independent of the orders
+    limit above, even though the numbers match.
+  - Exceeding any of these returns a clean `429`:
     `{ "success": false, "message": "Too many requests. Please try again later." }`.
 - **Environment variables are validated at startup** — `DATABASE_URL`,
   `DIRECT_URL` and `FRONTEND_URL` are all required; the backend fails
@@ -511,6 +515,136 @@ backend itself set, never a live courier API.
 ```
 HTTP status: `404`.
 
+## Enquiry Routes
+
+| Method | Route | Description |
+|---|---|---|
+| POST | `/api/enquiries` | Submit an enquiry |
+| GET | `/api/enquiries/:id/status` | A safe, limited status lookup for one enquiry |
+
+This backs all four frontend demo forms — Contact, Schools, Wholesale,
+Distributor — via one `Enquiry` model, distinguished by `type`. **This
+is not an admin dashboard.** There is no list-all-enquiries route and
+no way to publicly browse enquiries; `GET /:id/status` only ever
+returns the narrow, non-identifying shape documented below, never the
+full enquiry.
+
+`POST /api/enquiries` has its own rate limit, separate from
+`POST /api/orders`'s: **10 requests / 15 minutes / IP** (on top of the
+general 100/15min limit on all of `/api` — see "Security & Rate
+Limiting" above).
+
+### POST /api/enquiries — Request Body
+
+```json
+{
+  "type": "CONTACT",
+  "name": "Example Name",
+  "email": "customer@example.com",
+  "phone": "0712345678",
+  "companyName": "Optional Company",
+  "organisationType": "Optional",
+  "subject": "Optional subject",
+  "message": "Customer message",
+  "province": "Gauteng",
+  "city": "Pretoria",
+  "estimatedQuantity": 50
+}
+```
+
+`type` must be one of `CONTACT`, `SCHOOL`, `WHOLESALE`, `DISTRIBUTOR`
+(the `EnquiryType` enum). `name`, `email` and `message` are always
+required; `phone` (if given) must look South African; `province` (if
+given) must be one of the 9 provinces (same list as the Order API);
+`estimatedQuantity` (if given) must be a positive whole number.
+`companyName`, `organisationType`, `subject`, `city` are always
+optional free text.
+
+**Type-specific rules** (see `src/validators/enquiry.validator.ts`):
+
+| Type | Extra requirement |
+|---|---|
+| `CONTACT` | None — `name`/`email`/`message` are already enough. |
+| `SCHOOL` | None enforced — `organisationType`/`companyName` and `estimatedQuantity` are useful but optional, so the form doesn't feel demanding. |
+| `WHOLESALE` | `companyName` **required**; `estimatedQuantity` **required** (and must be positive). |
+| `DISTRIBUTOR` | `companyName` **required**. `city`/`province` are encouraged but not enforced. |
+
+**Note on `estimatedQuantity` storage:** the schema's
+`Enquiry.estimatedQuantity` is deliberately a free-text `String?`
+field (see `DATABASE_SCHEMA_PLAN.md`/`schema.prisma` — wholesale and
+distributor enquiries don't always give a precise number). This
+endpoint's *input* validation is stricter — it only accepts a clean
+positive integer from the API — and that integer is then stored as a
+string. The schema itself is unchanged and still has room for freer
+text if a future milestone needs it.
+
+### Validation error example
+
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": [
+    { "field": "email", "message": "Please provide a valid email address." },
+    { "field": "companyName", "message": "Company name is required for wholesale enquiries." }
+  ]
+}
+```
+HTTP status: `400`. Same shape as every other validation error in this
+API (see "Validation error format" above).
+
+### Success response — POST /api/enquiries
+
+```json
+{
+  "success": true,
+  "message": "Enquiry received successfully",
+  "data": {
+    "id": "cmril912i0000qhkogml41nym",
+    "type": "CONTACT",
+    "status": "NEW",
+    "createdAt": "2026-07-13T02:13:37.577Z"
+  }
+}
+```
+HTTP status: `201`. **Deliberately narrow** — the response never
+echoes back the name/email/phone/message/etc. that were just
+submitted, even though the caller obviously already has that data;
+this keeps the response shape identical to (and reusable by) the
+status-lookup endpoint below.
+
+### GET /api/enquiries/:id/status
+
+```json
+{
+  "success": true,
+  "message": "Enquiry status retrieved successfully",
+  "data": {
+    "id": "cmril912i0000qhkogml41nym",
+    "type": "CONTACT",
+    "status": "NEW",
+    "createdAt": "2026-07-13T02:13:37.577Z",
+    "message": "Your enquiry has been received."
+  }
+}
+```
+
+**Privacy note:** this is a public, unauthenticated endpoint (there's
+no login in this version), so it is deliberately limited to
+`id`/`type`/`status`/`createdAt`/a friendly status `message`. It never
+returns `name`, `email`, `phone`, `companyName`, or the enquiry's own
+`message` text — those are only ever visible to whatever reads the
+database directly (there is no admin dashboard yet). The database
+query backing this route uses Prisma's `select` to fetch only those
+four safe columns, so the rest can't leak even by accident.
+
+If the id doesn't match any enquiry:
+
+```json
+{ "success": false, "message": "Enquiry not found: not-real-id" }
+```
+HTTP status: `404`.
+
 ## Known Limitations
 
 - **The frontend is not connected.** It still reads its own static
@@ -538,10 +672,15 @@ HTTP status: `404`.
   restart and isn't shared across multiple instances. Fine for this
   single-process milestone; a real multi-instance deployment would
   need a shared store (e.g. Redis) instead.
-- No enquiry API yet — the frontend's four demo forms (Contact,
-  Schools, Wholesale, Distributor) still show their "doesn't send yet"
-  message. The `Enquiry` model exists in the schema (Milestone 10) but
-  nothing reads/writes it yet.
-- No `/api/products`/`/api/orders` write (create/update/delete) or
-  bulk-admin routes — everything added through Milestone 14 is either
-  read-only or, for orders, guest-create-and-lookup only.
+- The Enquiry API (Milestone 15) exists and works, but **the
+  frontend's four demo forms are not wired up to it yet** — Contact,
+  Schools, Wholesale and Distributor still show their "doesn't send
+  yet" message. Swapping that over is a future milestone.
+- No enquiry list/admin route of any kind — `GET /:id/status` is
+  intentionally the only way to read anything back, and it only ever
+  returns the narrow, non-identifying status shape (see "Enquiry
+  Routes" above). There's no way to browse or search enquiries via
+  this API.
+- No `/api/products`/`/api/orders`/`/api/enquiries` write
+  (update/delete) or bulk-admin routes — everything is either
+  read-only, or create-and-narrow-lookup only.

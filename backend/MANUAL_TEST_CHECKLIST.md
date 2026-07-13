@@ -90,6 +90,33 @@ products.
 - [ ] `GET /api/orders/not-real-order` → `404`.
 - [ ] `GET /api/orders/not-real-order/tracking` → `404`.
 
+## Enquiries
+
+- [ ] `POST /api/enquiries` with a valid `CONTACT` body → `201`,
+      `status: "NEW"`.
+- [ ] Same for `SCHOOL`, `WHOLESALE` (with `companyName` +
+      `estimatedQuantity`), and `DISTRIBUTOR` (with `companyName`).
+- [ ] `POST /api/enquiries` with `{}` → `400`, `errors` lists `type`,
+      `name`, `email`, `message`.
+- [ ] Invalid `email` / invalid `phone` / invalid `type` → `400`,
+      field-specific error.
+- [ ] `WHOLESALE` missing `companyName` → `400`. `WHOLESALE` missing
+      `estimatedQuantity` → `400` (test independently — each error
+      alone, not just together).
+- [ ] `DISTRIBUTOR` missing `companyName` → `400`.
+- [ ] `estimatedQuantity: 0` (or negative, or non-integer) → `400`.
+- [ ] `GET /api/enquiries/<real-id>/status` → `200`, only
+      `id`/`type`/`status`/`createdAt`/`message` — **no `name`,
+      `email`, `phone`, `companyName`, or the enquiry's own
+      `message`.**
+- [ ] `GET /api/enquiries/not-real-id/status` → `404`.
+- [ ] 11 rapid `POST /api/enquiries` requests → the 11th returns `429`
+      (separate 10/15min/IP counter from order creation — confirm a
+      still-fresh order-creation request succeeds in the same window).
+- [ ] Query the database directly afterward: enquiry rows exist with
+      the expected fields, `estimatedQuantity` stored as a string
+      (e.g. `"50"`), optional fields `null` when omitted.
+
 ## Security / Infrastructure
 
 - [ ] Unknown route (e.g. `GET /api/nonexistent`) → `404`, clean JSON,

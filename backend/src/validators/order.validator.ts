@@ -7,18 +7,17 @@
 // order.service.ts, since it needs the database.
 
 import { PaymentMethod } from "@prisma/client";
+import {
+  asRecord,
+  isNonEmptyString,
+  isValidEmail,
+  isValidPostalCode,
+  isValidSAPhone,
+  SA_PROVINCES,
+  type ValidationErrorDetail,
+} from "./shared.js";
 
-const SA_PROVINCES = [
-  "Eastern Cape",
-  "Free State",
-  "Gauteng",
-  "KwaZulu Natal",
-  "Limpopo",
-  "Mpumalanga",
-  "Northern Cape",
-  "North West",
-  "Western Cape",
-] as const;
+export type { ValidationErrorDetail } from "./shared.js";
 
 const PAYMENT_METHOD_VALUES: PaymentMethod[] = [
   PaymentMethod.BANK_TRANSFER,
@@ -26,11 +25,6 @@ const PAYMENT_METHOD_VALUES: PaymentMethod[] = [
   PaymentMethod.CASH_ON_DELIVERY,
   PaymentMethod.MANUAL,
 ];
-
-export interface ValidationErrorDetail {
-  field: string;
-  message: string;
-}
 
 export interface ValidatedOrderItem {
   productSlug: string;
@@ -56,30 +50,6 @@ export interface OrderValidationResult {
   isValid: boolean;
   errors: ValidationErrorDetail[];
   value: ValidatedOrderInput | null;
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-// Same rule as the frontend (src/js/validation.js): a local number
-// starting with 0, or an international +27 number, once spaces/dashes
-// are stripped.
-function isValidSAPhone(phone: string): boolean {
-  const cleaned = phone.replace(/[\s-]/g, "");
-  return /^(0\d{9}|\+27\d{9})$/.test(cleaned);
-}
-
-function isValidPostalCode(postalCode: string): boolean {
-  return /^\d{4}$/.test(postalCode.trim());
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
 export function validateOrderRequest(body: unknown): OrderValidationResult {

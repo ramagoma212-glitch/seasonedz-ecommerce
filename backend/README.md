@@ -5,29 +5,31 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: Product/Category API, a guest Order API, and API
-hardening.** A real PostgreSQL database (hosted on Supabase) holds a
-starter catalogue (6 categories, 10 products). On top of it: read-only
-`/api/products` and `/api/categories` routes (Milestone 12), guest
-`/api/orders` creation/lookup (Milestone 13), and — as of Milestone 14
-— rate limiting, multi-origin CORS, stricter startup environment
-validation, and consistent validation-error responses across the whole
-API. See the full reference in `API_ROUTES.md`. Order creation
-verifies every product and price server-side (never trusts a
-client-supplied price) and reduces stock inside a database
-transaction. There is still no write API for products/categories, no
-login, no admin dashboard, no real payment or courier integration, and
-**nothing here is connected to the frontend yet** — it continues to
-run entirely on its own static data and Local Storage, including
-checkout. See "What's Coming Later" below.
+**Current status: Product/Category API, a guest Order API, a hardened
+security baseline, and an Enquiry API.** A real PostgreSQL database
+(hosted on Supabase) holds a starter catalogue (6 categories, 10
+products). On top of it: read-only `/api/products` and `/api/categories`
+routes (Milestone 12), guest `/api/orders` creation/lookup (Milestone
+13), rate limiting/multi-origin CORS/stricter startup validation
+(Milestone 14), and — as of Milestone 15 — `/api/enquiries` for the
+frontend's Contact/Schools/Wholesale/Distributor forms. See the full
+reference in `API_ROUTES.md`. Order creation verifies every product
+and price server-side (never trusts a client-supplied price) and
+reduces stock inside a database transaction. There is still no write
+API for products/categories, no login, no admin dashboard, no real
+payment or courier integration, and **nothing here is connected to the
+frontend yet** — it continues to run entirely on its own static data,
+Local Storage, and demo form messages. See "What's Coming Later"
+below.
 
 ## Tech Stack
 
 - Node.js + Express
 - TypeScript (ES Modules, `NodeNext` module resolution)
 - Prisma + PostgreSQL (hosted on Supabase) — schema migrated, seeded
-  with starter data; read-only Product/Category API and a guest Order
-  API (server-side pricing, stock, and totals) built on top of it
+  with starter data; read-only Product/Category API, a guest Order API
+  (server-side pricing, stock, and totals), and an Enquiry API built on
+  top of it
 
 ## Installing Dependencies
 
@@ -141,13 +143,17 @@ is documented in `API_ROUTES.md`'s "CORS" section.
 | POST | `/api/orders` | Create a guest order (server-verified pricing/stock) |
 | GET | `/api/orders/:orderNumber` | Look up an order by its order number |
 | GET | `/api/orders/:orderNumber/tracking` | A lighter-weight tracking view of an order |
+| POST | `/api/enquiries` | Submit an enquiry (Contact/Schools/Wholesale/Distributor) |
+| GET | `/api/enquiries/:id/status` | A safe, limited status lookup — no personal details |
 
 **Full reference — query parameters, sort values, stock-filter
 semantics, exact output shapes, and example responses — is in
 [`API_ROUTES.md`](./API_ROUTES.md).** Product/category routes are
-read-only (no create/update/delete yet); order routes are guest-only
-(no login, no admin order list yet). Every route here is public (no
-authentication yet).
+read-only (no create/update/delete yet); order and enquiry routes are
+guest-only (no login, no admin list-all route for either). Every route
+here is public (no authentication yet). The enquiry status lookup is
+deliberately narrow — see "Enquiry Routes" in `API_ROUTES.md` for
+exactly what it does and doesn't return.
 
 Example response (`GET /api/health`):
 
@@ -193,8 +199,10 @@ Hardened in Milestone 14 — full detail in `API_ROUTES.md`'s "Security
 - **Request body size** capped at `1mb`.
 - **Rate limiting** (`express-rate-limit`, in-memory): 100 requests /
   15 minutes / IP across all of `/api`; an additional, stricter 10
-  requests / 15 minutes / IP on `POST /api/orders` specifically.
-  Exceeding either returns a clean `429` JSON response.
+  requests / 15 minutes / IP each on `POST /api/orders` and
+  `POST /api/enquiries` specifically (separate counters — one doesn't
+  affect the other). Exceeding any of these returns a clean `429` JSON
+  response.
 - **Environment variables validated at startup** (see "Environment
   Variables" above) — the backend refuses to start in a misconfigured
   state rather than failing confusingly later.
@@ -218,21 +226,26 @@ backend/
       product.routes.ts          /api/products routes
       category.routes.ts         /api/categories routes
       order.routes.ts             /api/orders routes
+      enquiry.routes.ts            /api/enquiries routes
     controllers/
       health.controller.ts       Health check handler
       product.controller.ts      Product route handlers (query parsing, responses)
       category.controller.ts     Category route handlers
       order.controller.ts         Order route handlers (validation, responses)
+      enquiry.controller.ts        Enquiry route handlers (validation, responses)
     services/
       product.service.ts         Product Prisma queries + output shaping
       category.service.ts        Category Prisma queries + output shaping
       order.service.ts            Product verification, order transaction, tracking
+      enquiry.service.ts           Enquiry creation + narrow public status lookup
     validators/
+      shared.ts                   Validation primitives shared by every validator below
       order.validator.ts          POST /api/orders request-shape validation
+      enquiry.validator.ts         POST /api/enquiries request-shape + type-specific validation
     middleware/
       notFound.middleware.ts     Clean JSON 404 for unmatched routes
       error.middleware.ts         Clean JSON error handler (incl. malformed JSON -> 400)
-      rateLimit.middleware.ts     express-rate-limit configs (general + order creation)
+      rateLimit.middleware.ts     express-rate-limit configs (general, order, enquiry)
     utils/
       apiResponse.ts             Consistent success/error response helpers
       query.ts                    Safe query-string parsing helpers
@@ -266,13 +279,15 @@ Future backend milestones will add, roughly in this order:
 4. ~~**API hardening** — rate limiting, multi-origin CORS, stricter
    startup environment validation, consistent validation-error
    responses.~~ Done — see `API_ROUTES.md`.
-5. **Connecting the frontend** — swapping the frontend's static
-   data/Local Storage for real API calls.
-6. **Enquiry API** — a real endpoint backing the frontend's four demo
-   forms (Contact, Schools, Wholesale, Distributor).
+5. ~~**Enquiry API** — a real endpoint backing the frontend's four demo
+   forms (Contact, Schools, Wholesale, Distributor).~~ Done — see
+   `API_ROUTES.md`. Frontend forms aren't wired up to it yet.
+6. **Connecting the frontend** — swapping the frontend's static
+   data/Local Storage/demo form messages for real API calls.
 7. **Payment integration** (PayFast), **courier integration**, and
    **authentication** (login/registration), each as their own
    milestone.
-8. **Admin dashboard** for managing products, categories and orders.
+8. **Admin dashboard** for managing products, categories, orders and
+   enquiries.
 
 This README will be updated as each piece lands.

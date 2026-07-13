@@ -36,3 +36,16 @@ export const orderCreationRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// A separate counter from orderCreationRateLimiter (not the same
+// instance/route) — an IP's order attempts and enquiry submissions
+// shouldn't share one combined budget, even though the numbers happen
+// to match. Enquiry submission is unauthenticated and write-only, the
+// same shape of risk as order creation.
+export const enquiryCreationRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
