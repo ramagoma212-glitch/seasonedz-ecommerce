@@ -5,22 +5,21 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: Product/Category API, a guest Order API, a hardened
-security baseline, and an Enquiry API.** A real PostgreSQL database
-(hosted on Supabase) holds a starter catalogue (6 categories, 10
-products). On top of it: read-only `/api/products` and `/api/categories`
-routes (Milestone 12), guest `/api/orders` creation/lookup (Milestone
-13), rate limiting/multi-origin CORS/stricter startup validation
-(Milestone 14), and — as of Milestone 15 — `/api/enquiries` for the
-frontend's Contact/Schools/Wholesale/Distributor forms. See the full
-reference in `API_ROUTES.md`. Order creation verifies every product
-and price server-side (never trusts a client-supplied price) and
-reduces stock inside a database transaction. There is still no write
-API for products/categories, no login, no admin dashboard, no real
-payment or courier integration, and **nothing here is connected to the
-frontend yet** — it continues to run entirely on its own static data,
-Local Storage, and demo form messages. See "What's Coming Later"
-below.
+**Current status: connected to the frontend locally, and prepared for
+deployment (not yet deployed).** A real PostgreSQL database (hosted on
+Supabase) holds a starter catalogue (6 categories, 10 products), with
+`/api/products`, `/api/categories`, `/api/orders` and `/api/enquiries`
+on top of it (Milestones 12-15), hardened with rate limiting,
+multi-origin CORS and stricter startup validation (Milestone 14). As
+of Milestone 16, the frontend actually calls this API locally — see
+`../VERSION_2_INTEGRATION_NOTES.md`. As of Milestone 17, this backend
+is *prepared* for deployment to a host like Render — see
+`DEPLOYMENT.md` and `DEPLOYMENT_CHECKLIST.md` — but **has not actually
+been deployed anywhere yet**; it still only runs locally. See the full
+API reference in `API_ROUTES.md`. Order creation verifies every
+product and price server-side (never trusts a client-supplied price)
+and reduces stock inside a database transaction. There is still no
+write API for products/categories, no login, and no admin dashboard.
 
 ## Tech Stack
 
@@ -257,10 +256,25 @@ backend/
     migrations/                  Generated SQL migration history
   API_ROUTES.md                 Full API reference (routes, security, errors)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
+  DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
+  DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy
   .env.example
   package.json
   tsconfig.json
 ```
+
+## Deployment
+
+Not deployed yet — this backend still only runs locally. When that's
+ready to change, `DEPLOYMENT.md` has the full plan (Render settings,
+environment variables, CORS, Prisma migration notes, and how the
+frontend's `VITE_API_BASE_URL` needs to be updated and redeployed
+afterward), and `DEPLOYMENT_CHECKLIST.md` has a safety checklist to
+work through before and after. An optional `render.yaml` at the repo
+root can pre-fill Render's settings, but manual setup through Render's
+UI works identically. **Real environment secrets are never committed
+to Git** — they're only ever entered directly in the hosting
+provider's dashboard.
 
 ## What's Coming Later
 
@@ -281,13 +295,21 @@ Future backend milestones will add, roughly in this order:
    responses.~~ Done — see `API_ROUTES.md`.
 5. ~~**Enquiry API** — a real endpoint backing the frontend's four demo
    forms (Contact, Schools, Wholesale, Distributor).~~ Done — see
-   `API_ROUTES.md`. Frontend forms aren't wired up to it yet.
-6. **Connecting the frontend** — swapping the frontend's static
-   data/Local Storage/demo form messages for real API calls.
-7. **Payment integration** (PayFast), **courier integration**, and
+   `API_ROUTES.md`.
+6. ~~**Connecting the frontend** — swapping the frontend's static
+   data/Local Storage/demo form messages for real API calls.~~ Done —
+   see `../VERSION_2_INTEGRATION_NOTES.md`. Cart/wishlist remain Local
+   Storage by design.
+7. ~~**Backend deployment preparation** — production-ready scripts,
+   environment validation, CORS, and a documented Render deployment
+   plan.~~ Done — see "Deployment" above. **Not actually deployed
+   yet.**
+8. Actually deploying the backend, then updating the frontend's
+   `VITE_API_BASE_URL` and redeploying it to GitHub Pages.
+9. **Payment integration** (PayFast), **courier integration**, and
    **authentication** (login/registration), each as their own
    milestone.
-8. **Admin dashboard** for managing products, categories, orders and
-   enquiries.
+10. **Admin dashboard** for managing products, categories, orders and
+    enquiries.
 
 This README will be updated as each piece lands.

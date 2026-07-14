@@ -60,6 +60,14 @@ export const env = {
 // Every browser origin CORS should accept — never a wildcard. Built
 // from FRONTEND_URL (always present) plus FRONTEND_PRODUCTION_URL
 // (only if set). See app.ts for how this is used.
+//
+// Important: an "origin" is scheme + host (+ port), never a path — the
+// browser's Origin header for a request from
+// https://ramagoma212-glitch.github.io/seasonedz-ecommerce/#/shop is
+// just "https://ramagoma212-glitch.github.io", with no /seasonedz-ecommerce
+// suffix. So FRONTEND_PRODUCTION_URL must be set to that bare
+// scheme+host value, not the full GitHub Pages project-site path — see
+// backend/DEPLOYMENT.md.
 export const allowedOrigins: string[] = [env.frontendUrl, env.frontendProductionUrl].filter(
   (url): url is string => Boolean(url)
 );

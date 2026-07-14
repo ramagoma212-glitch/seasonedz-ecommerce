@@ -2,7 +2,7 @@
   "name": "seasonedz-backend",
   "private": true,
   "version": "0.1.0",
-  "description": "Seasonedz Group backend API (Version 2 foundation) — Express + TypeScript, no database connection yet.",
+  "description": "Seasonedz Group backend API (Version 2) — Express + TypeScript + Prisma, backed by a real Supabase PostgreSQL database.",
   "type": "module",
   "main": "dist/server.js",
   "engines": {
@@ -10,7 +10,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
     "seed": "tsx prisma/seed.ts"

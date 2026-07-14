@@ -1,0 +1,31 @@
+# Render Blueprint — optional. Pre-fills the backend service's settings
+# when creating it via Render's "New → Blueprint" flow. Contains no
+# secret values: every env var below either has a plain, non-secret
+# value (NODE_ENV) or is marked `sync: false`, which tells Render "this
+# variable is required, but must be entered by hand in the dashboard"
+# — see backend/DEPLOYMENT.md and backend/DEPLOYMENT_CHECKLIST.md.
+#
+# This file is not required — manual setup through Render's UI (using
+# the same settings listed in backend/DEPLOYMENT.md) works exactly the
+# same way and doesn't depend on this file existing at all.
+
+services:
+  - type: web
+    name: seasonedz-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: FRONTEND_PRODUCTION_URL
+        sync: false

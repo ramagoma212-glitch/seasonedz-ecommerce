@@ -31,6 +31,14 @@ involve.
 > servers locally. Cart and wishlist are still Local Storage only, and
 > there's still no real payment, no real courier tracking, and no
 > login — see that file for the full picture.
+>
+> **Backend deployment preparation has started** (Milestone 17) — the
+> backend is not deployed anywhere yet, but `backend/DEPLOYMENT.md` now
+> has a full plan for deploying it to Render (or a similar host) when
+> that's decided, plus `backend/DEPLOYMENT_CHECKLIST.md` for what to
+> verify before/after. As always, real environment secrets (database
+> credentials, etc.) are never committed to Git — only entered directly
+> in the hosting provider's dashboard.
 
 ### Features Included in Version 1
 
