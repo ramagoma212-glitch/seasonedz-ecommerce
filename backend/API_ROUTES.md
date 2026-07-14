@@ -1,11 +1,12 @@
-# API Routes (Version 2, Milestones 12-15)
+# API Routes (Version 2, Milestones 12-17)
 
 Product, Category, guest Order, and Enquiry API, backed by the real
 Supabase database seeded in Milestone 11, hardened in Milestone 14.
-**Nothing here is connected to the frontend yet** — the frontend
-continues to run entirely on its own static data, Local Storage, and
-demo "doesn't send yet" form messages. This document is the reference
-for what the API returns today.
+**As of Milestone 16, the frontend calls this API locally** (with a
+static-data fallback if the backend isn't running) — see
+`../VERSION_2_INTEGRATION_NOTES.md`. Nothing is deployed anywhere yet
+(Milestone 17 only prepared for that — see `DEPLOYMENT.md`). This
+document is the reference for what the API returns today.
 
 Base path for every route: `/api`.
 
@@ -647,10 +648,10 @@ HTTP status: `404`.
 
 ## Known Limitations
 
-- **The frontend is not connected.** It still reads its own static
-  data and Local Storage; nothing on the site calls this API yet —
-  including checkout, which still creates Local Storage demo orders
-  exactly as before.
+- **The frontend is connected locally (Milestone 16), but nothing is
+  deployed anywhere.** Cart and wishlist still stay in Local Storage
+  by design — see `../VERSION_2_INTEGRATION_NOTES.md` for exactly
+  what's connected and what still falls back to static/local data.
 - Read-only Product/Category API: no create/update/delete routes for
   products or categories. Admin management is a future milestone.
 - Guest orders only: no login, no authenticated customer order
