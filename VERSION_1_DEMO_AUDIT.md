@@ -1,5 +1,14 @@
 # Version 1 Demo Audit
 
+> **Update (Version 2, Milestone 16):** several items below have since
+> been connected to a real backend running locally — products/
+> categories, checkout, order confirmation/tracking, and the Contact/
+> Schools/Wholesale/Distributor forms. This document is kept as-is, as
+> an accurate historical record of Version 1. See
+> **`VERSION_2_INTEGRATION_NOTES.md`** for what has actually changed
+> and what (cart/wishlist, real payment, real courier tracking, login)
+> is still demo/local-only.
+
 This document lists every part of the Seasonedz Group website that is
 currently **demo only, sample content, or a placeholder** — built to
 show how the feature will work, but not yet connected to anything real

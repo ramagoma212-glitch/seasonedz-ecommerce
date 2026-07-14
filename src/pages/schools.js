@@ -63,6 +63,8 @@ export function renderSchools() {
           orgPlaceholder: "e.g. Sunnyside Primary School",
           ctaText: "Send School Enquiry",
           idPrefix: "school",
+          type: "SCHOOL",
+          showQuantityField: true,
         })}
       </div>
     </section>

@@ -2,12 +2,15 @@
 // rails (featured / best sellers / new arrivals) built from real
 // product data, a schools/wholesale banner and a customer trust section.
 // No cart/checkout functionality lives here yet.
+//
+// Product/category data now loads from the backend API where
+// possible, falling back to the static data files if it's unavailable
+// — see js/api/productsApi.js.
 
-import { categories } from "../data/categories.js";
-import { products } from "../data/products.js";
 import { renderCategoryCard } from "../components/categoryCard.js";
 import { renderProductCard } from "../components/productCard.js";
 import { withBase } from "../js/paths.js";
+import { getCatalog } from "../js/api/productsApi.js";
 
 const MAX_PER_ROW = 4;
 
@@ -27,7 +30,9 @@ function renderProductRow(heading, subtext, list) {
   `;
 }
 
-export function renderHome() {
+export async function renderHome() {
+  const { products, categories } = await getCatalog();
+
   const featured = products.filter((product) => product.isFeatured);
   const bestSellers = products.filter((product) => product.isBestSeller);
   const newArrivals = products.filter((product) => product.isNewArrival);

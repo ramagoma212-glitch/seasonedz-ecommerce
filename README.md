@@ -21,10 +21,16 @@ See **`VERSION_1_RELEASE_NOTES.md`** for the full release summary and
 or placeholder area, with notes on what upgrading it later would
 involve.
 
-> **Version 2 backend work has started** in the `backend/` folder
-> (Node.js + Express + TypeScript, foundation only so far — see
-> `backend/README.md`). The frontend documented in this README is
-> unaffected and continues to run exactly as described below.
+> **Version 2: the frontend now talks to the backend, locally.** As of
+> Milestone 16, the frontend calls the real backend API (`backend/`,
+> see `backend/README.md`) for products/categories, checkout, order
+> confirmation/tracking, and the Contact/Schools/Wholesale/Distributor
+> forms — with a safe fallback to the original static data if the
+> backend isn't running. See **`VERSION_2_INTEGRATION_NOTES.md`** for
+> exactly what's connected, what still isn't, and how to run both
+> servers locally. Cart and wishlist are still Local Storage only, and
+> there's still no real payment, no real courier tracking, and no
+> login — see that file for the full picture.
 
 ### Features Included in Version 1
 
@@ -63,14 +69,34 @@ involve.
 npm install
 ```
 
-### 2. Run the development server
+### 2. (Optional but recommended) Start the backend
+
+For live products/categories, real checkout, order confirmation/
+tracking, and working Contact/Schools/Wholesale/Distributor forms, the
+backend needs to be running locally too — see `backend/README.md` for
+its own setup (env vars, database, `npm install`). Once set up:
+
+```bash
+cd backend
+npm run dev
+```
+
+It listens on `http://localhost:5000` by default. **The frontend still
+works without this** — see `VERSION_2_INTEGRATION_NOTES.md` for what
+falls back to static/demo behaviour when the backend isn't running.
+
+### 3. Run the frontend development server
+
+From the project root (a separate terminal from the backend, if it's running):
 
 ```bash
 npm run dev
 ```
 
 Vite will print a local URL (usually `http://localhost:5173`) — open it
-in your browser.
+in your browser. It reads `VITE_API_BASE_URL` from `.env` (copy
+`.env.example` if `.env` doesn't exist yet) to know where the backend
+is — not a secret, safe to see in the browser.
 
 ### Other scripts
 
@@ -103,11 +129,21 @@ seasonedz-ecommerce/
       app.js                  Entry point — mounts header/footer, wires up all delegated
                                event handling (cart, wishlist, forms, filters, etc.)
       router.js               Hash-based router (routes, dynamic segments, query strings,
-                               per-page document titles)
+                               per-page document titles) — supports async page renders
+      apiClient.js             Low-level fetch wrapper: JSON, error handling, ApiError/
+                               ApiUnavailableError (see VERSION_2_INTEGRATION_NOTES.md)
+      api/                     Backend API calls + response-shape mapping
+        productsApi.js           Products/categories, with static-data fallback
+        ordersApi.js              Order creation/lookup/tracking, order payload builder
+        enquiriesApi.js           Enquiry submission
+        mappers.js                 Maps backend shapes onto the existing frontend shape
       storage.js               Safe Local Storage read/write helpers
-      cart.js, wishlist.js      Cart/wishlist logic + Local Storage persistence
-      orders.js                 Demo order creation, lookup, and status/tracking model
+      cart.js, wishlist.js      Cart/wishlist logic + Local Storage persistence (unchanged
+                               in Version 2 — see VERSION_2_INTEGRATION_NOTES.md)
+      orders.js                 Version 1 demo order model — kept only as a fallback for
+                               orders created before the backend existed (see notes above)
       search.js                  Search, filter and sort logic for the shop/search pages
+                               (still runs client-side against API or static data alike)
       validation.js              Form validation (checkout, generic helpers)
       paths.js                    Resolves image paths against the GitHub Pages base path
 
@@ -187,30 +223,42 @@ handler in `src/js/app.js` (since page content is re-rendered on every
 route change, not just mounted once), which updates Local Storage,
 refreshes the header badge counts, and shows a toast message.
 
-**Important:** prices in the cart are never re-verified anywhere.
-Once a real backend exists, every price must be checked server-side
-before an order is accepted — see the Security section of
-`VERSION_1_DEMO_AUDIT.md`.
+**Important:** prices in the cart are still never trusted at checkout
+— the backend (`backend/src/services/order.service.ts`) re-looks-up
+every item by slug and re-prices it from the database before creating
+an order, ignoring any price the frontend sends. See
+`VERSION_2_INTEGRATION_NOTES.md`.
 
-## How Demo Orders Work
+## How Checkout, Order Confirmation and Tracking Work (Version 2)
 
 1. A customer fills in the guest checkout form (`src/pages/checkoutPage.js`).
-2. On submit, `src/js/validation.js` validates every field
-   (client-side only).
-3. If valid, `src/js/orders.js`'s `createOrder()` builds an order
-   object — generating a readable order number like `SG-2026-A1B2` —
-   and saves it to Local Storage under `seasonedz_orders`.
-4. The cart is cleared, and the customer is redirected to
-   `#/order-confirmation?order=<order-number>`.
-5. The same order can later be looked up on the Track Order page
-   (`#/track-order?order=<order-number>`), which shows a status
-   stepper driven by `orders.js`'s fixed demo status model — the
-   status never changes on its own (there's a `setOrderStatusForDemo`
-   helper for developers to preview different stages, but no
-   customer-facing control to change it).
+2. On submit, `src/js/validation.js` validates every field client-side
+   first (fast feedback), then the cart items (`productSlug` +
+   `quantity` only — never price) and form data are sent to
+   `POST /api/orders` (`src/js/api/ordersApi.js`).
+3. The backend validates everything again, re-prices every item, and
+   creates a real database order — see `backend/API_ROUTES.md`. Its
+   response order number is what the frontend actually uses.
+4. On success, the cart is cleared and the customer is redirected to
+   `#/order-confirmation?order=<order-number>`, which fetches the real
+   order from `GET /api/orders/:orderNumber`.
+5. The Track Order page (`#/track-order?order=<order-number>`) calls
+   `GET /api/orders/:orderNumber/tracking` for a lighter-weight status
+   view with a visual stepper, driven by the backend's real
+   `OrderStatus` — the status only changes if a staff member updates
+   it directly in the database (there's no automated status
+   progression, and no customer-facing control to change it).
 
-No real payment is taken, no goods are shipped, and no order is ever
-seen outside the browser that created it.
+**If the backend isn't running**, checkout shows a clear "could not
+connect to the order system" message instead of silently creating a
+fake order — see `VERSION_2_INTEGRATION_NOTES.md`. Orders placed
+*before* the backend existed (Version 1, Local Storage only) still
+work on the confirmation/tracking pages too, clearly labelled as old
+local demo data — `src/js/orders.js` is kept around for exactly that
+fallback.
+
+No real payment is taken yet, and no goods are shipped — see the demo
+notices on the checkout and confirmation pages themselves.
 
 ## How GitHub Pages Deployment Works
 
@@ -231,9 +279,11 @@ Live site: `https://<your-github-username>.github.io/seasonedz-ecommerce/`
 
 ## Known Demo Limitations
 
-Cart, wishlist, checkout, orders, tracking, and every contact/enquiry
-form are all demo-only — see **`VERSION_1_DEMO_AUDIT.md`** for the
-full, itemised breakdown of what's demo vs. real, and why.
+Cart and wishlist are still Local Storage only, and there's still no
+real payment processing, no real courier tracking, and no login — see
+**`VERSION_2_INTEGRATION_NOTES.md`** for exactly what's now connected
+to the backend versus what's still demo/local-only. For the original
+Version 1 (before any backend existed), see **`VERSION_1_DEMO_AUDIT.md`**.
 
 ## SEO Notes
 
@@ -252,12 +302,18 @@ to a real backend.
 
 ## Future Roadmap
 
-### Version 2 — Backend & Database Foundation (recommended next step)
+### Version 2 — Backend & Local Integration (in progress)
 
-- Real backend + database, replacing Local Storage as the source of
-  truth for products, cart, wishlist and orders.
+- ~~Real backend + database~~ — done (see `backend/`).
+- ~~Frontend connected to the backend locally~~ (products/categories,
+  checkout, order confirmation/tracking, enquiry forms) — done, see
+  `VERSION_2_INTEGRATION_NOTES.md`. Cart/wishlist remain Local Storage
+  by design.
+- Deploying the backend somewhere reachable from the live GitHub Pages
+  site (still local-only for now — see `VERSION_2_INTEGRATION_NOTES.md`).
 - Real payment processing (PayFast), with server-side price/stock
-  verification.
+  verification (server-side verification already exists; PayFast
+  itself doesn't yet).
 - Real courier integration and live order tracking.
 - Real email notifications (order confirmations, contact/enquiry
   forms).

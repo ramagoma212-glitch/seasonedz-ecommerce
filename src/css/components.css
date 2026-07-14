@@ -861,6 +861,21 @@
   color: var(--color-text);
 }
 
+/* ---- Form-level banner (API errors: backend unavailable, business-rule failures) -- */
+.form-banner {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  margin-block: var(--space-md);
+}
+
+.form-banner--error {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-error);
+  border-left: 4px solid var(--color-error);
+  color: var(--color-error);
+}
+
 /* ---- Track order form ------------------------------------------------------------- */
 .track-order-form {
   max-width: 640px;

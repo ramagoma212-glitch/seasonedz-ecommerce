@@ -18,13 +18,13 @@ import {
   updateCartQuantity,
   clearCart,
   getCart,
-  getCartSubtotal,
   getCartItemCount,
-  calculateDeliveryFee,
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } from "./wishlist.js";
 import { validateCheckoutForm } from "./validation.js";
-import { createOrder } from "./orders.js";
+import { ApiError, ApiUnavailableError } from "./apiClient.js";
+import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
+import { submitEnquiry } from "./api/enquiriesApi.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -42,7 +42,7 @@ function mountApp() {
   setupProductActions();
   setupCheckoutForm();
   setupTrackOrderForm();
-  setupDemoForms();
+  setupEnquiryForms();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -288,6 +288,7 @@ function clearAllCheckoutErrors(form) {
   form.querySelectorAll(".form-field__error").forEach((el) => (el.textContent = ""));
   form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
   form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+  clearCheckoutFormBanner(form);
 }
 
 function showCheckoutErrors(form, errors) {
@@ -321,7 +322,69 @@ function focusFirstCheckoutError(form) {
   firstErrorEl.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-function handleCheckoutSubmit(form) {
+function showCheckoutFormBanner(form, message) {
+  const bannerEl = form.querySelector("[data-checkout-banner]");
+  if (!bannerEl) return;
+
+  bannerEl.textContent = message;
+  bannerEl.hidden = false;
+  bannerEl.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function clearCheckoutFormBanner(form) {
+  const bannerEl = form.querySelector("[data-checkout-banner]");
+  if (!bannerEl) return;
+
+  bannerEl.textContent = "";
+  bannerEl.hidden = true;
+}
+
+// Maps the backend's dotted/indexed field names (customer.email,
+// deliveryAddress.postalCode, ...) onto this form's actual input
+// `name` attributes, so a backend validation error can highlight the
+// same field a matching client-side error would have.
+const BACKEND_TO_CHECKOUT_FIELD = {
+  "customer.firstName": "firstName",
+  "customer.lastName": "lastName",
+  "customer.email": "email",
+  "customer.phone": "phone",
+  "deliveryAddress.streetAddress": "street",
+  "deliveryAddress.suburb": "suburb",
+  "deliveryAddress.city": "city",
+  "deliveryAddress.province": "province",
+  "deliveryAddress.postalCode": "postalCode",
+  paymentMethod: "paymentMethod",
+};
+
+// Backend errors come back as [{ field, message }]; showCheckoutErrors
+// (shared with the client-side validator above) expects a
+// { fieldName: message } map — any error for a field this form doesn't
+// have (e.g. an `items[...]` stock problem) has nowhere to attach, so
+// it's collected into the form-level banner instead.
+function mapBackendErrorsToCheckoutForm(form, backendErrors) {
+  const fieldErrors = {};
+  const unmatched = [];
+
+  backendErrors.forEach(({ field, message }) => {
+    const formField = BACKEND_TO_CHECKOUT_FIELD[field];
+    if (formField) {
+      fieldErrors[formField] = message;
+    } else {
+      unmatched.push(message);
+    }
+  });
+
+  if (Object.keys(fieldErrors).length > 0) {
+    showCheckoutErrors(form, fieldErrors);
+    focusFirstCheckoutError(form);
+  }
+
+  if (unmatched.length > 0) {
+    showCheckoutFormBanner(form, unmatched.join(" "));
+  }
+}
+
+async function handleCheckoutSubmit(form) {
   clearAllCheckoutErrors(form);
 
   const data = Object.fromEntries(new FormData(form).entries());
@@ -334,10 +397,7 @@ function handleCheckoutSubmit(form) {
   }
 
   const items = getCart();
-  const subtotal = getCartSubtotal();
-  const deliveryFee = calculateDeliveryFee(subtotal);
-
-  const order = createOrder({
+  const payload = buildOrderPayload({
     customer: {
       firstName: data.firstName.trim(),
       lastName: data.lastName.trim(),
@@ -354,14 +414,32 @@ function handleCheckoutSubmit(form) {
     deliveryNotes: (data.deliveryNotes || "").trim(),
     paymentMethod: data.paymentMethod,
     items,
-    subtotal,
-    deliveryFee,
   });
 
-  clearCart();
-  updateHeaderCounters();
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
 
-  window.location.hash = `/order-confirmation?order=${encodeURIComponent(order.orderNumber)}`;
+  try {
+    const response = await createOrder(payload);
+    const orderNumber = response.data.orderNumber;
+
+    clearCart();
+    updateHeaderCounters();
+
+    window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      showCheckoutFormBanner(form, "We could not connect to the order system right now. Please try again shortly.");
+    } else if (error instanceof ApiError && error.errors?.length) {
+      mapBackendErrorsToCheckoutForm(form, error.errors);
+    } else if (error instanceof ApiError) {
+      showCheckoutFormBanner(form, error.message);
+    } else {
+      showCheckoutFormBanner(form, "Something went wrong placing your order. Please try again.");
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 // Order tracking form: submitting a non-empty order number navigates
@@ -400,23 +478,119 @@ function setupTrackOrderForm() {
   });
 }
 
-// Contact/Schools/Wholesale/Distributor forms (see components/enquiryForm.js)
-// share one ".demo-form" class and never actually send anything — this
-// just reveals the "demo only" message already sitting in the form
-// markup, rather than posting anywhere.
-function setupDemoForms() {
+// Contact/Schools/Wholesale/Distributor forms (see
+// components/enquiryForm.js) share one ".demo-form" class (kept for
+// its existing CSS/behaviour hooks, even though the form itself is no
+// longer a demo) and each carries data-enquiry-type ("CONTACT" /
+// "SCHOOL" / "WHOLESALE" / "DISTRIBUTOR") so this one delegated
+// handler can submit any of them to POST /api/enquiries.
+function setupEnquiryForms() {
   document.addEventListener("submit", (event) => {
     const form = event.target.closest(".demo-form");
     if (!form) return;
 
     event.preventDefault();
+    handleEnquirySubmit(form);
+  });
 
+  document.addEventListener("input", (event) => {
+    const form = event.target.closest(".demo-form");
+    if (!form || !event.target.name) return;
+    clearFieldError(form, event.target.name);
+  });
+}
+
+function showEnquiryBanner(form, message) {
+  const bannerEl = form.querySelector("[data-enquiry-banner]");
+  if (!bannerEl) return;
+
+  bannerEl.textContent = message;
+  bannerEl.hidden = false;
+}
+
+function clearAllEnquiryErrors(form) {
+  form.querySelectorAll(".form-field__error").forEach((el) => (el.textContent = ""));
+  form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
+  form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+
+  const bannerEl = form.querySelector("[data-enquiry-banner]");
+  if (bannerEl) {
+    bannerEl.textContent = "";
+    bannerEl.hidden = true;
+  }
+
+  const resultEl = form.querySelector(".demo-form__result");
+  if (resultEl) resultEl.hidden = true;
+}
+
+// Enquiry field names (type/name/email/phone/companyName/message/
+// province/estimatedQuantity/...) are already flat, top-level backend
+// field names — unlike the checkout form, no field-name mapping table
+// is needed here.
+function showEnquiryFieldErrors(form, backendErrors) {
+  const fieldErrors = {};
+  const unmatched = [];
+
+  backendErrors.forEach(({ field, message }) => {
+    if (form.querySelector(`[name="${field}"]`)) {
+      fieldErrors[field] = message;
+    } else {
+      unmatched.push(message);
+    }
+  });
+
+  if (Object.keys(fieldErrors).length > 0) {
+    showCheckoutErrors(form, fieldErrors);
+  }
+  if (unmatched.length > 0) {
+    showEnquiryBanner(form, unmatched.join(" "));
+  }
+}
+
+async function handleEnquirySubmit(form) {
+  clearAllEnquiryErrors(form);
+
+  const type = form.dataset.enquiryType;
+  const data = Object.fromEntries(new FormData(form).entries());
+
+  const payload = {
+    type,
+    name: (data.name || "").trim(),
+    email: (data.email || "").trim(),
+    message: (data.message || "").trim(),
+  };
+  if ((data.companyName || "").trim()) payload.companyName = data.companyName.trim();
+  if (data.estimatedQuantity) {
+    const quantity = parseInt(data.estimatedQuantity, 10);
+    if (Number.isInteger(quantity)) payload.estimatedQuantity = quantity;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const response = await submitEnquiry(payload);
     const resultEl = form.querySelector(".demo-form__result");
+
     if (resultEl) {
+      resultEl.textContent = `Thank you. Your enquiry has been received. Reference: ${response.data.id}.`;
       resultEl.hidden = false;
       resultEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
-  });
+    form.reset();
+  } catch (error) {
+    if (error instanceof ApiUnavailableError) {
+      showEnquiryBanner(form, "We could not send your enquiry right now. Please try again shortly.");
+    } else if (error instanceof ApiError && error.errors?.length) {
+      showEnquiryFieldErrors(form, error.errors);
+    } else if (error instanceof ApiError) {
+      showEnquiryBanner(form, error.message);
+    } else {
+      showEnquiryBanner(form, "We could not send your enquiry right now. Please try again shortly.");
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 function updateHeaderCounters() {
