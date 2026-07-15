@@ -87,6 +87,41 @@ if (payfastEnabled) {
   }
 }
 
+// Email (Version 3, Milestone 24 — preparation only). Nothing is
+// wired up to actually send anything yet — see
+// backend/src/services/email/ and backend/EMAIL_SETUP.md.
+//
+// EMAIL_ENABLED is the same kind of safety switch as PAYFAST_ENABLED
+// above: real sending stays off until this is explicitly "true", so
+// the backend must keep starting normally without anyone having to
+// add email credentials for a feature that's still fully disabled by
+// default. EMAIL_PROVIDER defaults to "console" — log-only, never a
+// real send — regardless of EMAIL_ENABLED.
+const emailEnabled = getEnv("EMAIL_ENABLED", "false").trim().toLowerCase() === "true";
+const emailProvider = getEnv("EMAIL_PROVIDER", "console");
+const emailFromName = getEnv("EMAIL_FROM_NAME", "Seasonedz Group");
+const emailFromAddress = getOptionalEnv("EMAIL_FROM_ADDRESS");
+const adminNotificationEmail = getOptionalEnv("ADMIN_NOTIFICATION_EMAIL");
+
+// Provider API keys (RESEND_API_KEY, SENDGRID_API_KEY, SMTP_*) are
+// deliberately NOT validated here, even when EMAIL_ENABLED is true —
+// no provider is actually wired up yet (Milestone 24 is templates +
+// a console-only service), so requiring them now would just be
+// busywork with nothing to check against. A future milestone that
+// picks a real provider should add that provider's specific
+// requirement here, at the point it actually starts being used.
+if (emailEnabled) {
+  const missing: string[] = [];
+  if (!emailFromAddress) missing.push("EMAIL_FROM_ADDRESS");
+  if (!adminNotificationEmail) missing.push("ADMIN_NOTIFICATION_EMAIL");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `EMAIL_ENABLED is true but missing required email environment variable(s): ${missing.join(", ")}. Set these in backend/.env, or set EMAIL_ENABLED=false until email is ready — see backend/EMAIL_SETUP.md.`
+    );
+  }
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -115,6 +150,13 @@ export const env = {
   payfastReturnUrl,
   payfastCancelUrl,
   payfastNotifyUrl,
+  // Email — see the block above. No provider credentials are read
+  // here; a real provider integration adds its own vars when it exists.
+  emailEnabled,
+  emailProvider,
+  emailFromName,
+  emailFromAddress,
+  adminNotificationEmail,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built

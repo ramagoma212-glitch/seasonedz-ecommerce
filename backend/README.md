@@ -102,6 +102,12 @@ real values):
 | `PAYFAST_PASSPHRASE` | Optional PayFast account passphrase | Optional, even when PayFast is enabled |
 | `BACKEND_PUBLIC_URL` | This backend's own public URL, used to build the notify URL | **Required only if `PAYFAST_ENABLED=true`** |
 | `PAYFAST_RETURN_URL` / `PAYFAST_CANCEL_URL` / `PAYFAST_NOTIFY_URL` | Where PayFast redirects/notifies after a payment attempt | **Required only if `PAYFAST_ENABLED=true`** |
+| `EMAIL_ENABLED` | Feature flag — real email sending stays off until `true` | Defaults to `false`. See "Email Setup" below |
+| `EMAIL_PROVIDER` | `console` (log-only) or a future real provider name | Defaults to `console` |
+| `EMAIL_FROM_NAME` | Display name emails would be sent from | Defaults to `Seasonedz Group` |
+| `EMAIL_FROM_ADDRESS` | Sender address | **Required only if `EMAIL_ENABLED=true`** |
+| `ADMIN_NOTIFICATION_EMAIL` | Where admin notification emails would go | **Required only if `EMAIL_ENABLED=true`** |
+| `RESEND_API_KEY` / `SENDGRID_API_KEY` / `SMTP_*` | Future provider credentials | Not required by anything yet — no provider is integrated |
 
 All environment variables are read in one place: `src/config/env.ts`,
 which validates them **at startup** — if `DATABASE_URL`, `DIRECT_URL`
@@ -154,6 +160,27 @@ short version:
 - No real PayFast account is needed to run this backend locally today
   — leave `PAYFAST_ENABLED=false` (the `.env.example` default) and
   everything else works exactly as before.
+
+## Email Setup (Version 3, Milestone 24)
+
+Preparation only — no real email is sent yet, and no order/payment/
+enquiry flow calls the email service automatically. Full detail
+(including exactly where those calls will go later) is in
+[`EMAIL_SETUP.md`](./EMAIL_SETUP.md); short version:
+
+- `src/services/email/` has a working, testable email layer:
+  `email.types.ts` (input shapes), `emailTemplates.ts` (five plain-text
+  templates), `email.service.ts` (`sendOrderCreatedEmail`,
+  `sendPaymentConfirmedEmail`, `sendPaymentFailedEmail`,
+  `sendAdminNewOrderEmail`, `sendAdminNewEnquiryEmail`).
+- With `EMAIL_ENABLED=false` (the `.env.example` default), every one of
+  those functions is a safe no-op.
+- With `EMAIL_PROVIDER=console` (the default), a "send" only logs
+  template name + a masked recipient + an order number/enquiry
+  reference — never the rendered body, a full email address, or any
+  personal detail.
+- No real email provider is integrated yet — `EMAIL_PROVIDER` values
+  other than `console` just log a "not implemented" warning.
 
 ## Available Routes
 
@@ -266,6 +293,10 @@ backend/
       category.service.ts        Category Prisma queries + output shaping
       order.service.ts            Product verification, order transaction, tracking
       enquiry.service.ts           Enquiry creation + narrow public status lookup
+      email/                       Email service (Milestone 24 — preparation only, nothing sends yet)
+        email.types.ts               Input shapes for templates (OrderEmailData, EnquiryEmailData)
+        emailTemplates.ts             Plain-text template rendering
+        email.service.ts              sendOrderCreatedEmail/sendPaymentConfirmedEmail/etc. — no-op unless EMAIL_ENABLED=true
     validators/
       shared.ts                   Validation primitives shared by every validator below
       order.validator.ts          POST /api/orders request-shape validation
@@ -285,6 +316,7 @@ backend/
     migrations/                  Generated SQL migration history
   API_ROUTES.md                 Full API reference (routes, security, errors)
   PAYFAST_SETUP.md               PayFast sandbox setup plan (Milestone 20 — configuration only)
+  EMAIL_SETUP.md                  Email service + templates plan (Milestone 24 — preparation only)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
   DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
   DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy

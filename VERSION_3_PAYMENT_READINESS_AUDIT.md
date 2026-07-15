@@ -1,9 +1,9 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
-*(See the "Milestone 20", "Milestone 21", "Milestone 22", and
-"Milestone 23" sections near the end of this document for the sandbox
-configuration, payment initiation, ITN verification, and frontend
-checkout flow work that followed this audit.)*
+*(See the "Milestone 20", "Milestone 21", "Milestone 22", "Milestone
+23", and "Milestone 24" sections near the end of this document for the
+sandbox configuration, payment initiation, ITN verification, frontend
+checkout flow, and email preparation work that followed this audit.)*
 
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
@@ -610,3 +610,84 @@ inspected the generated form and exercised the pages directly via
 query strings) — see `backend/PAYFAST_SETUP.md`'s "Known Limitations".
 No live/production PayFast credentials are in use anywhere, and
 nothing from this milestone has been deployed.
+
+---
+
+## Milestone 24 — Order and Payment Email Preparation
+
+Builds a clean, testable email service and five plain-text templates —
+**no real email is sent, no provider is integrated, and no
+order/payment/enquiry flow was changed to call it.** Full detail in
+`backend/EMAIL_SETUP.md`.
+
+**Root `.env` hygiene finding:** root (frontend) `.env` was found to
+still contain non-`VITE_`-prefixed PayFast backend values
+(`PAYFAST_MODE`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
+`PAYFAST_PASSPHRASE`, `BACKEND_PUBLIC_URL`, `PAYFAST_RETURN_URL`,
+`PAYFAST_CANCEL_URL`, `PAYFAST_NOTIFY_URL`) — first noticed during
+Milestone 23, still present. These look like real user-configured
+sandbox merchant credentials (a different merchant ID than the generic
+public PayFast test account used for automated testing throughout
+Milestones 21-23), sitting in the wrong file and pointing at production
+URLs. **Not removed or moved automatically** — this was reported to
+the user directly, asking them to move or delete these lines
+themselves, rather than an AI session guessing at intent with
+credential-like data it didn't create. Both `.env.example` files
+remain placeholder-only, and both `.env` files remain git-ignored —
+those checks pass.
+
+**What was built:**
+
+- `backend/.env.example` — added `EMAIL_ENABLED=false`,
+  `EMAIL_PROVIDER=console`, `EMAIL_FROM_NAME=Seasonedz Group`,
+  `EMAIL_FROM_ADDRESS=`, `ADMIN_NOTIFICATION_EMAIL=`, plus optional
+  future-provider placeholders (`RESEND_API_KEY`, `SENDGRID_API_KEY`,
+  `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`) — all empty, no
+  provider chosen yet.
+- `backend/src/config/env.ts` — reads and validates the above.
+  `EMAIL_FROM_ADDRESS`/`ADMIN_NOTIFICATION_EMAIL` are only eagerly
+  required when `EMAIL_ENABLED=true` (same pattern as
+  `PAYFAST_ENABLED`); provider API keys are never validated, since no
+  provider is wired up yet.
+- `backend/src/services/email/` (new) — `email.types.ts`
+  (`OrderEmailData`/`EnquiryEmailData`, deliberately independent of
+  `order.service.ts`/`enquiry.service.ts`'s own output types),
+  `emailTemplates.ts` (five plain-text templates — order created,
+  payment confirmed, payment failed/cancelled, admin new order, admin
+  new enquiry — South African English, no fake bank details, a
+  placeholder line for bank transfer instructions), `email.service.ts`
+  (`sendOrderCreatedEmail`, `sendPaymentConfirmedEmail`,
+  `sendPaymentFailedEmail`, `sendAdminNewOrderEmail`,
+  `sendAdminNewEnquiryEmail` — all safe no-ops unless
+  `EMAIL_ENABLED=true`, and even then only log masked metadata in
+  `console` mode).
+
+**Email service result:** verified locally — with `EMAIL_ENABLED=false`
+(default), every send function is confirmed to do nothing (no console
+output at all). With `EMAIL_ENABLED=true` and `EMAIL_PROVIDER=console`,
+each send logs exactly one line: template name, a masked recipient
+(e.g. `j***@e***.com`), and an order number/enquiry reference — never
+the rendered body, a full address, or any other personal detail.
+
+**Templates created:** all five render without throwing against mock
+order/enquiry data, covering every payment method's next-step wording
+(bank transfer, PayFast, cash on delivery) and both admin notification
+templates.
+
+**Emails are prepared only, not wired automatically.** Reviewed and
+documented (not modified) exact hook points for a future milestone:
+`order.controller.ts`'s `createOrderHandler` (after order creation),
+`payfast.service.ts`'s `processPayfastNotification` (inside the
+`COMPLETE`/`FAILED`/`CANCELLED` branches that represent a *newly*
+resolved status — deliberately not the idempotency early-return
+branches, so a repeated ITN can never trigger a duplicate email once
+wired up), and `enquiry.controller.ts`'s `createEnquiryHandler` (after
+enquiry creation). None of these three files were changed — order
+creation, ITN verification, and enquiry creation behave identically to
+before this milestone.
+
+**Still not done:** no real provider is chosen or integrated, no email
+has ever actually been sent (by design), and the send functions aren't
+called from anywhere in the request-handling code yet. That's
+deliberately left for a later milestone, once a provider decision is
+made.
