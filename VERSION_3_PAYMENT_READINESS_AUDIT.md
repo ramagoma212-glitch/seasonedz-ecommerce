@@ -1,8 +1,8 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
-*(See the "Milestone 20" and "Milestone 21" sections near the end of
-this document for the sandbox configuration and payment initiation
-work that followed this audit.)*
+*(See the "Milestone 20", "Milestone 21", and "Milestone 22" sections
+near the end of this document for the sandbox configuration, payment
+initiation, and ITN verification work that followed this audit.)*
 
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
@@ -434,3 +434,91 @@ and ITN verification — the only thing that can ever move an order to
 `paymentStatus: PAID`. `PAYFAST_ENABLED` should stay `false` in any
 real/deployed environment until that exists too (see
 `backend/PAYFAST_SETUP.md`).
+
+---
+
+## Milestone 22 — PayFast ITN and Payment Verification
+
+Builds `POST /api/payments/payfast/notify` — **the only code path in
+this backend allowed to set `paymentStatus: PAID`.** Full detail in
+`backend/PAYFAST_SETUP.md` and `backend/API_ROUTES.md`'s "Payment
+Routes" section.
+
+**What was built:**
+
+- `POST /api/payments/payfast/notify` — accepts PayFast's
+  server-to-server ITN (form-urlencoded), verifies it, and updates
+  `Payment`/`Order` only once every check passes.
+- `backend/src/services/payfast.service.ts` — `processPayfastNotification()`,
+  covering: required-field presence, `merchant_id` match, signature
+  verification, order lookup, exact amount match, eligibility
+  (payment method/provider/order status), status mapping, and
+  idempotency.
+- `backend/src/utils/payfastSignature.ts` — `verifyPayfastSignature()`,
+  recomputing PayFast's signature over every field it actually posted
+  (minus `signature`) and comparing with `crypto.timingSafeEqual`.
+- `backend/src/app.ts` — `express.urlencoded({ extended: false })`
+  (was `extended: true`) — PayFast posts a flat form body, and `false`
+  (the `querystring` parser) is what its signature verification
+  assumes; nothing else on this backend reads a urlencoded body, so
+  JSON routes are unaffected.
+- Renamed `PaymentInitiationError` → `PaymentError` (used by both
+  `/initiate` and `/notify` now) — a pure rename, no behaviour change.
+
+**Signature verification result:** implemented per PayFast's
+documented custom-integration rules, verified working end-to-end in
+testing (valid ITN accepted, single-byte-tampered signature rejected
+with `403`). The raw string being hashed and the signature itself are
+never logged anywhere.
+
+**Amount verification result:** `amount_gross` is compared against
+`Order.total` as a `Prisma.Decimal`, never a plain string — confirmed
+a mismatched amount is rejected with a clean `400` and no DB write
+occurs.
+
+**Payment status mapping (documented decision):** `COMPLETE` →
+`Payment.status/Order.paymentStatus = PAID`, `Order.status =
+CONFIRMED`. `FAILED`/`CANCELLED` → matching `Payment.status`/
+`Order.paymentStatus`, but **`Order.status` is deliberately left
+unchanged (`PENDING`)** rather than auto-cancelling the order — a
+single failed/cancelled payment attempt shouldn't prevent the customer
+from retrying payment. Any other status is acknowledged but never
+marks anything as paid; a note is saved to `Payment.failureReason` for
+later investigation.
+
+**Idempotency result:** confirmed via testing — a duplicate `COMPLETE`
+for an already-`PAID` order returns a clean `200` acknowledgement with
+no DB write and no stock change; a stale `FAILED`/`CANCELLED` arriving
+after `PAID` is likewise acknowledged without downgrading the order.
+
+**Stock:** never touched by this endpoint — confirmed by both code
+review (no `stockQuantity` write anywhere in `processPayfastNotification`)
+and direct testing (stock unchanged after a COMPLETE notification).
+
+**Source IP verification — deliberately not implemented, documented as
+a known gap** (task 12's explicit allowance): it can't be meaningfully
+tested locally (no way to originate a request from PayFast's real
+infrastructure to confirm the check works), and a check that's never
+been exercised is riskier than an honest gap. Signature verification
+is the primary defence in the meantime. Flagged clearly in
+`backend/PAYFAST_SETUP.md` as required before any real production
+PayFast credentials are used.
+
+**Security properties now concretely true in code:**
+
+- The frontend cannot decide payment success — no code path outside
+  `/notify` can set `paymentStatus: PAID`.
+- The amount verified is always `Order.total` from the database, never
+  anything from the notification alone (it must *match* the stored
+  total, not merely be present).
+- `return_url`/`cancel_url` are confirmed to be navigation-only — the
+  notify endpoint doesn't read or depend on them at all.
+
+**Still not built:** the frontend pages that will actually receive a
+customer back from PayFast (`payment-success`/`payment-failed`/
+`payment-cancelled`), checkout branching for `PAYFAST`, source IP
+verification, and email notification. `PAYFAST_ENABLED` should stay
+`false` in any real/deployed environment until the frontend flow has
+been tested against a genuine browser round-trip to PayFast's sandbox
+— everything verified so far has been via direct, crafted requests
+(`curl`), not a real PayFast interaction.

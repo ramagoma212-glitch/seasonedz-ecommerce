@@ -41,7 +41,14 @@ export function createApp(): Express {
   );
 
   app.use(express.json({ limit: "1mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "1mb" }));
+  // extended: false (the querystring parser, not qs) — every JSON API
+  // route on this backend already reads JSON bodies, not urlencoded
+  // ones, so this only matters for PayFast's ITN notification (Version
+  // 3, Milestone 22), which POSTs a flat form-urlencoded body. Flat
+  // key/value pairs is exactly what PayFast sends and exactly what its
+  // signature verification needs — qs's nested-object parsing
+  // (extended: true) is never appropriate for it.
+  app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
   // General backstop for the whole API; POST /api/orders additionally
   // has its own tighter limit — see routes/order.routes.ts.

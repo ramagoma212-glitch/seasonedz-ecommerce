@@ -523,19 +523,19 @@ backend itself set, never a live courier API.
 ```
 HTTP status: `404`.
 
-## Payment Routes (Version 3, Milestone 21)
+## Payment Routes (Version 3, Milestones 21-22)
 
 | Method | Route | Description |
 |---|---|---|
 | POST | `/api/payments/payfast/initiate` | Prepare a PayFast sandbox/production payment for an existing `PAYFAST` order |
+| POST | `/api/payments/payfast/notify` | PayFast's ITN webhook — the only route that can ever mark a payment `PAID` |
 
-**Preparation only — no payment is actually taken by this route, and
-no order is ever marked as paid here.** It looks up an existing order,
-checks it's eligible, and returns the exact form fields (+ signature) a
-frontend needs to `POST` the customer's browser to PayFast. Marking an
-order as paid only ever happens later, via a verified PayFast ITN
-(Instant Transaction Notification) — not built yet (see
-`../VERSION_3_PAYMENT_READINESS_AUDIT.md`).
+**`/initiate` never takes a payment — no order is ever marked as paid
+here.** It looks up an existing order, checks it's eligible, and
+returns the exact form fields (+ signature) a frontend needs to `POST`
+the customer's browser to PayFast. **Only `/notify` (below) can ever
+mark an order as paid, and only after independently verifying the
+notification** — see `../VERSION_3_PAYMENT_READINESS_AUDIT.md`.
 
 **Requires `PAYFAST_ENABLED=true`** (see `PAYFAST_SETUP.md`) — if
 PayFast isn't enabled, every call to this route returns a clean `503`:
@@ -624,6 +624,137 @@ already decremented once, at order creation).
 ```
 HTTP status: `400` for validation/business-rule failures, `404` if the
 order doesn't exist, `503` if `PAYFAST_ENABLED` is not `true`.
+
+### POST /api/payments/payfast/notify (Milestone 22)
+
+PayFast's ITN (Instant Transaction Notification) — a server-to-server
+`application/x-www-form-urlencoded` POST PayFast itself sends after a
+customer completes, fails, or cancels a payment attempt. **This is the
+only code path in the whole backend allowed to set `paymentStatus:
+PAID`.** A customer's browser being redirected to `return_url` proves
+nothing on its own — see "Return URL Is Never Trusted" below.
+
+Body is form-urlencoded, not JSON (`express.urlencoded({ extended:
+false })` — see `src/app.ts`). Key fields read (a real PayFast ITN
+includes more; only these are used):
+
+| Field | Used for |
+|---|---|
+| `m_payment_id` | Looked up as this backend's `Order.orderNumber` |
+| `pf_payment_id` | Stored as `Payment.providerReference` if present |
+| `payment_status` | `COMPLETE` / `FAILED` / `CANCELLED` / anything else — see mapping below |
+| `amount_gross` | Compared against `Order.total` — must match exactly |
+| `merchant_id` | Compared against the configured `PAYFAST_MERCHANT_ID` |
+| `signature` | Verified against every other field PayFast posted |
+
+`amount_fee`, `amount_net`, `item_name`, and `email_address` are also
+present on a real ITN but aren't read — there's no schema field to
+store them in yet (see the Milestone 19 audit's future-fields list).
+
+**Processing order (every step must pass before the next runs):**
+
+1. **Field presence** — `m_payment_id`, `payment_status`,
+   `amount_gross`, `signature`, `merchant_id` must all be present, and
+   `merchant_id` must equal the configured `PAYFAST_MERCHANT_ID`.
+   Missing/mismatched → clean `400`.
+2. **Signature verification** (`src/utils/payfastSignature.ts`) — the
+   signature is recomputed from every field PayFast actually posted
+   (minus `signature` itself), in the order it posted them, with the
+   configured passphrase appended if set, then compared byte-for-byte
+   (`crypto.timingSafeEqual`). A mismatch → clean `403` (chosen instead
+   of `400` specifically to mean "this wasn't verifiably from PayFast",
+   distinct from an otherwise-valid request with a business-rule
+   problem). **The raw string being hashed, and the signature itself,
+   are never logged.**
+3. **Order lookup** — `m_payment_id` is looked up as `Order.orderNumber`.
+   Not found → clean `404`.
+4. **Amount verification** — `amount_gross` must equal `Order.total`
+   exactly (compared as decimals, so `"918"`/`"918.0"`/`"918.00"` are
+   all correctly treated as equal). Mismatch → clean `400`. **The
+   amount is never taken from anything but the stored order.**
+5. **Eligibility** — all of: `order.paymentMethod` is `PAYFAST`; the
+   order has a `Payment` record; `payment.provider` is `PAYFAST` or
+   still `null`; `order.status` is not `CANCELLED`/`REFUNDED`. Any
+   failure → clean `400` (an order not created for PayFast is never
+   touched by this route, no matter what it's sent).
+6. **Status mapping + idempotency** — see below.
+
+### Payment status mapping
+
+| PayFast `payment_status` | Effect |
+|---|---|
+| `COMPLETE` | `Payment.status = PAID`, `Payment.paidAt = now`, `Order.paymentStatus = PAID`, **`Order.status = CONFIRMED`**. Only applied if the order's current `paymentStatus` is `PENDING` or `FAILED` — see idempotency below. |
+| `FAILED` | `Payment.status = FAILED`, `Order.paymentStatus = FAILED`. **`Order.status` is deliberately left unchanged (stays `PENDING`)** — documented decision, see `PAYFAST_SETUP.md`: a single failed attempt shouldn't by itself cancel the whole order, since the customer may still retry payment. |
+| `CANCELLED` | `Payment.status = CANCELLED`, `Order.paymentStatus = CANCELLED`. `Order.status` likewise left unchanged, same reasoning. |
+| Anything else | Never marks the order as paid. `Payment.failureReason` is set to a note recording the unrecognised status, for later investigation; nothing else changes. |
+
+**Stock is never touched by this route** — it was already decremented
+once, at order creation (Milestone 13).
+
+### Idempotency
+
+PayFast documents that the same ITN can be delivered more than once.
+This route is safe to call repeatedly with the same notification:
+
+- A duplicate `COMPLETE` for an order already `paymentStatus: PAID`
+  does not re-run the update, does not touch stock, and returns a
+  clean `200` acknowledgement.
+- A `FAILED` or `CANCELLED` notification arriving **after** an order
+  is already `PAID` is also acknowledged without changing anything —
+  ITN delivery order isn't guaranteed, and a late/stale notification
+  must never downgrade a genuinely paid order.
+
+### Return URL Is Never Trusted
+
+`return_url`/`cancel_url` (from `/initiate`) exist purely so PayFast
+can send the customer's browser somewhere after they leave PayFast's
+site — they are navigation only. Nothing about a browser landing on
+`return_url` is checked or trusted by this backend; the frontend page
+at that URL (later milestone) must re-fetch the order's real status
+from the API rather than assume success because of how it got there.
+Only a verified `/notify` call can ever change `paymentStatus`.
+
+### Source IP Verification
+
+**Not implemented in this milestone — documented as a known gap, not
+faked.** PayFast recommends validating that an ITN's source IP belongs
+to PayFast's published ranges as an additional production hardening
+layer. This wasn't implemented here because it can't be meaningfully
+tested locally (there's no way to originate a local request from
+PayFast's real infrastructure to confirm the check works), and a check
+that's never exercised is worse than an honest gap — see
+`PAYFAST_SETUP.md`'s "Known Limitations" for the full note and what
+production readiness would require. Signature verification (step 2
+above) is the primary defence in the meantime, especially once a
+passphrase is configured.
+
+### Response shape
+
+Success (any of `COMPLETE`/`FAILED`/`CANCELLED`/unrecognised, once all
+checks pass) — always `200`, never sensitive data:
+
+```json
+{ "success": true, "message": "Payment verified and marked as PAID." }
+```
+
+Failure examples:
+
+```json
+{ "success": false, "message": "Missing required PayFast notification field(s): amount_gross, signature" }
+```
+```json
+{ "success": false, "message": "Invalid PayFast signature." }
+```
+```json
+{ "success": false, "message": "Order not found: SG-2026-ZZZZ" }
+```
+```json
+{ "success": false, "message": "Amount does not match the order total on record." }
+```
+
+HTTP status: `400` for missing fields/business-rule/amount failures,
+`403` for an invalid signature, `404` if the order doesn't exist, `503`
+if `PAYFAST_ENABLED` is not `true`.
 
 ## Enquiry Routes
 

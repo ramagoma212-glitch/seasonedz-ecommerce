@@ -1,12 +1,15 @@
-// POST /api/payments/payfast/initiate request handling. Request-shape
-// validation lives here (it's simple enough not to need its own
-// validators/ file — one required string field, one format check) —
-// order lookup/eligibility/field-building is all in payfast.service.ts.
+// POST /api/payments/payfast/initiate and POST /api/payments/payfast/
+// notify request handling. Request-shape validation for /initiate
+// lives here (it's simple enough not to need its own validators/ file
+// — one required string field, one format check); ITN field
+// extraction/signature/eligibility for /notify is all in
+// payfast.service.ts. Order lookup/eligibility/field-building for
+// /initiate is likewise all in payfast.service.ts.
 
 import type { NextFunction, Request, Response } from "express";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { asRecord, isNonEmptyString } from "../validators/shared.js";
-import { initiatePayfastPayment, PaymentInitiationError } from "../services/payfast.service.js";
+import { initiatePayfastPayment, PaymentError, processPayfastNotification } from "../services/payfast.service.js";
 
 // Same shape the frontend already validates against for order tracking
 // (src/pages/trackOrder.js) and the same shape backend/src/utils/
@@ -45,7 +48,26 @@ export async function initiatePayfastPaymentHandler(req: Request, res: Response,
       data: result,
     });
   } catch (error) {
-    if (error instanceof PaymentInitiationError) {
+    if (error instanceof PaymentError) {
+      sendError(res, { message: error.message, statusCode: error.statusCode });
+      return;
+    }
+    next(error);
+  }
+}
+
+// PayFast POSTs this as a server-to-server form-urlencoded request —
+// never trust it just because it hit this URL; every field is
+// verified in processPayfastNotification() before anything is
+// updated. req.body here is never logged, and neither is anything
+// derived from it (see payfast.service.ts / payfastSignature.ts).
+export async function payfastNotifyHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const rawBody = asRecord(req.body);
+    const result = await processPayfastNotification(rawBody);
+    sendSuccess(res, { message: result.message });
+  } catch (error) {
+    if (error instanceof PaymentError) {
       sendError(res, { message: error.message, statusCode: error.statusCode });
       return;
     }
