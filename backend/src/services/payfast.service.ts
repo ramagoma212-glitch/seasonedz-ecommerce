@@ -43,6 +43,24 @@ export interface PayfastInitiationResult {
   fields: Record<string, string>;
 }
 
+// The configured return_url/cancel_url point at this frontend's
+// hash-based router (e.g. "http://localhost:5173/#/payment-success"),
+// so the payment-success/payment-cancelled pages (Milestone 23) know
+// which order to look up. A plain query string appended before the
+// "#" would never reach the router at all (everything after "#" is a
+// fragment the browser never sends to a server, and the SPA itself
+// only ever reads its own route/query out of that fragment) — so the
+// order number must be appended *inside* the fragment instead. Simple
+// string concatenation is enough: whatever comes after "#" is just a
+// string our own router.js parses (path, then "?", then query) — it
+// isn't interpreted by the browser, so there's no real URL-parsing
+// rule to violate here, unlike a normal (non-fragment) query string.
+function appendOrderNumberToUrl(baseUrl: string | undefined, orderNumber: string): string | undefined {
+  if (!baseUrl) return undefined;
+  const separator = baseUrl.includes("?") ? "&" : "?";
+  return `${baseUrl}${separator}orderNumber=${encodeURIComponent(orderNumber)}`;
+}
+
 export async function initiatePayfastPayment(orderNumber: string): Promise<PayfastInitiationResult> {
   if (!payfastConfig.enabled) {
     throw new PaymentError("PayFast payments are not enabled.", 503);
@@ -88,8 +106,8 @@ export async function initiatePayfastPayment(orderNumber: string): Promise<Payfa
   const fields: Record<string, string | undefined> = {
     merchant_id: payfastConfig.merchantId,
     merchant_key: payfastConfig.merchantKey,
-    return_url: payfastConfig.returnUrl,
-    cancel_url: payfastConfig.cancelUrl,
+    return_url: appendOrderNumberToUrl(payfastConfig.returnUrl, order.orderNumber),
+    cancel_url: appendOrderNumberToUrl(payfastConfig.cancelUrl, order.orderNumber),
     notify_url: payfastConfig.notifyUrl,
     name_first: order.customerFirstName,
     name_last: order.customerLastName,

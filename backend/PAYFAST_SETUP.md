@@ -70,6 +70,20 @@ URL for the configured mode:
 - Sandbox: `https://sandbox.payfast.co.za/eng/process`
 - Production: `https://www.payfast.co.za/eng/process`
 
+> **Reminder: quote `.env` values containing `#`.** This frontend uses
+> a hash-based router (`https://.../#/payment-success`), and `dotenv`
+> treats an unquoted `#` as the start of a comment — everything after
+> it in the value is silently dropped. If `PAYFAST_RETURN_URL`/
+> `PAYFAST_CANCEL_URL` are set without quotes, only
+> `http://localhost:5173/` survives; the `#/payment-success` part
+> vanishes. Always quote these in `.env`:
+> ```
+> PAYFAST_RETURN_URL="http://localhost:5173/#/payment-success"
+> PAYFAST_CANCEL_URL="http://localhost:5173/#/payment-cancelled"
+> ```
+> (Found and fixed while testing Milestone 21; worth remembering every
+> time these are set, including for a future production deployment.)
+
 ## Sandbox Mode vs. Production Mode
 
 `PAYFAST_MODE=sandbox` must be used for all development and testing —
@@ -117,6 +131,17 @@ production payment page.
 - **Every field comes from the backend's own `Order` record** —
   `amount` is `Order.total` (formatted to 2 decimals), never anything
   a client sends. `m_payment_id` is the order's own `orderNumber`.
+- **`return_url`/`cancel_url` have `?orderNumber=<orderNumber>`
+  appended** (Version 3, Milestone 23), so the frontend's
+  payment-success/payment-cancelled pages know which order they're
+  showing. Since these URLs point at the frontend's hash-based router
+  (e.g. `http://localhost:5173/#/payment-success`), the query has to
+  go *inside* the `#` fragment, not before it — a normal query string
+  before `#` would never reach the router at all. Plain string
+  concatenation is correct here specifically because everything after
+  `#` is just a string the SPA parses itself, not something the
+  browser or a server interprets — see the `appendOrderNumberToUrl`
+  comment in `src/services/payfast.service.ts`.
 - **`paymentStatus` stays `PENDING`.** This endpoint only *prepares* a
   payment attempt — it never marks anything as paid, and stock is not
   touched again (it was already decremented once, at order creation).
@@ -229,6 +254,44 @@ sitting behind a proxy — `X-Forwarded-For`/`trust proxy` needs
 correct configuration first) against PayFast's published IP ranges,
 and treat a mismatch the same as an invalid signature.
 
+## Frontend Checkout Flow (Version 3, Milestone 23)
+
+The frontend now has a real (sandbox) PayFast checkout path, gated by
+its own feature flag, separate from the backend's:
+
+- **`VITE_PAYFAST_ENABLED`** (root `.env` / `.env.example`, default
+  `false`) — controls whether the PayFast radio button is selectable
+  at checkout at all (`src/js/orders.js`'s `PAYMENT_METHODS`). This is
+  a **UI-only** gate. It never bypasses the backend's own
+  `PAYFAST_ENABLED` check — a determined client could still POST
+  `paymentMethod: PAYFAST` directly, and the backend independently
+  rejects it if *its* flag is off. Two separate flags, two separate
+  layers, neither trusts the other.
+- **Checkout flow** (`src/js/app.js`): for `PAYFAST`, the order is
+  created first via the existing Order API (exactly like
+  `BANK_TRANSFER`), then `POST /api/payments/payfast/initiate` is
+  called for that order, then a hidden `<form method="POST">` is built
+  from the backend's response fields and submitted — a real (non-SPA)
+  browser navigation to PayFast. **The frontend never builds a
+  PayFast field or a signature itself** — `src/js/api/paymentsApi.js`
+  only ever forwards the backend's response verbatim into that form.
+- **Local Storage pending-payment reference**
+  (`src/js/pendingPayment.js`): a small, non-sensitive record
+  (`orderNumber`, `paymentMethod`, `createdAt` — never a status, never
+  a PayFast field) saved right before redirecting, so the
+  payment-success/cancelled/failed pages can still find the order if
+  the URL comes back without a query string for some reason. It's a
+  convenience lookup, never proof of anything.
+- **`payment-success` / `payment-cancelled` / `payment-failed` pages**
+  (`src/pages/`) are all **read-only**: each one calls
+  `GET /api/orders/:orderNumber/tracking` and displays whatever
+  `paymentStatus` the backend actually has on record. **None of them
+  can ever mark a payment as paid, failed, or cancelled** — there is no
+  write call anywhere in any of the three files. If `paymentStatus` is
+  still `PENDING`, `payment-success` says so explicitly ("Payment is
+  being verified... please do not place another order yet") rather
+  than assuming success just because PayFast redirected there.
+
 ## Why PAYFAST_ENABLED Remains False (in Any Real Deployment) Until the Full Flow Is Proven
 
 Before Milestone 20, `PaymentMethod.PAYFAST` was already a valid value
@@ -239,33 +302,40 @@ existed to ever resolve it. `PAYFAST_ENABLED` closed that gap at the
 API level: `POST /api/orders` rejects `paymentMethod: PAYFAST` with a
 clean `400` unless `PAYFAST_ENABLED=true`.
 
-Milestones 21-22 add payment initiation and ITN verification — the
-backend can now be tested end-to-end with crafted requests, as this
-milestone did. `PAYFAST_ENABLED=true` is safe to use **locally, with
-sandbox credentials**, for exactly that kind of testing. It should stay
-`false` in any real (deployed) environment until: the frontend
-redirect/success/failed/cancelled pages exist and have been tested
-against a real browser round-trip to PayFast's sandbox (not just
-crafted `curl` payloads), and ideally until source IP verification
+Milestones 21-23 add payment initiation, ITN verification, and the
+full frontend flow (checkout redirect + success/cancelled/failed
+pages) — the whole loop can now be tested locally, as this milestone
+did (backend with crafted requests in M21-22; the frontend flow with a
+real browser in M23, redirecting to PayFast's actual sandbox
+`processUrl`). `PAYFAST_ENABLED=true`/`VITE_PAYFAST_ENABLED=true` are
+safe to use **locally, with sandbox credentials**, for exactly this
+kind of testing. They should stay `false` in any real (deployed)
+environment until: a full manual sandbox payment has actually been
+completed through PayFast's real hosted payment page (not just a form
+built and inspected locally), and ideally until source IP verification
 (above) is added as well.
 
-## Known Limitations (as of Milestone 22)
+## Known Limitations (as of Milestone 23)
 
 - **No source IP verification** on `/notify` — see "Source IP
   Verification" above. Signature verification is the primary defence
   in the meantime.
-- **No frontend integration yet** — nothing redirects a real customer
-  to PayFast, and there are no `payment-success`/`payment-failed`/
-  `payment-cancelled` pages yet (planned in the Milestone 19 audit,
-  §9). `/initiate` and `/notify` have only been exercised directly
-  (via `curl`/crafted requests), never through an actual browser
-  round-trip to PayFast's sandbox.
+- **Frontend flow built but not yet proven against a real PayFast
+  round-trip** — the checkout redirect and
+  payment-success/cancelled/failed pages exist (Milestone 23) and were
+  tested locally (form fields inspected, pages tested by navigating
+  directly with a query string), but no one has yet actually completed
+  a real sandbox payment on PayFast's own hosted page and followed it
+  all the way back through `return_url`/`notify_url`. That end-to-end
+  round trip is the next real test before considering this ready for
+  anything beyond local development.
 - **No email notification** on a successful/failed payment — a
   customer or the business isn't told anything happened beyond
   whatever the frontend shows on its next page load.
 - **No admin visibility** into unrecognised PayFast statuses beyond
   `Payment.failureReason` — there's no admin dashboard yet to surface
   these for review.
-- **`PAYFAST_ENABLED` must stay `false` in any real/deployed
-  environment** until the above are addressed — see the section above
-  for exactly what "addressed" means.
+- **`PAYFAST_ENABLED` and `VITE_PAYFAST_ENABLED` must both stay
+  `false` in any real/deployed environment** until the above are
+  addressed — see the section above for exactly what "addressed"
+  means.

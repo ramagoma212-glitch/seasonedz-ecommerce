@@ -1,8 +1,9 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
-*(See the "Milestone 20", "Milestone 21", and "Milestone 22" sections
-near the end of this document for the sandbox configuration, payment
-initiation, and ITN verification work that followed this audit.)*
+*(See the "Milestone 20", "Milestone 21", "Milestone 22", and
+"Milestone 23" sections near the end of this document for the sandbox
+configuration, payment initiation, ITN verification, and frontend
+checkout flow work that followed this audit.)*
 
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
@@ -522,3 +523,90 @@ verification, and email notification. `PAYFAST_ENABLED` should stay
 been tested against a genuine browser round-trip to PayFast's sandbox
 — everything verified so far has been via direct, crafted requests
 (`curl`), not a real PayFast interaction.
+
+---
+
+## Milestone 23 — Frontend PayFast Checkout Flow
+
+Connects the checkout page to `POST /api/payments/payfast/initiate`
+and adds the three customer-facing pages a PayFast redirect needs.
+Full detail in `backend/PAYFAST_SETUP.md`'s "Frontend Checkout Flow"
+section.
+
+**What was built:**
+
+- `VITE_PAYFAST_ENABLED` (root `.env`/`.env.example`, default `false`)
+  — a **frontend-only** UI gate (`src/js/orders.js`'s
+  `PAYMENT_METHODS`) for whether PayFast is selectable at checkout.
+  Independent of the backend's own `PAYFAST_ENABLED` — flipping this
+  alone can never let a real PayFast order through if the backend
+  isn't also configured for it; the backend re-validates regardless.
+- `src/js/api/paymentsApi.js` (new) — `initiatePayfastPayment(orderNumber)`,
+  a thin wrapper matching the existing `ordersApi.js`/`enquiriesApi.js`
+  style.
+- `src/js/pendingPayment.js` (new) — a small Local Storage helper
+  (`orderNumber`, `paymentMethod`, `createdAt` only — never a status or
+  a PayFast field) so the payment-result pages can recover the order
+  number if the URL doesn't have one.
+- `src/js/app.js` — checkout now branches on `paymentMethod`: `PAYFAST`
+  creates the order (same Order API call as `BANK_TRANSFER`), calls
+  `/initiate`, then builds and submits a hidden `<form method="POST">`
+  to the returned `processUrl` using the returned `fields` verbatim —
+  **no field or signature is ever generated in the frontend.** If
+  initiation itself fails after the order was created, the customer is
+  sent to the real order's confirmation page rather than left stuck.
+- `src/pages/paymentSuccess.js`, `paymentCancelled.js`,
+  `paymentFailed.js` (new), registered in `src/js/router.js` as
+  `#/payment-success`, `#/payment-cancelled`, `#/payment-failed`. All
+  three are **read-only** — each only calls
+  `GET /api/orders/:orderNumber/tracking` and renders whatever
+  `paymentStatus` comes back; none of them can write anything.
+- `backend/src/services/payfast.service.ts` — `return_url`/`cancel_url`
+  now get `?orderNumber=<orderNumber>` appended (inside the hash
+  fragment, since these are hash-router URLs) so the new pages know
+  which order to look up.
+- `src/pages/checkoutPage.js` and `src/pages/orderConfirmation.js` —
+  wording updated so neither page claims "no real payment has been
+  taken" when a PayFast order has actually been paid; both now reflect
+  the order's real `paymentStatus`.
+
+**Checkout flow result:** verified locally — `BANK_TRANSFER` checkout
+is unchanged; a `PAYFAST` checkout creates a real `PAYFAST` order,
+calls `/initiate`, and submits a real hidden form (`method="POST"`) to
+PayFast's sandbox `processUrl` with every field (including `signature`)
+taken directly from the backend's response.
+
+**Payment success/cancelled/failed page results:** all three load
+correctly with an `orderNumber` from the query string; `payment-success`
+correctly shows the "being verified" (`PENDING`) message when no ITN
+has confirmed payment yet, and would show "Payment Confirmed" only once
+`paymentStatus` is genuinely `PAID` (confirmed by re-using Milestone
+22's ITN test to move a test order to `PAID` and reloading the page).
+None of the three pages make any write API call — confirmed by code
+review (no `apiPost`/mutating call anywhere in any of the three files).
+
+**Backend return/cancel URL result:** confirmed via a real `/initiate`
+call that `return_url`/`cancel_url` come back with `?orderNumber=...`
+correctly appended after the `#` fragment (e.g.
+`http://localhost:5173/#/payment-success?orderNumber=SG-2026-XXXX`).
+
+**Order status read result:** `GET /api/orders/:orderNumber/tracking`
+already returned everything the new pages need (`paymentStatus`,
+`status`) — reviewed, no backend response changes were necessary.
+
+**Security properties reconfirmed at the frontend layer:**
+
+- The frontend never marks a payment as paid, failed, or cancelled —
+  no code path in any of the three new pages writes anything.
+- The frontend never builds a PayFast field or signature — it only
+  ever relays the backend's `/initiate` response into a form.
+- `VITE_PAYFAST_ENABLED` is a UI convenience only, not a security
+  boundary — the backend's own `PAYFAST_ENABLED` is what actually
+  decides whether a `PAYFAST` order/payment can be created.
+
+**Still not done:** a real end-to-end round trip through PayFast's own
+hosted sandbox payment page has not yet been performed (testing so far
+inspected the generated form and exercised the pages directly via
+query strings) — see `backend/PAYFAST_SETUP.md`'s "Known Limitations".
+No live/production PayFast credentials are in use anywhere, and
+nothing from this milestone has been deployed.

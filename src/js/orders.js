@@ -13,9 +13,16 @@ import { getStorageItem, setStorageItem } from "./storage.js";
 const ORDERS_KEY = "seasonedz_orders";
 const LATEST_ORDER_KEY = "seasonedz_latest_order";
 
-// Payment options shown at checkout. None of these connect to a real
-// payment provider yet — PayFast is disabled until that integration
-// exists, and the other two are clearly marked as demo-only.
+// Payment options shown at checkout. Bank transfer and cash/card on
+// delivery are always demo-only. PayFast (Version 3, Milestone 23) is
+// only selectable when VITE_PAYFAST_ENABLED="true" — this flag only
+// controls what the checkout UI *offers*; the backend independently
+// re-checks its own PAYFAST_ENABLED and rejects paymentMethod: PAYFAST
+// regardless of what this frontend flag says, so flipping this alone
+// can never let a real PayFast order through if the backend isn't
+// also configured for it.
+const payfastEnabled = (import.meta.env.VITE_PAYFAST_ENABLED || "").toLowerCase() === "true";
+
 export const PAYMENT_METHODS = [
   {
     value: "bank-transfer",
@@ -24,9 +31,11 @@ export const PAYMENT_METHODS = [
   },
   {
     value: "payfast",
-    label: "PayFast (Coming Soon)",
-    description: "Real PayFast integration is not connected yet.",
-    disabled: true,
+    label: payfastEnabled ? "PayFast" : "PayFast (Coming Soon)",
+    description: payfastEnabled
+      ? "You'll be redirected to PayFast to complete payment."
+      : "Real PayFast integration is not connected yet.",
+    disabled: !payfastEnabled,
   },
   {
     value: "cash-on-delivery",

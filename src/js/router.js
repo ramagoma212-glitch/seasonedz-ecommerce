@@ -29,6 +29,9 @@ import { renderCartPage } from "../pages/cartPage.js";
 import { renderWishlistPage } from "../pages/wishlistPage.js";
 import { renderCheckoutPage } from "../pages/checkoutPage.js";
 import { renderOrderConfirmation } from "../pages/orderConfirmation.js";
+import { renderPaymentSuccess } from "../pages/paymentSuccess.js";
+import { renderPaymentCancelled } from "../pages/paymentCancelled.js";
+import { renderPaymentFailed } from "../pages/paymentFailed.js";
 import { renderTrackOrder } from "../pages/trackOrder.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
@@ -57,6 +60,9 @@ const routeDefs = [
   { pattern: "/wishlist", render: renderWishlistPage, title: "Your Wishlist" },
   { pattern: "/checkout", render: renderCheckoutPage, title: "Checkout" },
   { pattern: "/order-confirmation", render: renderOrderConfirmation, title: "Order Confirmation" },
+  { pattern: "/payment-success", render: renderPaymentSuccess, title: "Payment Successful" },
+  { pattern: "/payment-cancelled", render: renderPaymentCancelled, title: "Payment Cancelled" },
+  { pattern: "/payment-failed", render: renderPaymentFailed, title: "Payment Failed" },
   { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order" },
   { pattern: "/about", render: renderAbout, title: "About Us" },
   { pattern: "/contact", render: renderContact, title: "Contact Us" },
