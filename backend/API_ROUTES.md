@@ -1,12 +1,16 @@
-# API Routes (Version 2, Milestones 12-17)
+# API Routes (Version 2-3, Milestones 12-25)
 
-Product, Category, guest Order, and Enquiry API, backed by the real
-Supabase database seeded in Milestone 11, hardened in Milestone 14.
-**As of Milestone 16, the frontend calls this API locally** (with a
-static-data fallback if the backend isn't running) — see
-`../VERSION_2_INTEGRATION_NOTES.md`. Nothing is deployed anywhere yet
-(Milestone 17 only prepared for that — see `DEPLOYMENT.md`). This
-document is the reference for what the API returns today.
+Product, Category, guest Order, Enquiry, and Payment API, backed by
+the real Supabase database seeded in Milestone 11, hardened in
+Milestone 14. **The frontend calls this API** (with a static-data
+fallback if the backend isn't running) — see
+`../VERSION_2_INTEGRATION_NOTES.md`. **This backend is deployed and
+live** on Render at `https://seasonedz-ecommerce.onrender.com/api` —
+see `DEPLOYMENT.md` and `../VERSION_2_LIVE_STABILITY_REVIEW.md`.
+Version 3's Payment Routes (PayFast, Milestones 21-22) exist in code
+but stay inert in any real environment until `PAYFAST_ENABLED=true` is
+deliberately set — see `PAYFAST_SETUP.md`. This document is the
+reference for what the API returns today.
 
 Base path for every route: `/api`.
 

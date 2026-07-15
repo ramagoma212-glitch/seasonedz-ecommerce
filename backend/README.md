@@ -5,21 +5,25 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: connected to the frontend locally, and prepared for
-deployment (not yet deployed).** A real PostgreSQL database (hosted on
-Supabase) holds a starter catalogue (6 categories, 10 products), with
-`/api/products`, `/api/categories`, `/api/orders` and `/api/enquiries`
-on top of it (Milestones 12-15), hardened with rate limiting,
-multi-origin CORS and stricter startup validation (Milestone 14). As
-of Milestone 16, the frontend actually calls this API locally — see
-`../VERSION_2_INTEGRATION_NOTES.md`. As of Milestone 17, this backend
-is *prepared* for deployment to a host like Render — see
-`DEPLOYMENT.md` and `DEPLOYMENT_CHECKLIST.md` — but **has not actually
-been deployed anywhere yet**; it still only runs locally. See the full
-API reference in `API_ROUTES.md`. Order creation verifies every
+**Current status: live and deployed.** A real PostgreSQL database
+(hosted on Supabase) holds a starter catalogue (6 categories, 10
+products), with `/api/products`, `/api/categories`, `/api/orders` and
+`/api/enquiries` on top of it (Milestones 12-15), hardened with rate
+limiting, multi-origin CORS and stricter startup validation (Milestone
+14). As of Milestone 16, the frontend calls this API — see
+`../VERSION_2_INTEGRATION_NOTES.md`. As of Milestone 17/18, this
+backend is deployed and live on Render at
+`https://seasonedz-ecommerce.onrender.com/api`, with the production
+frontend build (on GitHub Pages) configured to use it — see
+`DEPLOYMENT.md` and `../VERSION_2_LIVE_STABILITY_REVIEW.md`. See the
+full API reference in `API_ROUTES.md`. Order creation verifies every
 product and price server-side (never trusts a client-supplied price)
 and reduces stock inside a database transaction. There is still no
 write API for products/categories, no login, and no admin dashboard.
+Version 3 (Milestones 19-25) adds PayFast payment integration, email
+preparation, and delivery rules, all sandbox/local-only so far — see
+`PAYFAST_SETUP.md`, `EMAIL_SETUP.md`, `DELIVERY_SETUP.md`, and
+`../VERSION_3_PAYMENT_READINESS_AUDIT.md`.
 
 ## Tech Stack
 
@@ -347,16 +351,20 @@ backend/
 
 ## Deployment
 
-Not deployed yet — this backend still only runs locally. When that's
-ready to change, `DEPLOYMENT.md` has the full plan (Render settings,
-environment variables, CORS, Prisma migration notes, and how the
-frontend's `VITE_API_BASE_URL` needs to be updated and redeployed
-afterward), and `DEPLOYMENT_CHECKLIST.md` has a safety checklist to
-work through before and after. An optional `render.yaml` at the repo
-root can pre-fill Render's settings, but manual setup through Render's
-UI works identically. **Real environment secrets are never committed
-to Git** — they're only ever entered directly in the hosting
-provider's dashboard.
+**Deployed and live** on Render at
+`https://seasonedz-ecommerce.onrender.com/api` — see
+`../VERSION_2_LIVE_STABILITY_REVIEW.md` for the post-deployment
+verification. `DEPLOYMENT.md` has the full deployment plan (Render
+settings, environment variables, CORS, Prisma migration notes, and how
+the frontend's `VITE_API_BASE_URL` was updated and redeployed), and
+`DEPLOYMENT_CHECKLIST.md` has the safety checklist that was worked
+through before and after. An optional `render.yaml` at the repo root
+pre-fills Render's settings. **Real environment secrets are never
+committed to Git** — they're only ever entered directly in the hosting
+provider's dashboard. Version 3's PayFast/email features (Milestones
+19-25) are **not** part of this live deployment yet — `PAYFAST_ENABLED`/
+`EMAIL_ENABLED` stay `false` in any real environment until they're
+ready; see `PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
 
 ## What's Coming Later
 
