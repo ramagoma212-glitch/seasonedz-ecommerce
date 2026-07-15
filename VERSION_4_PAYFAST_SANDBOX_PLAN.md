@@ -161,8 +161,27 @@ testing.
 
 ## Source IP Verification Plan
 
-**Not implemented yet, and this milestone does not implement it —
-planning only, so it can be built correctly in a later milestone.**
+**Update (Milestone 29): implemented, disabled by default.** The plan
+below (written during Milestone 27) is preserved as originally
+written; see the "Milestone 29" section near the end of this document
+for exactly how it was actually built, and the two differences worth
+knowing about before reading the plan as if it were still the current
+state:
+
+1. The two mechanisms proposed here were built as **two separate,
+   independently-flagged checks** (`PAYFAST_VERIFY_SOURCE` and
+   `PAYFAST_VALIDATE_SERVER`), not one combined "source verification"
+   feature — each can be turned on independently.
+2. The "domain-based source validation" mechanism was simplified from
+   *reverse*-resolving the source IP and confirming it forward-resolves
+   back (as originally proposed below) to the more direct approach of
+   *forward*-resolving PayFast's own known domains and checking the
+   source IP against that result set — simpler, avoids relying on
+   reverse DNS (PTR records) being configured correctly for whatever
+   infrastructure PayFast's servers run on, and was what Milestone 29
+   was explicitly asked to build.
+
+**Original planning-stage framing follows, unchanged:**
 
 ### How Express/Render Receives the Client IP
 
@@ -361,3 +380,45 @@ entirely to the tester's own machine.
   fully environment-variable-driven from Milestones 20-23, with no
   hardcoded `localhost` or other fixed values anywhere in the backend
   or the three frontend payment pages reviewed.
+
+---
+
+## Milestone 29 — PayFast Source Verification Hardening
+
+Implements the source verification plan above — disabled by default,
+layered on top of (never instead of) the existing signature/amount/
+merchant-ID checks. Full detail in
+`VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`.
+
+**What was built:**
+
+- `PAYFAST_VERIFY_SOURCE` (default `false`) — DNS-based domain
+  verification, forward-resolving PayFast's known domains and checking
+  the ITN's source IP against the result (`payfastSourceVerification.ts`).
+- `PAYFAST_VALIDATE_SERVER` (default `false`) — POSTs the received ITN
+  back to PayFast's own validation endpoint, requires `"VALID"`
+  (`payfastServerValidation.ts`).
+- `TRUST_PROXY` (default `false`) — `app.set("trust proxy", 1)` only
+  when explicitly enabled, so `req.ip` can reflect the real caller
+  behind Render's or a tunnel's reverse proxy.
+- Both new checks wired into `payfast.service.ts`'s notify flow as
+  Steps 5-6, right after eligibility and before status mapping —
+  failing either rejects with a clean `403` (source — same class as an
+  invalid signature) or `400` (server validation — same class as an
+  amount/merchant-ID mismatch), and never updates payment status.
+
+**Tested:** with both flags `false`, the exact Milestone 22 regression
+(valid COMPLETE → `PAID`/`CONFIRMED`) still passes unchanged. With
+`PAYFAST_VERIFY_SOURCE=true`, a local request is correctly rejected
+(`403`) — proving the rejection path, not yet the acceptance path.
+With `PAYFAST_VALIDATE_SERVER=true`, crafted data POSTed to PayFast's
+**real sandbox validate endpoint** is correctly rejected (`400`) — a
+genuine network call to PayFast's actual infrastructure, confirming
+the mechanism works end-to-end without needing a real payment to have
+happened. No secrets or raw payloads logged in any test; no stock
+changes during any notify call.
+
+**Still not proven:** the *acceptance* path for either check — that a
+genuine PayFast-originated ITN passes both. That requires Milestone
+30's real hosted sandbox round trip, the only way a request can
+actually originate from PayFast's own infrastructure.

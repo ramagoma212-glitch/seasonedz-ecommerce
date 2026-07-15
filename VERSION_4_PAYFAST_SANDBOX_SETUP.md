@@ -71,6 +71,22 @@ PAYFAST_CANCEL_URL="http://localhost:5173/#/payment-cancelled"
 uses one) `PAYFAST_PASSPHRASE` should already be set from your sandbox
 account — leave them as they are.
 
+**For the actual Milestone 30 hosted round trip** (not required just
+to reach this point), also set the source verification hardening from
+Milestone 29 — see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`:
+
+```
+PAYFAST_VERIFY_SOURCE=true
+PAYFAST_VALIDATE_SERVER=true
+TRUST_PROXY=true
+```
+
+`TRUST_PROXY=true` is what lets `req.ip` reflect the real caller behind
+your tunnel rather than the tunnel's own address — without it,
+`PAYFAST_VERIFY_SOURCE` has no chance of seeing PayFast's real source
+IP. Leave all three `false` (the default) if you're only working
+through Steps 1-11 below without yet attempting a real hosted payment.
+
 **Important — quote any value containing `#`.** `dotenv` treats an
 unquoted `#` as the start of a comment and silently truncates
 everything after it. `PAYFAST_RETURN_URL`/`PAYFAST_CANCEL_URL` contain
@@ -258,6 +274,14 @@ Work through this before Milestone 30's actual hosted payment attempt:
 - [ ] `backend/.env` has `PAYFAST_NOTIFY_URL` using the tunnel URL.
 - [ ] Root `.env` has `VITE_PAYFAST_ENABLED=true`.
 - [ ] Root `.env` has `VITE_API_BASE_URL=http://localhost:5000/api`.
+- [ ] `backend/.env` has `PAYFAST_VERIFY_SOURCE=true` (Milestone 29
+      hardening — see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`).
+- [ ] `backend/.env` has `PAYFAST_VALIDATE_SERVER=true` (Milestone 29
+      hardening).
+- [ ] `backend/.env` has `TRUST_PROXY=true` — without this, `req.ip`
+      reflects the tunnel's own address rather than PayFast's real
+      source IP, and `PAYFAST_VERIFY_SOURCE` cannot possibly pass no
+      matter how correct the request actually is.
 - [ ] Order creation works (a normal bank-transfer or PayFast order can
       be created via the API).
 - [ ] PayFast initiation works (`/initiate` returns a sandbox
@@ -277,6 +301,9 @@ Work through this once a testing session ends:
 - [ ] Set `backend/.env`'s `PAYFAST_ENABLED=false` (or remove the line
       entirely — both are equally safe, since `false` is the default).
 - [ ] Set root `.env`'s `VITE_PAYFAST_ENABLED=false`.
+- [ ] Set `backend/.env`'s `PAYFAST_VERIFY_SOURCE=false`,
+      `PAYFAST_VALIDATE_SERVER=false`, and `TRUST_PROXY=false` (or
+      remove the lines entirely — all three default to `false`).
 - [ ] Stop the tunnel process.
 - [ ] Clean up any test orders/enquiries created during the session,
       by precise order number/ID — restore stock for any deleted

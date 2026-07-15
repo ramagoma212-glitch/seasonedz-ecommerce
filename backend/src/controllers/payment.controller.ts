@@ -64,7 +64,7 @@ export async function initiatePayfastPaymentHandler(req: Request, res: Response,
 export async function payfastNotifyHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const rawBody = asRecord(req.body);
-    const result = await processPayfastNotification(rawBody);
+    const result = await processPayfastNotification(rawBody, req);
     sendSuccess(res, { message: result.message });
   } catch (error) {
     if (error instanceof PaymentError) {

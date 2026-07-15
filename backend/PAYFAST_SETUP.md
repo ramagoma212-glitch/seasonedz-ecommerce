@@ -239,20 +239,39 @@ ever change `paymentStatus`. The frontend pages at those URLs (a later
 milestone) must re-fetch the order's real status from the API rather
 than assume success because of how they got there.
 
-### Source IP Verification — Known Limitation, Not Implemented
+### Source IP Verification and Server Validation (Version 4, Milestone 29)
 
-PayFast recommends validating that an ITN's source IP belongs to its
-own published ranges, as an additional production-hardening layer on
-top of signature verification. **This is not implemented** — deliberately,
-rather than faked. It can't be meaningfully tested locally (there's no
-way to have a local request genuinely originate from PayFast's
-infrastructure to confirm the check behaves correctly), and a check
-that's never been exercised is riskier than an honest, documented gap.
-**Before any real production PayFast credentials are used, this should
-be added**: validate the request's source IP (accounting for Render
-sitting behind a proxy — `X-Forwarded-For`/`trust proxy` needs
-correct configuration first) against PayFast's published IP ranges,
-and treat a mismatch the same as an invalid signature.
+**Now implemented, disabled by default.** Two further checks exist on
+top of signature/amount/merchant-ID verification, each gated behind
+its own flag (both default `false`):
+
+- **`PAYFAST_VERIFY_SOURCE`** — resolves PayFast's own domains via DNS
+  at verification time and confirms the ITN's source IP matches
+  (`src/utils/payfastSourceVerification.ts`). No fixed IP list is
+  hardcoded — PayFast doesn't publish one to hardcode.
+- **`PAYFAST_VALIDATE_SERVER`** — POSTs the received ITN back to
+  PayFast's own validation endpoint and requires a `"VALID"` response
+  (`src/utils/payfastServerValidation.ts`) — PayFast's own recommended
+  custom-integration confirmation step.
+
+Both were deliberately left disabled through Milestone 28, for the
+same reason as before: they can't be meaningfully proven against real
+PayFast traffic from local development alone, and a check that's never
+been exercised is riskier than an honest, documented gap. Milestone 29
+built and tested both — their *rejection* paths are proven (a local
+request correctly fails source verification; crafted data correctly
+fails PayFast's real sandbox server validation) — but their
+*acceptance* paths (a genuine PayFast-originated ITN passing both
+checks) can only be proven by Milestone 30's actual hosted sandbox
+round trip. See `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` for full
+detail, including `TRUST_PROXY` (needed for `req.ip` to reflect the
+real caller behind Render's or a tunnel's reverse proxy) and exactly
+which PayFast domains are checked per mode.
+
+**Before any real production PayFast credentials are used, both
+`PAYFAST_VERIFY_SOURCE=true` and `PAYFAST_VALIDATE_SERVER=true` should
+be set** — this remains a documentation/operational requirement, not
+something enforced in code.
 
 ## Frontend Checkout Flow (Version 3, Milestone 23)
 
@@ -307,19 +326,24 @@ full frontend flow (checkout redirect + success/cancelled/failed
 pages) — the whole loop can now be tested locally, as this milestone
 did (backend with crafted requests in M21-22; the frontend flow with a
 real browser in M23, redirecting to PayFast's actual sandbox
-`processUrl`). `PAYFAST_ENABLED=true`/`VITE_PAYFAST_ENABLED=true` are
-safe to use **locally, with sandbox credentials**, for exactly this
-kind of testing. They should stay `false` in any real (deployed)
-environment until: a full manual sandbox payment has actually been
-completed through PayFast's real hosted payment page (not just a form
-built and inspected locally), and ideally until source IP verification
-(above) is added as well.
+`processUrl`). Milestone 29 adds source verification and server
+validation (both still disabled by default). `PAYFAST_ENABLED=true`/
+`VITE_PAYFAST_ENABLED=true` are safe to use **locally, with sandbox
+credentials**, for exactly this kind of testing. They should stay
+`false` in any real (deployed) environment until: a full manual
+sandbox payment has actually been completed through PayFast's real
+hosted payment page (not just a form built and inspected locally), and
+`PAYFAST_VERIFY_SOURCE`/`PAYFAST_VALIDATE_SERVER` have both been
+proven against that real round trip (Milestone 30).
 
-## Known Limitations (as of Milestone 23)
+## Known Limitations (as of Milestone 29)
 
-- **No source IP verification** on `/notify` — see "Source IP
-  Verification" above. Signature verification is the primary defence
-  in the meantime.
+- **Source IP verification and server validation are implemented but
+  disabled by default and unproven against real PayFast traffic** —
+  see "Source IP Verification and Server Validation" above and
+  `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`. Their rejection paths are
+  tested; their acceptance paths (a genuine PayFast ITN passing both)
+  are not yet, pending Milestone 30's hosted round trip.
 - **Frontend flow built but not yet proven against a real PayFast
   round-trip** — the checkout redirect and
   payment-success/cancelled/failed pages exist (Milestone 23) and were

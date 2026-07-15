@@ -5,7 +5,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { allowedOrigins } from "./config/env.js";
+import { allowedOrigins, env } from "./config/env.js";
 import routes from "./routes/index.js";
 import { notFoundMiddleware } from "./middleware/notFound.middleware.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
@@ -13,6 +13,22 @@ import { generalRateLimiter } from "./middleware/rateLimit.middleware.js";
 
 export function createApp(): Express {
   const app = express();
+
+  // Only trust the reverse proxy in front of this app (Render's own
+  // proxy, or a temporary tunnel like ngrok) when explicitly told to
+  // via TRUST_PROXY — never unconditionally. Express's default
+  // (trust proxy off) means req.ip always reports whatever directly
+  // connected to the Node process — the proxy itself, on Render, never
+  // the real original client. Trusting exactly one hop (not `true`,
+  // which would trust the whole X-Forwarded-For chain and let a client
+  // freely spoof it if more than one proxy were ever involved) is what
+  // lets req.ip report the real caller — needed for PAYFAST_VERIFY_SOURCE
+  // (Version 4, Milestone 29) to have any chance of seeing PayFast's
+  // real source IP instead of a proxy's. See
+  // backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
+  if (env.trustProxy) {
+    app.set("trust proxy", 1);
+  }
 
   app.use(helmet());
 

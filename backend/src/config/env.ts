@@ -87,6 +87,29 @@ if (payfastEnabled) {
   }
 }
 
+// PayFast source verification hardening (Version 4, Milestone 29).
+// All three are independent, always-optional booleans — never
+// required regardless of PAYFAST_ENABLED, since they harden an
+// already-working notify flow rather than gate a new feature. Every
+// one defaults to "false", so today's backend (local or the current
+// Render deployment) starts and behaves identically whether or not
+// anyone has heard of these yet. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
+//
+// Before any real production PayFast payment is accepted, the
+// documentation (not this code) requires PAYFAST_VERIFY_SOURCE=true
+// and PAYFAST_VALIDATE_SERVER=true to both be set — there's no way for
+// this file to know "we're about to go live" versus "we're testing
+// sandbox", so that's a deliberate operational decision, not something
+// enforced here.
+const payfastVerifySource = getEnv("PAYFAST_VERIFY_SOURCE", "false").trim().toLowerCase() === "true";
+const payfastValidateServer = getEnv("PAYFAST_VALIDATE_SERVER", "false").trim().toLowerCase() === "true";
+
+// Accepts "true" or "1" (both common conventions for this kind of
+// flag) — see app.ts for how this is used.
+const trustProxyRaw = getEnv("TRUST_PROXY", "false").trim().toLowerCase();
+const trustProxy = trustProxyRaw === "true" || trustProxyRaw === "1";
+
 // Email (Version 3, Milestone 24 — preparation only). Nothing is
 // wired up to actually send anything yet — see
 // backend/src/services/email/ and backend/EMAIL_SETUP.md.
@@ -150,6 +173,10 @@ export const env = {
   payfastReturnUrl,
   payfastCancelUrl,
   payfastNotifyUrl,
+  // PayFast source verification hardening — see the block above.
+  payfastVerifySource,
+  payfastValidateServer,
+  trustProxy,
   // Email — see the block above. No provider credentials are read
   // here; a real provider integration adds its own vars when it exists.
   emailEnabled,
