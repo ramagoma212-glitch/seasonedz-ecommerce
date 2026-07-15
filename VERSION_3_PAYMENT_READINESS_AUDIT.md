@@ -1,5 +1,8 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
+*(See "Milestone 20" section near the end of this document for the
+sandbox configuration work that followed this audit.)*
+
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
 no schema migration were made in this milestone** — this document is
@@ -314,3 +317,55 @@ guessing now and migrating twice.
 initiation, ITN verification, and the success/failed/cancelled pages,
 fully tested against PayFast's sandbox — no production credentials, no
 live charge — before any further milestone considers going live.
+
+---
+
+## Milestone 20 — PayFast Sandbox Setup and Payment Configuration
+
+Configuration-only follow-up to this audit. No payment initiation, no
+ITN handling, and no redirect to PayFast were built — this milestone
+only prepares the backend safely and fixes the one concrete risk this
+audit found (§3 above: `PaymentMethod.PAYFAST` was accepted by
+`POST /api/orders` even though nothing could ever resolve such an
+order). Full detail in `backend/PAYFAST_SETUP.md`.
+
+**What changed:**
+
+- `backend/.env.example` — added safe placeholders for `PAYFAST_ENABLED`,
+  `PAYFAST_MODE`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
+  `PAYFAST_PASSPHRASE`, `BACKEND_PUBLIC_URL`, `PAYFAST_RETURN_URL`,
+  `PAYFAST_CANCEL_URL`, `PAYFAST_NOTIFY_URL` — no real values.
+- `backend/src/config/env.ts` — now reads and validates all of the
+  above. `PAYFAST_MODE` must be `sandbox` or `production`. The
+  merchant-credential and URL variables are only eagerly required
+  (backend refuses to start, naming exactly what's missing) when
+  `PAYFAST_ENABLED=true` — with the default `false`, nothing about
+  this backend's startup behaviour changes.
+- `backend/src/config/payfast.ts` (new) — exposes a single
+  `payfastConfig` object (`mode`, `merchantId`, `merchantKey`,
+  `passphrase`, `processUrl`, `returnUrl`, `cancelUrl`, `notifyUrl`) to
+  backend code only. `processUrl` resolves to PayFast's sandbox or
+  production endpoint based on `mode`. Nothing calls PayFast with it
+  yet.
+- **Risk fix:** `backend/src/validators/order.validator.ts` now
+  rejects `paymentMethod: PAYFAST` with a clean `400` — *"PayFast
+  payments are not available yet. Please choose another payment
+  method."* — unless `PAYFAST_ENABLED=true`. This closes the gap this
+  audit found at the API level (the frontend already disabled this
+  option in the UI, but the backend previously accepted it anyway).
+
+**Decision recorded:** the "required for sandbox payment work" env
+vars (§7 above) are validated as required only when `PAYFAST_ENABLED`
+is `true`, not unconditionally. Requiring them unconditionally would
+have meant the currently-running local dev backend — and the live
+Render deployment, once this code ships there — would refuse to start
+at all without new PayFast vars, for a feature that's still fully
+disabled by default. Gating the requirement behind the same flag that
+gates the feature itself avoids that disruption while still giving
+real, meaningful validation once PayFast is actually turned on.
+
+**Still not built (unchanged from §3/§11 above):** payment initiation,
+signature generation, ITN handling, and the payment-success/
+payment-failed/payment-cancelled frontend pages. `PAYFAST_ENABLED`
+stays `false` until all of that exists and has been tested in
+PayFast's sandbox.

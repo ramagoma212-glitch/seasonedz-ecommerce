@@ -96,6 +96,12 @@ real values):
 | `DIRECT_URL` | Direct (non-pooled) PostgreSQL connection, used only by Prisma Migrate (Supabase's pooler doesn't support migration DDL) | **Required — no default.** Backend fails to start without it |
 | `FRONTEND_URL` | Primary allowed CORS origin | **Required.** Defaults to `http://localhost:5173` outside production; in production it must be set explicitly — no localhost fallback |
 | `FRONTEND_PRODUCTION_URL` | Optional second allowed CORS origin (e.g. deployed GitHub Pages URL) | Optional — omit if there's only one frontend origin |
+| `PAYFAST_ENABLED` | Feature flag — real PayFast checkout stays blocked until `true` | Defaults to `false`. See "PayFast Sandbox Setup" below |
+| `PAYFAST_MODE` | `sandbox` or `production` | Defaults to `sandbox` |
+| `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` | PayFast merchant credentials | **Required only if `PAYFAST_ENABLED=true`** |
+| `PAYFAST_PASSPHRASE` | Optional PayFast account passphrase | Optional, even when PayFast is enabled |
+| `BACKEND_PUBLIC_URL` | This backend's own public URL, used to build the notify URL | **Required only if `PAYFAST_ENABLED=true`** |
+| `PAYFAST_RETURN_URL` / `PAYFAST_CANCEL_URL` / `PAYFAST_NOTIFY_URL` | Where PayFast redirects/notifies after a payment attempt | **Required only if `PAYFAST_ENABLED=true`** |
 
 All environment variables are read in one place: `src/config/env.ts`,
 which validates them **at startup** — if `DATABASE_URL`, `DIRECT_URL`
@@ -104,7 +110,9 @@ clear message naming the missing variable (never its value) instead of
 starting in a broken or insecure state. `.env.example` intentionally
 ships with both database URLs (and `FRONTEND_PRODUCTION_URL`) empty —
 real Supabase credentials belong only in the git-ignored `.env`, never
-in a tracked template file.
+in a tracked template file. The PayFast variables follow the same
+naming-not-value pattern, but are only *required* to be present when
+`PAYFAST_ENABLED=true` — see below.
 
 ### Configuring allowed frontend origins (CORS)
 
@@ -126,6 +134,26 @@ explicitly — never a wildcard:
 
 Full CORS behaviour (including how non-matching origins are handled)
 is documented in `API_ROUTES.md`'s "CORS" section.
+
+## PayFast Sandbox Setup (Version 3, Milestone 20)
+
+Configuration only — no PayFast code runs yet. Full detail (including
+why each rule exists) is in [`PAYFAST_SETUP.md`](./PAYFAST_SETUP.md);
+short version:
+
+- `POST /api/orders` rejects `paymentMethod: PAYFAST` with a clean
+  `400` ("PayFast payments are not available yet...") unless
+  `PAYFAST_ENABLED=true` — this stays `false` until real payment
+  initiation and ITN verification are built and tested in sandbox.
+- All PayFast credentials (`PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
+  `PAYFAST_PASSPHRASE`) live only in the backend's environment
+  variables — never in frontend code, never committed to Git.
+- `src/config/payfast.ts` exposes this config to backend code only; it
+  picks PayFast's sandbox or production process URL based on
+  `PAYFAST_MODE`.
+- No real PayFast account is needed to run this backend locally today
+  — leave `PAYFAST_ENABLED=false` (the `.env.example` default) and
+  everything else works exactly as before.
 
 ## Available Routes
 
@@ -218,6 +246,7 @@ backend/
     server.ts                  Starts the HTTP server
     config/
       env.ts                    Reads and validates environment variables
+      payfast.ts                 PayFast config (Milestone 20 — sandbox setup only, no calls made yet)
       prisma.ts                  Shared PrismaClient instance
     routes/
       index.ts                  Mounts every route group under /api
@@ -255,6 +284,7 @@ backend/
     seed.ts                      Starter categories/products (npm run seed)
     migrations/                  Generated SQL migration history
   API_ROUTES.md                 Full API reference (routes, security, errors)
+  PAYFAST_SETUP.md               PayFast sandbox setup plan (Milestone 20 — configuration only)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
   DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
   DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy
