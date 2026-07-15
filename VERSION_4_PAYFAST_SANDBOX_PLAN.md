@@ -1,0 +1,296 @@
+# Version 4 — PayFast Sandbox Round Trip Plan (Milestone 27)
+
+**Planning only.** No code was changed to produce this document — it
+reviews what already exists (Version 3) and plans what a real, hosted
+PayFast sandbox round trip needs. No PayFast code changed, no Render
+settings changed, nothing deployed, nothing enabled.
+
+## Current State (Reviewed from Version 3)
+
+Confirmed by re-reading the actual code, not just prior notes:
+
+- **`backend/src/config/payfast.ts`** — exposes `payfastConfig`
+  (`enabled`, `mode`, `merchantId`, `merchantKey`, `passphrase`,
+  `processUrl`, `returnUrl`, `cancelUrl`, `notifyUrl`) to backend code
+  only. `processUrl` resolves to PayFast's sandbox or production
+  endpoint based on `PAYFAST_MODE`.
+- **`POST /api/payments/payfast/initiate`** — prepares PayFast form
+  fields + signature from the backend's own `Order` record. Requires
+  `PAYFAST_ENABLED=true`; returns `503` otherwise.
+- **`POST /api/payments/payfast/notify`** — the only code path allowed
+  to set `paymentStatus: PAID`. Verifies signature (`timingSafeEqual`),
+  merchant ID, and amount (against `Order.total`) before touching
+  anything. Idempotent. No rate limiter (deliberately — a webhook may
+  retry).
+- **`VITE_PAYFAST_ENABLED`** (frontend) — UI-only gate on whether the
+  PayFast radio is selectable. Independent of the backend's own gate.
+- **`payment-success` / `payment-cancelled` / `payment-failed`**
+  (`src/pages/`) — all read-only, all call
+  `GET /api/orders/:orderNumber/tracking` and display whatever
+  `paymentStatus` the backend actually has on record. None can write
+  anything.
+- **Render production safety (documented in
+  `VERSION_3_LIVE_STABILITY_REVIEW.md` and `VERSION_3_PRE_MERGE_SAFETY_CHECK.md`):**
+  `PAYFAST_ENABLED` confirmed `false`/unset on live Render;
+  `VITE_PAYFAST_ENABLED` explicitly `false` in
+  `.github/workflows/deploy.yml`. Confirmed live: the route exists
+  (`503`, not `404`) but is inert.
+- **Known source IP verification gap** (`backend/PAYFAST_SETUP.md`):
+  documented as not implemented, deliberately, since it can't be
+  meaningfully exercised locally. Re-confirmed while reviewing for this
+  milestone: **no `trust proxy` setting exists anywhere in
+  `backend/src/app.ts`, and no code anywhere reads `req.ip` or an
+  `X-Forwarded-For` header.** This is a genuinely blank slate, not a
+  partially-built feature.
+- **Everything so far has been tested via direct API calls
+  (`curl`/crafted requests) or by inspecting the generated redirect
+  form — no one has completed a real payment on PayFast's own hosted
+  sandbox page and had PayFast's real infrastructure call back in.**
+  That gap is exactly what this milestone plans to close next.
+
+## Sandbox Round Trip Goal
+
+A real browser submits the PayFast form → customer completes or
+cancels on PayFast's actual hosted sandbox page → **PayFast's own
+servers** send a real ITN to our `notify_url` → backend verifies and
+updates the order → the frontend success/cancelled/failed page reads
+that real backend status. Every step already has code; what's missing
+is a way for step 3 (PayFast's real infrastructure reaching our
+`notify_url`) to actually happen.
+
+## Required External Setup
+
+- **A PayFast sandbox merchant account** — already have one: sandbox
+  merchant ID, merchant key, and passphrase are already present in the
+  local, git-ignored `backend/.env` (moved there during the Milestone
+  24 environment hygiene pass). No new sandbox account signup is
+  needed to run the round trip described here. (Values not printed —
+  see `backend/.env` directly if you need to confirm them yourself.)
+- **A way for PayFast's real servers to reach our `notify_url` over
+  the public internet** — see "Why `localhost` Cannot Work" below.
+- Nothing else external is required — no new library, no new provider.
+
+## Environment Variables Needed
+
+All already exist (`backend/.env.example`) — none are new for the
+*planning* stage. For the actual round-trip *test* (Milestone 28+),
+two of them need temporary, test-specific values:
+
+| Variable | For this round trip |
+|---|---|
+| `PAYFAST_ENABLED` | `true` — **only ever in a local `.env`, never on Render** |
+| `PAYFAST_MODE` | `sandbox` |
+| `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` / `PAYFAST_PASSPHRASE` | Already set locally (sandbox account) |
+| `BACKEND_PUBLIC_URL` | Must become the tunnel's public URL during the test (see below) — not `http://localhost:5000` |
+| `PAYFAST_NOTIFY_URL` | Built from `BACKEND_PUBLIC_URL` — must be the public tunnel URL + `/api/payments/payfast/notify` |
+| `PAYFAST_RETURN_URL` / `PAYFAST_CANCEL_URL` | Can stay pointing at `http://localhost:5173/#/payment-success` / `#/payment-cancelled` — see below, these are different from `notify_url` |
+| `VITE_PAYFAST_ENABLED` | `true` — **only in local root `.env`, never in `.github/workflows/deploy.yml`** |
+
+No brand-new environment variable is required for the round trip
+itself. One new variable is *proposed* for source IP verification —
+see that section below.
+
+## Why a `localhost` Notify URL Will Not Work
+
+`notify_url` is called **server-to-server, directly by PayFast's own
+infrastructure** — not by the customer's browser. PayFast's servers,
+running somewhere on the public internet, have no route to
+`http://localhost:5000` or `127.0.0.1` on a developer's own machine —
+that address only means "this machine" to the machine itself; it is
+meaningless and unreachable from any other computer on the internet.
+This isn't a configuration mistake to fix, it's a fundamental property
+of what "localhost" means. **`notify_url` must be a real, public,
+internet-routable URL for a genuine ITN to ever arrive.**
+
+## Return URL and Cancel URL Requirements
+
+These are different from `notify_url` in one important way: they are
+**browser redirects**, not server-to-server calls. PayFast tells the
+*customer's own browser* to navigate there after they finish on
+PayFast's site. If the person running this test is doing so from their
+own machine, in their own browser, against their own local dev
+frontend, then `http://localhost:5173/#/payment-success` genuinely
+works as a `return_url` — the browser doing the redirecting is the
+same machine the dev server is running on. **Only `notify_url` strictly
+needs to be public; `return_url`/`cancel_url` can stay local for a
+manual, single-tester round trip.**
+
+## Render Backend vs. a Temporary Tunnel (e.g. ngrok)
+
+**Recommendation: use a local backend + a temporary tunnel (e.g.
+ngrok), not the live Render backend.**
+
+| | Local + tunnel | Live Render backend |
+|---|---|---|
+| Requires touching Render's dashboard | No | Yes — `PAYFAST_ENABLED=true` would have to be set there |
+| Risk to real customers | None — `PAYFAST_ENABLED` only changes on the tester's own machine; the live site's backend and frontend are completely unaffected | Real — if `PAYFAST_ENABLED=true` were ever set on Render, the backend would start accepting real `PAYFAST` orders from real site visitors too, regardless of the frontend flag (a determined visitor doesn't need the UI to POST directly to the API) |
+| Violates "do not change Render production env variables" | No | Yes, directly |
+| Setup effort | One tunnel command, temporary, torn down after | None (already deployed) |
+
+**One risk that exists either way, not unique to choosing Render:**
+local dev and the live Render backend read the **same** Supabase
+database (`DATABASE_URL`/`DIRECT_URL` point at one shared production
+database, not separate dev/prod databases). This means **even
+local+tunnel testing writes real rows into the same database real
+customers' orders live in.** The existing test-data discipline used
+throughout this project — clean up by precise order number/ID, restore
+stock, never delete unrecognised orders — remains required for the
+sandbox round trip too, regardless of which backend option is chosen.
+
+## Risks of Using the Production Render Backend for Sandbox Testing
+
+- Would require setting `PAYFAST_ENABLED=true` directly on Render,
+  explicitly forbidden for this milestone and risky beyond it: it
+  would make the *live* backend accept real `PAYFAST` orders from any
+  real visitor, not just the tester, independent of what the frontend
+  shows.
+- Mixes test transactions into the same live service handling real
+  customer traffic, logs, and rate limits.
+- Makes "only ever local" much harder to guarantee — a mistake here is
+  a production incident, not a local cleanup.
+
+## Keeping `PAYFAST_ENABLED` False on Production Until Ready
+
+Simple invariant, unchanged from Version 3: **never set
+`PAYFAST_ENABLED` (or flip `VITE_PAYFAST_ENABLED` in
+`.github/workflows/deploy.yml`) on Render or in the GitHub Actions
+workflow.** Both stay exactly as Version 3 left them through all of
+Milestones 27-31 below. Only a final, deliberate, separately-reviewed
+decision (step F) should ever change that — not a side effect of
+testing.
+
+## Source IP Verification Plan
+
+**Not implemented yet, and this milestone does not implement it —
+planning only, so it can be built correctly in a later milestone.**
+
+### How Express/Render Receives the Client IP
+
+Express exposes `req.ip`/`req.ips`, but by default Express does **not**
+trust any `X-Forwarded-For` header — it reports the IP of whatever
+directly connected to the Node process. On Render, that's Render's own
+reverse proxy, not the real original client (PayFast's server, for a
+genuine ITN). Confirmed by reviewing `backend/src/app.ts`: **there is
+no `app.set("trust proxy", ...)` anywhere in this codebase today.**
+Without it, `req.ip` on Render always resolves to Render's internal
+proxy address — useless for identifying PayFast.
+
+### Trusting the Proxy Correctly
+
+Render's own documentation describes exactly one reverse-proxy hop in
+front of the application. The correct, minimal fix is
+`app.set("trust proxy", 1)` in `backend/src/app.ts` — trusting exactly
+one hop, not `true` (which trusts every hop in the chain and would let
+a client freely spoof `X-Forwarded-For` if there were ever more than
+one proxy involved). This must be verified against Render's actual
+current proxy behaviour before relying on it, not assumed.
+
+### Comparing Against PayFast's Source
+
+PayFast does not publish a small, fixed, static IP allowlist to
+compare against directly (or at least, none is known/verified as part
+of this plan — treating this as unverified rather than asserting a
+specific IP range would otherwise be guessing). PayFast's own
+documented custom-integration validation instead relies on two other
+mechanisms, which this plan recommends as the real approach:
+
+1. **Server confirmation POST-back** — after signature verification,
+   POST the received ITN fields back to PayFast's own validation
+   endpoint (sandbox: `https://sandbox.payfast.co.za/eng/query/validate`;
+   production: `https://www.payfast.co.za/eng/query/validate`) and
+   require a `VALID` response before trusting the notification. This
+   is protocol-guaranteed regardless of PayFast's underlying IP
+   infrastructure, and is the most robust check available.
+2. **Domain-based source validation** — reverse-resolve the source IP
+   to a hostname, confirm it ends in `.payfast.co.za`, then
+   forward-resolve that hostname and confirm it maps back to the same
+   IP (guards against a spoofed/forged reverse DNS entry). This is a
+   secondary layer, not a replacement for (1).
+
+Both should be added **in addition to**, never instead of, the
+existing signature/amount/merchant-ID checks — defense in depth, not a
+replacement for what's already there.
+
+### Local Development Cannot Test This Normally
+
+A local request can never genuinely originate from PayFast's real
+infrastructure, so the *real* version of this check can only ever be
+proven against real traffic (during the sandbox round trip itself, or
+in production). **The plan is not to fake this locally.** Instead:
+
+- Gate the whole feature behind its own new flag (recommended name:
+  `PAYFAST_VERIFY_SOURCE=false` by default), following the exact same
+  pattern as `PAYFAST_ENABLED`/`EMAIL_ENABLED` — safe, inert by
+  default, no behaviour change for anyone until deliberately turned on.
+- Unit-test the *logic* (the DNS-lookup function, the confirmation
+  POST-back function) directly with crafted inputs and a mocked DNS/
+  HTTP layer — this proves the code behaves correctly for known inputs
+  without claiming it's been proven against real PayFast traffic.
+- The *real* proof only comes from the sandbox round trip (step D
+  below) and, later, real production traffic — both are honestly
+  labelled as such in whatever documentation follows.
+
+### Keeping Sandbox Testing Practical Without Weakening Production Rules
+
+`PAYFAST_VERIFY_SOURCE` should default `false` so that today's already-
+tested notify flow (signature/amount/merchant-ID checks) isn't put at
+risk by adding an unproven new check on top of it. Once implemented
+and exercised against real ITN traffic during the sandbox round trip,
+turning it on is a deliberate, separate decision — not bundled
+silently into "just testing sandbox."
+
+## Recommended Version 4 Implementation Order
+
+| Step | What | Why this order |
+|---|---|---|
+| **A** | Plan and document the sandbox round trip | This milestone (27) — understand the whole picture before writing any new code |
+| **B** | Add source IP verification support, behind `PAYFAST_VERIFY_SOURCE=false` | Should exist *before* the real round trip (step D) so that round trip can also exercise/prove this new code against genuine PayFast traffic, not just the parts already tested |
+| **C** | Add a documented, safe way to run a temporary sandbox test session (local backend + tunnel, `PAYFAST_ENABLED=true` locally only) | Operational setup/documentation, not necessarily new application code — makes step D repeatable and safe |
+| **D** | Actually perform the PayFast hosted sandbox round trip with a public (tunnelled) local backend | The real proof: a genuine browser round trip, a genuine ITN, genuine source IP verification exercised for the first time against real traffic |
+| **E** | Update docs and QA with the round trip's real results | Replace "not yet performed" language across `PAYFAST_SETUP.md`, the QA docs, and the stability review with what was actually observed |
+| **F** | Only later, as its own deliberate and separately-reviewed decision: whether to enable PayFast in production | Never a side effect of any step above |
+
+## Risks
+
+- **Shared production database** — every step above still writes to
+  the same Supabase database real customers use; test-data cleanup
+  discipline is mandatory regardless of local vs. tunnel vs. Render.
+- **Tunnel URLs are temporary** — a free ngrok URL typically changes
+  each session; `BACKEND_PUBLIC_URL`/`PAYFAST_NOTIFY_URL` must be
+  updated locally each time a new tunnel session starts, and PayFast's
+  sandbox config (if using PayFast's dashboard-configured notify URL
+  rather than a per-request one) may need updating too.
+- **Confusing a successful round trip with production readiness** —
+  a successful sandbox round trip and a working source IP check are
+  necessary, not sufficient, before enabling real production payments;
+  step F remains a separate, deliberate decision regardless of how
+  well D and B go.
+- **Accidentally leaving `PAYFAST_ENABLED=true` set locally** is low
+  risk (it only affects the tester's own machine) but should still be
+  reverted to the project's safe default when a testing session ends,
+  to avoid confusion in a later session.
+
+## What Must Not Be Done Yet
+
+- Do not set `PAYFAST_ENABLED=true` (or any PayFast credential) on
+  Render.
+- Do not set `VITE_PAYFAST_ENABLED=true` in
+  `.github/workflows/deploy.yml`.
+- Do not implement source IP verification by faking or hardcoding a
+  "pass" result.
+- Do not perform the actual sandbox round trip yet — that's step D,
+  not this milestone.
+- Do not touch courier integration, real email sending, login, or an
+  admin dashboard — all explicitly out of scope for Version 4 so far.
+
+## Recommendation for Milestone 28
+
+**Milestone 28 should be Step B: implement source IP verification,
+gated behind `PAYFAST_VERIFY_SOURCE=false`, with its logic unit-tested
+against crafted inputs (never faked against real traffic it hasn't
+seen).** This keeps the same safe, incremental, default-off pattern
+every prior PayFast/email/delivery milestone has used, and puts the
+verification code in place and ready *before* Milestone 29 (Step C/D:
+the actual sandbox round trip), so that round trip can genuinely
+exercise and prove the new check against real PayFast traffic for the
+first time.
