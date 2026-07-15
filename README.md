@@ -40,6 +40,24 @@ involve.
 > `VERSION_2_INTEGRATION_NOTES.md` for the full detail. As always, real
 > environment secrets (database credentials, etc.) are never committed
 > to Git — only entered directly in the hosting provider's dashboard.
+>
+> **Version 3 (in progress): PayFast payment integration, sandbox
+> only.** The backend can prepare a PayFast payment
+> (`POST /api/payments/payfast/initiate`) and verify PayFast's payment
+> notification (`POST /api/payments/payfast/notify`) — only a verified
+> notification can ever mark an order as paid, never the frontend. The
+> checkout flow can redirect to PayFast and there are
+> payment-success/payment-cancelled/payment-failed pages, all gated
+> behind `VITE_PAYFAST_ENABLED` (frontend) and `PAYFAST_ENABLED`
+> (backend), both `false` by default. **No live/production PayFast
+> credentials are in use anywhere, and none of this has been deployed
+> yet.** Full detail in `VERSION_3_PAYMENT_READINESS_AUDIT.md` and
+> `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
+> (templates + a console-only service) but not yet wired to send
+> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rules
+> (R80 standard, free from R700) are unchanged but now live in one
+> backend config module; courier fulfilment is still entirely manual —
+> see `backend/DELIVERY_SETUP.md`.
 
 ### Features Included in Version 1
 
@@ -324,12 +342,21 @@ to a real backend.
   frontend build is configured to use it. The live GitHub Pages site
   itself still needs an actual redeploy to pick this up — see
   `VERSION_2_INTEGRATION_NOTES.md`.
-- Real payment processing (PayFast), with server-side price/stock
-  verification (server-side verification already exists; PayFast
-  itself doesn't yet).
-- Real courier integration and live order tracking.
+- Real payment processing (PayFast) — **in progress (Version 3,
+  Milestones 19-23), sandbox only.** Server-side price/stock
+  verification, payment initiation, ITN verification, and the
+  frontend checkout redirect/success/cancelled/failed flow all exist
+  locally, gated behind `PAYFAST_ENABLED`/`VITE_PAYFAST_ENABLED`
+  (both `false` by default). No live credentials, no deployment yet —
+  see `VERSION_3_PAYMENT_READINESS_AUDIT.md`.
+- Real courier integration and live order tracking — **delivery fee
+  rules and manual courier workflow prepared (Version 3, Milestone
+  25)**; no courier API, credentials, or live tracking yet — see
+  `backend/DELIVERY_SETUP.md`.
 - Real email notifications (order confirmations, contact/enquiry
-  forms).
+  forms) — **templates and a console-only service prepared (Version 3,
+  Milestone 24)**, not yet wired to send automatically — see
+  `backend/EMAIL_SETUP.md`.
 - Customer accounts (login/registration), with cart/wishlist/orders
   attached to the account.
 

@@ -24,7 +24,9 @@ import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } f
 import { validateCheckoutForm } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
+import { initiatePayfastPayment } from "./api/paymentsApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
+import { savePendingPayment } from "./pendingPayment.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -426,6 +428,11 @@ async function handleCheckoutSubmit(form) {
     clearCart();
     updateHeaderCounters();
 
+    if (data.paymentMethod === "payfast") {
+      await redirectToPayfast(orderNumber);
+      return;
+    }
+
     window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
@@ -440,6 +447,46 @@ async function handleCheckoutSubmit(form) {
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
+}
+
+// The order already exists (created above) by the time this runs —
+// only the backend ever builds PayFast's fields/signature
+// (POST /api/payments/payfast/initiate); this just submits exactly
+// what it returns. If initiation itself fails (e.g. the backend's own
+// PAYFAST_ENABLED was turned off after this page loaded), the order
+// still exists, so the customer is sent to its real order confirmation
+// rather than left on a dead end.
+async function redirectToPayfast(orderNumber) {
+  savePendingPayment({ orderNumber, paymentMethod: "payfast" });
+
+  try {
+    const response = await initiatePayfastPayment(orderNumber);
+    submitPayfastForm(response.data);
+  } catch {
+    window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
+  }
+}
+
+// Builds a plain hidden <form> from the backend's response and submits
+// it — a real (non-SPA) navigation to PayFast. Every field, including
+// the signature, comes from the backend; nothing here generates or
+// alters any of them.
+function submitPayfastForm({ processUrl, method, fields }) {
+  const form = document.createElement("form");
+  form.method = method || "POST";
+  form.action = processUrl;
+  form.style.display = "none";
+
+  Object.entries(fields).forEach(([name, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
 }
 
 // Order tracking form: submitting a non-empty order number navigates

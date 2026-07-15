@@ -67,6 +67,45 @@ function renderBackendUnavailable(orderNumber) {
   `;
 }
 
+// PayFast orders can genuinely be PAID by the time this page is
+// viewed (e.g. the customer clicks back after payment-success) — the
+// old blanket "no real payment has been taken" claim would be actively
+// wrong in that case, so this reflects the order's real paymentStatus
+// instead of assuming every order is unpaid.
+function renderPaymentNotice(order) {
+  if (order.paymentStatus === "PAID") {
+    return `
+      <div class="demo-notice">
+        <span class="demo-notice__icon" aria-hidden="true">&#10003;</span>
+        <div>
+          <strong>Payment confirmed.</strong>
+          <p>
+            Your order is now being prepared for delivery. Seasonedz
+            Group will share courier tracking details once it's
+            dispatched — there's no live courier tracking yet, so
+            please allow some time.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  const payfastHint =
+    order.paymentMethod === "PAYFAST"
+      ? `If you completed payment with PayFast, confirmation can take a few minutes — check the <a href="#/payment-success?orderNumber=${encodeURIComponent(order.orderNumber)}">payment status page</a> or refresh shortly. `
+      : "";
+
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div>
+        <strong>Payment is not yet confirmed.</strong>
+        <p>${payfastHint}No real payment has been taken yet, and no goods have shipped.</p>
+      </div>
+    </div>
+  `;
+}
+
 function renderBackendOrderConfirmation(order) {
   const items = order.items.map((item) => ({ name: item.productName, price: item.unitPrice, quantity: item.quantity }));
 
@@ -78,18 +117,7 @@ function renderBackendOrderConfirmation(order) {
         <p>Your order has been placed successfully.</p>
       </div>
 
-      <div class="demo-notice">
-        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-        <div>
-          <strong>Payment is still not processed online.</strong>
-          <p>
-            Your order has been saved by the Seasonedz Group backend
-            (in development) — no real payment has been taken and no
-            goods have shipped yet. PayFast and real courier tracking
-            are coming later.
-          </p>
-        </div>
-      </div>
+      ${renderPaymentNotice(order)}
 
       <div class="order-confirmation__layout">
         <div class="order-confirmation__details">

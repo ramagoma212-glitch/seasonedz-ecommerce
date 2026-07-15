@@ -5,21 +5,25 @@ runs as a separate project alongside the existing frontend (see the
 root `README.md` for the frontend), with its own `package.json`, its
 own dependencies, and its own dev server.
 
-**Current status: connected to the frontend locally, and prepared for
-deployment (not yet deployed).** A real PostgreSQL database (hosted on
-Supabase) holds a starter catalogue (6 categories, 10 products), with
-`/api/products`, `/api/categories`, `/api/orders` and `/api/enquiries`
-on top of it (Milestones 12-15), hardened with rate limiting,
-multi-origin CORS and stricter startup validation (Milestone 14). As
-of Milestone 16, the frontend actually calls this API locally — see
-`../VERSION_2_INTEGRATION_NOTES.md`. As of Milestone 17, this backend
-is *prepared* for deployment to a host like Render — see
-`DEPLOYMENT.md` and `DEPLOYMENT_CHECKLIST.md` — but **has not actually
-been deployed anywhere yet**; it still only runs locally. See the full
-API reference in `API_ROUTES.md`. Order creation verifies every
+**Current status: live and deployed.** A real PostgreSQL database
+(hosted on Supabase) holds a starter catalogue (6 categories, 10
+products), with `/api/products`, `/api/categories`, `/api/orders` and
+`/api/enquiries` on top of it (Milestones 12-15), hardened with rate
+limiting, multi-origin CORS and stricter startup validation (Milestone
+14). As of Milestone 16, the frontend calls this API — see
+`../VERSION_2_INTEGRATION_NOTES.md`. As of Milestone 17/18, this
+backend is deployed and live on Render at
+`https://seasonedz-ecommerce.onrender.com/api`, with the production
+frontend build (on GitHub Pages) configured to use it — see
+`DEPLOYMENT.md` and `../VERSION_2_LIVE_STABILITY_REVIEW.md`. See the
+full API reference in `API_ROUTES.md`. Order creation verifies every
 product and price server-side (never trusts a client-supplied price)
 and reduces stock inside a database transaction. There is still no
 write API for products/categories, no login, and no admin dashboard.
+Version 3 (Milestones 19-25) adds PayFast payment integration, email
+preparation, and delivery rules, all sandbox/local-only so far — see
+`PAYFAST_SETUP.md`, `EMAIL_SETUP.md`, `DELIVERY_SETUP.md`, and
+`../VERSION_3_PAYMENT_READINESS_AUDIT.md`.
 
 ## Tech Stack
 
@@ -96,6 +100,18 @@ real values):
 | `DIRECT_URL` | Direct (non-pooled) PostgreSQL connection, used only by Prisma Migrate (Supabase's pooler doesn't support migration DDL) | **Required — no default.** Backend fails to start without it |
 | `FRONTEND_URL` | Primary allowed CORS origin | **Required.** Defaults to `http://localhost:5173` outside production; in production it must be set explicitly — no localhost fallback |
 | `FRONTEND_PRODUCTION_URL` | Optional second allowed CORS origin (e.g. deployed GitHub Pages URL) | Optional — omit if there's only one frontend origin |
+| `PAYFAST_ENABLED` | Feature flag — real PayFast checkout stays blocked until `true` | Defaults to `false`. See "PayFast Sandbox Setup" below |
+| `PAYFAST_MODE` | `sandbox` or `production` | Defaults to `sandbox` |
+| `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` | PayFast merchant credentials | **Required only if `PAYFAST_ENABLED=true`** |
+| `PAYFAST_PASSPHRASE` | Optional PayFast account passphrase | Optional, even when PayFast is enabled |
+| `BACKEND_PUBLIC_URL` | This backend's own public URL, used to build the notify URL | **Required only if `PAYFAST_ENABLED=true`** |
+| `PAYFAST_RETURN_URL` / `PAYFAST_CANCEL_URL` / `PAYFAST_NOTIFY_URL` | Where PayFast redirects/notifies after a payment attempt | **Required only if `PAYFAST_ENABLED=true`** |
+| `EMAIL_ENABLED` | Feature flag — real email sending stays off until `true` | Defaults to `false`. See "Email Setup" below |
+| `EMAIL_PROVIDER` | `console` (log-only) or a future real provider name | Defaults to `console` |
+| `EMAIL_FROM_NAME` | Display name emails would be sent from | Defaults to `Seasonedz Group` |
+| `EMAIL_FROM_ADDRESS` | Sender address | **Required only if `EMAIL_ENABLED=true`** |
+| `ADMIN_NOTIFICATION_EMAIL` | Where admin notification emails would go | **Required only if `EMAIL_ENABLED=true`** |
+| `RESEND_API_KEY` / `SENDGRID_API_KEY` / `SMTP_*` | Future provider credentials | Not required by anything yet — no provider is integrated |
 
 All environment variables are read in one place: `src/config/env.ts`,
 which validates them **at startup** — if `DATABASE_URL`, `DIRECT_URL`
@@ -104,7 +120,9 @@ clear message naming the missing variable (never its value) instead of
 starting in a broken or insecure state. `.env.example` intentionally
 ships with both database URLs (and `FRONTEND_PRODUCTION_URL`) empty —
 real Supabase credentials belong only in the git-ignored `.env`, never
-in a tracked template file.
+in a tracked template file. The PayFast variables follow the same
+naming-not-value pattern, but are only *required* to be present when
+`PAYFAST_ENABLED=true` — see below.
 
 ### Configuring allowed frontend origins (CORS)
 
@@ -126,6 +144,64 @@ explicitly — never a wildcard:
 
 Full CORS behaviour (including how non-matching origins are handled)
 is documented in `API_ROUTES.md`'s "CORS" section.
+
+## PayFast Sandbox Setup (Version 3, Milestone 20)
+
+Configuration only — no PayFast code runs yet. Full detail (including
+why each rule exists) is in [`PAYFAST_SETUP.md`](./PAYFAST_SETUP.md);
+short version:
+
+- `POST /api/orders` rejects `paymentMethod: PAYFAST` with a clean
+  `400` ("PayFast payments are not available yet...") unless
+  `PAYFAST_ENABLED=true` — this stays `false` until real payment
+  initiation and ITN verification are built and tested in sandbox.
+- All PayFast credentials (`PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
+  `PAYFAST_PASSPHRASE`) live only in the backend's environment
+  variables — never in frontend code, never committed to Git.
+- `src/config/payfast.ts` exposes this config to backend code only; it
+  picks PayFast's sandbox or production process URL based on
+  `PAYFAST_MODE`.
+- No real PayFast account is needed to run this backend locally today
+  — leave `PAYFAST_ENABLED=false` (the `.env.example` default) and
+  everything else works exactly as before.
+
+## Email Setup (Version 3, Milestone 24)
+
+Preparation only — no real email is sent yet, and no order/payment/
+enquiry flow calls the email service automatically. Full detail
+(including exactly where those calls will go later) is in
+[`EMAIL_SETUP.md`](./EMAIL_SETUP.md); short version:
+
+- `src/services/email/` has a working, testable email layer:
+  `email.types.ts` (input shapes), `emailTemplates.ts` (five plain-text
+  templates), `email.service.ts` (`sendOrderCreatedEmail`,
+  `sendPaymentConfirmedEmail`, `sendPaymentFailedEmail`,
+  `sendAdminNewOrderEmail`, `sendAdminNewEnquiryEmail`).
+- With `EMAIL_ENABLED=false` (the `.env.example` default), every one of
+  those functions is a safe no-op.
+- With `EMAIL_PROVIDER=console` (the default), a "send" only logs
+  template name + a masked recipient + an order number/enquiry
+  reference — never the rendered body, a full email address, or any
+  personal detail.
+- No real email provider is integrated yet — `EMAIL_PROVIDER` values
+  other than `console` just log a "not implemented" warning.
+
+## Delivery Setup (Version 3, Milestone 25)
+
+Full detail in [`DELIVERY_SETUP.md`](./DELIVERY_SETUP.md); short
+version:
+
+- Delivery fee rule (unchanged): **R80** flat rate, **free from R700**.
+  Single source of truth is now `src/config/delivery.ts`
+  (`STANDARD_DELIVERY_FEE`, `FREE_DELIVERY_THRESHOLD`) — `utils/money.ts`
+  and `services/delivery.service.ts` both read from it instead of
+  hardcoding the numbers.
+- `src/services/delivery.service.ts` (new) — `calculateDeliveryFee`,
+  `getDeliverySummary`, `getManualCourierStatus`. No courier provider
+  is contacted by anything here.
+- Courier fulfilment is entirely manual — no courier API, credentials,
+  or integration exist anywhere in this codebase. `COURIER_INTEGRATION_ENABLED`
+  is hardcoded `false` in `config/delivery.ts`.
 
 ## Available Routes
 
@@ -218,6 +294,8 @@ backend/
     server.ts                  Starts the HTTP server
     config/
       env.ts                    Reads and validates environment variables
+      payfast.ts                 PayFast config (Milestone 20 — sandbox setup only, no calls made yet)
+      delivery.ts                 Delivery fee rule + courier flags (Milestone 25 — no courier API)
       prisma.ts                  Shared PrismaClient instance
     routes/
       index.ts                  Mounts every route group under /api
@@ -237,6 +315,11 @@ backend/
       category.service.ts        Category Prisma queries + output shaping
       order.service.ts            Product verification, order transaction, tracking
       enquiry.service.ts           Enquiry creation + narrow public status lookup
+      delivery.service.ts           Delivery fee summary + manual courier status (Milestone 25 — no courier API)
+      email/                       Email service (Milestone 24 — preparation only, nothing sends yet)
+        email.types.ts               Input shapes for templates (OrderEmailData, EnquiryEmailData)
+        emailTemplates.ts             Plain-text template rendering
+        email.service.ts              sendOrderCreatedEmail/sendPaymentConfirmedEmail/etc. — no-op unless EMAIL_ENABLED=true
     validators/
       shared.ts                   Validation primitives shared by every validator below
       order.validator.ts          POST /api/orders request-shape validation
@@ -248,13 +331,16 @@ backend/
     utils/
       apiResponse.ts             Consistent success/error response helpers
       query.ts                    Safe query-string parsing helpers
-      money.ts                    Delivery fee calculation (Decimal-safe)
+      money.ts                    Delivery fee calculation (Decimal-safe, reads config/delivery.ts)
       orderNumber.ts               Unique SG-YYYY-XXXX order number generator
   prisma/
     schema.prisma               Full data model (see DATABASE_SCHEMA_PLAN.md)
     seed.ts                      Starter categories/products (npm run seed)
     migrations/                  Generated SQL migration history
   API_ROUTES.md                 Full API reference (routes, security, errors)
+  PAYFAST_SETUP.md               PayFast sandbox setup plan (Milestone 20 — configuration only)
+  EMAIL_SETUP.md                  Email service + templates plan (Milestone 24 — preparation only)
+  DELIVERY_SETUP.md                Delivery rules + manual courier workflow (Milestone 25 — no courier API)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
   DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
   DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy
@@ -265,16 +351,20 @@ backend/
 
 ## Deployment
 
-Not deployed yet — this backend still only runs locally. When that's
-ready to change, `DEPLOYMENT.md` has the full plan (Render settings,
-environment variables, CORS, Prisma migration notes, and how the
-frontend's `VITE_API_BASE_URL` needs to be updated and redeployed
-afterward), and `DEPLOYMENT_CHECKLIST.md` has a safety checklist to
-work through before and after. An optional `render.yaml` at the repo
-root can pre-fill Render's settings, but manual setup through Render's
-UI works identically. **Real environment secrets are never committed
-to Git** — they're only ever entered directly in the hosting
-provider's dashboard.
+**Deployed and live** on Render at
+`https://seasonedz-ecommerce.onrender.com/api` — see
+`../VERSION_2_LIVE_STABILITY_REVIEW.md` for the post-deployment
+verification. `DEPLOYMENT.md` has the full deployment plan (Render
+settings, environment variables, CORS, Prisma migration notes, and how
+the frontend's `VITE_API_BASE_URL` was updated and redeployed), and
+`DEPLOYMENT_CHECKLIST.md` has the safety checklist that was worked
+through before and after. An optional `render.yaml` at the repo root
+pre-fills Render's settings. **Real environment secrets are never
+committed to Git** — they're only ever entered directly in the hosting
+provider's dashboard. Version 3's PayFast/email features (Milestones
+19-25) are **not** part of this live deployment yet — `PAYFAST_ENABLED`/
+`EMAIL_ENABLED` stay `false` in any real environment until they're
+ready; see `PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
 
 ## What's Coming Later
 

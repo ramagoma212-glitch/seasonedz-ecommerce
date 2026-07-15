@@ -7,6 +7,7 @@
 // order.service.ts, since it needs the database.
 
 import { PaymentMethod } from "@prisma/client";
+import { env } from "../config/env.js";
 import {
   asRecord,
   isNonEmptyString,
@@ -103,6 +104,14 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     errors.push({ field: "paymentMethod", message: "Payment method is required." });
   } else if (!(PAYMENT_METHOD_VALUES as string[]).includes(root.paymentMethod)) {
     errors.push({ field: "paymentMethod", message: `Payment method must be one of: ${PAYMENT_METHOD_VALUES.join(", ")}.` });
+  } else if (root.paymentMethod === PaymentMethod.PAYFAST && !env.payfastEnabled) {
+    // Milestone 20 safety fix: PAYFAST is a valid enum value (ready for
+    // when real PayFast integration exists), but until payment
+    // initiation and ITN verification are actually built, a raw API
+    // call must not be able to create an order that can never be
+    // resolved. The frontend already disables this option in the UI
+    // (src/js/orders.js); this closes the same gap at the API level.
+    errors.push({ field: "paymentMethod", message: "PayFast payments are not available yet. Please choose another payment method." });
   }
 
   const rawItems = Array.isArray(root.items) ? root.items : null;

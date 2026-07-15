@@ -66,18 +66,24 @@ function renderPaymentMethods() {
   `;
 }
 
+// Wording stays accurate regardless of whether PayFast is currently
+// selectable (see PAYMENT_METHODS in js/orders.js) — Bank Transfer and
+// Cash/Card on Delivery are always demo-only; PayFast, when available,
+// is a real redirect to PayFast, but no goods have shipped yet either
+// way and real courier tracking still doesn't exist.
 function renderDemoNotice() {
   return `
     <div class="demo-notice">
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
-        <strong>Payment is still not processed online.</strong>
+        <strong>No goods have shipped yet.</strong>
         <p>
-          No real payment is taken and no goods are shipped yet. Your
-          order is saved by the Seasonedz Group backend (in
-          development), so it's a real database record rather than
-          just this browser — but PayFast and real courier tracking
-          are coming later.
+          Bank Transfer and Cash / Card on Delivery are demo payment
+          options only — no real charge is taken for either. If PayFast
+          is available and selected, you'll be redirected to PayFast's
+          own payment page to complete a real payment; your order is
+          saved by the Seasonedz Group backend either way. Real courier
+          tracking is coming later.
         </p>
       </div>
     </div>
