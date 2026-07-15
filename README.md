@@ -32,13 +32,14 @@ involve.
 > there's still no real payment, no real courier tracking, and no
 > login — see that file for the full picture.
 >
-> **Backend deployment preparation has started** (Milestone 17) — the
-> backend is not deployed anywhere yet, but `backend/DEPLOYMENT.md` now
-> has a full plan for deploying it to Render (or a similar host) when
-> that's decided, plus `backend/DEPLOYMENT_CHECKLIST.md` for what to
-> verify before/after. As always, real environment secrets (database
-> credentials, etc.) are never committed to Git — only entered directly
-> in the hosting provider's dashboard.
+> **The backend is now deployed** at
+> `https://seasonedz-ecommerce.onrender.com/api` (Render — see
+> `backend/DEPLOYMENT.md` and `backend/DEPLOYMENT_CHECKLIST.md`). The
+> production frontend build (`.github/workflows/deploy.yml`) is
+> configured to use this URL as `VITE_API_BASE_URL` — see
+> `VERSION_2_INTEGRATION_NOTES.md` for the full detail. As always, real
+> environment secrets (database credentials, etc.) are never committed
+> to Git — only entered directly in the hosting provider's dashboard.
 
 ### Features Included in Version 1
 
@@ -317,8 +318,12 @@ to a real backend.
   checkout, order confirmation/tracking, enquiry forms) — done, see
   `VERSION_2_INTEGRATION_NOTES.md`. Cart/wishlist remain Local Storage
   by design.
-- Deploying the backend somewhere reachable from the live GitHub Pages
-  site (still local-only for now — see `VERSION_2_INTEGRATION_NOTES.md`).
+- ~~Deploying the backend somewhere reachable from the live GitHub
+  Pages site~~ — done, deployed on Render at
+  `https://seasonedz-ecommerce.onrender.com/api`, and the production
+  frontend build is configured to use it. The live GitHub Pages site
+  itself still needs an actual redeploy to pick this up — see
+  `VERSION_2_INTEGRATION_NOTES.md`.
 - Real payment processing (PayFast), with server-side price/stock
   verification (server-side verification already exists; PayFast
   itself doesn't yet).

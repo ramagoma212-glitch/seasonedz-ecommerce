@@ -24,6 +24,41 @@ The frontend reads `VITE_API_BASE_URL` from `.env` (copy
 **The frontend still works if the backend isn't running** — see
 "Fallback and Error Behaviour" below.
 
+## Production API Configuration
+
+The backend is deployed on Render at
+`https://seasonedz-ecommerce.onrender.com/api` (see
+`backend/DEPLOYMENT.md`). This URL is **not secret** — it's public and
+safe to see in browser dev tools, since Vite bakes `VITE_API_BASE_URL`
+into the built JavaScript either way.
+
+- **Local development** (`npm run dev` / a plain `npm run build`) still
+  uses whatever `.env` has — normally
+  `VITE_API_BASE_URL=http://localhost:5000/api`, per `.env.example`.
+- **Production builds** (what `.github/workflows/deploy.yml` runs on
+  every push to `main`) set `VITE_API_BASE_URL` to the Render URL
+  above directly in the workflow's Build step — see that file. This
+  was chosen over a repo secret specifically because the value isn't
+  secret; a secret would just add indirection for no safety benefit.
+- `.env.production.example` documents this same value for anyone who
+  wants to build locally against the live Render backend instead of
+  localhost (e.g. `VITE_API_BASE_URL=https://seasonedz-ecommerce.onrender.com/api npm run build`).
+  It's a reference file, not auto-loaded by Vite.
+- Verified locally (Milestone 19-adjacent QA, not a numbered milestone
+  of its own): running the frontend dev server with
+  `VITE_API_BASE_URL` pointed at the live Render URL, with no local
+  backend running at all, correctly loaded real product/category data,
+  completed a full checkout → order confirmation → tracking flow
+  against Render, and submitted all four enquiry forms — all
+  confirmed via the actual network requests seen, all landing on
+  `onrender.com`, not `localhost`. Test data created during that check
+  was deleted afterward.
+
+**Redeploying GitHub Pages with this configuration is a separate,
+deliberate step** (a push to `main`, which is exactly when
+`deploy.yml` runs) — this configuration change alone doesn't redeploy
+anything by itself.
+
 ## What's Now Connected to the Backend
 
 - **Products and categories** (homepage rails, Shop, Categories,
@@ -66,12 +101,13 @@ The frontend reads `VITE_API_BASE_URL` from `.env` (copy
   (`trackingSource: "backend-demo"`).
 - **No login/registration/customer accounts, no customer or admin
   dashboard.** Every API call here is a public, guest-facing one.
-- **Production backend deployment is still pending.** Everything above
-  only works when the backend is running *locally*
-  (`http://localhost:5000`). The deployed GitHub Pages frontend has no
-  backend to reach yet — this milestone is local integration only, and
-  deliberately does not touch `.github/workflows/deploy.yml` or add any
-  production backend hosting.
+- **The backend is deployed** (Render, see `backend/DEPLOYMENT.md`) at
+  `https://seasonedz-ecommerce.onrender.com/api`, and the frontend's
+  production build now points at it — see "Production API
+  Configuration" below. The GitHub Pages frontend itself hasn't
+  actually been rebuilt/redeployed with this yet as of this note; that
+  redeploy is a deliberate separate step, not done automatically just
+  by merging this configuration.
 
 ## Fallback and Error Behaviour
 
