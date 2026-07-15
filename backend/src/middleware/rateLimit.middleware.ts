@@ -49,3 +49,14 @@ export const enquiryCreationRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Payment initiation (Version 3, Milestone 21) does real signature
+// generation and a database write on every call, and is unauthenticated
+// like order/enquiry creation — same shape of risk, own counter.
+export const paymentInitiationRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

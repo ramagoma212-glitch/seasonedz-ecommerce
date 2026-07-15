@@ -1,7 +1,8 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
-*(See "Milestone 20" section near the end of this document for the
-sandbox configuration work that followed this audit.)*
+*(See the "Milestone 20" and "Milestone 21" sections near the end of
+this document for the sandbox configuration and payment initiation
+work that followed this audit.)*
 
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
@@ -369,3 +370,67 @@ signature generation, ITN handling, and the payment-success/
 payment-failed/payment-cancelled frontend pages. `PAYFAST_ENABLED`
 stays `false` until all of that exists and has been tested in
 PayFast's sandbox.
+
+---
+
+## Milestone 21 — PayFast Payment Initiation
+
+Builds the first real PayFast code: a backend endpoint that *prepares*
+a PayFast sandbox/production payment for an existing order. **No order
+is marked as paid, no ITN/notify handling exists, and nothing redirects
+a real customer to PayFast yet** — that's still later work. Full detail
+in `backend/PAYFAST_SETUP.md` and `backend/API_ROUTES.md`'s "Payment
+Routes" section.
+
+**What was built:**
+
+- `POST /api/payments/payfast/initiate` — takes `{ "orderNumber":
+  "SG-YYYY-XXXX" }`, validates the order exists and is eligible
+  (`paymentMethod: PAYFAST`, `paymentStatus: PENDING`, `status` not
+  `CANCELLED`/`REFUNDED`, `total > 0`), and returns the exact form
+  fields + MD5 signature a frontend can `POST` to PayFast.
+- `backend/src/services/payfast.service.ts` (new) — the eligibility
+  checks and field-building, all sourced from the backend's own `Order`
+  record (never a client-supplied amount).
+- `backend/src/utils/payfastSignature.ts` (new) — PayFast's documented
+  custom-integration signature algorithm (ordered fields, blanks
+  dropped, PHP-style URL-encoding, optional passphrase, MD5). The raw
+  string being hashed is never logged, since it contains
+  `merchant_key` and (if configured) the passphrase.
+- `backend/src/controllers/payment.controller.ts` and
+  `backend/src/routes/payment.routes.ts` (new), registered in
+  `backend/src/routes/index.ts` under `/api/payments`. Same rate-limit
+  pattern as order/enquiry creation (10 requests / 15 min / IP, its own
+  counter).
+
+**Gated the same way as Milestone 20's fix:** the whole route returns
+a clean `503` (`"PayFast payments are not enabled."`) unless
+`PAYFAST_ENABLED=true` — so it stays inert in any environment where
+that flag isn't explicitly turned on.
+
+**Payment record:** on a successful initiation, the order's `Payment`
+row is updated with `provider: "PAYFAST"` and `providerReference:
+orderNumber` — `status` is left exactly as it was (`PENDING`), and no
+stock is touched.
+
+**Security properties carried over from the audit (§5/§6 above), now
+concretely true in code, not just planned:**
+
+- The amount sent to PayFast is `Order.total` from the database —
+  never anything the request body could influence (the request body
+  only ever contains `orderNumber`).
+- `merchant_id`/`merchant_key`/`passphrase` are read only from backend
+  env vars (`src/config/payfast.ts`) — never present in any frontend
+  code or bundle.
+- The passphrase is never returned in the API response — only the
+  final computed `signature` is.
+- `paymentStatus` is not, and cannot be, set to `PAID` by this
+  endpoint — there's simply no code path here that writes it.
+
+**Still not built:** the frontend pages/redirect flow that will
+actually use this endpoint (`payment-success`/`payment-failed`/
+`payment-cancelled`, checkout branching for `PAYFAST` — see §9 above),
+and ITN verification — the only thing that can ever move an order to
+`paymentStatus: PAID`. `PAYFAST_ENABLED` should stay `false` in any
+real/deployed environment until that exists too (see
+`backend/PAYFAST_SETUP.md`).

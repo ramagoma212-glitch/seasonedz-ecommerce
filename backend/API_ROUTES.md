@@ -71,6 +71,9 @@ be valid JSON." }`, rather than falling through to a generic `500`.
   - Additional, separate limit on `POST /api/enquiries`: **10 requests
     / 15 minutes / IP** — its own counter, independent of the orders
     limit above, even though the numbers match.
+  - Additional, separate limit on `POST /api/payments/payfast/initiate`
+    (Version 3, Milestone 21): **10 requests / 15 minutes / IP** — its
+    own counter, same reasoning as orders/enquiries.
   - Exceeding any of these returns a clean `429`:
     `{ "success": false, "message": "Too many requests. Please try again later." }`.
 - **Environment variables are validated at startup** — `DATABASE_URL`,
@@ -374,10 +377,14 @@ is simply never read.
 ```
 
 `paymentMethod` must be one of the schema's `PaymentMethod` values:
-`BANK_TRANSFER`, `PAYFAST`, `CASH_ON_DELIVERY`, `MANUAL` (accepting
-`PAYFAST` here is just schema-level validation — no real PayFast
-integration exists; the frontend's own UI is what currently keeps
-PayFast disabled as a selectable option).
+`BANK_TRANSFER`, `PAYFAST`, `CASH_ON_DELIVERY`, `MANUAL`. **`PAYFAST`
+is only accepted if the backend has `PAYFAST_ENABLED=true`** (Version
+3, Milestone 20) — otherwise it's rejected with a clean `400`:
+`"PayFast payments are not available yet. Please choose another
+payment method."` This exists so an order can never be created with
+`paymentMethod: PAYFAST` that nothing can ever resolve. Once an order
+is created with `paymentMethod: PAYFAST`, see "Payment Routes" below
+for how to actually prepare a PayFast payment for it.
 
 `deliveryAddress.province` must be one of: Eastern Cape, Free State,
 Gauteng, KwaZulu Natal, Limpopo, Mpumalanga, Northern Cape, North
@@ -515,6 +522,108 @@ backend itself set, never a live courier API.
 { "success": false, "message": "Order not found: not-real-order" }
 ```
 HTTP status: `404`.
+
+## Payment Routes (Version 3, Milestone 21)
+
+| Method | Route | Description |
+|---|---|---|
+| POST | `/api/payments/payfast/initiate` | Prepare a PayFast sandbox/production payment for an existing `PAYFAST` order |
+
+**Preparation only — no payment is actually taken by this route, and
+no order is ever marked as paid here.** It looks up an existing order,
+checks it's eligible, and returns the exact form fields (+ signature) a
+frontend needs to `POST` the customer's browser to PayFast. Marking an
+order as paid only ever happens later, via a verified PayFast ITN
+(Instant Transaction Notification) — not built yet (see
+`../VERSION_3_PAYMENT_READINESS_AUDIT.md`).
+
+**Requires `PAYFAST_ENABLED=true`** (see `PAYFAST_SETUP.md`) — if
+PayFast isn't enabled, every call to this route returns a clean `503`:
+
+```json
+{ "success": false, "message": "PayFast payments are not enabled." }
+```
+
+### POST /api/payments/payfast/initiate — Request Body
+
+```json
+{ "orderNumber": "SG-2026-A1B2" }
+```
+
+`orderNumber` is required and must match the Seasonedz order number
+format (`SG-YYYY-XXXX`, case-insensitive — normalised to uppercase).
+An invalid shape returns a `400` in the usual `errors` array shape; an
+`orderNumber` that doesn't exist returns a `404`.
+
+### Order eligibility checks
+
+Before preparing a payment, the order must satisfy all of:
+
+- The order exists.
+- `order.paymentMethod` is `PAYFAST` (an order created with
+  `BANK_TRANSFER`, `CASH_ON_DELIVERY`, or `MANUAL` is rejected with a
+  clean `400` — PayFast is never initiated for a different payment
+  method).
+- `order.status` is not `CANCELLED` or `REFUNDED`.
+- `order.paymentStatus` is `PENDING` (an order already paid/failed/
+  refunded can't be re-initiated).
+- `order.total` is greater than zero.
+
+Any failed check returns a clean `400` (or `404` if the order doesn't
+exist) with a single `message`, the same convention as the order
+business-rule errors above.
+
+### Success response — POST /api/payments/payfast/initiate
+
+```json
+{
+  "success": true,
+  "message": "PayFast payment prepared successfully",
+  "data": {
+    "processUrl": "https://sandbox.payfast.co.za/eng/process",
+    "method": "POST",
+    "fields": {
+      "merchant_id": "10000100",
+      "merchant_key": "46f0cd694581a",
+      "return_url": "https://ramagoma212-glitch.github.io/seasonedz-ecommerce/#/payment-success",
+      "cancel_url": "https://ramagoma212-glitch.github.io/seasonedz-ecommerce/#/payment-cancelled",
+      "notify_url": "https://seasonedz-ecommerce.onrender.com/api/payments/payfast/notify",
+      "name_first": "Rolivhuwa",
+      "name_last": "Nedzamba",
+      "email_address": "customer@example.com",
+      "cell_number": "0712345678",
+      "m_payment_id": "SG-2026-A1B2",
+      "amount": "378.00",
+      "item_name": "Seasonedz Group Order SG-2026-A1B2",
+      "item_description": "2 item(s) — Seasonedz Group order SG-2026-A1B2",
+      "signature": "5f4dcc3b5aa765d61d8327deb882cf99"
+    }
+  }
+}
+```
+
+(`merchant_id`/`merchant_key` above are PayFast's own publicly
+documented generic sandbox test values, shown only as a shape example
+— never real credentials.) The frontend's job (later milestone) is to
+build a plain HTML `<form method="POST" action="{processUrl}">` with
+one hidden input per `fields` entry and submit it, redirecting the
+customer's browser to PayFast. **`paymentStatus` stays `PENDING`** —
+this route never changes it, and stock is not touched again (it was
+already decremented once, at order creation).
+
+### Failure examples
+
+```json
+{ "success": false, "message": "Validation failed", "errors": [{ "field": "orderNumber", "message": "Order number is required." }] }
+```
+```json
+{ "success": false, "message": "Order not found: SG-2026-ZZZZ" }
+```
+```json
+{ "success": false, "message": "This order was not created for PayFast payment." }
+```
+HTTP status: `400` for validation/business-rule failures, `404` if the
+order doesn't exist, `503` if `PAYFAST_ENABLED` is not `true`.
 
 ## Enquiry Routes
 

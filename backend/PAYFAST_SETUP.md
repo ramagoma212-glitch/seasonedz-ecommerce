@@ -1,11 +1,13 @@
-# PayFast Sandbox Setup (Version 3, Milestone 20)
+# PayFast Sandbox Setup (Version 3, Milestones 20-21)
 
-This document covers **configuration only**. No PayFast code has been
-written yet — no payment initiation, no ITN (Instant Transaction
-Notification) handling, no redirect to PayFast. That's later work
-(Milestone 21+). This milestone makes the backend safely *ready* for
-that work and closes a risk found during the Milestone 19 audit (see
-`../VERSION_3_PAYMENT_READINESS_AUDIT.md`).
+This document originally covered **configuration only** (Milestone
+20). Milestone 21 adds the first real PayFast code: a **payment
+initiation** endpoint that prepares (but does not send or verify) a
+PayFast payment for an existing order. **No ITN (Instant Transaction
+Notification) handling exists yet, and no order can be marked as paid
+yet** — that's later work. See "Payment Initiation" below for what
+Milestone 21 actually added, and closes a risk found during the
+Milestone 19 audit (see `../VERSION_3_PAYMENT_READINESS_AUDIT.md`).
 
 ## Sandbox Account Needed
 
@@ -98,16 +100,57 @@ the stored `Order` record. Once ITN handling exists, `paymentStatus`
 must only ever be set to `PAID` by that verified server-to-server
 check — never by anything the frontend sends or claims.
 
-## Why PAYFAST_ENABLED Remains False Until Payment Initiation and ITN Are Built
+## Payment Initiation (Version 3, Milestone 21)
 
-Before this milestone, `PaymentMethod.PAYFAST` was already a valid
-value accepted by `POST /api/orders` — the frontend UI disabled the
-PayFast radio button, but a raw API call could still create an order
-with `paymentMethod: PAYFAST` that would sit unpaid forever, since no
-code exists to ever resolve it (no payment initiation to redirect the
-customer, no ITN to confirm payment). `PAYFAST_ENABLED` closes that gap
-at the API level: `POST /api/orders` now rejects `paymentMethod:
-PAYFAST` with a clean `400` ("PayFast payments are not available
-yet...") unless `PAYFAST_ENABLED=true`. This flag should only be
-flipped to `true` once payment initiation and ITN verification are
-fully built and tested against PayFast's sandbox — not before.
+`POST /api/payments/payfast/initiate` (full request/response reference
+in `API_ROUTES.md`'s "Payment Routes" section) takes an existing
+order's `orderNumber`, checks it's a `PAYFAST` order still `PENDING`
+payment, and returns the exact PayFast form fields + signature a
+frontend can `POST` to redirect the customer to PayFast's sandbox or
+production payment page.
+
+- **Requires `PAYFAST_ENABLED=true`.** If it isn't, every call returns
+  a clean `503`: `"PayFast payments are not enabled."`
+- **Every field comes from the backend's own `Order` record** —
+  `amount` is `Order.total` (formatted to 2 decimals), never anything
+  a client sends. `m_payment_id` is the order's own `orderNumber`.
+- **`paymentStatus` stays `PENDING`.** This endpoint only *prepares* a
+  payment attempt — it never marks anything as paid, and stock is not
+  touched again (it was already decremented once, at order creation).
+  The related `Payment` record is updated with `provider: "PAYFAST"`
+  and `providerReference: orderNumber` so it's clear a PayFast attempt
+  was prepared, but `status` is left exactly as it was.
+- **Signature generation** (`src/utils/payfastSignature.ts`) follows
+  PayFast's documented custom-integration rules: fields in submission
+  order, blank values dropped, PHP-style URL-encoding (spaces as `+`),
+  passphrase appended if configured, then MD5-hashed. The raw string
+  that gets hashed (which includes `merchant_key` and, if set, the
+  passphrase) is never logged anywhere.
+- **The passphrase itself is never returned in any API response** —
+  only the final `signature` is. A frontend or anyone inspecting the
+  response can never recover the passphrase from it.
+- **Still not built:** actually redirecting a customer to PayFast (that
+  form-submission piece lives in the frontend, a later milestone), and
+  ITN verification — see "Why the Frontend Never Decides Payment
+  Success" above, which still fully applies. Nothing in this milestone
+  can mark an order as paid.
+
+## Why PAYFAST_ENABLED Remains False (in Any Real Deployment) Until ITN Is Built Too
+
+Before Milestone 20, `PaymentMethod.PAYFAST` was already a valid value
+accepted by `POST /api/orders` — the frontend UI disabled the PayFast
+radio button, but a raw API call could still create an order with
+`paymentMethod: PAYFAST` that would sit unpaid forever, since no code
+existed to ever resolve it. `PAYFAST_ENABLED` closed that gap at the
+API level: `POST /api/orders` rejects `paymentMethod: PAYFAST` with a
+clean `400` unless `PAYFAST_ENABLED=true`.
+
+Milestone 21 adds payment *initiation* (above), but that's still only
+half the picture — an order can now be prepared for PayFast, but
+nothing yet verifies whether the customer actually paid. Until ITN
+verification exists, there is still no trustworthy way to mark an
+order `PAID`. `PAYFAST_ENABLED=true` is safe to use **locally, with
+sandbox credentials, for testing initiation** (as this milestone did),
+but should stay `false` in any real (deployed) environment until ITN
+verification is fully built and tested end-to-end against PayFast's
+sandbox.
