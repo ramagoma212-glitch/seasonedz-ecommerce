@@ -283,14 +283,81 @@ silently into "just testing sandbox."
 - Do not touch courier integration, real email sending, login, or an
   admin dashboard — all explicitly out of scope for Version 4 so far.
 
-## Recommendation for Milestone 28
+## Recommendation for Milestone 28 (as proposed in Milestone 27)
 
-**Milestone 28 should be Step B: implement source IP verification,
+**Originally recommended:** Step B — implement source IP verification,
 gated behind `PAYFAST_VERIFY_SOURCE=false`, with its logic unit-tested
 against crafted inputs (never faked against real traffic it hasn't
-seen).** This keeps the same safe, incremental, default-off pattern
-every prior PayFast/email/delivery milestone has used, and puts the
-verification code in place and ready *before* Milestone 29 (Step C/D:
-the actual sandbox round trip), so that round trip can genuinely
+seen) — before the actual sandbox round trip, so that round trip could
 exercise and prove the new check against real PayFast traffic for the
 first time.
+
+**What actually happened:** Milestone 28 was assigned to Step C
+instead — public sandbox test *setup* (tunnel/environment preparation)
+— see the "Milestone 28" section below. This is a reasonable,
+still-safe resequencing (setup doesn't depend on source IP
+verification existing yet), not a deviation that changes any risk —
+source IP verification remains recommended before Milestone 30's
+actual hosted round trip, so that round trip can still prove it
+against real traffic, just slightly later in the sequence than
+originally suggested.
+
+---
+
+## Milestone 28 — Public Sandbox Test Setup
+
+Prepares the local setup needed for a real hosted PayFast sandbox round
+trip using a temporary public tunnel. **Setup, documentation, and
+preflight only — no hosted payment was run.** Full detail in
+`VERSION_4_PAYFAST_SANDBOX_SETUP.md`.
+
+### Setup Approach
+
+A temporary public tunnel (e.g. ngrok) forwards a public HTTPS URL to
+the locally-running backend (`localhost:5000`). Only two existing env
+vars change to make this work: `BACKEND_PUBLIC_URL` and
+`PAYFAST_NOTIFY_URL`, both updated to the tunnel's URL in the local,
+git-ignored `backend/.env`. `PAYFAST_RETURN_URL`/`PAYFAST_CANCEL_URL`
+stay pointed at `localhost:5173`, since those are browser redirects on
+the tester's own machine, not server-to-server calls.
+
+### Tunnel Requirement
+
+A tunnel is required specifically for `notify_url` — see below. No
+tunnel is needed for `return_url`/`cancel_url`, the frontend, or the
+API base URL the frontend itself uses (`VITE_API_BASE_URL` stays
+`localhost` throughout).
+
+### Why Localhost `notify_url` Does Not Work
+
+PayFast's ITN is a server-to-server POST made by PayFast's own
+infrastructure, not by the customer's browser. `localhost` only means
+"this machine" to the machine itself — PayFast's servers, elsewhere on
+the internet, have no route to it. A public tunnel is the only way to
+give PayFast's servers a real address that forwards back to the
+developer's own machine.
+
+### Why Production Render Should Not Be Used Yet
+
+Testing against the live Render backend would require setting
+`PAYFAST_ENABLED=true` there directly — explicitly out of scope for
+Version 4 so far, and risky beyond that: it would make the live
+backend accept real `PAYFAST` orders from any real site visitor, not
+just the tester, regardless of what the frontend shows. The
+tunnel + local backend approach keeps `PAYFAST_ENABLED=true` confined
+entirely to the tester's own machine.
+
+### Known Risks
+
+- Local dev and the live Render backend share the same Supabase
+  database — every test order/enquiry created during tunnel testing is
+  a real row in the same database real customers' orders live in;
+  precise-ID cleanup remains mandatory.
+- Tunnel URLs are typically temporary/session-specific — env vars need
+  updating (and the backend restarting) each time a new tunnel session
+  starts.
+- Code review confirmed **no code changes were needed** for tunnel
+  compatibility — `notify_url`/`return_url`/`cancel_url` were already
+  fully environment-variable-driven from Milestones 20-23, with no
+  hardcoded `localhost` or other fixed values anywhere in the backend
+  or the three frontend payment pages reviewed.
