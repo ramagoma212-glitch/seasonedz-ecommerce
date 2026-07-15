@@ -79,7 +79,12 @@ function renderPaymentNotice(order) {
         <span class="demo-notice__icon" aria-hidden="true">&#10003;</span>
         <div>
           <strong>Payment confirmed.</strong>
-          <p>No goods have shipped yet — real courier tracking is coming later.</p>
+          <p>
+            Your order is now being prepared for delivery. Seasonedz
+            Group will share courier tracking details once it's
+            dispatched — there's no live courier tracking yet, so
+            please allow some time.
+          </p>
         </div>
       </div>
     `;

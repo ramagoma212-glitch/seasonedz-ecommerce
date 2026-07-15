@@ -1,9 +1,9 @@
 # Version 3 — Payment Readiness Audit (Milestone 19)
 
-*(See the "Milestone 20", "Milestone 21", "Milestone 22", "Milestone
-23", and "Milestone 24" sections near the end of this document for the
-sandbox configuration, payment initiation, ITN verification, frontend
-checkout flow, and email preparation work that followed this audit.)*
+*(See the "Milestone 20" through "Milestone 25" sections near the end
+of this document for the sandbox configuration, payment initiation,
+ITN verification, frontend checkout flow, email preparation, and
+delivery/courier preparation work that followed this audit.)*
 
 Planning-only review of what exists today and what real PayFast payment
 integration will need. **No PayFast code, no payment logic changes, and
@@ -691,3 +691,71 @@ has ever actually been sent (by design), and the send functions aren't
 called from anywhere in the request-handling code yet. That's
 deliberately left for a later milestone, once a provider decision is
 made.
+
+---
+
+## Milestone 25 — Delivery Rules and Courier Preparation
+
+Moves the existing delivery fee rule into one backend config module
+and adds a small delivery service + manual-courier documentation —
+**the rule itself is unchanged, and no courier API is integrated.**
+Full detail in `backend/DELIVERY_SETUP.md`.
+
+**Delivery rule result:** unchanged — R80 standard delivery, free from
+a R700 subtotal. Confirmed via testing (below) that both boundary
+cases (just under R700, exactly R700) still produce the correct fee.
+
+**What was built:**
+
+- `backend/src/config/delivery.ts` (new) — `STANDARD_DELIVERY_FEE`
+  (80), `FREE_DELIVERY_THRESHOLD` (700), `DEFAULT_COUNTRY`
+  ("South Africa"), `COURIER_INTEGRATION_ENABLED` (hardcoded `false`),
+  `COURIER_PROVIDER` ("manual") — plain numbers/strings, not
+  `Prisma.Decimal`, since the constants themselves (whole Rand amounts)
+  have no floating-point risk; consumers wrap them in `Decimal` at the
+  point of calculation, same as before.
+- `backend/src/utils/money.ts` — `calculateDeliveryFee()` now reads
+  `STANDARD_DELIVERY_FEE`/`FREE_DELIVERY_THRESHOLD` from
+  `config/delivery.ts` instead of hardcoding `80`/`700` inline. Same
+  Decimal-based logic, same result — this was the "hardcoded rule
+  found in order service" the milestone asked to relocate (task 5).
+- `backend/src/services/delivery.service.ts` (new) —
+  `calculateDeliveryFee` (plain-number wrapper around `utils/money.ts`'s
+  Decimal version), `getDeliverySummary` (fee + free-threshold info in
+  one object), `getManualCourierStatus` (an honest description of
+  manual courier state for an order — never claims live tracking,
+  never contacts any courier provider).
+- `backend/DELIVERY_SETUP.md` (new) — current rule, manual courier
+  process, the three status fields (`Order.status`/`paymentStatus`/
+  `fulfilmentStatus`) and how they should relate, future courier
+  provider options (Courier Guy, PUDO, Bob Go) and env var
+  placeholders (documentation only), explicit "what not to do yet,"
+  and why tracking isn't live.
+- Frontend wording — `src/pages/orderConfirmation.js`'s paid-order
+  notice now says the order is "being prepared for delivery" and that
+  tracking will be shared "once it's dispatched" (previously just "no
+  goods have shipped yet"). `src/pages/shippingPolicy.js` was
+  rewritten — it still described this as a "demo checkout" with "no
+  physical orders" (stale since Milestone 16 added a real backend);
+  now accurately describes payment-confirmation-gated preparation and
+  manually-shared tracking, without inventing any specific delivery
+  timeframe.
+
+**Courier integration status:** none. `COURIER_INTEGRATION_ENABLED =
+false` (hardcoded, not even an env flag yet — there's nothing to
+enable). No Courier Guy/PUDO/Bob Go credentials, API calls, or
+webhooks exist anywhere in this codebase.
+
+**Testing confirmed:** a R149 subtotal (below R700) → backend order
+`deliveryFee: 80`, `total: 229`; an R918 subtotal (2×R459, above R700)
+→ backend order `deliveryFee: 0`, `total: 918`. Both matched at the
+frontend too — the checkout page's live order summary showed "R80.00"
+for the below-threshold cart and "Free" for the above-threshold one, a
+completed bank-transfer checkout's order confirmation showed
+"R80.00", and the tracking page's honest "not a live courier... updated
+manually by Seasonedz Group" wording was confirmed present. Bank
+transfer checkout and PayFast option selectability (with
+`VITE_PAYFAST_ENABLED=true`) both still work. No console errors, no
+secrets in any log. All test orders were deleted and stock restored
+afterward.
+

@@ -52,7 +52,12 @@ involve.
 > (backend), both `false` by default. **No live/production PayFast
 > credentials are in use anywhere, and none of this has been deployed
 > yet.** Full detail in `VERSION_3_PAYMENT_READINESS_AUDIT.md` and
-> `backend/PAYFAST_SETUP.md`.
+> `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
+> (templates + a console-only service) but not yet wired to send
+> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rules
+> (R80 standard, free from R700) are unchanged but now live in one
+> backend config module; courier fulfilment is still entirely manual —
+> see `backend/DELIVERY_SETUP.md`.
 
 ### Features Included in Version 1
 
@@ -344,9 +349,14 @@ to a real backend.
   locally, gated behind `PAYFAST_ENABLED`/`VITE_PAYFAST_ENABLED`
   (both `false` by default). No live credentials, no deployment yet —
   see `VERSION_3_PAYMENT_READINESS_AUDIT.md`.
-- Real courier integration and live order tracking.
+- Real courier integration and live order tracking — **delivery fee
+  rules and manual courier workflow prepared (Version 3, Milestone
+  25)**; no courier API, credentials, or live tracking yet — see
+  `backend/DELIVERY_SETUP.md`.
 - Real email notifications (order confirmations, contact/enquiry
-  forms).
+  forms) — **templates and a console-only service prepared (Version 3,
+  Milestone 24)**, not yet wired to send automatically — see
+  `backend/EMAIL_SETUP.md`.
 - Customer accounts (login/registration), with cart/wishlist/orders
   attached to the account.
 

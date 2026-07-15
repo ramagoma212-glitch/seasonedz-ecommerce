@@ -1,6 +1,8 @@
 // Shipping policy page. General, honest wording only — no specific
 // delivery dates are promised since real courier integration isn't
-// connected yet (the delivery fee logic itself lives in js/cart.js).
+// connected yet (the delivery fee logic itself lives in js/cart.js on
+// the frontend and backend/src/config/delivery.ts on the backend —
+// both use the same R80 / R700 rule).
 
 export function renderShippingPolicy() {
   return `
@@ -36,18 +38,22 @@ export function renderShippingPolicy() {
 
         <h2>Order Processing</h2>
         <p>
-          Orders are prepared once placed. As this site currently runs a
-          demo checkout, no physical orders are dispatched yet — this
-          policy describes how shipping will work once real ordering goes
-          live.
+          Your order is prepared for delivery once payment is confirmed —
+          for PayFast, that's once payment is verified; for bank transfer
+          or cash/card on delivery, once Seasonedz Group has confirmed
+          your order. Courier fulfilment is currently handled manually by
+          Seasonedz Group rather than through a live courier system.
         </p>
 
         <h2>Tracking Your Order</h2>
         <p>
           Once your order is placed, you can look it up on our
           <a href="#/track-order">Track Order</a> page using your order
-          number. Real-time courier tracking will be added once courier
-          integration is complete.
+          number to see its current processing status. Courier tracking
+          details (once your order is dispatched) will be shared by
+          Seasonedz Group directly — this is not yet live, real-time
+          courier tracking; that will be added once courier integration
+          is complete.
         </p>
       </div>
     </section>

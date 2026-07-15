@@ -182,6 +182,23 @@ enquiry flow calls the email service automatically. Full detail
 - No real email provider is integrated yet — `EMAIL_PROVIDER` values
   other than `console` just log a "not implemented" warning.
 
+## Delivery Setup (Version 3, Milestone 25)
+
+Full detail in [`DELIVERY_SETUP.md`](./DELIVERY_SETUP.md); short
+version:
+
+- Delivery fee rule (unchanged): **R80** flat rate, **free from R700**.
+  Single source of truth is now `src/config/delivery.ts`
+  (`STANDARD_DELIVERY_FEE`, `FREE_DELIVERY_THRESHOLD`) — `utils/money.ts`
+  and `services/delivery.service.ts` both read from it instead of
+  hardcoding the numbers.
+- `src/services/delivery.service.ts` (new) — `calculateDeliveryFee`,
+  `getDeliverySummary`, `getManualCourierStatus`. No courier provider
+  is contacted by anything here.
+- Courier fulfilment is entirely manual — no courier API, credentials,
+  or integration exist anywhere in this codebase. `COURIER_INTEGRATION_ENABLED`
+  is hardcoded `false` in `config/delivery.ts`.
+
 ## Available Routes
 
 | Method | Route | Description |
@@ -274,6 +291,7 @@ backend/
     config/
       env.ts                    Reads and validates environment variables
       payfast.ts                 PayFast config (Milestone 20 — sandbox setup only, no calls made yet)
+      delivery.ts                 Delivery fee rule + courier flags (Milestone 25 — no courier API)
       prisma.ts                  Shared PrismaClient instance
     routes/
       index.ts                  Mounts every route group under /api
@@ -293,6 +311,7 @@ backend/
       category.service.ts        Category Prisma queries + output shaping
       order.service.ts            Product verification, order transaction, tracking
       enquiry.service.ts           Enquiry creation + narrow public status lookup
+      delivery.service.ts           Delivery fee summary + manual courier status (Milestone 25 — no courier API)
       email/                       Email service (Milestone 24 — preparation only, nothing sends yet)
         email.types.ts               Input shapes for templates (OrderEmailData, EnquiryEmailData)
         emailTemplates.ts             Plain-text template rendering
@@ -308,7 +327,7 @@ backend/
     utils/
       apiResponse.ts             Consistent success/error response helpers
       query.ts                    Safe query-string parsing helpers
-      money.ts                    Delivery fee calculation (Decimal-safe)
+      money.ts                    Delivery fee calculation (Decimal-safe, reads config/delivery.ts)
       orderNumber.ts               Unique SG-YYYY-XXXX order number generator
   prisma/
     schema.prisma               Full data model (see DATABASE_SCHEMA_PLAN.md)
@@ -317,6 +336,7 @@ backend/
   API_ROUTES.md                 Full API reference (routes, security, errors)
   PAYFAST_SETUP.md               PayFast sandbox setup plan (Milestone 20 — configuration only)
   EMAIL_SETUP.md                  Email service + templates plan (Milestone 24 — preparation only)
+  DELIVERY_SETUP.md                Delivery rules + manual courier workflow (Milestone 25 — no courier API)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
   DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
   DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy
