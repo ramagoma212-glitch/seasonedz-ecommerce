@@ -61,8 +61,10 @@ export function renderDistributor() {
         heading: "Distributor Enquiry",
         orgLabel: "Company Name",
         orgPlaceholder: "e.g. Sunnyside Distribution",
+        orgRequired: true,
         ctaText: "Send Enquiry",
         idPrefix: "distributor",
+        type: "DISTRIBUTOR",
       })}
     </section>
   `;

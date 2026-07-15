@@ -1,7 +1,6 @@
-// Contact page: contact details plus a visual-only contact form.
-// The form never sends anything — see the shared .demo-form submit
-// handler in js/app.js, which reveals a friendly "demo only" message
-// instead of actually submitting.
+// Contact page: contact details plus the shared enquiry form, submitted
+// to the backend Enquiry API as a CONTACT-type enquiry — see the
+// shared .demo-form submit handler in js/app.js.
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
 
@@ -46,7 +45,7 @@ export function renderContact() {
           </div>
         </div>
 
-        ${renderEnquiryForm({ heading: "Send Us a Message", ctaText: "Send Message", idPrefix: "contact" })}
+        ${renderEnquiryForm({ heading: "Send Us a Message", ctaText: "Send Message", idPrefix: "contact", type: "CONTACT" })}
       </div>
     </section>
   `;

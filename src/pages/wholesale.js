@@ -50,8 +50,12 @@ export function renderWholesale() {
         heading: "Wholesale Enquiry",
         orgLabel: "Business Name",
         orgPlaceholder: "e.g. Sunnyside Books",
+        orgRequired: true,
         ctaText: "Request a Quote",
         idPrefix: "wholesale",
+        type: "WHOLESALE",
+        showQuantityField: true,
+        quantityRequired: true,
       })}
     </section>
   `;

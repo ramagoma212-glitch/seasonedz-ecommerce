@@ -33,6 +33,12 @@ jobs:
         run: npm ci
 
       - name: Build
+        # VITE_API_BASE_URL is not secret — it's baked into the built JS
+        # either way (any visitor's browser can see it), so it's safe to
+        # set directly in the workflow rather than as a repo secret. See
+        # VERSION_2_INTEGRATION_NOTES.md.
+        env:
+          VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
         run: npm run build
 
       - name: Setup Pages

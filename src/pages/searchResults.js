@@ -1,9 +1,11 @@
 // Search results page. Reads ?q= (set by the header search form) plus
 // the same category/price/age/stock/tag/sort params the shop page
 // uses, via getProductResults, so search and filters combine cleanly.
+//
+// Product/category data now loads from the backend API where
+// possible, falling back to the static data files if it's unavailable
+// — see js/api/productsApi.js.
 
-import { products } from "../data/products.js";
-import { categories } from "../data/categories.js";
 import { renderProductCard } from "../components/productCard.js";
 import {
   renderFilterBar,
@@ -13,6 +15,7 @@ import {
   renderEmptyState,
 } from "../components/filterBar.js";
 import { getProductResults, getDistinctAgeRanges, getDistinctTags, escapeHtml } from "../js/search.js";
+import { getCatalog } from "../js/api/productsApi.js";
 
 function renderNoSearchYet() {
   return `
@@ -26,9 +29,12 @@ function renderNoSearchYet() {
   `;
 }
 
-export function renderSearchResults({ query } = {}) {
-  const { results, term, sort } = getProductResults(products, categories, query);
+export async function renderSearchResults({ query } = {}) {
+  const term = (query?.get("q") || "").trim();
   if (!term) return renderNoSearchYet();
+
+  const { products, categories } = await getCatalog();
+  const { results, sort } = getProductResults(products, categories, query);
 
   const ageRanges = getDistinctAgeRanges(products);
   const tags = getDistinctTags(products);

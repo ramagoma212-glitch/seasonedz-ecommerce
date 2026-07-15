@@ -12,6 +12,13 @@
 // Milestone 7 adds a `title` per route, set on document.title on every
 // render — simple SEO/UX basics, not the fuller meta/OG/sitemap work
 // planned for Milestone 8.
+//
+// Milestone 16 (Version 2 frontend/backend integration) allows a
+// render(params) function to return either a string (as before) or a
+// Promise<string> — needed by any page that now fetches from the
+// backend API (product pages, order confirmation, order tracking).
+// The router awaits either shape the same way, so pages that don't
+// need async data don't have to change at all.
 
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
@@ -100,19 +107,21 @@ function matchRoute(path) {
   return null;
 }
 
-function renderCurrentRoute() {
+async function renderCurrentRoute() {
   const main = document.getElementById("main-content");
   if (!main) return;
 
   const { path, query } = parseHash();
   const matched = matchRoute(path);
 
-  main.innerHTML = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
   document.title = matched ? `${matched.title} | Seasonedz Group` : "Page Not Found | Seasonedz Group";
+
+  const result = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
+  main.innerHTML = result instanceof Promise ? await result : result;
 }
 
-function resolveRoute() {
-  renderCurrentRoute();
+async function resolveRoute() {
+  await renderCurrentRoute();
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 

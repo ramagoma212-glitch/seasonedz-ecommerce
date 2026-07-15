@@ -71,11 +71,13 @@ function renderDemoNotice() {
     <div class="demo-notice">
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
-        <strong>This is a demo checkout.</strong>
+        <strong>Payment is still not processed online.</strong>
         <p>
-          No real payment will be taken and no goods will be shipped.
-          Your order is saved only in this browser so you can see how
-          checkout will work.
+          No real payment is taken and no goods are shipped yet. Your
+          order is saved by the Seasonedz Group backend (in
+          development), so it's a real database record rather than
+          just this browser — but PayFast and real courier tracking
+          are coming later.
         </p>
       </div>
     </div>
@@ -103,7 +105,7 @@ export function renderCheckoutPage() {
     <section class="stub-page container checkout-page">
       <h1 class="stub-page__title">Checkout</h1>
       <p class="stub-page__text">
-        Enter your delivery details below to place a demo order — no account needed.
+        Enter your delivery details below to place your order — no account needed.
       </p>
 
       <div class="checkout-layout">
@@ -152,6 +154,8 @@ export function renderCheckoutPage() {
           </div>
 
           ${renderDemoNotice()}
+
+          <div class="form-banner form-banner--error" data-checkout-banner hidden></div>
 
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>

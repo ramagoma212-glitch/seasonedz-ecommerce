@@ -1,10 +1,14 @@
 // Single product details page. Loads a product by the :slug route param
 // supplied by router.js. Add to Cart, Add to Wishlist and the quantity
 // selector are visual only — see js/app.js for the delegated handlers.
+//
+// Product data now loads from the backend API where possible, falling
+// back to the static data file if it's unavailable — see
+// js/api/productsApi.js.
 
-import { products } from "../data/products.js";
 import { renderProductCard, renderStars } from "../components/productCard.js";
 import { isInWishlist } from "../js/wishlist.js";
+import { getCatalog } from "../js/api/productsApi.js";
 
 function renderNotFound() {
   return `
@@ -40,7 +44,7 @@ function renderGallery(product) {
   `;
 }
 
-function renderRelatedProducts(product) {
+function renderRelatedProducts(product, products) {
   const related = products
     .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id)
     .slice(0, 4);
@@ -60,7 +64,8 @@ function renderRelatedProducts(product) {
   `;
 }
 
-export function renderProductDetails({ slug } = {}) {
+export async function renderProductDetails({ slug } = {}) {
+  const { products } = await getCatalog();
   const product = products.find((item) => item.slug === slug);
   if (!product) return renderNotFound();
 
@@ -146,7 +151,7 @@ export function renderProductDetails({ slug } = {}) {
         </ul>
       </div>
 
-      ${renderRelatedProducts(product)}
+      ${renderRelatedProducts(product, products)}
     </section>
   `;
 }
