@@ -15,7 +15,10 @@ services:
     runtime: node
     rootDir: backend
     plan: free
-    buildCommand: npm install && npm run build
+    # --include=dev is required: NODE_ENV=production (set below) makes a
+    # plain `npm install` skip devDependencies, but the build needs
+    # typescript/@types/* from there to compile — see backend/DEPLOYMENT.md.
+    buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

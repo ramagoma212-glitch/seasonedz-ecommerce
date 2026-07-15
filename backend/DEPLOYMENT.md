@@ -28,7 +28,7 @@ field names differ.
 |---|---|
 | **Root Directory** | `backend` |
 | **Environment** | Node |
-| **Build Command** | `npm install && npm run build` |
+| **Build Command** | `npm install --include=dev && npm run build` |
 | **Start Command** | `npm start` |
 | **Health Check Path** | `/api/health` |
 
@@ -37,6 +37,15 @@ at the repo root, backend in `backend/`). Setting Root Directory to
 `backend` means every other command above runs from inside that
 folder, and Render only redeploys this service when something under
 `backend/` changes.
+
+**`--include=dev` is required, not optional.** With `NODE_ENV=production`
+set (see section 3), a plain `npm install` skips `devDependencies`
+entirely — but `typescript`, `@types/express`, `@types/cors` and
+`@types/node` all live there, and `npm run build` needs every one of
+them to compile. Without `--include=dev`, the build fails with errors
+like "Could not find a declaration file for module 'express'" or
+"Cannot find name 'process'". `npm install --include=dev` installs
+`devDependencies` regardless of `NODE_ENV`.
 
 `npm run build` already runs `prisma generate && tsc` (see "Prisma
 Deployment Notes" below) — Render doesn't need a separate Prisma
