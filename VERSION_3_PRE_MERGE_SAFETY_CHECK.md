@@ -18,38 +18,28 @@ deploy, no push happened as part of this review.
 
 ## GitHub Actions Frontend Flag Status
 
-**`VITE_PAYFAST_ENABLED` is not explicitly set in
-`.github/workflows/deploy.yml`.** The Build step's `env:` block only
-sets `VITE_API_BASE_URL`:
+**Updated — `VITE_PAYFAST_ENABLED` is now explicitly set to `"false"`
+in `.github/workflows/deploy.yml`** (production safety hardening step,
+applied after this document was first written). The Build step's
+`env:` block now reads:
 
 ```yaml
 env:
   VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
+  VITE_PAYFAST_ENABLED: "false"
 run: npm run build
 ```
 
-**Effective result is still safe**, because the frontend code reads
-this flag defensively (`src/js/orders.js`):
-
-```js
-const payfastEnabled = (import.meta.env.VITE_PAYFAST_ENABLED || "").toLowerCase() === "true";
-```
-
-An unset variable is `undefined` in CI (no `.env` file exists there —
-it's git-ignored), so `payfastEnabled` evaluates to `false` exactly as
-if it had been explicitly set that way. **The production build today
-would not show PayFast as selectable.**
-
-**Recommendation (not applied — not urgent enough to justify an
-unrequested code change right now):** add `VITE_PAYFAST_ENABLED:
-"false"` explicitly to the same `env:` block, the same way
-`VITE_API_BASE_URL` is already set directly (neither is secret — both
-get baked into the public client bundle regardless). This would make
-the safety explicit and self-documenting in the workflow file itself,
-rather than relying on a reader knowing the frontend code's default
-behaviour. Worth doing at some point, but the current implicit default
-is already genuinely safe — this is a clarity improvement, not a fix
-for a real gap.
+This was already the *effective* behaviour before this change — the
+frontend code (`src/js/orders.js`) reads the flag defensively
+(`(import.meta.env.VITE_PAYFAST_ENABLED || "").toLowerCase() ===
+"true"`), so an unset variable already evaluated to `false`. Setting it
+explicitly removes any dependence on a reader knowing that default:
+the workflow file itself now states the production safety posture
+directly, the same way `VITE_API_BASE_URL` already is (neither value
+is secret — both get baked into the public client bundle regardless).
+**The production build does not show PayFast as selectable, now
+explicitly by design rather than only by an unstated default.**
 
 ## Tracked Env Example Result
 

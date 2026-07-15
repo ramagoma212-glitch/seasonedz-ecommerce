@@ -37,8 +37,15 @@ jobs:
         # either way (any visitor's browser can see it), so it's safe to
         # set directly in the workflow rather than as a repo secret. See
         # VERSION_2_INTEGRATION_NOTES.md.
+        #
+        # VITE_PAYFAST_ENABLED is explicitly "false" here for production
+        # safety/clarity (Version 3 pre-merge hardening) — the frontend
+        # code already defaults to false when this is unset, but setting
+        # it explicitly means production safety doesn't depend on a
+        # reader knowing that default. See VERSION_3_PRE_MERGE_SAFETY_CHECK.md.
         env:
           VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
+          VITE_PAYFAST_ENABLED: "false"
         run: npm run build
 
       - name: Setup Pages
