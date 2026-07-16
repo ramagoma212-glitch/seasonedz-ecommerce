@@ -1,5 +1,6 @@
 // PayFast ITN source verification (Version 4, Milestone 29 —
-// hardening, disabled by default via PAYFAST_VERIFY_SOURCE).
+// hardening; mode-based strategy since Version 5, Milestone 35, via
+// PAYFAST_SOURCE_VERIFICATION_MODE = "off" | "monitor" | "enforce").
 //
 // PayFast does not publish a small, fixed, static IP allowlist to
 // compare a request against (or at least, none is known/verified as
@@ -8,12 +9,18 @@
 // Instead, this resolves PayFast's own domains via DNS at verification
 // time and compares the request's source IP against whatever those
 // domains currently resolve to — correct even if PayFast's IPs change,
-// and never a hardcoded list that could silently go stale.
+// and never a hardcoded list that could silently go stale. This has
+// proven unreliable to positively confirm through any proxy/tunnel
+// topology tested so far — see
+// VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md — which is
+// why the caller (payfast.service.ts) treats a failure here as a hard
+// block only in "enforce" mode, not "monitor".
 //
 // This is one layer of defense, never the only one — signature,
 // amount, and merchant-ID verification (payfast.service.ts) all still
-// run regardless of whether this is enabled. See
-// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md for the full plan
+// run regardless of this check's mode or outcome. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md and
+// VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md for the full plan
 // this implements, including why this can't be meaningfully tested
 // against real traffic from local development.
 
@@ -59,23 +66,35 @@ async function resolveDomainIps(domain: string): Promise<string[]> {
   return [...v4, ...v6];
 }
 
+// A coarse, safe-to-log category — never the actual source IP or any
+// DNS-resolved address — so callers (payfast.service.ts) can log
+// *why* a check passed/failed without ever logging anything sensitive
+// or identifying. See VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
+export type PayfastSourceVerificationReason = "matched" | "no_source_ip" | "no_dns_match";
+
+export interface PayfastSourceVerificationOutcome {
+  passed: boolean;
+  reason: PayfastSourceVerificationReason;
+}
+
 // Verifies that `req`'s source IP resolves back to one of PayFast's
-// own domains for the given mode. Returns false — never throws, never
-// "passes" — for any case that can't be positively confirmed: no
-// source IP available, DNS resolution failing for every allowed
-// domain, or the IP simply not matching. The caller
-// (payfast.service.ts) must treat false as a hard rejection, not a
-// warning.
-export async function verifyPayfastSource(req: Request, mode: "sandbox" | "production"): Promise<boolean> {
+// own domains for the given mode. Returns `passed: false` — never
+// throws, never "passes" — for any case that can't be positively
+// confirmed: no source IP available, DNS resolution failing for every
+// allowed domain, or the IP simply not matching. Version 5, Milestone
+// 35: the caller now decides what to do with `passed: false` based on
+// its configured mode ("enforce" rejects, "monitor" logs only) — this
+// function itself makes no blocking decision.
+export async function verifyPayfastSource(req: Request, mode: "sandbox" | "production"): Promise<PayfastSourceVerificationOutcome> {
   const sourceIp = getRequestSourceIp(req);
-  if (!sourceIp) return false;
+  if (!sourceIp) return { passed: false, reason: "no_source_ip" };
 
   const allowedDomains = mode === "production" ? PRODUCTION_ALLOWED_DOMAINS : SANDBOX_ALLOWED_DOMAINS;
 
   for (const domain of allowedDomains) {
     const ips = await resolveDomainIps(domain);
-    if (ips.includes(sourceIp)) return true;
+    if (ips.includes(sourceIp)) return { passed: true, reason: "matched" };
   }
 
-  return false;
+  return { passed: false, reason: "no_dns_match" };
 }

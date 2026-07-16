@@ -20,10 +20,11 @@
 // so the amount PayFast is asked to charge (and later asked to
 // confirm) always matches what was actually verified at checkout.
 //
-// PAYFAST_VERIFY_SOURCE and PAYFAST_VALIDATE_SERVER (both default
-// false) add two further, independent checks on top of the above —
-// never instead of it. See
-// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
+// PAYFAST_SOURCE_VERIFICATION_MODE and PAYFAST_VALIDATE_SERVER (both
+// default to their safest no-op setting) add two further, independent
+// checks on top of the above — never instead of it. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md and
+// VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
 //
 // Version 5, Milestone 34: initiatePayfastPayment() takes an optional
 // `context` ("checkout" | "retry") distinguishing checkout's own first
@@ -38,6 +39,22 @@ import { env } from "../config/env.js";
 import { generatePayfastSignature, verifyPayfastSignature } from "../utils/payfastSignature.js";
 import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
 import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
+
+// Version 5, Milestone 35: the only logging this module does — deliberately
+// narrow. Allowed: order number, which check ran, its configured mode,
+// and a pass/fail result plus a coarse reason category. Never allowed:
+// raw PayFast payload, passphrase, merchant key, signature string, or
+// any customer contact/address detail — none of those are ever passed
+// to this function, by construction, not just by convention.
+function logPayfastVerificationEvent(
+  orderNumber: string,
+  check: "sourceVerification" | "serverValidation",
+  mode: string,
+  passed: boolean,
+  reason: string
+): void {
+  console.log(`[PayFast] order=${orderNumber} check=${check} mode=${mode} result=${passed ? "pass" : "fail"} reason=${reason}`);
+}
 
 // Shared by both payment initiation (Milestone 21) and ITN
 // verification (Milestone 22) — both are "something about this
@@ -235,9 +252,9 @@ export interface PayfastNotifyResult {
 }
 
 // `req` is used only for source verification (Step 5 below), when
-// PAYFAST_VERIFY_SOURCE is enabled — passed through from the
-// controller rather than reconstructed here, since Express's Request
-// is what actually carries the resolved req.ip (see app.ts's
+// PAYFAST_SOURCE_VERIFICATION_MODE isn't "off" — passed through from
+// the controller rather than reconstructed here, since Express's
+// Request is what actually carries the resolved req.ip (see app.ts's
 // TRUST_PROXY handling and utils/payfastSourceVerification.ts).
 export async function processPayfastNotification(rawBody: Record<string, unknown>, req: Request): Promise<PayfastNotifyResult> {
   if (!payfastConfig.enabled) {
@@ -337,21 +354,30 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
     throw new PaymentError("This order has been cancelled or refunded and cannot be updated.", 400);
   }
 
-  // --- Step 5: source verification (Version 4, Milestone 29 — off by default) ---
-  // Disabled (the default): this step doesn't run at all, and nothing
-  // below changes — existing behaviour from Milestone 22 is preserved
-  // exactly. Enabled: a source that doesn't resolve back to one of
-  // PayFast's own domains is a hard rejection, never a warning — see
-  // utils/payfastSourceVerification.ts for why this can only be
-  // meaningfully proven against real PayFast traffic, not crafted
-  // local requests.
-  if (env.payfastVerifySource) {
-    const sourceValid = await verifyPayfastSource(req, payfastConfig.mode);
-    if (!sourceValid) {
+  // --- Step 5: source verification (Version 4, Milestone 29; mode-based since Version 5, Milestone 35) ---
+  // "off" (default via legacy PAYFAST_VERIFY_SOURCE=false/unset): this
+  // step doesn't run at all — existing behaviour from Milestone 22 is
+  // preserved exactly. "monitor": runs the check and logs the outcome,
+  // but a failure never blocks — every other check (signature/
+  // merchant/amount/server validation/idempotency) still fully
+  // applies. "enforce" (default via legacy PAYFAST_VERIFY_SOURCE=true):
+  // a source that doesn't resolve back to one of PayFast's own domains
+  // is a hard rejection, exactly like the old PAYFAST_VERIFY_SOURCE=true.
+  // See utils/payfastSourceVerification.ts for why this can only be
+  // meaningfully proven against real PayFast traffic, not crafted local
+  // requests, and VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md for
+  // why "monitor" exists as a safer step before "enforce".
+  if (env.payfastSourceVerificationMode !== "off") {
+    const sourceOutcome = await verifyPayfastSource(req, payfastConfig.mode);
+    logPayfastVerificationEvent(order.orderNumber, "sourceVerification", env.payfastSourceVerificationMode, sourceOutcome.passed, sourceOutcome.reason);
+
+    if (!sourceOutcome.passed && env.payfastSourceVerificationMode === "enforce") {
       // 403: the same "we can't verify this actually came from
       // PayFast" class of failure as the signature check above.
       throw new PaymentError("PayFast source verification failed.", 403);
     }
+    // "monitor" + failed: deliberately falls through — logged above,
+    // never blocks.
   }
 
   // --- Step 6: server validation (Version 4, Milestone 29 — off by default) ---
@@ -359,9 +385,13 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
   // "VALID"/"INVALID" confirmation is required before trusting this
   // notification — see utils/payfastServerValidation.ts. A network
   // failure or timeout talking to PayFast is treated exactly the same
-  // as an explicit "INVALID", never as a pass.
+  // as an explicit "INVALID", never as a pass. Required (documentation,
+  // not enforced here) before PAYFAST_ENABLED can be considered
+  // production-ready — see VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
   if (env.payfastValidateServer) {
     const serverValid = await validateWithPayfastServer(rawBody, payfastConfig.mode);
+    logPayfastVerificationEvent(order.orderNumber, "serverValidation", "enforce", serverValid, serverValid ? "matched" : "not_valid");
+
     if (!serverValid) {
       // 400, not 403: PayFast's own infrastructure was reachable and
       // responded — this is "the data didn't check out", the same

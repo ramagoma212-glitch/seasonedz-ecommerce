@@ -298,20 +298,25 @@ ever change `paymentStatus`. The frontend pages at those URLs (a later
 milestone) must re-fetch the order's real status from the API rather
 than assume success because of how they got there.
 
-### Source IP Verification and Server Validation (Version 4, Milestone 29)
+### Source IP Verification and Server Validation (Version 4, Milestone 29; strategy updated Version 5, Milestone 35)
 
-**Now implemented, disabled by default.** Two further checks exist on
-top of signature/amount/merchant-ID verification, each gated behind
-its own flag (both default `false`):
+**Now implemented.** Two further checks exist on top of
+signature/amount/merchant-ID verification:
 
-- **`PAYFAST_VERIFY_SOURCE`** — resolves PayFast's own domains via DNS
-  at verification time and confirms the ITN's source IP matches
+- **`PAYFAST_SOURCE_VERIFICATION_MODE`** (`off` | `monitor` | `enforce`,
+  default `off`) — resolves PayFast's own domains via DNS at
+  verification time and confirms the ITN's source IP matches
   (`src/utils/payfastSourceVerification.ts`). No fixed IP list is
-  hardcoded — PayFast doesn't publish one to hardcode.
-- **`PAYFAST_VALIDATE_SERVER`** — POSTs the received ITN back to
-  PayFast's own validation endpoint and requires a `"VALID"` response
-  (`src/utils/payfastServerValidation.ts`) — PayFast's own recommended
-  custom-integration confirmation step.
+  hardcoded — PayFast doesn't publish one to hardcode. `off` skips the
+  check entirely; `monitor` runs it and logs the outcome but never
+  blocks on failure; `enforce` blocks on failure with a clean `403`.
+  The old boolean `PAYFAST_VERIFY_SOURCE` still works as a
+  backward-compatible fallback (`true` → `enforce`, `false`/unset →
+  `off`) when the new variable isn't set.
+- **`PAYFAST_VALIDATE_SERVER`** (default `false`) — POSTs the received
+  ITN back to PayFast's own validation endpoint and requires a
+  `"VALID"` response (`src/utils/payfastServerValidation.ts`) —
+  PayFast's own recommended custom-integration confirmation step.
 
 Both were deliberately left disabled through Milestone 28, for the
 same reason as before: they can't be meaningfully proven against real
@@ -319,18 +324,25 @@ PayFast traffic from local development alone, and a check that's never
 been exercised is riskier than an honest, documented gap. Milestone 29
 built and tested both — their *rejection* paths are proven (a local
 request correctly fails source verification; crafted data correctly
-fails PayFast's real sandbox server validation) — but their
-*acceptance* paths (a genuine PayFast-originated ITN passing both
-checks) can only be proven by Milestone 30's actual hosted sandbox
-round trip. See `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` for full
-detail, including `TRUST_PROXY` (needed for `req.ip` to reflect the
-real caller behind Render's or a tunnel's reverse proxy) and exactly
-which PayFast domains are checked per mode.
+fails PayFast's real sandbox server validation). Milestone 30 proved
+**server validation's** acceptance path against a genuine hosted
+round trip; source verification's acceptance path was not proven (and,
+per Milestone 33's investigation, may not be reliably provable through
+every proxy/tunnel topology at all) — see
+`VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` and
+`VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md` for full
+detail, including `TRUST_PROXY` and exactly which PayFast domains are
+checked per mode.
 
-**Before any real production PayFast credentials are used, both
-`PAYFAST_VERIFY_SOURCE=true` and `PAYFAST_VALIDATE_SERVER=true` should
-be set** — this remains a documentation/operational requirement, not
-something enforced in code.
+**Current production requirement (Version 5, Milestone 35):**
+`PAYFAST_VALIDATE_SERVER=true` is required before real production
+PayFast credentials are ever used — its acceptance path is already
+proven. `PAYFAST_SOURCE_VERIFICATION_MODE=monitor` should be used first
+to gather real evidence on the actual hosting environment (Render);
+`enforce` is only appropriate once that evidence shows it reliably
+passing against real PayFast traffic there — see
+`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`. None of this is
+enforced in code — it remains a documentation/operational requirement.
 
 ## Frontend Checkout Flow (Version 3, Milestone 23)
 
@@ -396,6 +408,14 @@ hosted payment page (not just a form built and inspected locally), and
 proven against that real round trip (Milestone 30).
 
 ## Known Limitations (as of Milestone 31)
+
+> Superseded in part by Version 5: retry-while-`PENDING` is resolved
+> (Milestone 34, `VERSION_5_RETRY_PENDING_RISK_FIX.md`), and the source
+> verification / server validation strategy below has been updated
+> (Milestone 35, `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`) —
+> see the "Source IP Verification and Server Validation" section above
+> for the current requirement. The historical record below is otherwise
+> still accurate.
 
 - **A real hosted PayFast sandbox round trip is now proven** (Version
   4, Milestone 30) — checkout through PayFast's real sandbox payment

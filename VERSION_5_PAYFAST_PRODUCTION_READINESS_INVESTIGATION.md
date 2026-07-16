@@ -297,11 +297,11 @@ review:
   `POST /api/payments/payfast/initiate`); frontend copy and
   `isPayfastRetryEligible` updated to match. See
   `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
-- **Milestone 35 — PayFast verification strategy update.** Implement
-  the Option C source-verification architecture recommended above
-  (server validation as the real gate; DNS source-IP as best-effort/
-  logging only); update `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`
-  accordingly.
+- **Milestone 35 — PayFast verification strategy update.** Complete —
+  Option C implemented via a new `PAYFAST_SOURCE_VERIFICATION_MODE`
+  (`off | monitor | enforce`); `PAYFAST_VALIDATE_SERVER=true` documented
+  as a required production precondition. See
+  `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`.
 - **Milestone 36 — PayFast final sandbox QA.** A real hosted round trip
   **against the deployed Render backend** (not a tunnel), proving the
   updated verification strategy's acceptance path directly on the real
@@ -314,11 +314,14 @@ review:
   PayFast decision and can proceed on its own timeline.
 
 Milestone 34 is complete as of `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
-Milestone 35 has not been started.
+Milestone 35 is complete as of
+`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`. Milestone 36 has
+not been started.
 
 ## What Must Not Be Done Yet
 
-Per this milestone's own instructions (still true after Milestone 34):
+Per this milestone's own instructions (still true after Milestones 34
+and 35):
 
 - PayFast is not enabled in Render production.
 - No live PayFast credentials were added anywhere.
@@ -331,5 +334,6 @@ Per this milestone's own instructions (still true after Milestone 34):
 - No login was added.
 - No admin dashboard was added.
 - No additional hosted PayFast payment was run.
-- The Option C source-verification recommendation above was **not
-  implemented** — Milestone 35, still pending.
+- `PAYFAST_SOURCE_VERIFICATION_MODE=enforce` has not been proven on
+  Render — Milestone 36's real hosted round trip against the actual
+  deployed backend, still pending.

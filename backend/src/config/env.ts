@@ -87,23 +87,71 @@ if (payfastEnabled) {
   }
 }
 
-// PayFast source verification hardening (Version 4, Milestone 29).
-// All three are independent, always-optional booleans — never
-// required regardless of PAYFAST_ENABLED, since they harden an
-// already-working notify flow rather than gate a new feature. Every
-// one defaults to "false", so today's backend (local or the current
-// Render deployment) starts and behaves identically whether or not
-// anyone has heard of these yet. See
-// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
+// PayFast source verification hardening (Version 4, Milestone 29;
+// strategy updated Version 5, Milestone 35). PAYFAST_VALIDATE_SERVER is
+// an independent, always-optional boolean — never required regardless
+// of PAYFAST_ENABLED, since it hardens an already-working notify flow
+// rather than gates a new feature. Defaults to "false", so today's
+// backend (local or the current Render deployment) starts and behaves
+// identically whether or not anyone has heard of it yet. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md and
+// VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
 //
-// Before any real production PayFast payment is accepted, the
-// documentation (not this code) requires PAYFAST_VERIFY_SOURCE=true
-// and PAYFAST_VALIDATE_SERVER=true to both be set — there's no way for
-// this file to know "we're about to go live" versus "we're testing
-// sandbox", so that's a deliberate operational decision, not something
-// enforced here.
-const payfastVerifySource = getEnv("PAYFAST_VERIFY_SOURCE", "false").trim().toLowerCase() === "true";
+// For production PayFast readiness, PAYFAST_VALIDATE_SERVER=true is
+// required (documentation/operational decision, not enforced here —
+// this file can't know "we're about to go live" vs. "we're testing
+// sandbox", and PAYFAST_VALIDATE_SERVER must stay optional for local
+// startup either way).
 const payfastValidateServer = getEnv("PAYFAST_VALIDATE_SERVER", "false").trim().toLowerCase() === "true";
+
+// Version 5, Milestone 35: replaces the old hard on/off
+// PAYFAST_VERIFY_SOURCE with a three-way mode, since DNS-based source
+// IP matching turned out to be unreliable to prove through any proxy/
+// tunnel topology tested so far (see
+// VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md) — a hard
+// "enforce" everywhere risked blocking genuine payments on unproven
+// infrastructure (Render's own topology has never been tested).
+//
+//   off     — never run the DNS source check at all.
+//   monitor — run it, log the pass/fail outcome, but never block on a
+//             failure (all other checks — signature/merchant/amount/
+//             server validation — still fully apply). Safe to run
+//             anywhere, including Render, to gather real evidence
+//             before ever enforcing.
+//   enforce — run it and block on failure, exactly like the old
+//             PAYFAST_VERIFY_SOURCE=true. Only appropriate once the
+//             acceptance path is proven on the real hosting
+//             environment in use.
+//
+// Backward compatibility with the old PAYFAST_VERIFY_SOURCE boolean:
+// only consulted when PAYFAST_SOURCE_VERIFICATION_MODE isn't set at
+// all, so an explicit new-variable value always wins.
+//   PAYFAST_VERIFY_SOURCE=true  -> "enforce" (preserves the exact prior
+//     hard-blocking behaviour for anyone who'd already opted in).
+//   PAYFAST_VERIFY_SOURCE=false/unset -> "off" (preserves the exact
+//     prior no-op behaviour — never silently starts a new DNS lookup
+//     for an environment that never asked for one). "monitor" is
+//     opt-in only, via explicitly setting
+//     PAYFAST_SOURCE_VERIFICATION_MODE=monitor.
+export type PayfastSourceVerificationMode = "off" | "monitor" | "enforce";
+
+const VALID_SOURCE_VERIFICATION_MODES: readonly PayfastSourceVerificationMode[] = ["off", "monitor", "enforce"];
+
+const payfastVerifySourceLegacy = getEnv("PAYFAST_VERIFY_SOURCE", "false").trim().toLowerCase() === "true";
+const rawSourceVerificationMode = getOptionalEnv("PAYFAST_SOURCE_VERIFICATION_MODE");
+
+let payfastSourceVerificationMode: PayfastSourceVerificationMode;
+if (rawSourceVerificationMode !== undefined) {
+  const normalized = rawSourceVerificationMode.trim().toLowerCase();
+  if (!VALID_SOURCE_VERIFICATION_MODES.includes(normalized as PayfastSourceVerificationMode)) {
+    throw new Error(
+      `PAYFAST_SOURCE_VERIFICATION_MODE must be "off", "monitor", or "enforce" — got: "${rawSourceVerificationMode}".`
+    );
+  }
+  payfastSourceVerificationMode = normalized as PayfastSourceVerificationMode;
+} else {
+  payfastSourceVerificationMode = payfastVerifySourceLegacy ? "enforce" : "off";
+}
 
 // Accepts "true" or "1" (both common conventions for this kind of
 // flag) — see app.ts for how this is used.
@@ -174,7 +222,7 @@ export const env = {
   payfastCancelUrl,
   payfastNotifyUrl,
   // PayFast source verification hardening — see the block above.
-  payfastVerifySource,
+  payfastSourceVerificationMode,
   payfastValidateServer,
   trustProxy,
   // Email — see the block above. No provider credentials are read
