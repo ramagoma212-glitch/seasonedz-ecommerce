@@ -1,4 +1,4 @@
-# Seasonedz Group — Backend (Version 4)
+# Seasonedz Group — Backend (Version 5)
 
 This is the backend API for the Seasonedz Group e-commerce website. It
 runs as a separate project alongside the existing frontend (see the
@@ -30,7 +30,16 @@ optional source-verification/server-validation hardening, and added
 customer-facing payment retry — see `../VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`,
 `../VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`,
 `../VERSION_4_PAYMENT_RETRY_POLISH.md`, and
-`../VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
+`../VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md`. Version 4 was merged
+and deployed live — see `../VERSION_4_LIVE_STABILITY_REVIEW.md`.
+Version 5 (Milestones 33-37) is closing the two remaining production
+blockers: retry-while-`PENDING` is now fixed
+(`../VERSION_5_RETRY_PENDING_RISK_FIX.md`), source verification now has
+a safer `off | monitor | enforce` mode
+(`../VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`), and a Render
+sandbox QA plan exists but hasn't been run yet
+(`../VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md`) — see
+`../VERSION_5_QA_MERGE_READINESS_REVIEW.md` for the current
 production-readiness recommendation. `PAYFAST_ENABLED` remains `false`
 in every deployed environment.
 
@@ -373,9 +382,10 @@ committed to Git** — they're only ever entered directly in the hosting
 provider's dashboard. Version 3's PayFast/email code (Milestones 19-25)
 **is** part of this live deployment, but stays inactive there —
 `PAYFAST_ENABLED`/`EMAIL_ENABLED` stay `false` in any real environment
-until they're ready (Version 4, Milestones 27-31, proved the PayFast
-flow works end-to-end in sandbox but hasn't changed this); see
-`PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
+until they're ready (Version 4 proved the PayFast flow works
+end-to-end in sandbox; Version 5, Milestones 33-37, closed the retry
+and source-verification-strategy blockers but hasn't changed this);
+see `PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
 
 ## What's Coming Later
 
