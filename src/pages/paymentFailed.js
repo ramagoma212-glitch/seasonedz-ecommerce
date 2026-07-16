@@ -24,9 +24,25 @@ function humanizeEnum(value) {
 
 // `tracking` is only available once the backend has actually been
 // reached (renderWithOrderStatus) — the generic no-tracking case
-// (renderGenericFailed) always falls back to "start a new order"
-// since there's nothing to retry.
+// (renderGenericFailed) always falls back to "start a new order" since
+// there's nothing to retry.
+//
+// Version 5, Milestone 34: a still-PENDING PayFast order gets its own
+// branch here — never an active retry. See
+// VERSION_5_RETRY_PENDING_RISK_FIX.md and paymentCancelled.js's
+// identical reasoning.
 function renderActions(orderNumber, tracking) {
+  const isPendingPayfast = tracking && tracking.paymentMethod === "PAYFAST" && tracking.paymentStatus === "PENDING";
+  if (isPendingPayfast) {
+    return `
+      <div class="order-confirmation__actions">
+        <a class="btn btn--secondary" href="#/payment-failed?orderNumber=${encodeURIComponent(orderNumber)}">Check Again</a>
+        <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(orderNumber)}">Track Order</a>
+        <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
+      </div>
+    `;
+  }
+
   const showPayfastRetry = tracking && isPayfastRetryEligible(tracking);
   return `
     <div class="order-confirmation__actions">
@@ -68,7 +84,12 @@ function renderWithOrderStatus(tracking) {
     `;
   }
 
-  const headline = tracking.paymentStatus === "FAILED" ? "Payment failed." : "Payment was not completed.";
+  const headline =
+    tracking.paymentStatus === "FAILED"
+      ? "Payment failed."
+      : tracking.paymentStatus === "PENDING"
+        ? "Your payment was not completed, or we are still waiting for confirmation."
+        : "Payment was not completed.";
 
   return `
     <div class="form-banner form-banner--error">${headline}</div>

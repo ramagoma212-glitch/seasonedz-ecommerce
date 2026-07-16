@@ -274,21 +274,29 @@ review:
    real PayFast sandbox round trip **against the actual Render
    deployment**, not local development and not a tunnel, using server
    validation (plus signature/merchant/amount) as the gate.
-2. Either implement Option A (disable `PENDING` retry pre-production) or
-   formally, explicitly accept the current duplicate-payment risk as a
-   documented trade-off, before `PAYFAST_ENABLED` is ever set `true` on
-   Render.
-3. Only after both (1) and (2) are resolved or formally accepted should
+2. ~~Either implement Option A (disable `PENDING` retry pre-production)
+   or formally, explicitly accept the current duplicate-payment risk as
+   a documented trade-off~~ — **done as of Milestone 34.** Retry while
+   `PENDING` is now blocked at the backend regardless of what any
+   frontend client sends; see `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
+   The residual, narrower risk (a payment-attempt model for genuine
+   duplicate *detection*, Option D) remains open future work, not a
+   production blocker in the same way.
+3. Only after (1) is resolved or formally accepted should
    `PAYFAST_ENABLED` / `VITE_PAYFAST_ENABLED` be set `true` in Render
-   production.
+   production. (1) — source verification — remains the sole open
+   blocker after Milestone 34.
 
 ## Recommended Version 5 Implementation Milestones
 
 - **Milestone 33 — Production readiness investigation.** This
   milestone. Complete.
-- **Milestone 34 — Retry while PENDING risk fix.** Implement Option A
-  (disable retry while `PENDING`, keep it for `FAILED`/`CANCELLED`);
-  update frontend copy and `isPayfastRetryEligible` to match.
+- **Milestone 34 — Retry while PENDING risk fix.** Complete — Option A
+  implemented (retry disabled while `PENDING`, allowed only for
+  `FAILED`/`CANCELLED`, via a `context: "checkout" | "retry"` split on
+  `POST /api/payments/payfast/initiate`); frontend copy and
+  `isPayfastRetryEligible` updated to match. See
+  `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
 - **Milestone 35 — PayFast verification strategy update.** Implement
   the Option C source-verification architecture recommended above
   (server validation as the real gate; DNS source-IP as best-effort/
@@ -305,11 +313,12 @@ review:
   real email provider (currently console-only); independent of the
   PayFast decision and can proceed on its own timeline.
 
-Milestone 34 is not started as part of this milestone.
+Milestone 34 is complete as of `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
+Milestone 35 has not been started.
 
 ## What Must Not Be Done Yet
 
-Per this milestone's own instructions:
+Per this milestone's own instructions (still true after Milestone 34):
 
 - PayFast is not enabled in Render production.
 - No live PayFast credentials were added anywhere.
@@ -322,5 +331,5 @@ Per this milestone's own instructions:
 - No login was added.
 - No admin dashboard was added.
 - No additional hosted PayFast payment was run.
-- The Option A (retry) and Option C (source verification) recommendations
-  above were **not implemented** — Milestones 34 and 35 respectively.
+- The Option C source-verification recommendation above was **not
+  implemented** — Milestone 35, still pending.

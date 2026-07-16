@@ -9,7 +9,12 @@
 import type { NextFunction, Request, Response } from "express";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { asRecord, isNonEmptyString } from "../validators/shared.js";
-import { initiatePayfastPayment, PaymentError, processPayfastNotification } from "../services/payfast.service.js";
+import {
+  initiatePayfastPayment,
+  PaymentError,
+  processPayfastNotification,
+  type PayfastInitiationContext,
+} from "../services/payfast.service.js";
 
 // Same shape the frontend already validates against for order tracking
 // (src/pages/trackOrder.js) and the same shape backend/src/utils/
@@ -41,7 +46,18 @@ export async function initiatePayfastPaymentHandler(req: Request, res: Response,
       return;
     }
 
-    const result = await initiatePayfastPayment(orderNumber);
+    // Version 5, Milestone 34: optional, caller-supplied — only the
+    // literal "checkout" unlocks initiating a still-PENDING order (see
+    // initiationEligibleStatuses in payfast.service.ts). Anything else
+    // (missing, "retry", or an unrecognized string) safely falls
+    // through to the stricter retry-eligible set there, so there's
+    // nothing to reject here — passed through as-is rather than
+    // normalized, only for clearer request logging/debugging.
+    const rawContext = body.context;
+    const context: PayfastInitiationContext | undefined =
+      rawContext === "checkout" || rawContext === "retry" ? rawContext : undefined;
+
+    const result = await initiatePayfastPayment(orderNumber, context);
 
     sendSuccess(res, {
       message: "PayFast payment prepared successfully",

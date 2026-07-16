@@ -459,7 +459,7 @@ async function handleCheckoutSubmit(form) {
 // real order confirmation rather than left on a dead end.
 async function redirectToPayfast(orderNumber) {
   try {
-    await retryPayfastPayment(orderNumber);
+    await retryPayfastPayment(orderNumber, "checkout");
   } catch {
     window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
   }
@@ -488,7 +488,7 @@ async function handleRetryPayfast(buttonEl) {
   buttonEl.textContent = "Redirecting to PayFast…";
 
   try {
-    await retryPayfastPayment(orderNumber);
+    await retryPayfastPayment(orderNumber, "retry");
     // On success the browser navigates away to PayFast — nothing left
     // to update here.
   } catch (error) {

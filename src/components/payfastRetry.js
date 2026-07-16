@@ -3,17 +3,23 @@
 // safely be retried.
 //
 // isPayfastRetryEligible() only ever decides whether to *show* the
-// button — it mirrors PAYFAST_RETRY_ELIGIBLE_STATUSES in
+// button — it mirrors RETRY_ELIGIBLE_STATUSES in
 // backend/src/services/payfast.service.ts for a consistent customer
 // experience, but is never the authority: the backend independently
 // re-checks eligibility again the moment a retry request actually
-// arrives. Getting this frontend copy out of sync would at worst show
-// (or hide) a button that the backend still correctly accepts (or
-// rejects) on its own — never a security concern.
+// arrives (always with context: "retry" — see js/app.js), and rejects
+// PENDING regardless of what this frontend copy says. Getting this out
+// of sync would at worst show a button the backend still correctly
+// rejects on its own — never a security concern.
+//
+// Version 5, Milestone 34: PENDING deliberately removed — a still-
+// PENDING order's first attempt might still complete, so retrying is
+// never offered while pending. See VERSION_5_RETRY_PENDING_RISK_FIX.md
+// and the payment-success/cancelled/failed pages' own PENDING handling.
 
 import { escapeHtml } from "../js/search.js";
 
-const RETRY_ELIGIBLE_PAYMENT_STATUSES = ["PENDING", "FAILED", "CANCELLED"];
+const RETRY_ELIGIBLE_PAYMENT_STATUSES = ["FAILED", "CANCELLED"];
 
 export function isPayfastRetryEligible(tracking) {
   return tracking.paymentMethod === "PAYFAST" && RETRY_ELIGIBLE_PAYMENT_STATUSES.includes(tracking.paymentStatus);

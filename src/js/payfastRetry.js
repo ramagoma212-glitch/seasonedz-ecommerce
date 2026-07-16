@@ -36,13 +36,21 @@ export function submitPayfastForm({ processUrl, method, fields }) {
   form.submit();
 }
 
-// Re-initiates PayFast for an existing order (first attempt or retry —
-// the backend itself decides eligibility; see
-// PAYFAST_RETRY_ELIGIBLE_STATUSES in payfast.service.ts) and submits
-// the resulting form. Throws on failure so callers can show their own
-// contextual error message rather than this module deciding for them.
-export async function retryPayfastPayment(orderNumber) {
+// Re-initiates PayFast for an existing order (checkout's first attempt
+// or a customer retry — the backend itself decides eligibility per
+// `context`; see initiationEligibleStatuses in payfast.service.ts) and
+// submits the resulting form. Throws on failure so callers can show
+// their own contextual error message rather than this module deciding
+// for them — e.g. a retry blocked because the order is still PENDING
+// comes back as an ApiError whose message is already the right
+// customer-facing text (see backend/src/services/payfast.service.ts).
+//
+// `context` is required, not defaulted, so every call site states its
+// intent explicitly (js/app.js passes "checkout" for the first attempt,
+// "retry" for the "Try PayFast Again" button) — see
+// VERSION_5_RETRY_PENDING_RISK_FIX.md.
+export async function retryPayfastPayment(orderNumber, context) {
   savePendingPayment({ orderNumber, paymentMethod: "payfast" });
-  const response = await initiatePayfastPayment(orderNumber);
+  const response = await initiatePayfastPayment(orderNumber, context);
   submitPayfastForm(response.data);
 }

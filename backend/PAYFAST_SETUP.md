@@ -234,25 +234,44 @@ payment (PayFast again, or arrange another method) without the order
 itself having been prematurely cancelled. Only `paymentStatus`
 reflects the failed/cancelled attempt.
 
-### Payment Retry (Version 4, Milestone 31)
+### Payment Retry (Version 4, Milestone 31; tightened Version 5, Milestone 34)
 
 A customer whose PayFast attempt didn't reach `PAID` can retry — the
 frontend calls the same `POST /api/payments/payfast/initiate` again
 with the same `orderNumber`, no new order is ever created, and the
-existing `Payment` row is reused (never duplicated). Both the
-initiation check and the notify flow's `COMPLETE` guard share one
-allow-list, `PAYFAST_RETRY_ELIGIBLE_STATUSES` in
-`src/services/payfast.service.ts`, so a retry that's allowed to
-*start* is also guaranteed to be allowed to *finish*:
+existing `Payment` row is reused (never duplicated).
 
-| `Order.paymentMethod` | `Order.paymentStatus` | Retry allowed? |
-|---|---|---|
-| `PAYFAST` | `PENDING` | Yes — first attempt or a resumed one |
-| `PAYFAST` | `FAILED` | Yes |
-| `PAYFAST` | `CANCELLED` | Yes |
-| `PAYFAST` | `PAID` | **No** — `"This order's payment has already been processed."` |
-| `PAYFAST` | `REFUNDED` | **No** — same message; a refunded order is never re-chargeable |
-| `BANK_TRANSFER` (or any non-PayFast method) | any | **No** — `"This order was not created for PayFast payment."` |
+**`POST /api/payments/payfast/initiate` takes an optional `context`
+field: `"checkout"` or `"retry"`.** Checkout's own first PayFast
+redirect (right after `POST /api/orders` creates a fresh order, which
+always starts `PENDING`) sends `context: "checkout"`. The "Try PayFast
+Again" button on the payment-status pages sends `context: "retry"`.
+Missing or unrecognized `context` safely defaults to the stricter
+`"retry"` behaviour — only the literal string `"checkout"` ever unlocks
+initiating a `PENDING` order. This split exists because allowing
+`PENDING` to retry was a real duplicate-payment risk: a first attempt
+still genuinely in flight and a retry attempt could both independently
+complete, with PayFast having no way to know they were "the same
+order" — see `VERSION_5_RETRY_PENDING_RISK_FIX.md` and
+`VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md`.
+
+| `Order.paymentMethod` | `Order.paymentStatus` | `context: "checkout"` | `context: "retry"` (or missing/invalid) |
+|---|---|---|---|
+| `PAYFAST` | `PENDING` | **Yes** — the one state a fresh order can be in | **No** — `"Your payment is still being verified. Please wait a few minutes before trying again or contact Seasonedz Group."` |
+| `PAYFAST` | `FAILED` | No | **Yes** |
+| `PAYFAST` | `CANCELLED` | No | **Yes** |
+| `PAYFAST` | `PAID` | No | **No** — `"This order's payment has already been processed."` |
+| `PAYFAST` | `REFUNDED` | No | **No** — same message; a refunded order is never re-chargeable |
+| `BANK_TRANSFER` (or any non-PayFast method) | any | No | **No** — `"This order was not created for PayFast payment."` |
+
+The notify flow's `COMPLETE` guard is unaffected by any of this — it
+still accepts completing from `PENDING`, `FAILED`, or `CANCELLED`
+(`PAYFAST_COMPLETABLE_STATUSES` in `src/services/payfast.service.ts`),
+since a real ITN might belong to either a checkout-initiated attempt
+(order still `PENDING`) or a retry-initiated one (order still
+`FAILED`/`CANCELLED` right up until the ITN arrives — initiation never
+touches `order.paymentStatus`). A retry that's allowed to *start* is
+still guaranteed to be allowed to *finish*.
 
 `Order.status` being `CANCELLED` or `REFUNDED` also blocks retry
 regardless of `paymentStatus` (a separate, pre-existing check — an
@@ -261,13 +280,14 @@ its last payment attempt reported). Retry never reduces stock again
 (it was only ever decremented once, at order creation) and never
 creates a second `Payment` row.
 
-The frontend mirrors this same allow-list for *display* purposes only
-(`isPayfastRetryEligible` in `src/components/payfastRetry.js`) so an
-ineligible order doesn't show a button that could only ever fail — but
-the backend re-checks independently every time regardless of what the
-frontend decided to show. See `VERSION_4_PAYMENT_RETRY_POLISH.md` for
-the full frontend-side detail (retry pages, the shared retry helper,
-pending-payment storage).
+The frontend mirrors the `"retry"` set (`FAILED`/`CANCELLED` only, no
+longer `PENDING`) for *display* purposes only (`isPayfastRetryEligible`
+in `src/components/payfastRetry.js`) so a `PENDING` order never shows a
+"Try PayFast Again" button in the first place — but the backend
+re-checks independently every time regardless of what the frontend
+decided to show. See `VERSION_4_PAYMENT_RETRY_POLISH.md` and
+`VERSION_5_RETRY_PENDING_RISK_FIX.md` for the full frontend-side detail
+(retry pages, the shared retry helper, pending-payment storage).
 
 ### Return URL Is Never Trusted
 

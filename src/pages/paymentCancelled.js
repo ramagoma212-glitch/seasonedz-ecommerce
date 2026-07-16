@@ -26,7 +26,25 @@ function humanizeEnum(value) {
 // reached (renderWithOrderStatus) — the generic no-tracking case
 // (renderGenericCancelled) always falls back to "start a new order"
 // since there's nothing to retry.
+//
+// Version 5, Milestone 34: a still-PENDING PayFast order gets its own
+// branch here — never an active retry (isPayfastRetryEligible already
+// excludes PENDING, but the generic "Try Again" fallback below would
+// otherwise point at a plain new checkout, which is misleading for an
+// order whose first PayFast attempt might still complete). See
+// VERSION_5_RETRY_PENDING_RISK_FIX.md.
 function renderActions(orderNumber, tracking) {
+  const isPendingPayfast = tracking && tracking.paymentMethod === "PAYFAST" && tracking.paymentStatus === "PENDING";
+  if (isPendingPayfast) {
+    return `
+      <div class="order-confirmation__actions">
+        <a class="btn btn--secondary" href="#/payment-cancelled?orderNumber=${encodeURIComponent(orderNumber)}">Check Again</a>
+        <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(orderNumber)}">Track Order</a>
+        <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
+      </div>
+    `;
+  }
+
   const showPayfastRetry = tracking && isPayfastRetryEligible(tracking);
   return `
     <div class="order-confirmation__actions">
