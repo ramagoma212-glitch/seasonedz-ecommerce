@@ -527,7 +527,7 @@ backend itself set, never a live courier API.
 ```
 HTTP status: `404`.
 
-## Payment Routes (Version 3, Milestones 21-22)
+## Payment Routes (Version 3, Milestones 21-22; retry eligibility updated Version 4, Milestone 31)
 
 | Method | Route | Description |
 |---|---|---|
@@ -569,13 +569,17 @@ Before preparing a payment, the order must satisfy all of:
   clean `400` — PayFast is never initiated for a different payment
   method).
 - `order.status` is not `CANCELLED` or `REFUNDED`.
-- `order.paymentStatus` is `PENDING` (an order already paid/failed/
-  refunded can't be re-initiated).
+- `order.paymentStatus` is `PENDING`, `FAILED`, or `CANCELLED` (Version
+  4, Milestone 31 — a customer can retry a PayFast payment that didn't
+  reach `PAID`, calling this same route again with the same
+  `orderNumber`; no new order or `Payment` row is ever created). An
+  order already `PAID` or `REFUNDED` can't be (re-)initiated.
 - `order.total` is greater than zero.
 
 Any failed check returns a clean `400` (or `404` if the order doesn't
 exist) with a single `message`, the same convention as the order
-business-rule errors above.
+business-rule errors above. See `../VERSION_4_PAYMENT_RETRY_POLISH.md`
+for the full retry-eligibility rationale.
 
 ### Success response — POST /api/payments/payfast/initiate
 
@@ -687,7 +691,7 @@ store them in yet (see the Milestone 19 audit's future-fields list).
 
 | PayFast `payment_status` | Effect |
 |---|---|
-| `COMPLETE` | `Payment.status = PAID`, `Payment.paidAt = now`, `Order.paymentStatus = PAID`, **`Order.status = CONFIRMED`**. Only applied if the order's current `paymentStatus` is `PENDING` or `FAILED` — see idempotency below. |
+| `COMPLETE` | `Payment.status = PAID`, `Payment.paidAt = now`, `Order.paymentStatus = PAID`, **`Order.status = CONFIRMED`**. Only applied if the order's current `paymentStatus` is `PENDING`, `FAILED`, or `CANCELLED` (Version 4, Milestone 31 — matches `/initiate`'s retry eligibility above, so a retried payment can actually complete, not just start) — see idempotency below. |
 | `FAILED` | `Payment.status = FAILED`, `Order.paymentStatus = FAILED`. **`Order.status` is deliberately left unchanged (stays `PENDING`)** — documented decision, see `PAYFAST_SETUP.md`: a single failed attempt shouldn't by itself cancel the whole order, since the customer may still retry payment. |
 | `CANCELLED` | `Payment.status = CANCELLED`, `Order.paymentStatus = CANCELLED`. `Order.status` likewise left unchanged, same reasoning. |
 | Anything else | Never marks the order as paid. `Payment.failureReason` is set to a note recording the unrecognised status, for later investigation; nothing else changes. |

@@ -9,12 +9,16 @@ wholesale/distribution partners.
 Built with plain HTML5, CSS3 and JavaScript ES Modules, powered by
 [Vite](https://vitejs.dev/). No frameworks, no external UI libraries.
 
-## Current Status: Version 1 Frontend MVP
+## Current Status: Version 4 In Progress (Started from a Version 1 Frontend MVP)
 
-Version 1 is complete and is a **frontend-only** build: there is no
-backend, no database, no real payment processing, no real courier
-integration, no real email sending, and no login/accounts. Cart,
-wishlist and demo orders are all saved in the browser's Local Storage.
+Started as Version 1, a **frontend-only** build: no backend, no
+database, no real payment processing, no real courier integration, no
+real email sending, and no login/accounts, with cart/wishlist/demo
+orders all saved in the browser's Local Storage. See the Version 2/3/4
+notes below for everything added since — a real backend, real (but
+still sandbox-only and disabled-by-default) PayFast payment
+processing, and this milestone's QA/production-readiness review
+(`VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md`).
 
 See **`VERSION_1_RELEASE_NOTES.md`** for the full release summary and
 **`VERSION_1_DEMO_AUDIT.md`** for an itemised list of every demo-only
@@ -41,23 +45,44 @@ involve.
 > environment secrets (database credentials, etc.) are never committed
 > to Git — only entered directly in the hosting provider's dashboard.
 >
-> **Version 3 (in progress): PayFast payment integration, sandbox
-> only.** The backend can prepare a PayFast payment
-> (`POST /api/payments/payfast/initiate`) and verify PayFast's payment
-> notification (`POST /api/payments/payfast/notify`) — only a verified
-> notification can ever mark an order as paid, never the frontend. The
-> checkout flow can redirect to PayFast and there are
+> **Version 3 (complete, merged, deployed): PayFast payment
+> integration, sandbox only.** The backend can prepare a PayFast
+> payment (`POST /api/payments/payfast/initiate`) and verify PayFast's
+> payment notification (`POST /api/payments/payfast/notify`) — only a
+> verified notification can ever mark an order as paid, never the
+> frontend. The checkout flow redirects to PayFast and there are
 > payment-success/payment-cancelled/payment-failed pages, all gated
 > behind `VITE_PAYFAST_ENABLED` (frontend) and `PAYFAST_ENABLED`
-> (backend), both `false` by default. **No live/production PayFast
-> credentials are in use anywhere, and none of this has been deployed
-> yet.** Full detail in `VERSION_3_PAYMENT_READINESS_AUDIT.md` and
-> `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
-> (templates + a console-only service) but not yet wired to send
-> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rules
-> (R80 standard, free from R700) are unchanged but now live in one
-> backend config module; courier fulfilment is still entirely manual —
-> see `backend/DELIVERY_SETUP.md`.
+> (backend), both `false` by default in every deployed environment.
+> **No live/production PayFast credentials are in use anywhere.**
+> Version 3 itself (frontend + backend code, still disabled) has been
+> merged to `main` and deployed. Full detail in
+> `VERSION_3_PAYMENT_READINESS_AUDIT.md` and `backend/PAYFAST_SETUP.md`.
+> Order/payment emails are prepared (templates + a console-only
+> service) but not yet wired to send automatically — see
+> `backend/EMAIL_SETUP.md`. Delivery fee rules (R80 standard, free from
+> R700) are unchanged but now live in one backend config module;
+> courier fulfilment is still entirely manual — see
+> `backend/DELIVERY_SETUP.md`.
+>
+> **Version 4 (in progress): proving PayFast actually works end-to-end,
+> then polishing it.** A real hosted PayFast sandbox round trip
+> (checkout → PayFast's real sandbox payment page → a real ITN over a
+> temporary public tunnel → genuine backend-verified `PAID`) has been
+> completed and proven locally — see
+> `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`. Two real signature
+> bugs were found and fixed in the process. Optional server-side
+> hardening (`PAYFAST_VALIDATE_SERVER`) is proven; source-IP
+> verification (`PAYFAST_VERIFY_SOURCE`) correctly rejects unverifiable
+> traffic but its acceptance path is not yet proven through any tunnel
+> tested so far — see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`. A
+> customer can now retry a PayFast payment that didn't reach `PAID`
+> (`VERSION_4_PAYMENT_RETRY_POLISH.md`). **`PAYFAST_ENABLED` and
+> `VITE_PAYFAST_ENABLED` both remain `false` in every deployed
+> environment** — enabling PayFast in production is a separate,
+> deliberate decision not yet made; see
+> `VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
+> recommendation.
 
 ### Features Included in Version 1
 
@@ -78,7 +103,10 @@ involve.
 - 404 page, responsive design (mobile/tablet/desktop), and GitHub
   Pages deployment via GitHub Actions.
 
-### Features Not Included Yet
+### Features Not Included in Version 1
+
+(See the Version 2/3/4 notes above for what's since been added — this
+list is a historical snapshot of the original frontend-only build.)
 
 - Backend, database, or any server-side logic.
 - Real payment processing (including PayFast).
@@ -307,10 +335,13 @@ Live site: `https://<your-github-username>.github.io/seasonedz-ecommerce/`
 ## Known Demo Limitations
 
 Cart and wishlist are still Local Storage only, and there's still no
-real payment processing, no real courier tracking, and no login — see
-**`VERSION_2_INTEGRATION_NOTES.md`** for exactly what's now connected
-to the backend versus what's still demo/local-only. For the original
-Version 1 (before any backend existed), see **`VERSION_1_DEMO_AUDIT.md`**.
+real courier tracking and no login. Real PayFast payment processing
+exists and is sandbox-proven (see the Version 3/4 notes above), but
+`PAYFAST_ENABLED`/`VITE_PAYFAST_ENABLED` remain `false` in every
+deployed environment — see **`VERSION_2_INTEGRATION_NOTES.md`** for
+exactly what's connected to the backend versus what's still
+demo/local-only. For the original Version 1 (before any backend
+existed), see **`VERSION_1_DEMO_AUDIT.md`**.
 
 ## SEO Notes
 
@@ -329,7 +360,7 @@ to a real backend.
 
 ## Future Roadmap
 
-### Version 2 — Backend & Local Integration (in progress)
+### Version 2 — Backend & Local Integration — Complete
 
 - ~~Real backend + database~~ — done (see `backend/`).
 - ~~Frontend connected to the backend locally~~ (products/categories,
@@ -339,28 +370,44 @@ to a real backend.
 - ~~Deploying the backend somewhere reachable from the live GitHub
   Pages site~~ — done, deployed on Render at
   `https://seasonedz-ecommerce.onrender.com/api`, and the production
-  frontend build is configured to use it. The live GitHub Pages site
-  itself still needs an actual redeploy to pick this up — see
-  `VERSION_2_INTEGRATION_NOTES.md`.
-- Real payment processing (PayFast) — **in progress (Version 3,
-  Milestones 19-23), sandbox only.** Server-side price/stock
-  verification, payment initiation, ITN verification, and the
-  frontend checkout redirect/success/cancelled/failed flow all exist
-  locally, gated behind `PAYFAST_ENABLED`/`VITE_PAYFAST_ENABLED`
-  (both `false` by default). No live credentials, no deployment yet —
-  see `VERSION_3_PAYMENT_READINESS_AUDIT.md`.
-- Real courier integration and live order tracking — **delivery fee
-  rules and manual courier workflow prepared (Version 3, Milestone
-  25)**; no courier API, credentials, or live tracking yet — see
+  frontend build is configured to use it.
+
+### Version 3 — PayFast Integration (Sandbox) — Complete, Merged, Deployed
+
+- ~~Real payment processing (PayFast), sandbox only~~ — done. Server-side
+  price/stock verification, payment initiation, ITN verification, and
+  the frontend checkout redirect/success/cancelled/failed flow all
+  exist and are merged/deployed, gated behind
+  `PAYFAST_ENABLED`/`VITE_PAYFAST_ENABLED` (both `false` by default in
+  every deployed environment) — see `VERSION_3_PAYMENT_READINESS_AUDIT.md`.
+- Delivery fee rules and manual courier workflow prepared (Milestone
+  25); no courier API, credentials, or live tracking yet — see
   `backend/DELIVERY_SETUP.md`.
-- Real email notifications (order confirmations, contact/enquiry
-  forms) — **templates and a console-only service prepared (Version 3,
-  Milestone 24)**, not yet wired to send automatically — see
+- Order/payment email templates and a console-only service prepared
+  (Milestone 24), not yet wired to send automatically — see
   `backend/EMAIL_SETUP.md`.
+
+### Version 4 — Proving and Polishing PayFast (In Progress)
+
+- ~~Hosted PayFast sandbox round trip~~ — done: a real checkout, PayFast's
+  real sandbox payment page, a real ITN over a temporary tunnel, and a
+  genuine backend-verified `PAID` order, all proven locally. Two real
+  signature bugs found and fixed along the way — see
+  `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`.
+- ~~PayFast payment retry~~ — done: a customer can retry a PayFast
+  payment that didn't reach `PAID` — see
+  `VERSION_4_PAYMENT_RETRY_POLISH.md`.
+- Source IP verification's *acceptance* path (as opposed to its proven
+  rejection path) — not yet proven through any tunnel tested so far;
+  see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` and
+  `VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
+  recommendation.
+- Enabling `PAYFAST_ENABLED` in production — a separate, deliberate
+  decision not yet made.
 - Customer accounts (login/registration), with cart/wishlist/orders
   attached to the account.
 
-### Version 3 and Beyond
+### Version 5 and Beyond
 
 - Customer dashboard (order history, saved details).
 - Admin dashboard (manage products, categories, orders, content).
