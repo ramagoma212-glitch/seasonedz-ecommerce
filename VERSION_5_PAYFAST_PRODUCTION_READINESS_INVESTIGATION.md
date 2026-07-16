@@ -302,10 +302,13 @@ review:
   (`off | monitor | enforce`); `PAYFAST_VALIDATE_SERVER=true` documented
   as a required production precondition. See
   `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`.
-- **Milestone 36 — PayFast final sandbox QA.** A real hosted round trip
-  **against the deployed Render backend** (not a tunnel), proving the
-  updated verification strategy's acceptance path directly on the real
-  production topology.
+- **Milestone 36 — PayFast final sandbox QA.** Planning complete — see
+  `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md` for the full checklist
+  and test plan. The actual round trip **against the deployed Render
+  backend** (not a tunnel), proving the updated verification strategy's
+  acceptance path directly on the real production topology, has **not**
+  been run yet — it happens only once the user manually applies the
+  Render environment checklist and explicitly confirms readiness.
 - **Milestone 37 — Production PayFast enablement checklist.** The
   actual go-live checklist and (if approved) flipping `PAYFAST_ENABLED`
   in Render with real production credentials.
@@ -315,13 +318,30 @@ review:
 
 Milestone 34 is complete as of `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
 Milestone 35 is complete as of
-`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`. Milestone 36 has
-not been started.
+`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`. Milestone 36's
+**planning** is complete as of
+`VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md` — the actual round trip
+it plans for has not been run. Milestone 37 has not been started.
+
+## Milestone 36 — Final PayFast Sandbox QA Plan for Render (Planning)
+
+Produced the exact test plan and Render environment checklist for a
+sandbox round trip against the real deployed backend — see
+`VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md` for full detail:
+manual Render env checklist (sandbox credentials only, applied by the
+user directly in Render's dashboard — no secret values requested or
+printed here), the recommended approach (a local frontend pointed at
+the live Render backend, so the public GitHub Pages frontend never
+needs `VITE_PAYFAST_ENABLED=true` at any point), step-by-step test
+steps, a rollback checklist, and a risk review. No code changes were
+required for this plan — everything it depends on (server validation,
+`monitor` mode, retry-while-`PENDING` blocking) already exists from
+Milestones 29 and 34-35.
 
 ## What Must Not Be Done Yet
 
-Per this milestone's own instructions (still true after Milestones 34
-and 35):
+Per this milestone's own instructions (still true after Milestones 34,
+35, and 36's planning):
 
 - PayFast is not enabled in Render production.
 - No live PayFast credentials were added anywhere.
@@ -333,7 +353,10 @@ and 35):
 - No courier integration was added.
 - No login was added.
 - No admin dashboard was added.
-- No additional hosted PayFast payment was run.
+- No additional hosted PayFast payment was run — including no sandbox
+  round trip against Render yet; Milestone 36 only produced the plan
+  for one.
 - `PAYFAST_SOURCE_VERIFICATION_MODE=enforce` has not been proven on
-  Render — Milestone 36's real hosted round trip against the actual
-  deployed backend, still pending.
+  Render — the Milestone 36 plan's real hosted round trip against the
+  actual deployed backend, still pending, and requiring the user's
+  explicit go-ahead before it runs.

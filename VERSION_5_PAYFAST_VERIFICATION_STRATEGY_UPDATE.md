@@ -161,7 +161,10 @@ Unchanged from Milestone 33/34's findings, now narrowed to one item:
    local development, not a tunnel), using `PAYFAST_VALIDATE_SERVER=true`
    as the gate and `PAYFAST_SOURCE_VERIFICATION_MODE=monitor` to observe
    (without risk) how the DNS source check behaves on Render's real
-   proxy topology. This is Milestone 36's job.
+   proxy topology. **The plan and checklist for this are now complete —
+   see `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md` (Milestone 36) —
+   but the round trip itself has not been run yet**, and requires the
+   user to manually apply Render's sandbox environment checklist first.
 2. Retry-while-`PENDING` is already resolved (Milestone 34).
 
 Only after (1) is resolved should `PAYFAST_ENABLED` /
@@ -202,3 +205,18 @@ Seven controlled test orders (`SG-2026-M6A1` through `M6E1`) were
 created directly via Prisma for this testing and deleted afterward;
 none were created through the real checkout flow, so none affected
 stock. `SG-2026-28SM` was confirmed untouched throughout.
+
+## Milestone 36 Planning
+
+This milestone's local, crafted-request testing proves the strategy's
+logic is correct — it does not, and cannot, prove how
+`PAYFAST_SOURCE_VERIFICATION_MODE` behaves against genuine PayFast
+traffic on Render's real proxy topology, since a local request is
+never PayFast's real infrastructure. `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md`
+(Milestone 36) is the exact plan and checklist for the real hosted
+round trip against the deployed Render backend that would finally
+prove (or disprove) that — including a manual Render environment
+checklist (sandbox credentials only), a recommended local-frontend-
+against-Render testing approach that keeps the live GitHub Pages
+frontend's `VITE_PAYFAST_ENABLED=false` untouched throughout, and a
+rollback checklist. That round trip has not been run yet.
