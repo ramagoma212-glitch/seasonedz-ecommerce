@@ -13,6 +13,7 @@ import { ApiError } from "../js/apiClient.js";
 import { getPendingPayment, clearPendingPayment } from "../js/pendingPayment.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { escapeHtml } from "../js/search.js";
+import { isPayfastRetryEligible, renderPayfastRetryButton } from "../components/payfastRetry.js";
 
 function humanizeEnum(value) {
   return value
@@ -96,6 +97,7 @@ function renderPendingResult(tracking) {
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
       <a class="btn btn--secondary" href="#/payment-success?orderNumber=${encodeURIComponent(tracking.orderNumber)}">Check Again</a>
+      ${isPayfastRetryEligible(tracking) ? renderPayfastRetryButton(tracking.orderNumber) : ""}
     </div>
   `;
 }
@@ -108,7 +110,7 @@ function renderUnsuccessfulResult(tracking) {
     </div>
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
-      <a class="btn btn--primary" href="#/checkout">Try Again</a>
+      ${isPayfastRetryEligible(tracking) ? renderPayfastRetryButton(tracking.orderNumber) : ""}
       <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
     </div>
   `;

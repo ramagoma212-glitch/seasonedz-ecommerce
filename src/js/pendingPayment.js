@@ -14,6 +14,12 @@ import { getStorageItem, setStorageItem, removeStorageItem } from "./storage.js"
 
 const PENDING_PAYMENT_KEY = "seasonedz_pending_payment";
 
+// A PayFast attempt from days ago is no longer a useful hint — the
+// customer has almost certainly moved on, and continuing to resurface
+// a stale order number could point them at the wrong thing. Expiring
+// it is just good hygiene, not a security control (see file header).
+const PENDING_PAYMENT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 export function savePendingPayment({ orderNumber, paymentMethod }) {
   setStorageItem(PENDING_PAYMENT_KEY, {
     orderNumber,
@@ -23,7 +29,16 @@ export function savePendingPayment({ orderNumber, paymentMethod }) {
 }
 
 export function getPendingPayment() {
-  return getStorageItem(PENDING_PAYMENT_KEY, null);
+  const record = getStorageItem(PENDING_PAYMENT_KEY, null);
+  if (!record) return null;
+
+  const createdAt = Date.parse(record.createdAt);
+  if (Number.isNaN(createdAt) || Date.now() - createdAt > PENDING_PAYMENT_MAX_AGE_MS) {
+    removeStorageItem(PENDING_PAYMENT_KEY);
+    return null;
+  }
+
+  return record;
 }
 
 export function clearPendingPayment() {

@@ -24,9 +24,8 @@ import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } f
 import { validateCheckoutForm } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
-import { initiatePayfastPayment } from "./api/paymentsApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
-import { savePendingPayment } from "./pendingPayment.js";
+import { retryPayfastPayment } from "./payfastRetry.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -187,6 +186,8 @@ function setupProductActions() {
       showToast("Wishlist cleared.");
     } else if (action === "qty-increase" || action === "qty-decrease") {
       adjustQuantity(actionEl, action === "qty-increase" ? 1 : -1);
+    } else if (action === "retry-payfast") {
+      handleRetryPayfast(actionEl);
     }
   });
 }
@@ -452,41 +453,55 @@ async function handleCheckoutSubmit(form) {
 // The order already exists (created above) by the time this runs —
 // only the backend ever builds PayFast's fields/signature
 // (POST /api/payments/payfast/initiate); this just submits exactly
-// what it returns. If initiation itself fails (e.g. the backend's own
-// PAYFAST_ENABLED was turned off after this page loaded), the order
-// still exists, so the customer is sent to its real order confirmation
-// rather than left on a dead end.
+// what it returns (see js/payfastRetry.js). If initiation itself fails
+// (e.g. the backend's own PAYFAST_ENABLED was turned off after this
+// page loaded), the order still exists, so the customer is sent to its
+// real order confirmation rather than left on a dead end.
 async function redirectToPayfast(orderNumber) {
-  savePendingPayment({ orderNumber, paymentMethod: "payfast" });
-
   try {
-    const response = await initiatePayfastPayment(orderNumber);
-    submitPayfastForm(response.data);
+    await retryPayfastPayment(orderNumber);
   } catch {
     window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
   }
 }
 
-// Builds a plain hidden <form> from the backend's response and submits
-// it — a real (non-SPA) navigation to PayFast. Every field, including
-// the signature, comes from the backend; nothing here generates or
-// alters any of them.
-function submitPayfastForm({ processUrl, method, fields }) {
-  const form = document.createElement("form");
-  form.method = method || "POST";
-  form.action = processUrl;
-  form.style.display = "none";
+// "Try PayFast Again" on payment-success/cancelled/failed (Version 4,
+// Milestone 31). Unlike checkout's first-attempt redirectToPayfast
+// above, a retry failure shouldn't silently redirect anywhere — the
+// customer is already looking at a status page, so the clearest thing
+// is an inline error right next to the button they just clicked (see
+// components/payfastRetry.js's error span), never marking anything as
+// failed/cancelled itself — only the backend's notify route can ever
+// do that.
+async function handleRetryPayfast(buttonEl) {
+  const orderNumber = buttonEl.dataset.orderNumber;
+  if (!orderNumber) return;
 
-  Object.entries(fields).forEach(([name, value]) => {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  });
+  const errorEl = buttonEl.parentElement?.querySelector("[data-retry-error]");
+  if (errorEl) {
+    errorEl.hidden = true;
+    errorEl.textContent = "";
+  }
 
-  document.body.appendChild(form);
-  form.submit();
+  const originalText = buttonEl.textContent;
+  buttonEl.disabled = true;
+  buttonEl.textContent = "Redirecting to PayFast…";
+
+  try {
+    await retryPayfastPayment(orderNumber);
+    // On success the browser navigates away to PayFast — nothing left
+    // to update here.
+  } catch (error) {
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+    if (errorEl) {
+      errorEl.hidden = false;
+      errorEl.textContent =
+        error instanceof ApiError
+          ? error.message
+          : "We couldn't start PayFast again right now. Please contact Seasonedz Group.";
+    }
+  }
 }
 
 // Order tracking form: submitting a non-empty order number navigates

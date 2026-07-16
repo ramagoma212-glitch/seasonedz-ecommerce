@@ -54,6 +54,15 @@ export interface PayfastInitiationResult {
   fields: Record<string, string>;
 }
 
+// Shared by initiatePayfastPayment's eligibility check (Version 4,
+// Milestone 31) and processPayfastNotification's "COMPLETE" guard
+// below — a customer retrying a PayFast payment must be allowed to
+// both start a new attempt (initiate) and have that attempt actually
+// succeed (a later COMPLETE ITN), so both checks use the same list.
+// PAID and REFUNDED are deliberately excluded from both: a paid or
+// refunded order is never re-chargeable, retry or not.
+const PAYFAST_RETRY_ELIGIBLE_STATUSES: PaymentStatus[] = [PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.CANCELLED];
+
 // The configured return_url/cancel_url point at this frontend's
 // hash-based router (e.g. "http://localhost:5173/#/payment-success"),
 // so the payment-success/payment-cancelled pages (Milestone 23) know
@@ -94,7 +103,12 @@ export async function initiatePayfastPayment(orderNumber: string): Promise<Payfa
     throw new PaymentError("This order has been cancelled or refunded and cannot be paid.", 400);
   }
 
-  if (order.paymentStatus !== PaymentStatus.PENDING) {
+  // Version 4, Milestone 31: PENDING (first attempt), FAILED and
+  // CANCELLED (retry) may all initiate a new PayFast payment attempt —
+  // PAID and REFUNDED may not. This never creates a new Payment row
+  // (the update below reuses the existing one) and never touches
+  // stock (already decremented once, at order creation).
+  if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
     throw new PaymentError("This order's payment has already been processed.", 400);
   }
 
@@ -331,7 +345,12 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         return { message: "Payment already recorded as PAID; duplicate notification acknowledged." };
       }
 
-      if (order.paymentStatus !== PaymentStatus.PENDING && order.paymentStatus !== PaymentStatus.FAILED) {
+      // Version 4, Milestone 31: must mirror initiatePayfastPayment's
+      // eligibility exactly — a retried payment (from FAILED or
+      // CANCELLED) has to be allowed to actually complete here, or
+      // retry would be initiable but silently doomed to fail at this
+      // step.
+      if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
         throw new PaymentError("Order payment status does not allow marking as paid.", 400);
       }
 

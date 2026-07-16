@@ -121,10 +121,14 @@ and never by the return-URL redirect itself.
 
 `POST /api/payments/payfast/initiate` (full request/response reference
 in `API_ROUTES.md`'s "Payment Routes" section) takes an existing
-order's `orderNumber`, checks it's a `PAYFAST` order still `PENDING`
-payment, and returns the exact PayFast form fields + signature a
-frontend can `POST` to redirect the customer to PayFast's sandbox or
-production payment page.
+order's `orderNumber`, checks it's a `PAYFAST` order with a
+retry-eligible `paymentStatus` (see "Payment Retry" below), and returns
+the exact PayFast form fields + signature a frontend can `POST` to
+redirect the customer to PayFast's sandbox or production payment page.
+This is also the same endpoint a customer's "Try PayFast Again" retry
+uses (Version 4, Milestone 31) — initiation and retry are the same
+request, just called again for an order whose first attempt didn't
+reach `PAID`.
 
 - **Requires `PAYFAST_ENABLED=true`.** If it isn't, every call returns
   a clean `503`: `"PayFast payments are not enabled."`
@@ -229,6 +233,41 @@ rather than moved to `CANCELLED`, so the customer can still retry
 payment (PayFast again, or arrange another method) without the order
 itself having been prematurely cancelled. Only `paymentStatus`
 reflects the failed/cancelled attempt.
+
+### Payment Retry (Version 4, Milestone 31)
+
+A customer whose PayFast attempt didn't reach `PAID` can retry — the
+frontend calls the same `POST /api/payments/payfast/initiate` again
+with the same `orderNumber`, no new order is ever created, and the
+existing `Payment` row is reused (never duplicated). Both the
+initiation check and the notify flow's `COMPLETE` guard share one
+allow-list, `PAYFAST_RETRY_ELIGIBLE_STATUSES` in
+`src/services/payfast.service.ts`, so a retry that's allowed to
+*start* is also guaranteed to be allowed to *finish*:
+
+| `Order.paymentMethod` | `Order.paymentStatus` | Retry allowed? |
+|---|---|---|
+| `PAYFAST` | `PENDING` | Yes — first attempt or a resumed one |
+| `PAYFAST` | `FAILED` | Yes |
+| `PAYFAST` | `CANCELLED` | Yes |
+| `PAYFAST` | `PAID` | **No** — `"This order's payment has already been processed."` |
+| `PAYFAST` | `REFUNDED` | **No** — same message; a refunded order is never re-chargeable |
+| `BANK_TRANSFER` (or any non-PayFast method) | any | **No** — `"This order was not created for PayFast payment."` |
+
+`Order.status` being `CANCELLED` or `REFUNDED` also blocks retry
+regardless of `paymentStatus` (a separate, pre-existing check — an
+order can be administratively cancelled/refunded independent of what
+its last payment attempt reported). Retry never reduces stock again
+(it was only ever decremented once, at order creation) and never
+creates a second `Payment` row.
+
+The frontend mirrors this same allow-list for *display* purposes only
+(`isPayfastRetryEligible` in `src/components/payfastRetry.js`) so an
+ineligible order doesn't show a button that could only ever fail — but
+the backend re-checks independently every time regardless of what the
+frontend decided to show. See `VERSION_4_PAYMENT_RETRY_POLISH.md` for
+the full frontend-side detail (retry pages, the shared retry helper,
+pending-payment storage).
 
 ### Return URL Is Never Trusted
 
@@ -336,23 +375,28 @@ hosted payment page (not just a form built and inspected locally), and
 `PAYFAST_VERIFY_SOURCE`/`PAYFAST_VALIDATE_SERVER` have both been
 proven against that real round trip (Milestone 30).
 
-## Known Limitations (as of Milestone 29)
+## Known Limitations (as of Milestone 31)
 
-- **Source IP verification and server validation are implemented but
-  disabled by default and unproven against real PayFast traffic** —
-  see "Source IP Verification and Server Validation" above and
-  `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`. Their rejection paths are
-  tested; their acceptance paths (a genuine PayFast ITN passing both)
-  are not yet, pending Milestone 30's hosted round trip.
-- **Frontend flow built but not yet proven against a real PayFast
-  round-trip** — the checkout redirect and
-  payment-success/cancelled/failed pages exist (Milestone 23) and were
-  tested locally (form fields inspected, pages tested by navigating
-  directly with a query string), but no one has yet actually completed
-  a real sandbox payment on PayFast's own hosted page and followed it
-  all the way back through `return_url`/`notify_url`. That end-to-end
-  round trip is the next real test before considering this ready for
-  anything beyond local development.
+- **A real hosted PayFast sandbox round trip is now proven** (Version
+  4, Milestone 30) — checkout through PayFast's real sandbox payment
+  page, a real ITN delivered over a public tunnel, and genuine
+  backend-verified `PAID`/`CONFIRMED`. Two real signature bugs were
+  found and fixed in the process (PHP `urlencode()` encoding gap;
+  empty-valued ITN fields incorrectly dropped) — see
+  `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`.
+- **Server validation's acceptance path is proven; source
+  verification's is not.** `PAYFAST_VALIDATE_SERVER=true` correctly
+  accepted a real ITN in Milestone 30. `PAYFAST_VERIFY_SOURCE=true`
+  correctly and safely *rejected* the same real ITN through the tunnel
+  used — the exact cause (tunnel IP forwarding vs. a genuine DNS/IP
+  mismatch) wasn't isolated. Both flags stay disabled by default; this
+  remains the one open item before `PAYFAST_ENABLED` could ever be
+  considered for production.
+- **Payment retry is implemented** (Version 4, Milestone 31) — see
+  "Payment Retry" above and `VERSION_4_PAYMENT_RETRY_POLISH.md`. A
+  customer can retry a `PENDING`/`FAILED`/`CANCELLED` PayFast order
+  without a new order or a second `Payment` row; `PAID`/`REFUNDED`
+  orders and non-PayFast orders never offer or accept retry.
 - **No email notification** on a successful/failed payment — a
   customer or the business isn't told anything happened beyond
   whatever the frontend shows on its next page load.

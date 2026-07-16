@@ -460,3 +460,25 @@ Full detail in `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`. Summary:
   trip test doc for detail); ngrok, started independently by the user
   outside this session's own process tree, did not have the same
   problems and is the recommended tunnel tool going forward.
+
+## Milestone 31 — Payment Failure and Retry Polish
+
+Full detail in `VERSION_4_PAYMENT_RETRY_POLISH.md`. Summary:
+
+- A customer whose PayFast attempt didn't reach `PAID` can now retry —
+  "Try PayFast Again" on payment-success/cancelled/failed re-calls the
+  same `POST /api/payments/payfast/initiate`, no new order or `Payment`
+  row, no stock change.
+- Fixed a related backend gap found while implementing this: the
+  notify flow's `COMPLETE` guard only allowed completing from `PENDING`
+  or `FAILED`, not `CANCELLED` — retrying a cancelled order would have
+  been allowed to *start* but silently failed to ever record as `PAID`.
+  Both the initiate check and the notify guard now share one allow-list
+  (`PAYFAST_RETRY_ELIGIBLE_STATUSES`).
+- `PAID`/`REFUNDED` orders and non-PayFast orders never offer or accept
+  retry, backend-enforced regardless of what the frontend shows.
+- The frontend still never marks payment status itself — every retry
+  is just a re-initiation; only the backend's notify route can ever set
+  `paymentStatus`.
+- Does not touch source verification — Milestone 30's one open item
+  (its acceptance path unproven through a tunnel) is unchanged.
