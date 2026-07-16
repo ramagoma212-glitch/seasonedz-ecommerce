@@ -324,6 +324,7 @@ export interface OrderTrackingOutput {
   createdAt: Date;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethod;
   fulfilmentStatus: FulfilmentStatus;
   shippingStatus: FulfilmentStatus;
   deliveryCity: string;
@@ -357,6 +358,7 @@ export async function getOrderTracking(orderNumber: string): Promise<OrderTracki
     createdAt: order.createdAt,
     status: order.status,
     paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
     fulfilmentStatus: order.fulfilmentStatus,
     shippingStatus: order.shipping?.status ?? order.fulfilmentStatus,
     deliveryCity: order.deliveryCity,

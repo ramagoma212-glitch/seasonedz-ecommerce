@@ -1,5 +1,6 @@
-// PayFast payment initiation (Milestone 21) and ITN/payment
-// verification (Milestone 22).
+// PayFast payment initiation (Milestone 21), ITN/payment verification
+// (Milestone 22), and source verification hardening (Version 4,
+// Milestone 29).
 //
 // initiatePayfastPayment() prepares the exact form fields + signature
 // a frontend can POST to redirect a customer to PayFast's sandbox or
@@ -7,7 +8,8 @@
 //
 // processPayfastNotification() is the only code path in this backend
 // allowed to mark an order as paid — and only after verifying the
-// notification really came from PayFast (signature) and really
+// notification really came from PayFast (signature, and optionally
+// source IP + PayFast server confirmation — see below) and really
 // matches the order it claims to (amount, order lookup). A browser
 // redirect back from PayFast (return_url/cancel_url) is never treated
 // as proof of anything here; those exist purely for customer
@@ -17,11 +19,20 @@
 // backend's own Order record — never from anything a client sends —
 // so the amount PayFast is asked to charge (and later asked to
 // confirm) always matches what was actually verified at checkout.
+//
+// PAYFAST_VERIFY_SOURCE and PAYFAST_VALIDATE_SERVER (both default
+// false) add two further, independent checks on top of the above —
+// never instead of it. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
 
+import type { Request } from "express";
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { payfastConfig } from "../config/payfast.js";
+import { env } from "../config/env.js";
 import { generatePayfastSignature, verifyPayfastSignature } from "../utils/payfastSignature.js";
+import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
+import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
 
 // Shared by both payment initiation (Milestone 21) and ITN
 // verification (Milestone 22) — both are "something about this
@@ -42,6 +53,15 @@ export interface PayfastInitiationResult {
   method: "POST";
   fields: Record<string, string>;
 }
+
+// Shared by initiatePayfastPayment's eligibility check (Version 4,
+// Milestone 31) and processPayfastNotification's "COMPLETE" guard
+// below — a customer retrying a PayFast payment must be allowed to
+// both start a new attempt (initiate) and have that attempt actually
+// succeed (a later COMPLETE ITN), so both checks use the same list.
+// PAID and REFUNDED are deliberately excluded from both: a paid or
+// refunded order is never re-chargeable, retry or not.
+const PAYFAST_RETRY_ELIGIBLE_STATUSES: PaymentStatus[] = [PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.CANCELLED];
 
 // The configured return_url/cancel_url point at this frontend's
 // hash-based router (e.g. "http://localhost:5173/#/payment-success"),
@@ -83,7 +103,12 @@ export async function initiatePayfastPayment(orderNumber: string): Promise<Payfa
     throw new PaymentError("This order has been cancelled or refunded and cannot be paid.", 400);
   }
 
-  if (order.paymentStatus !== PaymentStatus.PENDING) {
+  // Version 4, Milestone 31: PENDING (first attempt), FAILED and
+  // CANCELLED (retry) may all initiate a new PayFast payment attempt —
+  // PAID and REFUNDED may not. This never creates a new Payment row
+  // (the update below reuses the existing one) and never touches
+  // stock (already decremented once, at order creation).
+  if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
     throw new PaymentError("This order's payment has already been processed.", 400);
   }
 
@@ -167,7 +192,12 @@ export interface PayfastNotifyResult {
   message: string;
 }
 
-export async function processPayfastNotification(rawBody: Record<string, unknown>): Promise<PayfastNotifyResult> {
+// `req` is used only for source verification (Step 5 below), when
+// PAYFAST_VERIFY_SOURCE is enabled — passed through from the
+// controller rather than reconstructed here, since Express's Request
+// is what actually carries the resolved req.ip (see app.ts's
+// TRUST_PROXY handling and utils/payfastSourceVerification.ts).
+export async function processPayfastNotification(rawBody: Record<string, unknown>, req: Request): Promise<PayfastNotifyResult> {
   if (!payfastConfig.enabled) {
     throw new PaymentError("PayFast payments are not enabled.", 503);
   }
@@ -265,7 +295,42 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
     throw new PaymentError("This order has been cancelled or refunded and cannot be updated.", 400);
   }
 
-  // --- Step 5: status mapping + idempotency (tasks 9-10) --------------------
+  // --- Step 5: source verification (Version 4, Milestone 29 — off by default) ---
+  // Disabled (the default): this step doesn't run at all, and nothing
+  // below changes — existing behaviour from Milestone 22 is preserved
+  // exactly. Enabled: a source that doesn't resolve back to one of
+  // PayFast's own domains is a hard rejection, never a warning — see
+  // utils/payfastSourceVerification.ts for why this can only be
+  // meaningfully proven against real PayFast traffic, not crafted
+  // local requests.
+  if (env.payfastVerifySource) {
+    const sourceValid = await verifyPayfastSource(req, payfastConfig.mode);
+    if (!sourceValid) {
+      // 403: the same "we can't verify this actually came from
+      // PayFast" class of failure as the signature check above.
+      throw new PaymentError("PayFast source verification failed.", 403);
+    }
+  }
+
+  // --- Step 6: server validation (Version 4, Milestone 29 — off by default) ---
+  // Disabled (the default): skipped entirely. Enabled: PayFast's own
+  // "VALID"/"INVALID" confirmation is required before trusting this
+  // notification — see utils/payfastServerValidation.ts. A network
+  // failure or timeout talking to PayFast is treated exactly the same
+  // as an explicit "INVALID", never as a pass.
+  if (env.payfastValidateServer) {
+    const serverValid = await validateWithPayfastServer(rawBody, payfastConfig.mode);
+    if (!serverValid) {
+      // 400, not 403: PayFast's own infrastructure was reachable and
+      // responded — this is "the data didn't check out", the same
+      // class of failure as the amount/merchant-ID checks above,
+      // distinct from "we couldn't verify this is from PayFast" at
+      // all (signature/source, which are 403).
+      throw new PaymentError("PayFast server validation failed.", 400);
+    }
+  }
+
+  // --- Step 7: status mapping + idempotency (tasks 9-10) --------------------
   // Stock is never touched here — it was already decremented once, at
   // order creation (Milestone 13). Nothing below writes to
   // Product.stockQuantity.
@@ -280,7 +345,12 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         return { message: "Payment already recorded as PAID; duplicate notification acknowledged." };
       }
 
-      if (order.paymentStatus !== PaymentStatus.PENDING && order.paymentStatus !== PaymentStatus.FAILED) {
+      // Version 4, Milestone 31: must mirror initiatePayfastPayment's
+      // eligibility exactly — a retried payment (from FAILED or
+      // CANCELLED) has to be allowed to actually complete here, or
+      // retry would be initiable but silently doomed to fail at this
+      // step.
+      if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
         throw new PaymentError("Order payment status does not allow marking as paid.", 400);
       }
 

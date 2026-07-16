@@ -10,8 +10,9 @@
 
 import { getOrderTracking } from "../js/api/ordersApi.js";
 import { ApiError } from "../js/apiClient.js";
-import { getPendingPayment } from "../js/pendingPayment.js";
+import { getPendingPayment, clearPendingPayment } from "../js/pendingPayment.js";
 import { escapeHtml } from "../js/search.js";
+import { isPayfastRetryEligible, renderPayfastRetryButton } from "../components/payfastRetry.js";
 
 function humanizeEnum(value) {
   return value
@@ -21,10 +22,15 @@ function humanizeEnum(value) {
     .join(" ");
 }
 
-function renderActions(orderNumber) {
+// `tracking` is only available once the backend has actually been
+// reached (renderWithOrderStatus) — the generic no-tracking case
+// (renderGenericFailed) always falls back to "start a new order"
+// since there's nothing to retry.
+function renderActions(orderNumber, tracking) {
+  const showPayfastRetry = tracking && isPayfastRetryEligible(tracking);
   return `
     <div class="order-confirmation__actions">
-      <a class="btn btn--primary" href="#/checkout">Try Again</a>
+      ${showPayfastRetry ? renderPayfastRetryButton(orderNumber) : `<a class="btn btn--primary" href="#/checkout">Try Again</a>`}
       <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
       ${orderNumber ? `<a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(orderNumber)}">View Order Tracking</a>` : ""}
     </div>
@@ -71,7 +77,7 @@ function renderWithOrderStatus(tracking) {
       <div class="order-confirmation__row"><span>Order Number</span><span>${escapeHtml(tracking.orderNumber)}</span></div>
       <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(tracking.paymentStatus)}</span></div>
     </div>
-    ${renderActions(tracking.orderNumber)}
+    ${renderActions(tracking.orderNumber, tracking)}
   `;
 }
 
@@ -84,7 +90,17 @@ export async function renderPaymentFailed({ query } = {}) {
 
   try {
     const response = await getOrderTracking(orderNumber);
-    return `<section class="container order-confirmation">${renderWithOrderStatus(response.data)}</section>`;
+    const tracking = response.data;
+
+    // Same discipline as payment-success: only clear the pending-
+    // payment reference once the backend has given a definitive
+    // (terminal) answer, never just because this page was reached —
+    // see js/pendingPayment.js.
+    if (["PAID", "FAILED", "CANCELLED"].includes(tracking.paymentStatus)) {
+      clearPendingPayment();
+    }
+
+    return `<section class="container order-confirmation">${renderWithOrderStatus(tracking)}</section>`;
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return `<section class="container order-confirmation">${renderGenericFailed(orderNumber)}</section>`;

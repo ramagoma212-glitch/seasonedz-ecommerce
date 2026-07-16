@@ -1,4 +1,4 @@
-# Seasonedz Group — Backend (Version 2)
+# Seasonedz Group — Backend (Version 4)
 
 This is the backend API for the Seasonedz Group e-commerce website. It
 runs as a separate project alongside the existing frontend (see the
@@ -20,10 +20,19 @@ full API reference in `API_ROUTES.md`. Order creation verifies every
 product and price server-side (never trusts a client-supplied price)
 and reduces stock inside a database transaction. There is still no
 write API for products/categories, no login, and no admin dashboard.
-Version 3 (Milestones 19-25) adds PayFast payment integration, email
-preparation, and delivery rules, all sandbox/local-only so far — see
-`PAYFAST_SETUP.md`, `EMAIL_SETUP.md`, `DELIVERY_SETUP.md`, and
-`../VERSION_3_PAYMENT_READINESS_AUDIT.md`.
+Version 3 (Milestones 19-25) added PayFast payment integration, email
+preparation, and delivery rules, all sandbox/local-only, and has since
+been merged and deployed (still disabled by default in production) —
+see `PAYFAST_SETUP.md`, `EMAIL_SETUP.md`, `DELIVERY_SETUP.md`, and
+`../VERSION_3_PAYMENT_READINESS_AUDIT.md`. Version 4 (Milestones 27-32)
+proved a real hosted PayFast sandbox round trip end-to-end, added
+optional source-verification/server-validation hardening, and added
+customer-facing payment retry — see `../VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`,
+`../VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`,
+`../VERSION_4_PAYMENT_RETRY_POLISH.md`, and
+`../VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
+production-readiness recommendation. `PAYFAST_ENABLED` remains `false`
+in every deployed environment.
 
 ## Tech Stack
 
@@ -294,7 +303,7 @@ backend/
     server.ts                  Starts the HTTP server
     config/
       env.ts                    Reads and validates environment variables
-      payfast.ts                 PayFast config (Milestone 20 — sandbox setup only, no calls made yet)
+      payfast.ts                 PayFast config (sandbox-proven end-to-end as of Milestone 30 — still disabled by default)
       delivery.ts                 Delivery fee rule + courier flags (Milestone 25 — no courier API)
       prisma.ts                  Shared PrismaClient instance
     routes/
@@ -338,7 +347,7 @@ backend/
     seed.ts                      Starter categories/products (npm run seed)
     migrations/                  Generated SQL migration history
   API_ROUTES.md                 Full API reference (routes, security, errors)
-  PAYFAST_SETUP.md               PayFast sandbox setup plan (Milestone 20 — configuration only)
+  PAYFAST_SETUP.md               PayFast sandbox setup + verification detail (updated through Milestone 31)
   EMAIL_SETUP.md                  Email service + templates plan (Milestone 24 — preparation only)
   DELIVERY_SETUP.md                Delivery rules + manual courier workflow (Milestone 25 — no courier API)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
@@ -361,10 +370,12 @@ the frontend's `VITE_API_BASE_URL` was updated and redeployed), and
 through before and after. An optional `render.yaml` at the repo root
 pre-fills Render's settings. **Real environment secrets are never
 committed to Git** — they're only ever entered directly in the hosting
-provider's dashboard. Version 3's PayFast/email features (Milestones
-19-25) are **not** part of this live deployment yet — `PAYFAST_ENABLED`/
-`EMAIL_ENABLED` stay `false` in any real environment until they're
-ready; see `PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
+provider's dashboard. Version 3's PayFast/email code (Milestones 19-25)
+**is** part of this live deployment, but stays inactive there —
+`PAYFAST_ENABLED`/`EMAIL_ENABLED` stay `false` in any real environment
+until they're ready (Version 4, Milestones 27-31, proved the PayFast
+flow works end-to-end in sandbox but hasn't changed this); see
+`PAYFAST_SETUP.md`/`EMAIL_SETUP.md`.
 
 ## What's Coming Later
 
