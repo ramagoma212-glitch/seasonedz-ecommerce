@@ -527,7 +527,7 @@ backend itself set, never a live courier API.
 ```
 HTTP status: `404`.
 
-## Payment Routes (Version 3, Milestones 21-22; retry eligibility updated Version 4, Milestone 31)
+## Payment Routes (Version 3, Milestones 21-22; retry eligibility updated Version 4 Milestone 31, tightened Version 5 Milestone 34)
 
 | Method | Route | Description |
 |---|---|---|
@@ -551,13 +551,19 @@ PayFast isn't enabled, every call to this route returns a clean `503`:
 ### POST /api/payments/payfast/initiate — Request Body
 
 ```json
-{ "orderNumber": "SG-2026-A1B2" }
+{ "orderNumber": "SG-2026-A1B2", "context": "checkout" }
 ```
 
 `orderNumber` is required and must match the Seasonedz order number
 format (`SG-YYYY-XXXX`, case-insensitive — normalised to uppercase).
 An invalid shape returns a `400` in the usual `errors` array shape; an
 `orderNumber` that doesn't exist returns a `404`.
+
+`context` is optional: `"checkout"` or `"retry"` (Version 5, Milestone
+34). It controls which `paymentStatus` values are eligible — see below.
+Missing or any other value is treated the same as `"retry"` (the
+stricter set) — only the literal string `"checkout"` unlocks initiating
+a `PENDING` order.
 
 ### Order eligibility checks
 
@@ -569,17 +575,38 @@ Before preparing a payment, the order must satisfy all of:
   clean `400` — PayFast is never initiated for a different payment
   method).
 - `order.status` is not `CANCELLED` or `REFUNDED`.
-- `order.paymentStatus` is `PENDING`, `FAILED`, or `CANCELLED` (Version
-  4, Milestone 31 — a customer can retry a PayFast payment that didn't
-  reach `PAID`, calling this same route again with the same
-  `orderNumber`; no new order or `Payment` row is ever created). An
-  order already `PAID` or `REFUNDED` can't be (re-)initiated.
+- `order.paymentStatus` is eligible for the given `context` (Version 5,
+  Milestone 34 — see table below). No new order or `Payment` row is
+  ever created either way; a retry reuses the existing `Payment` row.
 - `order.total` is greater than zero.
 
-Any failed check returns a clean `400` (or `404` if the order doesn't
-exist) with a single `message`, the same convention as the order
-business-rule errors above. See `../VERSION_4_PAYMENT_RETRY_POLISH.md`
-for the full retry-eligibility rationale.
+| `context` | Eligible `order.paymentStatus` |
+|---|---|
+| `"checkout"` | `PENDING` only — the one state a freshly-created order can be in |
+| `"retry"` (or missing/any other value) | `FAILED` or `CANCELLED` only — **not** `PENDING` |
+
+`PAID` and `REFUNDED` are never eligible under either context — an
+order already paid or refunded can't be (re-)initiated. Retrying a
+still-`PENDING` order (`context: "retry"` or missing, on a `PENDING`
+order) returns a specific `400`:
+
+```json
+{ "success": false, "message": "Your payment is still being verified. Please wait a few minutes before trying again or contact Seasonedz Group." }
+```
+
+This split exists because allowing `PENDING` to retry was a real
+duplicate-payment risk — a first attempt still genuinely in flight and
+a retry attempt could both independently complete, with PayFast having
+no way to know they were "the same order." See
+`../VERSION_5_RETRY_PENDING_RISK_FIX.md` and
+`../VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md`.
+
+Any other failed check returns a clean `400` (or `404` if the order
+doesn't exist) with a single `message`, the same convention as the
+order business-rule errors above. See
+`../VERSION_4_PAYMENT_RETRY_POLISH.md` and
+`../VERSION_5_RETRY_PENDING_RISK_FIX.md` for the full retry-eligibility
+rationale.
 
 ### Success response — POST /api/payments/payfast/initiate
 
@@ -691,7 +718,7 @@ store them in yet (see the Milestone 19 audit's future-fields list).
 
 | PayFast `payment_status` | Effect |
 |---|---|
-| `COMPLETE` | `Payment.status = PAID`, `Payment.paidAt = now`, `Order.paymentStatus = PAID`, **`Order.status = CONFIRMED`**. Only applied if the order's current `paymentStatus` is `PENDING`, `FAILED`, or `CANCELLED` (Version 4, Milestone 31 — matches `/initiate`'s retry eligibility above, so a retried payment can actually complete, not just start) — see idempotency below. |
+| `COMPLETE` | `Payment.status = PAID`, `Payment.paidAt = now`, `Order.paymentStatus = PAID`, **`Order.status = CONFIRMED`**. Only applied if the order's current `paymentStatus` is `PENDING`, `FAILED`, or `CANCELLED` — unaffected by Version 5 Milestone 34's `context` split on `/initiate` above: a `COMPLETE` ITN must be accepted regardless of whether it belongs to a checkout-initiated attempt (order still `PENDING`) or a retry-initiated one (order still `FAILED`/`CANCELLED` until the ITN arrives) — see idempotency below. |
 | `FAILED` | `Payment.status = FAILED`, `Order.paymentStatus = FAILED`. **`Order.status` is deliberately left unchanged (stays `PENDING`)** — documented decision, see `PAYFAST_SETUP.md`: a single failed attempt shouldn't by itself cancel the whole order, since the customer may still retry payment. |
 | `CANCELLED` | `Payment.status = CANCELLED`, `Order.paymentStatus = CANCELLED`. `Order.status` likewise left unchanged, same reasoning. |
 | Anything else | Never marks the order as paid. `Payment.failureReason` is set to a note recording the unrecognised status, for later investigation; nothing else changes. |

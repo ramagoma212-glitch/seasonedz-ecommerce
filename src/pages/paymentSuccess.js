@@ -81,6 +81,10 @@ function renderPaidResult(tracking) {
   `;
 }
 
+// Version 5, Milestone 34: never offers an active retry here — a
+// still-PENDING order's first attempt might still complete, and
+// starting a second one in parallel is the exact risk this milestone
+// removes. See VERSION_5_RETRY_PENDING_RISK_FIX.md.
 function renderPendingResult(tracking) {
   return `
     <div class="demo-notice">
@@ -90,14 +94,15 @@ function renderPendingResult(tracking) {
         <p>
           We're still waiting for PayFast to confirm this payment —
           this can take a few minutes. Please do not place another
-          order yet.
+          order or payment attempt yet.
         </p>
       </div>
     </div>
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
       <a class="btn btn--secondary" href="#/payment-success?orderNumber=${encodeURIComponent(tracking.orderNumber)}">Check Again</a>
-      ${isPayfastRetryEligible(tracking) ? renderPayfastRetryButton(tracking.orderNumber) : ""}
+      <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(tracking.orderNumber)}">Track Order</a>
+      <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
     </div>
   `;
 }

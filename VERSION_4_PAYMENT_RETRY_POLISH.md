@@ -9,6 +9,19 @@ an existing eligible order's PayFast attempt, and reads/displays
 whatever the backend already has on record — nothing here writes
 payment status.
 
+> **Amended, Version 5 Milestone 34
+> (`VERSION_5_RETRY_PENDING_RISK_FIX.md`): retrying while `PENDING` is
+> no longer allowed.** This milestone's "What Can Retry" table below
+> allowed `PENDING` to retry — that's exactly the duplicate-payment risk
+> Milestone 34 closed. `POST /api/payments/payfast/initiate` now takes
+> a `context: "checkout" | "retry"` field; only `context: "checkout"`
+> (checkout's own first attempt) may initiate a `PENDING` order.
+> `context: "retry"` (the "Try PayFast Again" button, unchanged from
+> this milestone otherwise) may only initiate `FAILED`/`CANCELLED`. The
+> rest of this document — the shared endpoint, no new order/Payment
+> row/stock change, the pending-payment storage behaviour — is still
+> accurate as written.
+
 ## Retry Behaviour
 
 A customer whose PayFast payment didn't reach `PAID` — still pending,
@@ -24,6 +37,9 @@ creation).
 
 ## What Can Retry
 
+**As of this milestone (31)** — superseded by Milestone 34, see the
+amendment note above:
+
 | `paymentMethod` | `paymentStatus` | Retry? |
 |---|---|---|
 | `PAYFAST` | `PENDING` | Yes |
@@ -32,6 +48,10 @@ creation).
 | `PAYFAST` | `PAID` | **No** |
 | `PAYFAST` | `REFUNDED` | **No** |
 | `BANK_TRANSFER` (or any non-PayFast method) | any | **No** |
+
+**Current (Version 5, Milestone 34 onward)** — `PENDING` retry (the
+`context: "retry"` case) is now **No**; see
+`VERSION_5_RETRY_PENDING_RISK_FIX.md` for the full current table.
 
 `Order.status` being `CANCELLED` or `REFUNDED` also blocks retry
 regardless of `paymentStatus` (a separate, pre-existing check).

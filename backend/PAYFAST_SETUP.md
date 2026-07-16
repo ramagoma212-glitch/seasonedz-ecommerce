@@ -234,25 +234,44 @@ payment (PayFast again, or arrange another method) without the order
 itself having been prematurely cancelled. Only `paymentStatus`
 reflects the failed/cancelled attempt.
 
-### Payment Retry (Version 4, Milestone 31)
+### Payment Retry (Version 4, Milestone 31; tightened Version 5, Milestone 34)
 
 A customer whose PayFast attempt didn't reach `PAID` can retry — the
 frontend calls the same `POST /api/payments/payfast/initiate` again
 with the same `orderNumber`, no new order is ever created, and the
-existing `Payment` row is reused (never duplicated). Both the
-initiation check and the notify flow's `COMPLETE` guard share one
-allow-list, `PAYFAST_RETRY_ELIGIBLE_STATUSES` in
-`src/services/payfast.service.ts`, so a retry that's allowed to
-*start* is also guaranteed to be allowed to *finish*:
+existing `Payment` row is reused (never duplicated).
 
-| `Order.paymentMethod` | `Order.paymentStatus` | Retry allowed? |
-|---|---|---|
-| `PAYFAST` | `PENDING` | Yes — first attempt or a resumed one |
-| `PAYFAST` | `FAILED` | Yes |
-| `PAYFAST` | `CANCELLED` | Yes |
-| `PAYFAST` | `PAID` | **No** — `"This order's payment has already been processed."` |
-| `PAYFAST` | `REFUNDED` | **No** — same message; a refunded order is never re-chargeable |
-| `BANK_TRANSFER` (or any non-PayFast method) | any | **No** — `"This order was not created for PayFast payment."` |
+**`POST /api/payments/payfast/initiate` takes an optional `context`
+field: `"checkout"` or `"retry"`.** Checkout's own first PayFast
+redirect (right after `POST /api/orders` creates a fresh order, which
+always starts `PENDING`) sends `context: "checkout"`. The "Try PayFast
+Again" button on the payment-status pages sends `context: "retry"`.
+Missing or unrecognized `context` safely defaults to the stricter
+`"retry"` behaviour — only the literal string `"checkout"` ever unlocks
+initiating a `PENDING` order. This split exists because allowing
+`PENDING` to retry was a real duplicate-payment risk: a first attempt
+still genuinely in flight and a retry attempt could both independently
+complete, with PayFast having no way to know they were "the same
+order" — see `VERSION_5_RETRY_PENDING_RISK_FIX.md` and
+`VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md`.
+
+| `Order.paymentMethod` | `Order.paymentStatus` | `context: "checkout"` | `context: "retry"` (or missing/invalid) |
+|---|---|---|---|
+| `PAYFAST` | `PENDING` | **Yes** — the one state a fresh order can be in | **No** — `"Your payment is still being verified. Please wait a few minutes before trying again or contact Seasonedz Group."` |
+| `PAYFAST` | `FAILED` | No | **Yes** |
+| `PAYFAST` | `CANCELLED` | No | **Yes** |
+| `PAYFAST` | `PAID` | No | **No** — `"This order's payment has already been processed."` |
+| `PAYFAST` | `REFUNDED` | No | **No** — same message; a refunded order is never re-chargeable |
+| `BANK_TRANSFER` (or any non-PayFast method) | any | No | **No** — `"This order was not created for PayFast payment."` |
+
+The notify flow's `COMPLETE` guard is unaffected by any of this — it
+still accepts completing from `PENDING`, `FAILED`, or `CANCELLED`
+(`PAYFAST_COMPLETABLE_STATUSES` in `src/services/payfast.service.ts`),
+since a real ITN might belong to either a checkout-initiated attempt
+(order still `PENDING`) or a retry-initiated one (order still
+`FAILED`/`CANCELLED` right up until the ITN arrives — initiation never
+touches `order.paymentStatus`). A retry that's allowed to *start* is
+still guaranteed to be allowed to *finish*.
 
 `Order.status` being `CANCELLED` or `REFUNDED` also blocks retry
 regardless of `paymentStatus` (a separate, pre-existing check — an
@@ -261,13 +280,14 @@ its last payment attempt reported). Retry never reduces stock again
 (it was only ever decremented once, at order creation) and never
 creates a second `Payment` row.
 
-The frontend mirrors this same allow-list for *display* purposes only
-(`isPayfastRetryEligible` in `src/components/payfastRetry.js`) so an
-ineligible order doesn't show a button that could only ever fail — but
-the backend re-checks independently every time regardless of what the
-frontend decided to show. See `VERSION_4_PAYMENT_RETRY_POLISH.md` for
-the full frontend-side detail (retry pages, the shared retry helper,
-pending-payment storage).
+The frontend mirrors the `"retry"` set (`FAILED`/`CANCELLED` only, no
+longer `PENDING`) for *display* purposes only (`isPayfastRetryEligible`
+in `src/components/payfastRetry.js`) so a `PENDING` order never shows a
+"Try PayFast Again" button in the first place — but the backend
+re-checks independently every time regardless of what the frontend
+decided to show. See `VERSION_4_PAYMENT_RETRY_POLISH.md` and
+`VERSION_5_RETRY_PENDING_RISK_FIX.md` for the full frontend-side detail
+(retry pages, the shared retry helper, pending-payment storage).
 
 ### Return URL Is Never Trusted
 
@@ -278,20 +298,25 @@ ever change `paymentStatus`. The frontend pages at those URLs (a later
 milestone) must re-fetch the order's real status from the API rather
 than assume success because of how they got there.
 
-### Source IP Verification and Server Validation (Version 4, Milestone 29)
+### Source IP Verification and Server Validation (Version 4, Milestone 29; strategy updated Version 5, Milestone 35)
 
-**Now implemented, disabled by default.** Two further checks exist on
-top of signature/amount/merchant-ID verification, each gated behind
-its own flag (both default `false`):
+**Now implemented.** Two further checks exist on top of
+signature/amount/merchant-ID verification:
 
-- **`PAYFAST_VERIFY_SOURCE`** — resolves PayFast's own domains via DNS
-  at verification time and confirms the ITN's source IP matches
+- **`PAYFAST_SOURCE_VERIFICATION_MODE`** (`off` | `monitor` | `enforce`,
+  default `off`) — resolves PayFast's own domains via DNS at
+  verification time and confirms the ITN's source IP matches
   (`src/utils/payfastSourceVerification.ts`). No fixed IP list is
-  hardcoded — PayFast doesn't publish one to hardcode.
-- **`PAYFAST_VALIDATE_SERVER`** — POSTs the received ITN back to
-  PayFast's own validation endpoint and requires a `"VALID"` response
-  (`src/utils/payfastServerValidation.ts`) — PayFast's own recommended
-  custom-integration confirmation step.
+  hardcoded — PayFast doesn't publish one to hardcode. `off` skips the
+  check entirely; `monitor` runs it and logs the outcome but never
+  blocks on failure; `enforce` blocks on failure with a clean `403`.
+  The old boolean `PAYFAST_VERIFY_SOURCE` still works as a
+  backward-compatible fallback (`true` → `enforce`, `false`/unset →
+  `off`) when the new variable isn't set.
+- **`PAYFAST_VALIDATE_SERVER`** (default `false`) — POSTs the received
+  ITN back to PayFast's own validation endpoint and requires a
+  `"VALID"` response (`src/utils/payfastServerValidation.ts`) —
+  PayFast's own recommended custom-integration confirmation step.
 
 Both were deliberately left disabled through Milestone 28, for the
 same reason as before: they can't be meaningfully proven against real
@@ -299,18 +324,25 @@ PayFast traffic from local development alone, and a check that's never
 been exercised is riskier than an honest, documented gap. Milestone 29
 built and tested both — their *rejection* paths are proven (a local
 request correctly fails source verification; crafted data correctly
-fails PayFast's real sandbox server validation) — but their
-*acceptance* paths (a genuine PayFast-originated ITN passing both
-checks) can only be proven by Milestone 30's actual hosted sandbox
-round trip. See `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` for full
-detail, including `TRUST_PROXY` (needed for `req.ip` to reflect the
-real caller behind Render's or a tunnel's reverse proxy) and exactly
-which PayFast domains are checked per mode.
+fails PayFast's real sandbox server validation). Milestone 30 proved
+**server validation's** acceptance path against a genuine hosted
+round trip; source verification's acceptance path was not proven (and,
+per Milestone 33's investigation, may not be reliably provable through
+every proxy/tunnel topology at all) — see
+`VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` and
+`VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md` for full
+detail, including `TRUST_PROXY` and exactly which PayFast domains are
+checked per mode.
 
-**Before any real production PayFast credentials are used, both
-`PAYFAST_VERIFY_SOURCE=true` and `PAYFAST_VALIDATE_SERVER=true` should
-be set** — this remains a documentation/operational requirement, not
-something enforced in code.
+**Current production requirement (Version 5, Milestone 35):**
+`PAYFAST_VALIDATE_SERVER=true` is required before real production
+PayFast credentials are ever used — its acceptance path is already
+proven. `PAYFAST_SOURCE_VERIFICATION_MODE=monitor` should be used first
+to gather real evidence on the actual hosting environment (Render);
+`enforce` is only appropriate once that evidence shows it reliably
+passing against real PayFast traffic there — see
+`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`. None of this is
+enforced in code — it remains a documentation/operational requirement.
 
 ## Frontend Checkout Flow (Version 3, Milestone 23)
 
@@ -376,6 +408,14 @@ hosted payment page (not just a form built and inspected locally), and
 proven against that real round trip (Milestone 30).
 
 ## Known Limitations (as of Milestone 31)
+
+> Superseded in part by Version 5: retry-while-`PENDING` is resolved
+> (Milestone 34, `VERSION_5_RETRY_PENDING_RISK_FIX.md`), and the source
+> verification / server validation strategy below has been updated
+> (Milestone 35, `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`) —
+> see the "Source IP Verification and Server Validation" section above
+> for the current requirement. The historical record below is otherwise
+> still accurate.
 
 - **A real hosted PayFast sandbox round trip is now proven** (Version
   4, Milestone 30) — checkout through PayFast's real sandbox payment

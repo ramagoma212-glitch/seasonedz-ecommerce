@@ -20,10 +20,16 @@
 // so the amount PayFast is asked to charge (and later asked to
 // confirm) always matches what was actually verified at checkout.
 //
-// PAYFAST_VERIFY_SOURCE and PAYFAST_VALIDATE_SERVER (both default
-// false) add two further, independent checks on top of the above —
-// never instead of it. See
-// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md.
+// PAYFAST_SOURCE_VERIFICATION_MODE and PAYFAST_VALIDATE_SERVER (both
+// default to their safest no-op setting) add two further, independent
+// checks on top of the above — never instead of it. See
+// backend/VERSION_4_PAYFAST_SOURCE_VERIFICATION.md and
+// VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
+//
+// Version 5, Milestone 34: initiatePayfastPayment() takes an optional
+// `context` ("checkout" | "retry") distinguishing checkout's own first
+// attempt from a later customer-initiated retry — see
+// initiationEligibleStatuses below and VERSION_5_RETRY_PENDING_RISK_FIX.md.
 
 import type { Request } from "express";
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
@@ -33,6 +39,22 @@ import { env } from "../config/env.js";
 import { generatePayfastSignature, verifyPayfastSignature } from "../utils/payfastSignature.js";
 import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
 import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
+
+// Version 5, Milestone 35: the only logging this module does — deliberately
+// narrow. Allowed: order number, which check ran, its configured mode,
+// and a pass/fail result plus a coarse reason category. Never allowed:
+// raw PayFast payload, passphrase, merchant key, signature string, or
+// any customer contact/address detail — none of those are ever passed
+// to this function, by construction, not just by convention.
+function logPayfastVerificationEvent(
+  orderNumber: string,
+  check: "sourceVerification" | "serverValidation",
+  mode: string,
+  passed: boolean,
+  reason: string
+): void {
+  console.log(`[PayFast] order=${orderNumber} check=${check} mode=${mode} result=${passed ? "pass" : "fail"} reason=${reason}`);
+}
 
 // Shared by both payment initiation (Milestone 21) and ITN
 // verification (Milestone 22) — both are "something about this
@@ -54,14 +76,41 @@ export interface PayfastInitiationResult {
   fields: Record<string, string>;
 }
 
-// Shared by initiatePayfastPayment's eligibility check (Version 4,
-// Milestone 31) and processPayfastNotification's "COMPLETE" guard
-// below — a customer retrying a PayFast payment must be allowed to
-// both start a new attempt (initiate) and have that attempt actually
-// succeed (a later COMPLETE ITN), so both checks use the same list.
-// PAID and REFUNDED are deliberately excluded from both: a paid or
-// refunded order is never re-chargeable, retry or not.
-const PAYFAST_RETRY_ELIGIBLE_STATUSES: PaymentStatus[] = [PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.CANCELLED];
+// Used only by processPayfastNotification's "COMPLETE" guard — an ITN
+// must be able to confirm a payment regardless of which initiation
+// path started it: checkout's own first attempt (order still PENDING)
+// or a customer retry (order FAILED/CANCELLED, and still FAILED/
+// CANCELLED right up until this ITN arrives — see
+// initiatePayfastPayment, which never touches order.paymentStatus).
+// PAID and REFUNDED are deliberately excluded: a paid or refunded order
+// is never re-chargeable.
+const PAYFAST_COMPLETABLE_STATUSES: PaymentStatus[] = [PaymentStatus.PENDING, PaymentStatus.FAILED, PaymentStatus.CANCELLED];
+
+// Version 5, Milestone 34: initiation eligibility is no longer one
+// flat list. Checkout's own first attempt (immediately after creating
+// a fresh PAYFAST order, which always starts PENDING) is a
+// fundamentally different call than a customer-initiated retry from a
+// payment-status page later — allowing PENDING to retry was exactly
+// the duplicate-payment risk this milestone removes. See
+// VERSION_5_RETRY_PENDING_RISK_FIX.md.
+//
+// "checkout" may only initiate a PENDING order — that's the one state
+// a freshly-created order can be in. "retry" (and any other/missing
+// context — see initiatePayfastPayment) may only initiate a FAILED or
+// CANCELLED order, never PENDING: a still-PENDING order's first
+// attempt might still complete, and starting a second one in parallel
+// is exactly the race this fix closes.
+export type PayfastInitiationContext = "checkout" | "retry";
+
+const CHECKOUT_ELIGIBLE_STATUSES: PaymentStatus[] = [PaymentStatus.PENDING];
+const RETRY_ELIGIBLE_STATUSES: PaymentStatus[] = [PaymentStatus.FAILED, PaymentStatus.CANCELLED];
+
+function initiationEligibleStatuses(context: PayfastInitiationContext | undefined): PaymentStatus[] {
+  // Anything other than the literal "checkout" — missing, "retry", or
+  // any unrecognized value — safely defaults to the stricter retry set.
+  // Only an explicit "checkout" ever unlocks initiating a PENDING order.
+  return context === "checkout" ? CHECKOUT_ELIGIBLE_STATUSES : RETRY_ELIGIBLE_STATUSES;
+}
 
 // The configured return_url/cancel_url point at this frontend's
 // hash-based router (e.g. "http://localhost:5173/#/payment-success"),
@@ -81,7 +130,7 @@ function appendOrderNumberToUrl(baseUrl: string | undefined, orderNumber: string
   return `${baseUrl}${separator}orderNumber=${encodeURIComponent(orderNumber)}`;
 }
 
-export async function initiatePayfastPayment(orderNumber: string): Promise<PayfastInitiationResult> {
+export async function initiatePayfastPayment(orderNumber: string, context?: PayfastInitiationContext): Promise<PayfastInitiationResult> {
   if (!payfastConfig.enabled) {
     throw new PaymentError("PayFast payments are not enabled.", 503);
   }
@@ -103,12 +152,22 @@ export async function initiatePayfastPayment(orderNumber: string): Promise<Payfa
     throw new PaymentError("This order has been cancelled or refunded and cannot be paid.", 400);
   }
 
-  // Version 4, Milestone 31: PENDING (first attempt), FAILED and
-  // CANCELLED (retry) may all initiate a new PayFast payment attempt —
-  // PAID and REFUNDED may not. This never creates a new Payment row
-  // (the update below reuses the existing one) and never touches
+  // Version 5, Milestone 34: eligibility now depends on context — see
+  // initiationEligibleStatuses above. This never creates a new Payment
+  // row (the update below reuses the existing one) and never touches
   // stock (already decremented once, at order creation).
-  if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
+  const eligibleStatuses = initiationEligibleStatuses(context);
+  if (!eligibleStatuses.includes(order.paymentStatus)) {
+    if (context !== "checkout" && order.paymentStatus === PaymentStatus.PENDING) {
+      // The specific, customer-facing case this milestone targets: a
+      // first attempt is still genuinely in flight. Never phrased as an
+      // error — retrying later is exactly what we want the customer to
+      // do, just not yet.
+      throw new PaymentError(
+        "Your payment is still being verified. Please wait a few minutes before trying again or contact Seasonedz Group.",
+        400
+      );
+    }
     throw new PaymentError("This order's payment has already been processed.", 400);
   }
 
@@ -193,9 +252,9 @@ export interface PayfastNotifyResult {
 }
 
 // `req` is used only for source verification (Step 5 below), when
-// PAYFAST_VERIFY_SOURCE is enabled — passed through from the
-// controller rather than reconstructed here, since Express's Request
-// is what actually carries the resolved req.ip (see app.ts's
+// PAYFAST_SOURCE_VERIFICATION_MODE isn't "off" — passed through from
+// the controller rather than reconstructed here, since Express's
+// Request is what actually carries the resolved req.ip (see app.ts's
 // TRUST_PROXY handling and utils/payfastSourceVerification.ts).
 export async function processPayfastNotification(rawBody: Record<string, unknown>, req: Request): Promise<PayfastNotifyResult> {
   if (!payfastConfig.enabled) {
@@ -295,21 +354,30 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
     throw new PaymentError("This order has been cancelled or refunded and cannot be updated.", 400);
   }
 
-  // --- Step 5: source verification (Version 4, Milestone 29 — off by default) ---
-  // Disabled (the default): this step doesn't run at all, and nothing
-  // below changes — existing behaviour from Milestone 22 is preserved
-  // exactly. Enabled: a source that doesn't resolve back to one of
-  // PayFast's own domains is a hard rejection, never a warning — see
-  // utils/payfastSourceVerification.ts for why this can only be
-  // meaningfully proven against real PayFast traffic, not crafted
-  // local requests.
-  if (env.payfastVerifySource) {
-    const sourceValid = await verifyPayfastSource(req, payfastConfig.mode);
-    if (!sourceValid) {
+  // --- Step 5: source verification (Version 4, Milestone 29; mode-based since Version 5, Milestone 35) ---
+  // "off" (default via legacy PAYFAST_VERIFY_SOURCE=false/unset): this
+  // step doesn't run at all — existing behaviour from Milestone 22 is
+  // preserved exactly. "monitor": runs the check and logs the outcome,
+  // but a failure never blocks — every other check (signature/
+  // merchant/amount/server validation/idempotency) still fully
+  // applies. "enforce" (default via legacy PAYFAST_VERIFY_SOURCE=true):
+  // a source that doesn't resolve back to one of PayFast's own domains
+  // is a hard rejection, exactly like the old PAYFAST_VERIFY_SOURCE=true.
+  // See utils/payfastSourceVerification.ts for why this can only be
+  // meaningfully proven against real PayFast traffic, not crafted local
+  // requests, and VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md for
+  // why "monitor" exists as a safer step before "enforce".
+  if (env.payfastSourceVerificationMode !== "off") {
+    const sourceOutcome = await verifyPayfastSource(req, payfastConfig.mode);
+    logPayfastVerificationEvent(order.orderNumber, "sourceVerification", env.payfastSourceVerificationMode, sourceOutcome.passed, sourceOutcome.reason);
+
+    if (!sourceOutcome.passed && env.payfastSourceVerificationMode === "enforce") {
       // 403: the same "we can't verify this actually came from
       // PayFast" class of failure as the signature check above.
       throw new PaymentError("PayFast source verification failed.", 403);
     }
+    // "monitor" + failed: deliberately falls through — logged above,
+    // never blocks.
   }
 
   // --- Step 6: server validation (Version 4, Milestone 29 — off by default) ---
@@ -317,9 +385,13 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
   // "VALID"/"INVALID" confirmation is required before trusting this
   // notification — see utils/payfastServerValidation.ts. A network
   // failure or timeout talking to PayFast is treated exactly the same
-  // as an explicit "INVALID", never as a pass.
+  // as an explicit "INVALID", never as a pass. Required (documentation,
+  // not enforced here) before PAYFAST_ENABLED can be considered
+  // production-ready — see VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md.
   if (env.payfastValidateServer) {
     const serverValid = await validateWithPayfastServer(rawBody, payfastConfig.mode);
+    logPayfastVerificationEvent(order.orderNumber, "serverValidation", "enforce", serverValid, serverValid ? "matched" : "not_valid");
+
     if (!serverValid) {
       // 400, not 403: PayFast's own infrastructure was reachable and
       // responded — this is "the data didn't check out", the same
@@ -345,12 +417,11 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         return { message: "Payment already recorded as PAID; duplicate notification acknowledged." };
       }
 
-      // Version 4, Milestone 31: must mirror initiatePayfastPayment's
-      // eligibility exactly — a retried payment (from FAILED or
-      // CANCELLED) has to be allowed to actually complete here, or
-      // retry would be initiable but silently doomed to fail at this
-      // step.
-      if (!PAYFAST_RETRY_ELIGIBLE_STATUSES.includes(order.paymentStatus)) {
+      // A completed payment must be accepted regardless of which
+      // initiation path started it — checkout's own first attempt
+      // (PENDING) or a customer retry (FAILED/CANCELLED) — see
+      // PAYFAST_COMPLETABLE_STATUSES above.
+      if (!PAYFAST_COMPLETABLE_STATUSES.includes(order.paymentStatus)) {
         throw new PaymentError("Order payment status does not allow marking as paid.", 400);
       }
 

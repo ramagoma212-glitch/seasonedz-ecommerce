@@ -7,7 +7,24 @@ the signature/amount/merchant-ID verification and idempotency that
 already existed from Milestone 22. No PayFast credential changed, no
 Render environment changed, no hosted sandbox payment was run.
 
+> **Amended, Version 5 Milestone 35
+> (`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`): the hard
+> on/off `PAYFAST_VERIFY_SOURCE` boolean described below has been
+> replaced by a three-way `PAYFAST_SOURCE_VERIFICATION_MODE` (`off` |
+> `monitor` | `enforce`).** `PAYFAST_VERIFY_SOURCE` still works as a
+> backward-compatible fallback (`true` → `enforce`, `false`/unset →
+> `off`), but new deployments should use the new variable. The new
+> `monitor` mode runs the same check and logs the outcome without ever
+> blocking — see the strategy update doc for why this exists and the
+> full current behaviour. Everything else in this document — the DNS
+> domain lists, the server validation endpoint behaviour, why
+> localhost testing can't prove the acceptance path — is unchanged and
+> still accurate.
+
 ## `PAYFAST_VERIFY_SOURCE`
+
+**As documented at this milestone (29)** — superseded by Milestone 35's
+`PAYFAST_SOURCE_VERIFICATION_MODE`, see the amendment above:
 
 Default: `false`. When `true`, `POST /api/payments/payfast/notify`
 additionally requires the request's source IP to resolve back to one
@@ -127,6 +144,10 @@ genuinely originate from PayFast — i.e., a real ITN during Milestone
 
 ## Why These Checks Must Be Enabled Before Real Live Payments
 
+**As documented at this milestone (29)** — see the Milestone 35
+amendment at the top of this document for the current, updated
+requirement:
+
 Signature verification alone proves the notification wasn't tampered
 with in transit, provided the passphrase (if used) stays secret — but
 it doesn't independently confirm the notification's *origin*. Source
@@ -138,6 +159,14 @@ payment is accepted, both `PAYFAST_VERIFY_SOURCE=true` and
 operational/documentation requirement, not something this code
 enforces automatically (there's no way for the backend to know "we're
 about to go live" versus "we're testing sandbox").
+
+**Current requirement (Version 5, Milestone 35 onward):**
+`PAYFAST_VALIDATE_SERVER=true` is required before production readiness
+— its acceptance path is already proven (Milestone 30). Source
+verification (`PAYFAST_SOURCE_VERIFICATION_MODE`) is no longer an equal
+hard requirement alongside it: `monitor` mode should run first, on the
+real hosting environment, to gather evidence before `enforce` is ever
+considered — see `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`.
 
 ## What Remains for Milestone 30
 

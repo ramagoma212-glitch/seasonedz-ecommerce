@@ -9,16 +9,16 @@ wholesale/distribution partners.
 Built with plain HTML5, CSS3 and JavaScript ES Modules, powered by
 [Vite](https://vitejs.dev/). No frameworks, no external UI libraries.
 
-## Current Status: Version 4 In Progress (Started from a Version 1 Frontend MVP)
+## Current Status: Version 5 In Progress (Started from a Version 1 Frontend MVP)
 
 Started as Version 1, a **frontend-only** build: no backend, no
 database, no real payment processing, no real courier integration, no
 real email sending, and no login/accounts, with cart/wishlist/demo
-orders all saved in the browser's Local Storage. See the Version 2/3/4
+orders all saved in the browser's Local Storage. See the Version 2/3/4/5
 notes below for everything added since — a real backend, real (but
 still sandbox-only and disabled-by-default) PayFast payment
-processing, and this milestone's QA/production-readiness review
-(`VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md`).
+processing, and Version 5's ongoing production-readiness work
+(`VERSION_5_QA_MERGE_READINESS_REVIEW.md`).
 
 See **`VERSION_1_RELEASE_NOTES.md`** for the full release summary and
 **`VERSION_1_DEMO_AUDIT.md`** for an itemised list of every demo-only
@@ -55,33 +55,50 @@ involve.
 > behind `VITE_PAYFAST_ENABLED` (frontend) and `PAYFAST_ENABLED`
 > (backend), both `false` by default in every deployed environment.
 > **No live/production PayFast credentials are in use anywhere.**
-> Version 3 itself (frontend + backend code, still disabled) has been
-> merged to `main` and deployed. Full detail in
-> `VERSION_3_PAYMENT_READINESS_AUDIT.md` and `backend/PAYFAST_SETUP.md`.
-> Order/payment emails are prepared (templates + a console-only
-> service) but not yet wired to send automatically — see
-> `backend/EMAIL_SETUP.md`. Delivery fee rules (R80 standard, free from
-> R700) are unchanged but now live in one backend config module;
-> courier fulfilment is still entirely manual — see
+> Full detail in `VERSION_3_PAYMENT_READINESS_AUDIT.md` and
+> `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
+> (templates + a console-only service) but not yet wired to send
+> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rules (R80
+> standard, free from R700) are unchanged but now live in one backend
+> config module; courier fulfilment is still entirely manual — see
 > `backend/DELIVERY_SETUP.md`.
 >
-> **Version 4 (in progress): proving PayFast actually works end-to-end,
-> then polishing it.** A real hosted PayFast sandbox round trip
-> (checkout → PayFast's real sandbox payment page → a real ITN over a
-> temporary public tunnel → genuine backend-verified `PAID`) has been
-> completed and proven locally — see
+> **Version 4 (complete, merged, deployed): proved PayFast actually
+> works end-to-end, then polished it.** A real hosted PayFast sandbox
+> round trip (checkout → PayFast's real sandbox payment page → a real
+> ITN over a temporary public tunnel → genuine backend-verified `PAID`)
+> was completed and proven — see
 > `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`. Two real signature
-> bugs were found and fixed in the process. Optional server-side
-> hardening (`PAYFAST_VALIDATE_SERVER`) is proven; source-IP
-> verification (`PAYFAST_VERIFY_SOURCE`) correctly rejects unverifiable
-> traffic but its acceptance path is not yet proven through any tunnel
-> tested so far — see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`. A
-> customer can now retry a PayFast payment that didn't reach `PAID`
-> (`VERSION_4_PAYMENT_RETRY_POLISH.md`). **`PAYFAST_ENABLED` and
-> `VITE_PAYFAST_ENABLED` both remain `false` in every deployed
+> bugs were found and fixed in the process. Server-side hardening
+> (`PAYFAST_VALIDATE_SERVER`) is proven; source-IP verification's
+> acceptance path was not proven through any tunnel tested — see
+> `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md`. A customer can retry a
+> PayFast payment that didn't reach `PAID`
+> (`VERSION_4_PAYMENT_RETRY_POLISH.md`). Version 4 itself was merged to
+> `main` and deployed live — see `VERSION_4_LIVE_STABILITY_REVIEW.md`.
+> **`PAYFAST_ENABLED` and `VITE_PAYFAST_ENABLED` both remain `false` in
+> every deployed environment.**
+>
+> **Version 5 (in progress): closing the two remaining blockers before
+> production PayFast can ever be enabled.** Milestone 33 investigated
+> both open items in detail
+> (`VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md`).
+> Milestone 34 closed the retry-while-`PENDING` duplicate-payment risk —
+> retry is now only allowed for `FAILED`/`CANCELLED` orders, never a
+> still-`PENDING` one, via a `context: "checkout" | "retry"` split on
+> the initiate endpoint (`VERSION_5_RETRY_PENDING_RISK_FIX.md`).
+> Milestone 35 replaced the hard on/off source-verification flag with a
+> three-way `PAYFAST_SOURCE_VERIFICATION_MODE` (`off | monitor |
+> enforce`), so DNS-based source checking can be observed safely before
+> ever being enforced
+> (`VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`). Milestone 36
+> produced the exact plan for a real sandbox round trip against the
+> deployed Render backend, not yet run
+> (`VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md`). **`PAYFAST_ENABLED`
+> and `VITE_PAYFAST_ENABLED` both remain `false` in every deployed
 > environment** — enabling PayFast in production is a separate,
 > deliberate decision not yet made; see
-> `VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
+> `VERSION_5_QA_MERGE_READINESS_REVIEW.md` for the current
 > recommendation.
 
 ### Features Included in Version 1
@@ -387,7 +404,7 @@ to a real backend.
   (Milestone 24), not yet wired to send automatically — see
   `backend/EMAIL_SETUP.md`.
 
-### Version 4 — Proving and Polishing PayFast (In Progress)
+### Version 4 — Proving and Polishing PayFast (Complete)
 
 - ~~Hosted PayFast sandbox round trip~~ — done: a real checkout, PayFast's
   real sandbox payment page, a real ITN over a temporary tunnel, and a
@@ -397,17 +414,29 @@ to a real backend.
 - ~~PayFast payment retry~~ — done: a customer can retry a PayFast
   payment that didn't reach `PAID` — see
   `VERSION_4_PAYMENT_RETRY_POLISH.md`.
-- Source IP verification's *acceptance* path (as opposed to its proven
-  rejection path) — not yet proven through any tunnel tested so far;
-  see `VERSION_4_PAYFAST_SOURCE_VERIFICATION.md` and
-  `VERSION_4_QA_PRODUCTION_READINESS_REVIEW.md` for the current
-  recommendation.
+- ~~Merge and deploy Version 4 live~~ — done — see
+  `VERSION_4_LIVE_STABILITY_REVIEW.md`.
+
+### Version 5 — Closing the Production Blockers (In Progress)
+
+- ~~Investigate both remaining blockers~~ — done — see
+  `VERSION_5_PAYFAST_PRODUCTION_READINESS_INVESTIGATION.md`.
+- ~~Retry-while-`PENDING` duplicate-payment risk~~ — done: retry now
+  only allowed for `FAILED`/`CANCELLED`, never a still-`PENDING` order
+  — see `VERSION_5_RETRY_PENDING_RISK_FIX.md`.
+- ~~Source verification strategy~~ — done: a three-way
+  `PAYFAST_SOURCE_VERIFICATION_MODE` (`off | monitor | enforce`)
+  replaces the old hard on/off flag — see
+  `VERSION_5_PAYFAST_VERIFICATION_STRATEGY_UPDATE.md`.
+- ~~Render sandbox QA plan~~ — done — see
+  `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md`. The actual sandbox
+  round trip against the deployed Render backend has not been run yet.
 - Enabling `PAYFAST_ENABLED` in production — a separate, deliberate
-  decision not yet made.
+  decision not yet made; see `VERSION_5_QA_MERGE_READINESS_REVIEW.md`.
 - Customer accounts (login/registration), with cart/wishlist/orders
   attached to the account.
 
-### Version 5 and Beyond
+### Version 6 and Beyond
 
 - Customer dashboard (order history, saved details).
 - Admin dashboard (manage products, categories, orders, content).
