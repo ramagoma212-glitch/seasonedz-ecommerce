@@ -153,3 +153,32 @@ about to go live" versus "we're testing sandbox").
   proven: consider updating `backend/PAYFAST_SETUP.md`'s production
   readiness guidance, and — as its own separate, deliberate decision —
   whether to ever set `PAYFAST_ENABLED=true` on Render.
+
+## Milestone 30 Result
+
+Full detail in `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`. In
+short:
+
+- **`PAYFAST_VALIDATE_SERVER`'s acceptance path is now proven** — a
+  real ITN, via a real hosted round trip through ngrok, correctly
+  passed server validation (a live call to PayFast's sandbox validate
+  endpoint returning `"VALID"`) and the order was genuinely marked
+  `PAID`.
+- **`PAYFAST_VERIFY_SOURCE`'s acceptance path is still not proven** —
+  the same real ITN was correctly and safely rejected (`403`) with
+  `PAYFAST_VERIFY_SOURCE=true`, through ngrok with `TRUST_PROXY=true`.
+  This is the one item from the list above still open. The exact cause
+  wasn't conclusively isolated — either ngrok's forwarding doesn't
+  present PayFast's real caller IP the way this single-hop
+  `TRUST_PROXY` setting expects, or PayFast's real outbound ITN IP
+  doesn't match what its published hostnames resolve to via DNS at
+  verification time. Both remain equally plausible.
+- A real, unrelated pair of bugs in the signature algorithm itself
+  (`backend/src/utils/payfastSignature.ts` — a PHP `urlencode()`
+  encoding gap, and empty-valued ITN fields being incorrectly dropped)
+  was found and fixed as a prerequisite to reaching either check at
+  all; see the round trip test doc for full detail.
+- `PAYFAST_ENABLED` remains `false` on Render — unchanged by this
+  milestone, and shouldn't change until source verification's
+  acceptance path is either proven or a deliberate decision is made to
+  launch without it.

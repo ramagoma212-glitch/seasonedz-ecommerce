@@ -422,3 +422,41 @@ changes during any notify call.
 genuine PayFast-originated ITN passes both. That requires Milestone
 30's real hosted sandbox round trip, the only way a request can
 actually originate from PayFast's own infrastructure.
+
+## Milestone 30 — Hosted PayFast Sandbox Round Trip Test
+
+Full detail in `VERSION_4_PAYFAST_SANDBOX_ROUND_TRIP_TEST.md`. Summary:
+
+- **Two real bugs found and fixed** in
+  `backend/src/utils/payfastSignature.ts`, both invisible to this
+  document's own Milestone 22 self-consistency testing since that only
+  ever checked the code against itself: (1) the URL-encoding helper
+  didn't replicate PHP's `urlencode()` for six punctuation characters
+  (`! ' ( ) * ~`) — the order's own `item_description` always contains
+  literal parentheses, so every real signature check involving it
+  failed; (2) empty-valued ITN fields (PayFast's own unused
+  `custom_str1-5`/`custom_int1-5`) were being dropped before recomputing
+  the signature, when PayFast's own signature includes them. Both fixed;
+  confirmed via independent recomputation matching PayFast's real
+  signature exactly.
+- **Hosted sandbox payment round trip works** — a real customer
+  checkout, through PayFast's real sandbox payment page, real
+  "Complete Payment" confirmation, real ITN delivered via ngrok, ending
+  in a genuinely backend-verified `PAID`/`CONFIRMED` order.
+- **PayFast server validation works** — `PAYFAST_VALIDATE_SERVER=true`
+  correctly accepted the real ITN via a live call to PayFast's sandbox
+  validate endpoint, not just the rejection path Milestone 29 proved.
+- **Source verification acceptance remains unproven through this
+  tunnel** — `PAYFAST_VERIFY_SOURCE=true` correctly and safely rejected
+  the real ITN (`403`); per this document's own planning, the fallback
+  test (`PAYFAST_VERIFY_SOURCE=false`, `PAYFAST_VALIDATE_SERVER=true`)
+  was run instead, clearly labelled, to prove the rest of the round
+  trip. The exact cause (tunnel IP-forwarding vs. a genuine DNS/IP
+  mismatch) was not conclusively root-caused.
+- **Production payments are still not ready** — `PAYFAST_ENABLED`
+  remains `false` on Render; that decision is unchanged by this
+  milestone.
+- **localtunnel proved unreliable** in this environment (see the round
+  trip test doc for detail); ngrok, started independently by the user
+  outside this session's own process tree, did not have the same
+  problems and is the recommended tunnel tool going forward.
