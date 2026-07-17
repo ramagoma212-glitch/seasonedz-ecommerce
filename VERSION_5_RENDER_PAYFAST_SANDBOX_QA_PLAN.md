@@ -6,6 +6,14 @@ checklist for a future, deliberately-scheduled round trip against the
 real deployed Render backend, to be carried out only once the user has
 manually confirmed the Render sandbox environment settings below.
 
+> **This plan has since been executed successfully.** See
+> `VERSION_5_RENDER_PAYFAST_SANDBOX_TEST_RESULT.md` for the full result
+> — server validation and `monitor`-mode source verification were both
+> proven against Render's real infrastructure, and the temporary
+> environment was rolled back and confirmed afterward. The plan below
+> is kept as-is for reference; everything in it was followed as
+> written.
+
 ## Purpose
 
 Prove, against the real Render deployment (not local development, not

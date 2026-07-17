@@ -155,24 +155,21 @@ address, never any request header).
 
 Unchanged from Milestone 33/34's findings, now narrowed to one item:
 
-1. **Prove (or formally accept as a documented trade-off) the
-   verification acceptance path directly on Render** — a real PayFast
-   sandbox round trip against the actual deployed Render backend (not
-   local development, not a tunnel), using `PAYFAST_VALIDATE_SERVER=true`
-   as the gate and `PAYFAST_SOURCE_VERIFICATION_MODE=monitor` to observe
-   (without risk) how the DNS source check behaves on Render's real
-   proxy topology. **The plan and checklist for this are now complete —
-   see `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md` (Milestone 36) —
-   but the round trip itself has not been run yet**, and requires the
-   user to manually apply Render's sandbox environment checklist first.
+1. ~~Prove (or formally accept as a documented trade-off) the
+   verification acceptance path directly on Render~~ — **done.** A real
+   PayFast sandbox round trip against the actual deployed Render
+   backend succeeded: `PAYFAST_VALIDATE_SERVER=true` genuinely accepted
+   a real ITN, and `PAYFAST_SOURCE_VERIFICATION_MODE=monitor` ran
+   without blocking, on Render's real proxy topology. See
+   `VERSION_5_RENDER_PAYFAST_SANDBOX_TEST_RESULT.md`.
 2. Retry-while-`PENDING` is already resolved (Milestone 34).
 
-Only after (1) is resolved should `PAYFAST_ENABLED` /
-`VITE_PAYFAST_ENABLED` ever be set `true` in Render production, and
-only with `PAYFAST_VALIDATE_SERVER=true` — per this milestone,
-`PAYFAST_SOURCE_VERIFICATION_MODE=enforce` should not be turned on
-until `monitor` mode's own logs on Render have shown it reliably
-passing against real PayFast traffic.
+With (1) now proven, `PAYFAST_ENABLED` / `VITE_PAYFAST_ENABLED` being
+set `true` in Render production is no longer blocked on a missing
+technical proof — but remains its own separate, deliberate go-live
+decision. `PAYFAST_SOURCE_VERIFICATION_MODE=enforce` still should not
+be turned on based on this single successful round trip alone — see
+"What This Does Not Prove" in the test result document.
 
 ## Testing
 
@@ -206,17 +203,19 @@ created directly via Prisma for this testing and deleted afterward;
 none were created through the real checkout flow, so none affected
 stock. `SG-2026-28SM` was confirmed untouched throughout.
 
-## Milestone 36 Planning
+## Milestone 36 (Complete)
 
 This milestone's local, crafted-request testing proves the strategy's
 logic is correct — it does not, and cannot, prove how
 `PAYFAST_SOURCE_VERIFICATION_MODE` behaves against genuine PayFast
 traffic on Render's real proxy topology, since a local request is
 never PayFast's real infrastructure. `VERSION_5_RENDER_PAYFAST_SANDBOX_QA_PLAN.md`
-(Milestone 36) is the exact plan and checklist for the real hosted
-round trip against the deployed Render backend that would finally
-prove (or disprove) that — including a manual Render environment
-checklist (sandbox credentials only), a recommended local-frontend-
-against-Render testing approach that keeps the live GitHub Pages
-frontend's `VITE_PAYFAST_ENABLED=false` untouched throughout, and a
-rollback checklist. That round trip has not been run yet.
+(Milestone 36) was the exact plan and checklist for the real hosted
+round trip against the deployed Render backend, **and that round trip
+has since been run successfully** — see
+`VERSION_5_RENDER_PAYFAST_SANDBOX_TEST_RESULT.md`. The plan included
+a manual Render environment checklist (sandbox credentials only), a
+recommended local-frontend-against-Render testing approach that keeps
+the live GitHub Pages frontend's `VITE_PAYFAST_ENABLED=false` untouched
+throughout, and a rollback checklist — all confirmed working exactly
+as planned during the real round trip.
