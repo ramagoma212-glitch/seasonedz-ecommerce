@@ -16,7 +16,7 @@ export const faqs = [
     category: "Ordering",
     question: "Can I change or cancel my order after placing it?",
     answer:
-      "This is a frontend demo store, so orders placed here are for preview purposes only. Once real ordering goes live, we'll add clear guidance on changes and cancellations.",
+      "Contact Seasonedz Group as soon as possible after placing your order. Orders are prepared for delivery once payment is confirmed, so the sooner you reach us, the more we can help.",
   },
   {
     category: "Delivery",
@@ -97,7 +97,7 @@ export const faqs = [
     category: "Colouring Books",
     question: "Are your colouring books educational?",
     answer:
-      "Yes. Our colouring books are designed to combine creativity with learning — from fun facts and alphabet practice to Bible stories and mindfulness patterns.",
+      "Yes. Our colouring books are designed to combine creativity with learning, from fun facts and alphabet practice to Bible stories and mindfulness patterns.",
   },
   {
     category: "Markers",
@@ -109,7 +109,7 @@ export const faqs = [
     category: "Guest Checkout",
     question: "Is guest checkout secure?",
     answer:
-      "This site's checkout is currently a frontend demo — details are stored only in your browser's Local Storage and no real payment is taken. See our Privacy Policy for more detail.",
+      "Yes. Guest checkout sends your order details securely to the Seasonedz Group backend, no account or password needed. Bank Transfer and Cash / Card on Delivery place a real order without taking an online payment. See our Privacy Policy for more detail.",
   },
   {
     category: "Order Tracking",

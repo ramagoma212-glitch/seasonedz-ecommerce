@@ -137,7 +137,7 @@ export function renderCheckoutPage() {
     <section class="stub-page container checkout-page">
       <h1 class="stub-page__title">Checkout</h1>
       <p class="stub-page__text">
-        Enter your delivery details below to place your order — no account needed.
+        Enter your delivery details below to place your order. No account needed.
       </p>
 
       <div class="checkout-layout">

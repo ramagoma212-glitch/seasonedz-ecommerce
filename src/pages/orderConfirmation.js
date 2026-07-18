@@ -82,7 +82,7 @@ function renderPaymentNotice(order) {
           <p>
             Your order is now being prepared for delivery. Seasonedz
             Group will share courier tracking details once it's
-            dispatched — there's no live courier tracking yet, so
+            dispatched. There's no live courier tracking yet, so
             please allow some time.
           </p>
         </div>
@@ -92,7 +92,7 @@ function renderPaymentNotice(order) {
 
   const payfastHint =
     order.paymentMethod === "PAYFAST"
-      ? `If you completed payment with PayFast, confirmation can take a few minutes — check the <a href="#/payment-success?orderNumber=${encodeURIComponent(order.orderNumber)}">payment status page</a> or refresh shortly. `
+      ? `If you completed payment with PayFast, confirmation can take a few minutes. Check the <a href="#/payment-success?orderNumber=${encodeURIComponent(order.orderNumber)}">payment status page</a> or refresh shortly. `
       : "";
 
   return `

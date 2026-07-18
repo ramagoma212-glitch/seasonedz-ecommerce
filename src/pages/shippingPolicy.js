@@ -36,14 +36,14 @@ export function renderShippingPolicy() {
           We aim to process and prepare orders promptly, but delivery times
           will vary depending on your location and the courier used. We'll
           share more specific delivery estimates once courier integration
-          is live — for now, please treat any delivery timing as a general
+          is live. For now, please treat any delivery timing as a general
           guide rather than a guaranteed date.
         </p>
 
         <h2>Manual Courier Arrangement</h2>
         <p>
-          Your order is prepared for delivery once payment is confirmed —
-          for PayFast, that's once payment is verified; for bank transfer
+          Your order is prepared for delivery once payment is confirmed.
+          For PayFast, that's once payment is verified; for bank transfer
           or cash/card on delivery, once Seasonedz Group has confirmed
           your order. We then choose a courier and book delivery
           ourselves; this is currently handled manually by Seasonedz

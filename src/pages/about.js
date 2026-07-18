@@ -7,7 +7,7 @@ export function renderAbout() {
       <h1 class="stub-page__title">About Seasonedz Group</h1>
       <p class="stub-page__text">
         Educational colouring books, Bible colouring books, mindfulness
-        colouring books, markers, crayons and creative learning products —
+        colouring books, markers, crayons and creative learning products,
         made for parents, teachers, schools, churches and anyone who loves
         to colour.
       </p>
@@ -16,7 +16,7 @@ export function renderAbout() {
         <h2>Our Story</h2>
         <p>
           Seasonedz Group started with a simple idea: colouring shouldn't
-          just be something to keep children busy — it can genuinely help
+          just be something to keep children busy. It can genuinely help
           them learn, reflect and grow. From there, our range has grown to
           include colouring books for young learners, faith-based colouring
           books for Sunday school, mindfulness colouring for adults, and the
@@ -27,7 +27,7 @@ export function renderAbout() {
         <p>
           We want to make it easy for families, teachers and churches to
           find colouring books and creative supplies that are educational,
-          well made and genuinely enjoyable to use — whether that's a
+          well made and genuinely enjoyable to use, whether that's a
           classroom of Grade 1 learners, a Sunday school class, or an adult
           winding down after a long day.
         </p>
@@ -46,8 +46,8 @@ export function renderAbout() {
         <h2>Why Educational Colouring Matters</h2>
         <p>
           Colouring does more than fill a quiet afternoon. It helps develop
-          fine motor skills, supports focus and patience, and — when paired
-          thoughtfully with letters, Bible stories or calming patterns — can
+          fine motor skills, supports focus and patience, and, when paired
+          thoughtfully with letters, Bible stories or calming patterns, can
           reinforce learning or simply help someone slow down. That's the
           thinking behind every product we make.
         </p>

@@ -219,6 +219,19 @@
   .grid--3,
   .grid--2 {
     grid-template-columns: 1fr;
+    /* A single, generous desktop gap (--space-lg) reads as excessive
+       once these grids collapse to one column on small mobile —
+       e.g. the homepage/about trust sections were leaving very large
+       vertical gaps between stacked items. Tighter, still comfortable. */
+    gap: var(--space-md);
+  }
+
+  /* Trust items (homepage "Why Families Choose", About page trust
+     section) had generous padding designed for a multi-column grid;
+     stacked to one column on small mobile it compounded with the gap
+     above into excessive whitespace between items. */
+  .trust-item {
+    padding: var(--space-sm) var(--space-md);
   }
 
   .site-footer__inner {
