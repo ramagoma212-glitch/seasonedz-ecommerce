@@ -80,13 +80,17 @@ more layers keep this milestone genuinely harmless even if
 ## Console Mode: What Gets Logged (and What Never Does)
 
 When `EMAIL_ENABLED=true` and `EMAIL_PROVIDER=console`, a "send" logs
-one line of safe metadata:
+one line of safe metadata (log format improved in Version 6,
+Milestone 53 to add recipient role and a short preview):
 
 ```
-[email:console] template="order-created" to="j***@e***.com" ref="SG-2026-A1B2" subject="Your Seasonedz Group Order SG-2026-A1B2 Has Been Received"
+[email:console] template="order-created" role="customer" to="j***@e***.com" ref="SG-2026-A1B2" subject="Your Seasonedz Group Order SG-2026-A1B2 Has Been Received" preview="Thank you for your order with Seasonedz Group! We've received order SG-2026-A1B2..."
 ```
 
 - **Template name** — which email this represents.
+- **Recipient role** — `customer` or `admin`, so a developer scanning
+  logs can tell at a glance who a given line was headed to, without
+  needing to decode the masked address.
 - **Masked recipient** — only the first character of the local part
   and of the domain's first label survive (`maskEmail()` in
   `email.service.ts`); the rest is replaced with `***`.
@@ -94,35 +98,50 @@ one line of safe metadata:
   ID for orders (matches the rest of the API's convention).
 - **Subject line** — safe; contains no personal data beyond the order
   number, which is already not sensitive.
+- **Preview** — the first non-greeting line of the body (`safePreview()`
+  in `email.service.ts`), truncated to 80 characters. Deliberately
+  skips the "Hi {name}," greeting line (the only line carrying the
+  customer's name) and, for enquiry emails, never touches the
+  customer's own free-text message — only generic template wording or
+  an already-non-sensitive reference ever appears here.
 
-**Never logged:** the rendered email body (which contains the
-customer's first name and full order total), the full recipient email
-address, delivery address, phone number, any raw PayFast ITN payload,
-or any secret/credential.
+**Never logged:** the full rendered email body, the customer's own
+enquiry message text, the full recipient email address, delivery
+address, phone number, any raw PayFast ITN payload, or any
+secret/credential.
 
 ## What Templates Exist
 
 `src/services/email/emailTemplates.ts` — plain-text, South African
 English ("colouring", not "coloring"), simple/professional/warm tone,
-not salesy:
+not salesy, no dash symbols in customer-facing copy:
 
 | Template | Function | Used by |
 |---|---|---|
 | Order created (any payment method) | `renderOrderCreatedEmail` | `sendOrderCreatedEmail` |
+| Payment still pending (follow-up) | `renderPaymentPendingEmail` | `sendPaymentPendingEmail` |
 | Payment confirmed | `renderPaymentConfirmedEmail` | `sendPaymentConfirmedEmail` |
 | Payment failed or cancelled | `renderPaymentFailedOrCancelledEmail` | `sendPaymentFailedEmail` |
+| Enquiry received (Contact/School/Wholesale/Distributor) | `renderEnquiryReceivedEmail` | `sendEnquiryReceivedEmail` |
 | Admin: new order notification | `renderAdminNewOrderEmail` | `sendAdminNewOrderEmail` |
 | Admin: new enquiry notification | `renderAdminNewEnquiryEmail` | `sendAdminNewEnquiryEmail` |
 
-Every customer-facing template includes: the customer's first name,
-order number, order total (formatted as e.g. `R539.00`), payment
-method and/or status, a safe next step, and a short contact line. The
-"order created" template's next-step line adapts to the payment
-method — **no fake bank account details are included**; a
-`BANK_TRANSFER` order gets the placeholder line *"Bank transfer
+Every customer-facing template includes: the customer's first name (or
+enquiry name), an order number or enquiry reference, order total
+(formatted as e.g. `R539.00`) where relevant, payment method and/or
+status where relevant, a safe next step, and a short contact line. The
+"order created" and "payment pending" templates' next-step line adapts
+to the payment method — **no fake bank account details are included**;
+a `BANK_TRANSFER` order gets the placeholder line *"Bank transfer
 details will be shared by Seasonedz Group."* until real banking
 details are safely configured somewhere (not yet, and not part of this
-milestone).
+milestone). "Payment pending" (Milestone 53) is a gentle follow-up
+distinct from "order created" — for an order that has stayed `PENDING`
+for a while, per `VERSION_6_ADMIN_ORDER_MONITORING_PLAN.md`'s "Pending
+Payment Follow-Up Process." "Enquiry received" (Milestone 53) is the
+customer-facing counterpart to the existing admin notification — one
+shared function covers all four enquiry types, varying only the
+opening line.
 
 `src/services/email/email.types.ts` defines the input shapes
 (`OrderEmailData`, `EnquiryEmailData`) each template needs —
@@ -158,15 +177,27 @@ milestone:
 - **`backend/src/controllers/enquiry.controller.ts`,
   `createEnquiryHandler`** (line 15, right after
   `enquiryService.createEnquiry(...)` succeeds): would call
-  `sendAdminNewEnquiryEmail(...)`.
+  `sendAdminNewEnquiryEmail(...)` **and** `sendEnquiryReceivedEmail(...)`
+  (Milestone 53's new customer-facing acknowledgement).
+- **A future scheduled/manual check** (not a request-triggered hook —
+  see `VERSION_6_ADMIN_ORDER_MONITORING_PLAN.md`'s "Pending Payment
+  Follow-Up Process"): would call `sendPaymentPendingEmail(...)` for a
+  `BANK_TRANSFER`/`CASH_ON_DELIVERY` order that has stayed `PENDING`
+  past a defined window. This has no natural request-handler hook point
+  the way the others do, since nothing in today's codebase runs on a
+  schedule — a future milestone adding this would need to decide how
+  that check runs at all (cron, manual admin trigger, etc.) before
+  deciding where this call goes.
 
-None of these files were modified by this milestone — order creation,
-ITN verification, and enquiry creation all behave exactly as they did
-before. Wiring these calls in is deliberately left for a later
-milestone, once a real provider decision has been made and this can be
-tested with an actual send (or at least a fully wired console-mode
-dry run through the real request flows, not just direct template/service
-calls as this milestone tested).
+None of these files were modified by this milestone (Version 6,
+Milestone 53 touched only `src/services/email/` and this document) —
+order creation, ITN verification, and enquiry creation all behave
+exactly as they did before. Wiring these calls in is deliberately left
+for a later milestone, once a real provider decision has been made and
+this can be tested with an actual send (or at least a fully wired
+console-mode dry run through the real request flows, not just direct
+template/service calls as this milestone and Milestone 24 both
+tested).
 
 ## No Secrets in Frontend
 

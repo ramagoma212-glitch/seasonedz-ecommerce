@@ -1,11 +1,13 @@
-// Email service (Version 3, Milestone 24 — preparation only).
+// Email service (Version 3, Milestone 24 — preparation only; templates
+// and dry-run log format extended in Version 6, Milestone 53).
 //
 // No real email is sent by anything in this file:
 //  - EMAIL_ENABLED=false (the default) makes every send*Email function
 //    a safe no-op.
 //  - EMAIL_PROVIDER="console" (the only supported value right now)
-//    logs only safe metadata — template name, a masked recipient
-//    address, and an order number/enquiry id. It never logs the
+//    logs only safe metadata — template name, recipient role, a masked
+//    recipient address, an order number/enquiry id, the subject, and a
+//    short, non-sensitive preview line. It never logs the full
 //    rendered body, a full email address, a raw PayFast payload, or
 //    any other personal detail.
 //  - Any other EMAIL_PROVIDER value is treated as "not implemented
@@ -19,11 +21,13 @@ import { env } from "../../config/env.js";
 import {
   renderAdminNewEnquiryEmail,
   renderAdminNewOrderEmail,
+  renderEnquiryReceivedEmail,
   renderOrderCreatedEmail,
   renderPaymentConfirmedEmail,
   renderPaymentFailedOrCancelledEmail,
+  renderPaymentPendingEmail,
 } from "./emailTemplates.js";
-import type { EmailTemplateName, EnquiryEmailData, OrderEmailData, RenderedEmail } from "./email.types.js";
+import type { EmailRecipientRole, EmailTemplateName, EnquiryEmailData, OrderEmailData, RenderedEmail } from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
 // domain's first label, e.g. "jane.doe@example.com" -> "j***@e***.com"
@@ -39,14 +43,38 @@ function maskEmail(email: string): string {
   return `${local[0]}***@${maskedDomain}`;
 }
 
-function logConsoleEmail(templateName: EmailTemplateName, recipientEmail: string, reference: string, rendered: RenderedEmail): void {
+// A short, non-sensitive preview line for the dry-run log — never the
+// full body. Skips the "Hi {name}," greeting line (the only line that
+// carries the customer's name) and, for enquiry templates, never
+// touches the customer's own free-text message; it only ever surfaces
+// generic template wording or an already-non-sensitive reference like
+// an order number, truncated well short of anything resembling a full
+// paragraph.
+function safePreview(body: string): string {
+  const MAX_LENGTH = 80;
+  const lines = body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const contentLine = lines.find((line) => !line.startsWith("Hi ")) || "";
+  return contentLine.length > MAX_LENGTH ? `${contentLine.slice(0, MAX_LENGTH - 1)}...` : contentLine;
+}
+
+function logConsoleEmail(
+  templateName: EmailTemplateName,
+  recipientRole: EmailRecipientRole,
+  recipientEmail: string,
+  reference: string,
+  rendered: RenderedEmail
+): void {
   console.log(
-    `[email:console] template="${templateName}" to="${maskEmail(recipientEmail)}" ref="${reference}" subject="${rendered.subject}"`
+    `[email:console] template="${templateName}" role="${recipientRole}" to="${maskEmail(recipientEmail)}" ref="${reference}" subject="${rendered.subject}" preview="${safePreview(rendered.body)}"`
   );
 }
 
 async function dispatch(
   templateName: EmailTemplateName,
+  recipientRole: EmailRecipientRole,
   recipientEmail: string | undefined,
   reference: string,
   rendered: RenderedEmail
@@ -59,7 +87,7 @@ async function dispatch(
   }
 
   if (env.emailProvider === "console") {
-    logConsoleEmail(templateName, recipientEmail, reference, rendered);
+    logConsoleEmail(templateName, recipientRole, recipientEmail, reference, rendered);
     return;
   }
 
@@ -72,21 +100,35 @@ async function dispatch(
 }
 
 export async function sendOrderCreatedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("order-created", order.customerEmail, order.orderNumber, renderOrderCreatedEmail(order));
+  await dispatch("order-created", "customer", order.customerEmail, order.orderNumber, renderOrderCreatedEmail(order));
+}
+
+export async function sendPaymentPendingEmail(order: OrderEmailData): Promise<void> {
+  await dispatch("payment-pending", "customer", order.customerEmail, order.orderNumber, renderPaymentPendingEmail(order));
 }
 
 export async function sendPaymentConfirmedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("payment-confirmed", order.customerEmail, order.orderNumber, renderPaymentConfirmedEmail(order));
+  await dispatch("payment-confirmed", "customer", order.customerEmail, order.orderNumber, renderPaymentConfirmedEmail(order));
 }
 
 export async function sendPaymentFailedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("payment-failed-or-cancelled", order.customerEmail, order.orderNumber, renderPaymentFailedOrCancelledEmail(order));
+  await dispatch(
+    "payment-failed-or-cancelled",
+    "customer",
+    order.customerEmail,
+    order.orderNumber,
+    renderPaymentFailedOrCancelledEmail(order)
+  );
+}
+
+export async function sendEnquiryReceivedEmail(enquiry: EnquiryEmailData): Promise<void> {
+  await dispatch("enquiry-received", "customer", enquiry.email, enquiry.id, renderEnquiryReceivedEmail(enquiry));
 }
 
 export async function sendAdminNewOrderEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("admin-new-order", env.adminNotificationEmail, order.orderNumber, renderAdminNewOrderEmail(order));
+  await dispatch("admin-new-order", "admin", env.adminNotificationEmail, order.orderNumber, renderAdminNewOrderEmail(order));
 }
 
 export async function sendAdminNewEnquiryEmail(enquiry: EnquiryEmailData): Promise<void> {
-  await dispatch("admin-new-enquiry", env.adminNotificationEmail, enquiry.id, renderAdminNewEnquiryEmail(enquiry));
+  await dispatch("admin-new-enquiry", "admin", env.adminNotificationEmail, enquiry.id, renderAdminNewEnquiryEmail(enquiry));
 }
