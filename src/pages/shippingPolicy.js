@@ -15,10 +15,12 @@ export function renderShippingPolicy() {
       </p>
 
       <div class="info-page__body policy-page">
-        <h2>Where We Deliver</h2>
+        <h2>How Delivery Currently Works</h2>
         <p>
-          We focus on delivering across South Africa. Full courier coverage
-          details will be confirmed once courier integration is complete.
+          Delivery is available across South Africa. Seasonedz Group is
+          a small team, so delivery is currently arranged manually
+          rather than through a live, automated courier system. Every
+          order is packed, booked with a courier and tracked by hand.
         </p>
 
         <h2>Delivery Fees</h2>
@@ -38,28 +40,30 @@ export function renderShippingPolicy() {
           guide rather than a guaranteed date.
         </p>
 
-        <h2>Order Processing</h2>
+        <h2>Manual Courier Arrangement</h2>
         <p>
           Your order is prepared for delivery once payment is confirmed —
           for PayFast, that's once payment is verified; for bank transfer
           or cash/card on delivery, once Seasonedz Group has confirmed
-          your order. Courier fulfilment is currently handled manually by
-          Seasonedz Group rather than through a live courier system.
+          your order. We then choose a courier and book delivery
+          ourselves; this is currently handled manually by Seasonedz
+          Group rather than through a live courier system.
         </p>
 
-        <h2>Tracking Your Order</h2>
+        <h2>Tracking Updates</h2>
         <p>
           Once your order is placed, you can look it up on our
           <a href="#/track-order">Track Order</a> page using your order
           number to see its current processing status. Courier tracking
-          details (once your order is dispatched) will be shared by
-          Seasonedz Group directly — this is not yet live, real-time
-          courier tracking; that will be added once courier integration
-          is complete.
+          details (once your order is dispatched, such as a waybill or
+          tracking number) will be shared with you manually by Seasonedz
+          Group directly. This is not yet live, real-time courier
+          tracking; that will be added once courier integration is
+          complete.
         </p>
 
-        <h2>Need Help?</h2>
-        ${renderContactSupportNote("If you have a question about delivery on your order, contact Seasonedz Group and we'll help sort it out.")}
+        <h2>Delivery Support</h2>
+        ${renderContactSupportNote("If you have a question about delivery on your order, or your delivery address needs to be corrected, contact Seasonedz Group and we'll help sort it out.")}
       </div>
     </section>
   `;

@@ -69,6 +69,28 @@ function renderPaymentMethods() {
   `;
 }
 
+// Version 6, Milestone 54: a dedicated delivery note, separate from
+// the payment notice above — Seasonedz Group confirms and arranges
+// delivery manually after the order is placed; no instant delivery or
+// automatic tracking is promised (see VERSION_6_COURIER_INTEGRATION_PLAN.md).
+function renderDeliveryNote() {
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div>
+        <strong>Delivery is arranged manually.</strong>
+        <p>
+          Delivery is R80, or free on orders of R700 or more. Seasonedz
+          Group will confirm and arrange delivery once your order is
+          placed. Tracking details will be shared with you manually
+          once your order is dispatched.
+        </p>
+        ${renderContactSupportNote("Need help with delivery?")}
+      </div>
+    </div>
+  `;
+}
+
 // Wording stays accurate regardless of whether PayFast is currently
 // selectable (see PAYMENT_METHODS in js/orders.js) — Bank Transfer and
 // Cash/Card on Delivery place a real order but take no online charge;
@@ -86,13 +108,11 @@ function renderDemoNotice() {
           No online charge is taken for either, and payment happens by
           manual bank transfer or on delivery. If PayFast is available
           and selected, you'll be redirected to PayFast's own payment
-          page to complete a real payment. Delivery is currently
-          arranged manually by our small team, so please allow us time
-          to confirm and prepare your order.
+          page to complete a real payment.
         </p>
-        ${renderContactSupportNote("Questions about your order? Contact Seasonedz Group.")}
       </div>
     </div>
+    ${renderDeliveryNote()}
   `;
 }
 
