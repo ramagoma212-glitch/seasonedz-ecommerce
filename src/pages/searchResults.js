@@ -62,7 +62,7 @@ export async function renderSearchResults({ query } = {}) {
 
           ${
             results.length
-              ? `<div class="grid grid--3">${results.map((product) => renderProductCard(product)).join("")}</div>`
+              ? `<div class="product-grid">${results.map((product) => renderProductCard(product)).join("")}</div>`
               : renderEmptyState({
                   title: `No results for &ldquo;${escapeHtml(term)}&rdquo;`,
                   message: "Try a different search term, or browse our full range instead.",

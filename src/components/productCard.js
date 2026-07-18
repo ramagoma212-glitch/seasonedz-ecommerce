@@ -71,7 +71,6 @@ export function renderProductCard(product) {
         <p class="product-card__stock product-card__stock--${stockClass}">${product.stockStatus}</p>
 
         <div class="product-card__actions">
-          <a class="btn btn--secondary btn--sm" href="#/product/${product.slug}">View Details</a>
           <button
             type="button"
             class="btn btn--primary btn--sm"

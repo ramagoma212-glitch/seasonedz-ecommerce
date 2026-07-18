@@ -23,7 +23,7 @@ function renderProductRow(heading, subtext, list) {
         <h2>${heading}</h2>
         <p>${subtext}</p>
       </div>
-      <div class="grid grid--4">
+      <div class="product-grid">
         ${list.slice(0, MAX_PER_ROW).map((product) => renderProductCard(product)).join("")}
       </div>
     </section>
