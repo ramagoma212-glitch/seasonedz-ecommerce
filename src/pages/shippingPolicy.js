@@ -55,6 +55,12 @@ export function renderShippingPolicy() {
           courier tracking; that will be added once courier integration
           is complete.
         </p>
+
+        <h2>Need Help?</h2>
+        <p>
+          If you have a question about delivery on your order, please
+          <a href="#/contact">contact us</a> and we'll help sort it out.
+        </p>
       </div>
     </section>
   `;

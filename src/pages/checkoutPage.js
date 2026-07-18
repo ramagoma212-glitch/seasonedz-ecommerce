@@ -1,7 +1,9 @@
 // Guest checkout page. No account/login required — the form submits
 // via a delegated handler in js/app.js, which validates it
-// (js/validation.js), creates a demo order (js/orders.js) and clears
-// the cart. This is a frontend demo only: no real payment is taken.
+// (js/validation.js), creates a real order via the backend Orders API
+// (js/api/ordersApi.js) and clears the cart. Bank Transfer and Cash /
+// Card on Delivery take no online charge through this site — see
+// PAYMENT_METHODS in js/orders.js.
 
 import { getCartSummary } from "../js/cart.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
@@ -68,22 +70,25 @@ function renderPaymentMethods() {
 
 // Wording stays accurate regardless of whether PayFast is currently
 // selectable (see PAYMENT_METHODS in js/orders.js) — Bank Transfer and
-// Cash/Card on Delivery are always demo-only; PayFast, when available,
-// is a real redirect to PayFast, but no goods have shipped yet either
-// way and real courier tracking still doesn't exist.
+// Cash/Card on Delivery place a real order but take no online charge;
+// PayFast, when available, is a real redirect to PayFast. Delivery is
+// currently arranged manually, and real courier tracking doesn't
+// exist yet either way.
 function renderDemoNotice() {
   return `
     <div class="demo-notice">
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
-        <strong>No goods have shipped yet.</strong>
+        <strong>Your order is placed with our team, not shipped automatically.</strong>
         <p>
-          Bank Transfer and Cash / Card on Delivery are demo payment
-          options only — no real charge is taken for either. If PayFast
-          is available and selected, you'll be redirected to PayFast's
-          own payment page to complete a real payment; your order is
-          saved by the Seasonedz Group backend either way. Real courier
-          tracking is coming later.
+          Bank Transfer and Cash / Card on Delivery place a real order.
+          No online charge is taken for either, and payment happens by
+          manual bank transfer or on delivery. If PayFast is available
+          and selected, you'll be redirected to PayFast's own payment
+          page to complete a real payment. Delivery is currently
+          arranged manually by our small team, so please allow us time
+          to confirm and prepare your order. Questions? See our
+          <a href="#/faq">FAQ</a> or <a href="#/contact">contact us</a>.
         </p>
       </div>
     </div>

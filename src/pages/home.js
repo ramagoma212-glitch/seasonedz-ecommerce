@@ -78,29 +78,44 @@ export async function renderHome() {
     <section class="section container">
       <div class="wholesale-banner">
         <div class="wholesale-banner__text">
-          <h2>Schools &amp; Wholesale Orders</h2>
-          <p>Bulk pricing for schools, churches and organisations is coming soon.</p>
+          <h2>Schools, Churches &amp; Bulk Orders</h2>
+          <p>
+            Buying for a preschool, school, church or as an educational gift
+            in bulk? We offer bulk pricing and can help you find the right
+            products.
+          </p>
         </div>
-        <a class="btn btn--primary" href="#/contact">Enquire Now</a>
+        <div class="wholesale-banner__actions">
+          <a class="btn btn--primary" href="#/schools">Schools</a>
+          <a class="btn btn--secondary" href="#/wholesale">Wholesale &amp; Bulk</a>
+        </div>
       </div>
     </section>
 
     <section class="section container">
-      <div class="grid grid--3">
+      <div class="section__header">
+        <h2>Why Families Choose Seasonedz Group</h2>
+      </div>
+      <div class="grid grid--4">
         <div class="trust-item">
-          <div class="trust-item__icon">&#10003;</div>
-          <h4 class="trust-item__title">Quality Assured</h4>
-          <p class="trust-item__text">Carefully designed, safe and durable products.</p>
+          <div class="trust-item__icon" aria-hidden="true">&#10003;</div>
+          <h4 class="trust-item__title">South African Small Business</h4>
+          <p class="trust-item__text">Proudly serving families, schools and churches across South Africa.</p>
         </div>
         <div class="trust-item">
-          <div class="trust-item__icon">&#128666;</div>
-          <h4 class="trust-item__title">Nationwide Delivery</h4>
-          <p class="trust-item__text">Courier delivery is coming soon.</p>
+          <div class="trust-item__icon" aria-hidden="true">&#10003;</div>
+          <h4 class="trust-item__title">For Every Age</h4>
+          <p class="trust-item__text">From young learners to adults, our books support creativity, learning, faith and quiet time.</p>
         </div>
         <div class="trust-item">
-          <div class="trust-item__icon">&#9825;</div>
-          <h4 class="trust-item__title">Loved by Parents &amp; Teachers</h4>
-          <p class="trust-item__text">Trusted by families, schools and churches.</p>
+          <div class="trust-item__icon" aria-hidden="true">&#10003;</div>
+          <h4 class="trust-item__title">Real Support</h4>
+          <p class="trust-item__text">Questions or a problem with your order? Our team is here to help. Get in touch any time.</p>
+        </div>
+        <div class="trust-item">
+          <div class="trust-item__icon" aria-hidden="true">&#10003;</div>
+          <h4 class="trust-item__title">Delivery Across South Africa</h4>
+          <p class="trust-item__text">R80 delivery, free from R700. Handled with care by our small team.</p>
         </div>
       </div>
     </section>

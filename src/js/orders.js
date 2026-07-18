@@ -14,20 +14,23 @@ const ORDERS_KEY = "seasonedz_orders";
 const LATEST_ORDER_KEY = "seasonedz_latest_order";
 
 // Payment options shown at checkout. Bank transfer and cash/card on
-// delivery are always demo-only. PayFast (Version 3, Milestone 23) is
-// only selectable when VITE_PAYFAST_ENABLED="true" — this flag only
-// controls what the checkout UI *offers*; the backend independently
-// re-checks its own PAYFAST_ENABLED and rejects paymentMethod: PAYFAST
-// regardless of what this frontend flag says, so flipping this alone
-// can never let a real PayFast order through if the backend isn't
-// also configured for it.
+// delivery both place a real order with the Seasonedz Group backend —
+// see js/api/ordersApi.js — but take no online charge through this
+// site; payment itself happens by manual bank transfer or on
+// delivery. PayFast (Version 3, Milestone 23) is only selectable when
+// VITE_PAYFAST_ENABLED="true" — this flag only controls what the
+// checkout UI *offers*; the backend independently re-checks its own
+// PAYFAST_ENABLED and rejects paymentMethod: PAYFAST regardless of
+// what this frontend flag says, so flipping this alone can never let
+// a real PayFast order through if the backend isn't also configured
+// for it.
 const payfastEnabled = (import.meta.env.VITE_PAYFAST_ENABLED || "").toLowerCase() === "true";
 
 export const PAYMENT_METHODS = [
   {
     value: "bank-transfer",
-    label: "Bank Transfer (Demo Only)",
-    description: "Demo only — no real bank transfer is processed.",
+    label: "Bank Transfer",
+    description: "Places your order now. We'll send bank details and confirm your order once payment is received.",
   },
   {
     value: "payfast",
@@ -39,8 +42,8 @@ export const PAYMENT_METHODS = [
   },
   {
     value: "cash-on-delivery",
-    label: "Cash / Card on Delivery (Demo Only)",
-    description: "Pay the courier when your order arrives. Demo only.",
+    label: "Cash / Card on Delivery",
+    description: "Places your order now. Pay the courier when your order arrives.",
   },
 ];
 

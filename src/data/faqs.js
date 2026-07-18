@@ -41,10 +41,16 @@ export const faqs = [
       "If an item arrives damaged or incorrect, we want to make it right. See our Returns Policy page for guidance, and contact us directly to arrange it.",
   },
   {
-    category: "School Orders",
-    question: "Do you offer bulk pricing for schools?",
+    category: "Support",
+    question: "How can I contact Seasonedz Group for support?",
     answer:
-      "Yes — we're happy to discuss bulk orders for preschools, primary schools and aftercare centres. Visit our Schools page or contact us for a quote.",
+      "You can reach us through our Contact page, by email, or by phone. Our details are also in the footer of every page. We're a small team, so please allow us a little time to respond.",
+  },
+  {
+    category: "School Orders",
+    question: "Do you offer bulk pricing for schools, churches or bulk gifts?",
+    answer:
+      "Yes. We're happy to discuss bulk pricing for preschools, primary schools, aftercare centres, churches and Sunday schools, or for educational gifts bought in bulk. Visit our Schools page or contact us for a quote.",
   },
   {
     category: "Wholesale",

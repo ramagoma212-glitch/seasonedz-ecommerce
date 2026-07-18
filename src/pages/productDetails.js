@@ -61,6 +61,50 @@ function buildProductStructuredData(product) {
   };
 }
 
+// Version 6, Milestone 52: short, honest "buying confidence" copy for
+// the product page — built only from real product data (ageRange,
+// categorySlug) already shown elsewhere on the page, never invented
+// reviews, ratings or testimonials. categoryUseCase is generic
+// per-category context, not a per-product claim.
+const categoryUseCase = {
+  "kids-colouring-books": "home, pre-school and the classroom",
+  "bible-colouring-books": "Sunday school and family devotion time",
+  "mindfulness-colouring": "quiet, screen-free relaxation time",
+  "markers-and-crayons": "everyday colouring at home or school",
+  bundles: "gifting, or getting started with everything in one set",
+  "schools-and-wholesale": "classrooms, schools and bulk orders",
+};
+
+function renderGoodFor(product) {
+  const useCase = categoryUseCase[product.categorySlug] || "everyday creative time";
+  return `
+    <h3>Good For</h3>
+    <p>This product suits ${product.ageRange}, and works well for ${useCase}.</p>
+  `;
+}
+
+function renderDeliveryNote() {
+  return `
+    <h3>Delivery</h3>
+    <p>
+      Delivery is R80, or free on orders of R700 or more. Delivery is
+      currently arranged manually by our small team. See our
+      <a href="#/shipping-policy">Shipping Policy</a> for details.
+    </p>
+  `;
+}
+
+function renderSupportNote() {
+  return `
+    <h3>Support</h3>
+    <p>
+      Questions about this product before you order?
+      <a href="#/contact">Contact Seasonedz Group</a> and we'll be happy
+      to help.
+    </p>
+  `;
+}
+
 function renderGallery(product) {
   const images = product.gallery?.length ? product.gallery : [product.image];
 
@@ -193,6 +237,10 @@ export async function renderProductDetails({ slug } = {}) {
         <ul class="product-details__features">
           ${product.features.map((feature) => `<li>${feature}</li>`).join("")}
         </ul>
+
+        ${renderGoodFor(product)}
+        ${renderDeliveryNote()}
+        ${renderSupportNote()}
       </div>
 
       ${renderRelatedProducts(product, products)}
