@@ -58,6 +58,8 @@ import { renderDistributor } from "../pages/distributor.js";
 import { renderBlog } from "../pages/blog.js";
 import { renderBlogPost } from "../pages/blogPost.js";
 import { renderNotFound } from "../pages/notFound.js";
+import { renderAdminLogin } from "../pages/adminLogin.js";
+import { renderAdminHome } from "../pages/adminHome.js";
 
 const routeDefs = [
   { pattern: "/", render: renderHome, title: "Home" },
@@ -128,6 +130,13 @@ const routeDefs = [
   },
   { pattern: "/blog", render: renderBlog, title: "Blog" },
   { pattern: "/blog/:slug", render: renderBlogPost, title: "Blog" },
+  // Version 7, Milestone 58: admin auth foundation only. Deliberately
+  // not linked from header/footer/any customer navigation — see
+  // VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md's "Navigation Safety"
+  // section. renderAdminHome checks auth itself and redirects to
+  // /admin/login when not signed in, same as every other async page.
+  { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login" },
+  { pattern: "/admin", render: renderAdminHome, title: "Admin" },
 ];
 
 // Splits "#/product/abc?ref=home" into { path: "/product/abc", query: URLSearchParams }

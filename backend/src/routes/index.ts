@@ -10,6 +10,7 @@ import categoryRoutes from "./category.routes.js";
 import orderRoutes from "./order.routes.js";
 import enquiryRoutes from "./enquiry.routes.js";
 import paymentRoutes from "./payment.routes.js";
+import adminAuthRoutes from "./adminAuth.routes.js";
 
 const router = Router();
 
@@ -19,5 +20,9 @@ router.use("/categories", categoryRoutes);
 router.use("/orders", orderRoutes);
 router.use("/enquiries", enquiryRoutes);
 router.use("/payments", paymentRoutes);
+// Version 7, Milestone 58: admin auth foundation only — login/logout/
+// me. No order, enquiry, customer or product admin data exists under
+// /api/admin yet; every other /api/admin/* path is a 404 today.
+router.use("/admin/auth", adminAuthRoutes);
 
 export default router;

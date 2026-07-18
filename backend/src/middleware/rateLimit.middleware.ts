@@ -60,3 +60,15 @@ export const paymentInitiationRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Admin login (Version 7, Milestone 58) gets its own, much tighter
+// limit than the other creation limiters above — this endpoint's risk
+// is credential-guessing, not accidental double-submission, so a low
+// limit is the point, not just a safety backstop.
+export const adminLoginRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
