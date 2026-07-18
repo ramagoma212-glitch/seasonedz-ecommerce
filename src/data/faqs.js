@@ -26,13 +26,13 @@ export const faqs = [
     category: "Delivery",
     question: "How much does delivery cost?",
     answer:
-      "Standard delivery is a flat rate, with free delivery on orders over R700. See our Shipping Policy for full details.",
+      "Standard delivery is a flat R80, with free delivery on orders of R700 or more. See our Shipping Policy for full details.",
   },
   {
     category: "Payment",
     question: "What payment methods will you accept?",
     answer:
-      "We're preparing options including PayFast and bank transfer. Real online payment isn't connected yet — this site currently shows a demo checkout only.",
+      "You can check out today using Bank Transfer or Cash / Card on Delivery, both of which place a real order. Online card payment through PayFast is coming soon.",
   },
   {
     category: "Returns",

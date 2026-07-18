@@ -19,7 +19,16 @@
 // backend API (product pages, order confirmation, order tracking).
 // The router awaits either shape the same way, so pages that don't
 // need async data don't have to change at all.
+//
+// Version 6, Milestone 48 adds an optional `description` per route,
+// applied via js/seo.js alongside `title` on every navigation — a
+// route without one falls back to the site's own default description
+// (see seo.js), never stale text left over from a previous page. Pages
+// whose content depends on async data (currently just Product
+// details) call setPageMeta()/setPageStructuredData() again themselves
+// once they know more, overriding these generic defaults.
 
+import { setPageMeta, clearPageStructuredData } from "./seo.js";
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
 import { renderCategories } from "../pages/categories.js";
@@ -52,8 +61,18 @@ import { renderNotFound } from "../pages/notFound.js";
 
 const routeDefs = [
   { pattern: "/", render: renderHome, title: "Home" },
-  { pattern: "/shop", render: renderShop, title: "Shop" },
-  { pattern: "/categories", render: renderCategories, title: "Categories" },
+  {
+    pattern: "/shop",
+    render: renderShop,
+    title: "Shop",
+    description: "Browse educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons from Seasonedz Group.",
+  },
+  {
+    pattern: "/categories",
+    render: renderCategories,
+    title: "Categories",
+    description: "Shop Seasonedz Group colouring books and creative supplies by category, from kids' colouring books to mindfulness colouring for adults.",
+  },
   { pattern: "/product/:slug", render: renderProductDetails, title: "Product" },
   { pattern: "/search", render: renderSearchResults, title: "Search" },
   { pattern: "/cart", render: renderCartPage, title: "Your Cart" },
@@ -64,9 +83,24 @@ const routeDefs = [
   { pattern: "/payment-cancelled", render: renderPaymentCancelled, title: "Payment Cancelled" },
   { pattern: "/payment-failed", render: renderPaymentFailed, title: "Payment Failed" },
   { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order" },
-  { pattern: "/about", render: renderAbout, title: "About Us" },
-  { pattern: "/contact", render: renderContact, title: "Contact Us" },
-  { pattern: "/faq", render: renderFaq, title: "FAQ" },
+  {
+    pattern: "/about",
+    render: renderAbout,
+    title: "About Us",
+    description: "Seasonedz Group is a South African small business selling educational, Bible and mindfulness colouring books for families, schools and churches.",
+  },
+  {
+    pattern: "/contact",
+    render: renderContact,
+    title: "Contact Us",
+    description: "Get in touch with Seasonedz Group for questions about our colouring books, orders, delivery or wholesale enquiries.",
+  },
+  {
+    pattern: "/faq",
+    render: renderFaq,
+    title: "FAQ",
+    description: "Answers to common questions about ordering, delivery, payment and returns at Seasonedz Group.",
+  },
   { pattern: "/policies", render: renderPolicies, title: "Policies" },
   { pattern: "/shipping-policy", render: renderShippingPolicy, title: "Shipping Policy" },
   { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
@@ -74,9 +108,24 @@ const routeDefs = [
   { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },
   { pattern: "/cookies-policy", render: renderCookiesPolicy, title: "Cookies Policy" },
   { pattern: "/testimonials", render: renderTestimonials, title: "Testimonials" },
-  { pattern: "/schools", render: renderSchools, title: "Schools" },
-  { pattern: "/wholesale", render: renderWholesale, title: "Wholesale" },
-  { pattern: "/distributor", render: renderDistributor, title: "Become a Distributor" },
+  {
+    pattern: "/schools",
+    render: renderSchools,
+    title: "Schools",
+    description: "Colouring books and classroom packs for schools and Sunday schools, with wholesale pricing available from Seasonedz Group.",
+  },
+  {
+    pattern: "/wholesale",
+    render: renderWholesale,
+    title: "Wholesale",
+    description: "Wholesale colouring books and creative supplies for retailers and churches from Seasonedz Group. Request a quote today.",
+  },
+  {
+    pattern: "/distributor",
+    render: renderDistributor,
+    title: "Become a Distributor",
+    description: "Become a Seasonedz Group distributor and bring our colouring books and creative supplies to your community.",
+  },
   { pattern: "/blog", render: renderBlog, title: "Blog" },
   { pattern: "/blog/:slug", render: renderBlogPost, title: "Blog" },
 ];
@@ -107,7 +156,7 @@ function matchRoute(path) {
       paramNames.forEach((name, index) => {
         params[name] = decodeURIComponent(match[index + 1]);
       });
-      return { render: route.render, title: route.title, params };
+      return { render: route.render, title: route.title, description: route.description, params };
     }
   }
   return null;
@@ -120,7 +169,11 @@ async function renderCurrentRoute() {
   const { path, query } = parseHash();
   const matched = matchRoute(path);
 
-  document.title = matched ? `${matched.title} | Seasonedz Group` : "Page Not Found | Seasonedz Group";
+  // Cleared unconditionally before every render so a page that doesn't
+  // set its own structured data never inherits stale data left over
+  // from whatever the customer viewed previously — see js/seo.js.
+  clearPageStructuredData();
+  setPageMeta({ title: matched ? matched.title : "Page Not Found", description: matched?.description });
 
   const result = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
   main.innerHTML = result instanceof Promise ? await result : result;

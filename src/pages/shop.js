@@ -19,6 +19,20 @@ import {
 } from "../components/filterBar.js";
 import { getProductResults, getDistinctAgeRanges, getDistinctTags } from "../js/search.js";
 import { getCatalog } from "../js/api/productsApi.js";
+import { setPageMeta } from "../js/seo.js";
+
+// Version 6, Milestone 48: when a category filter is active, this page
+// doubles as that category's own page — overriding the router's
+// generic "Shop" title/description with one naming the actual
+// category, "where possible" per VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md.
+// There's no separate per-category route/URL today, so this is the
+// only page a category filter can ever set metadata from.
+function categoryIntro(activeCategory) {
+  if (!activeCategory) {
+    return "Browse our full range of colouring books, Bible colouring books, mindfulness colouring, markers, crayons and bundles.";
+  }
+  return activeCategory.description || `Browse our ${activeCategory.name} range from Seasonedz Group.`;
+}
 
 export async function renderShop({ query } = {}) {
   const { products, categories } = await getCatalog();
@@ -26,12 +40,18 @@ export async function renderShop({ query } = {}) {
   const ageRanges = getDistinctAgeRanges(products);
   const tags = getDistinctTags(products);
 
+  if (activeCategory) {
+    setPageMeta({
+      title: activeCategory.name,
+      description: `Shop ${activeCategory.name} from Seasonedz Group. ${categoryIntro(activeCategory)}`.slice(0, 160),
+    });
+  }
+
   return `
     <section class="stub-page container shop-page">
-      <h1 class="stub-page__title">Shop</h1>
+      <h1 class="stub-page__title">${activeCategory ? activeCategory.name : "Shop"}</h1>
       <p class="stub-page__text">
-        Browse our full range of colouring books, Bible colouring books,
-        mindfulness colouring, markers, crayons and bundles.
+        ${categoryIntro(activeCategory)}
       </p>
 
       <div class="shop-layout">

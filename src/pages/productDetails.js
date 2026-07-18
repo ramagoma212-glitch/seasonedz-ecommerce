@@ -5,12 +5,23 @@
 // Product data now loads from the backend API where possible, falling
 // back to the static data file if it's unavailable — see
 // js/api/productsApi.js.
+//
+// Version 6, Milestone 48: once the product is known, this overrides
+// the router's generic "Product | Seasonedz Group" title/description
+// with the real product name and its own short description, and adds
+// Product structured data (JSON-LD) — see js/seo.js. Deliberately
+// never includes aggregateRating/review fields in that structured
+// data: the rating/reviewCount shown on the page are sample data, and
+// claiming them as real review markup to search engines would be
+// misleading — see VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md.
 
 import { renderProductCard, renderStars } from "../components/productCard.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
+import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 
 function renderNotFound() {
+  setPageMeta({ title: "Product Not Found" });
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Product Not Found</h1>
@@ -21,6 +32,33 @@ function renderNotFound() {
       <a class="btn btn--primary" href="#/shop">Back to Shop</a>
     </section>
   `;
+}
+
+// One of "In Stock" / "Low Stock" / "Out of Stock" today (see
+// data/products.js) — mapped to schema.org's own availability values
+// rather than passed through as-is, since those are the only three
+// values this catalogue's stockStatus ever actually takes.
+function schemaAvailability(stockStatus) {
+  if (stockStatus === "Out of Stock") return "https://schema.org/OutOfStock";
+  return "https://schema.org/InStock";
+}
+
+function buildProductStructuredData(product) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: product.name,
+    description: product.shortDescription,
+    image: new URL(product.image, window.location.origin).href,
+    category: product.category,
+    offers: {
+      "@type": "Offer",
+      priceCurrency: "ZAR",
+      price: product.price.toFixed(2),
+      availability: schemaAvailability(product.stockStatus),
+      url: window.location.href,
+    },
+  };
 }
 
 function renderGallery(product) {
@@ -68,6 +106,9 @@ export async function renderProductDetails({ slug } = {}) {
   const { products } = await getCatalog();
   const product = products.find((item) => item.slug === slug);
   if (!product) return renderNotFound();
+
+  setPageMeta({ title: product.name, description: product.shortDescription });
+  setPageStructuredData(buildProductStructuredData(product));
 
   const wishlisted = isInWishlist(product.id);
 
@@ -135,6 +176,9 @@ export async function renderProductDetails({ slug } = {}) {
           </div>
 
           <div class="product-details__meta">
+            ${product.paperSize ? `<p><strong>Size:</strong> ${product.paperSize}</p>` : ""}
+            ${product.pageCount ? `<p><strong>Pages:</strong> ${product.pageCount}</p>` : ""}
+            ${product.binding ? `<p><strong>Binding:</strong> ${product.binding}</p>` : ""}
             <p><strong>Age Range:</strong> ${product.ageRange}</p>
             <p><strong>Tags:</strong> ${product.tags.join(", ")}</p>
           </div>
