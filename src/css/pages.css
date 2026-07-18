@@ -77,6 +77,22 @@
   margin-top: var(--space-sm);
 }
 
+.wholesale-banner__actions {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.wholesale-banner .btn--secondary {
+  color: var(--color-white);
+  border-color: var(--color-white);
+}
+
+.wholesale-banner .btn--secondary:hover {
+  background-color: var(--color-white);
+  color: var(--color-secondary);
+}
+
 /* ---- Trust section ----------------------------------------------------------- */
 .trust-item {
   text-align: center;

@@ -690,6 +690,12 @@
   color: var(--color-text);
 }
 
+.order-summary__note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin-top: var(--space-sm);
+}
+
 .order-summary .btn {
   margin-top: var(--space-lg);
 }

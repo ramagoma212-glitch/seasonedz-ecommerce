@@ -45,6 +45,10 @@ export function renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton =
         <span>R${total.toFixed(2)}</span>
       </div>
 
+      <p class="order-summary__note">
+        ${deliveryFee === 0 ? "This order qualifies for free delivery." : "Orders of R700 or more qualify for free delivery."}
+      </p>
+
       ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="#/checkout">Proceed to Checkout</a>` : ""}
     </aside>
   `;
