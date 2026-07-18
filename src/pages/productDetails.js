@@ -139,7 +139,7 @@ function renderRelatedProducts(product, products) {
         <h2>You May Also Like</h2>
         <p>More from ${product.category}.</p>
       </div>
-      <div class="grid grid--4">
+      <div class="product-grid">
         ${related.map((item) => renderProductCard(item)).join("")}
       </div>
     </section>

@@ -125,3 +125,21 @@
 .grid--2 {
   grid-template-columns: repeat(2, 1fr);
 }
+
+/* ---- Product listing grid --------------------------------------------------
+   Dedicated to product-card grids only (home product rails, shop results,
+   search results, "You May Also Like") — kept separate from the generic
+   .grid--2/3/4 utility above so category/blog/testimonial/trust grids
+   elsewhere keep their own existing column counts and breakpoints
+   unchanged. Mobile-first: 2 columns by default, 1 below 360px, 3 from
+   768px, 4 from 1024px — see responsive.css for the breakpoint overrides. */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Every row's implicit height stretches to match the tallest card in
+     the whole grid, not just the tallest in its own row — keeps every
+     card the same height even when content length (title, stock
+     status, discount badge) varies from product to product. */
+  grid-auto-rows: 1fr;
+  gap: var(--space-sm);
+}

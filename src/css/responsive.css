@@ -6,6 +6,31 @@
      sm: 480px | md: 768px | lg: 1024px | xl: 1280px
    ========================================================================== */
 
+/* ---- Product listing grid (mobile-first) -----------------------------------
+   Deliberately separate from the rest of this file's max-width, desktop-
+   first overrides — .product-grid's own base rule (layout.css) is already
+   the mobile default, so these are additive min-width breakpoints:
+   2 columns by default, 1 only below 360px, 3 from tablet width, 4 from
+   desktop width. */
+@media (max-width: 359px) {
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 768px) {
+  .product-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .product-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 /* ---- Large desktop tightening --------------------------------------------- */
 @media (max-width: 1280px) {
   :root {
