@@ -16,6 +16,7 @@
 // misleading — see VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md.
 
 import { renderProductCard, renderStars } from "../components/productCard.js";
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
@@ -97,11 +98,7 @@ function renderDeliveryNote() {
 function renderSupportNote() {
   return `
     <h3>Support</h3>
-    <p>
-      Questions about this product before you order?
-      <a href="#/contact">Contact Seasonedz Group</a> and we'll be happy
-      to help.
-    </p>
+    ${renderContactSupportNote("Questions about this product before you order?")}
   `;
 }
 

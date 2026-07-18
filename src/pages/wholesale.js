@@ -2,6 +2,7 @@
 // shops, stationery stores, market sellers and corporate gifting buyers.
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
 
 export function renderWholesale() {
   return `
@@ -44,6 +45,7 @@ export function renderWholesale() {
           price list — instead, tell us what you're interested in using the
           form below, and we'll follow up with a custom quote.
         </p>
+        ${renderContactSupportNote("Prefer to reach us directly?")}
       </div>
 
       ${renderEnquiryForm({

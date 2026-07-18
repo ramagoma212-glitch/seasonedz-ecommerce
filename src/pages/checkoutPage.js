@@ -8,6 +8,7 @@
 import { getCartSummary } from "../js/cart.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { PAYMENT_METHODS } from "../js/orders.js";
 
 const PROVINCES = [
@@ -87,9 +88,9 @@ function renderDemoNotice() {
           and selected, you'll be redirected to PayFast's own payment
           page to complete a real payment. Delivery is currently
           arranged manually by our small team, so please allow us time
-          to confirm and prepare your order. Questions? See our
-          <a href="#/faq">FAQ</a> or <a href="#/contact">contact us</a>.
+          to confirm and prepare your order.
         </p>
+        ${renderContactSupportNote("Questions about your order? Contact Seasonedz Group.")}
       </div>
     </div>
   `;

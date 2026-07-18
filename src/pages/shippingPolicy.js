@@ -4,6 +4,8 @@
 // the frontend and backend/src/config/delivery.ts on the backend —
 // both use the same R80 / R700 rule).
 
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
+
 export function renderShippingPolicy() {
   return `
     <section class="stub-page container">
@@ -57,10 +59,7 @@ export function renderShippingPolicy() {
         </p>
 
         <h2>Need Help?</h2>
-        <p>
-          If you have a question about delivery on your order, please
-          <a href="#/contact">contact us</a> and we'll help sort it out.
-        </p>
+        ${renderContactSupportNote("If you have a question about delivery on your order, contact Seasonedz Group and we'll help sort it out.")}
       </div>
     </section>
   `;

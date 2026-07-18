@@ -3,6 +3,7 @@
 // shared .demo-form submit handler in js/app.js.
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
+import { businessInfo } from "../data/businessInfo.js";
 
 export function renderContact() {
   return `
@@ -19,21 +20,21 @@ export function renderContact() {
             <span class="contact-detail__icon" aria-hidden="true">&#9993;</span>
             <div>
               <h3>Email</h3>
-              <p>hello@seasonedzgroup.com</p>
+              <p><a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a></p>
             </div>
           </div>
           <div class="contact-detail">
             <span class="contact-detail__icon" aria-hidden="true">&#128241;</span>
             <div>
               <h3>WhatsApp</h3>
-              <p>+27 00 000 0000 <span class="contact-detail__note">(coming soon)</span></p>
+              <p><a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a></p>
             </div>
           </div>
           <div class="contact-detail">
             <span class="contact-detail__icon" aria-hidden="true">&#128222;</span>
             <div>
               <h3>Phone</h3>
-              <p>+27 00 000 0000</p>
+              <p><a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a></p>
             </div>
           </div>
           <div class="contact-detail">
