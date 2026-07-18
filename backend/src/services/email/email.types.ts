@@ -13,10 +13,17 @@
 
 export type EmailTemplateName =
   | "order-created"
+  | "payment-pending"
   | "payment-confirmed"
   | "payment-failed-or-cancelled"
+  | "enquiry-received"
   | "admin-new-order"
   | "admin-new-enquiry";
+
+// Which side of the conversation a template's recipient is — used only
+// for dry-run log clarity (see email.service.ts's logConsoleEmail),
+// never to change what actually gets sent.
+export type EmailRecipientRole = "customer" | "admin";
 
 export interface RenderedEmail {
   subject: string;
