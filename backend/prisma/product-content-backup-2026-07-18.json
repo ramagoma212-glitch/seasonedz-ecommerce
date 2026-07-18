@@ -1,0 +1,54 @@
+[
+  {
+    "slug": "abc-colouring-book-for-kids-with-fun-facts",
+    "sku": "SG-0001",
+    "shortDescription": "A colourful A-Z colouring book packed with fun facts for little learners.",
+    "description": "Help your child learn their ABCs while having fun. Each letter comes with a large, easy-to-colour illustration and a bite-sized fun fact, making this book a favourite for home, pre-school and the classroom.",
+    "features": [
+      "40 pages of colouring fun",
+      "A fun fact printed on every page",
+      "Thick, bleed-resistant paper",
+      "Perfect for ages 3 to 8"
+    ],
+    "ageRange": "3-8 years"
+  },
+  {
+    "slug": "mindfulness-colouring-book-for-adults",
+    "sku": "SG-0002",
+    "shortDescription": "Intricate, calming patterns designed to ease stress and encourage mindfulness.",
+    "description": "A beautifully illustrated colouring book for adults, featuring intricate mandalas and nature-inspired patterns. A screen-free way to unwind, focus and practise mindfulness after a long day.",
+    "features": [
+      "50 intricate pattern pages",
+      "Single-sided pages to prevent bleed-through",
+      "Designed for coloured pencils and fine markers",
+      "A relaxing, screen-free activity"
+    ],
+    "ageRange": "16+ years"
+  },
+  {
+    "slug": "little-hands-big-faith-old-testament-bible-colouring-book",
+    "sku": "SG-0003",
+    "shortDescription": "Beloved Old Testament stories brought to life through colouring.",
+    "description": "From Noah's Ark to David and Goliath, this colouring book introduces children to well-loved Old Testament stories through warm, simple illustrations, ideal for Sunday school or family devotion time.",
+    "features": [
+      "36 pages of Old Testament stories",
+      "Simple illustrations suited to young colourists",
+      "Great for Sunday school and family devotions",
+      "Sturdy cover for regular use"
+    ],
+    "ageRange": "4-10 years"
+  },
+  {
+    "slug": "little-hands-big-faith-new-testament-bible-colouring-book",
+    "sku": "SG-0004",
+    "shortDescription": "The life of Jesus and the New Testament, illustrated for little hands.",
+    "description": "A gentle introduction to the New Testament, from the Nativity to the parables of Jesus. Companion book to our Old Testament title, designed with the same warm, easy-to-colour illustration style.",
+    "features": [
+      "36 pages of New Testament stories",
+      "Companion to the Old Testament colouring book",
+      "Simple illustrations suited to young colourists",
+      "Great for Sunday school and family devotions"
+    ],
+    "ageRange": "4-10 years"
+  }
+]
