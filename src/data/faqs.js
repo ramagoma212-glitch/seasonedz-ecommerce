@@ -82,6 +82,12 @@ export const faqs = [
       "We welcome enquiries from bookshops, educational stores, church shops and stationery stores. Visit our Wholesale page to get in touch.",
   },
   {
+    category: "Distributor",
+    question: "How do I enquire about becoming a distributor?",
+    answer:
+      "Visit our Distributor page and send us an enquiry with your company name, region and distribution experience. Every distributor enquiry is reviewed personally by the Seasonedz Group team, and we'll respond once we've had a chance to review it.",
+  },
+  {
     category: "Product Age Ranges",
     question: "How do I know which products suit my child's age?",
     answer:

@@ -31,19 +31,31 @@ export function renderWholesale() {
 
         <h2>Who We Welcome Enquiries From</h2>
         <ul>
+          <li>Retailers and resellers</li>
           <li>Bookshops</li>
+          <li>Gift shops</li>
           <li>Educational and toy stores</li>
           <li>Church shops and Christian bookstores</li>
           <li>Stationery stores</li>
-          <li>Market sellers</li>
+          <li>Market sellers and bulk buyers</li>
           <li>Corporate gifting buyers</li>
+        </ul>
+
+        <h2>What to Include in Your Enquiry</h2>
+        <p>Including a few details helps us put together a useful quote:</p>
+        <ul>
+          <li>Your business name</li>
+          <li>Your location</li>
+          <li>The products you're interested in</li>
+          <li>Your estimated quantity</li>
+          <li>Your preferred contact method, email or WhatsApp</li>
         </ul>
 
         <h2>Request a Quote</h2>
         <p>
           Every wholesale enquiry is different, so we don't publish a fixed
-          price list — instead, tell us what you're interested in using the
-          form below, and we'll follow up with a custom quote.
+          price list. Tell us what you're interested in using the form
+          below, and we'll follow up with a custom quote.
         </p>
         ${renderContactSupportNote("Prefer to reach us directly?")}
       </div>

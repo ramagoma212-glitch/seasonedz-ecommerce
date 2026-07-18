@@ -44,6 +44,15 @@ export function renderDistributor() {
           <li>Reliable logistics and communication</li>
         </ul>
 
+        <h2>What to Include in Your Enquiry</h2>
+        <p>Including a few details helps us review your enquiry:</p>
+        <ul>
+          <li>Your company name</li>
+          <li>Your region or distribution area</li>
+          <li>Your current distribution network or experience</li>
+          <li>Your preferred contact method, email or WhatsApp</li>
+        </ul>
+
         <div class="demo-notice">
           <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
           <div>
