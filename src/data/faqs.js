@@ -26,9 +26,31 @@ export const faqs = [
   },
   {
     category: "Delivery",
-    question: "How much does delivery cost?",
+    question: "How much does delivery cost, and when is it free?",
     answer:
-      "Standard delivery is a flat R80, with free delivery on orders of R700 or more. See our Shipping Policy for full details.",
+      "Standard delivery is a flat R80. Orders of R700 or more qualify for free delivery. See our Shipping Policy for full details.",
+  },
+  {
+    category: "Delivery",
+    question: "How is my order delivered?",
+    answer:
+      "Delivery is currently arranged manually by Seasonedz Group rather than through a live courier system. Once your order and payment are confirmed, we pack your order, book a courier and arrange delivery ourselves.",
+  },
+  {
+    category: "Delivery",
+    question: "Can I track my delivery?",
+    answer:
+      "You can look up your order on our Track Order page using your order number. This is not yet live, real time courier tracking. Once your order is dispatched, Seasonedz Group will share tracking details, such as a waybill or tracking number, with you manually.",
+  },
+  {
+    category: "Delivery",
+    question: "What if my delivery address is wrong?",
+    answer: `Contact Seasonedz Group as soon as possible so we can correct it before your order is dispatched. Email: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a> WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a>.`,
+  },
+  {
+    category: "Delivery",
+    question: "Who do I contact for delivery help?",
+    answer: `Seasonedz Group handles all delivery arrangements directly. Email: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a> WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a>.`,
   },
   {
     category: "Payment",
