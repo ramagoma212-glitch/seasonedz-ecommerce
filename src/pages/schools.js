@@ -2,6 +2,7 @@
 // aftercare centres and learning centres about bulk/classroom orders.
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
 
 export function renderSchools() {
   return `
@@ -55,6 +56,7 @@ export function renderSchools() {
             looking for, and we'll be in touch to discuss options and
             pricing.
           </p>
+          ${renderContactSupportNote("Prefer to reach us directly?")}
         </div>
 
         ${renderEnquiryForm({

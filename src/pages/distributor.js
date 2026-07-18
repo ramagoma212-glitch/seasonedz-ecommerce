@@ -2,6 +2,7 @@
 // carrying the Seasonedz Group range more broadly than a single store.
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
+import { renderContactSupportNote } from "../components/contactSupportNote.js";
 
 export function renderDistributor() {
   return `
@@ -55,6 +56,8 @@ export function renderDistributor() {
             </p>
           </div>
         </div>
+
+        ${renderContactSupportNote("Prefer to reach us directly?")}
       </div>
 
       ${renderEnquiryForm({

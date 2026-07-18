@@ -1,5 +1,7 @@
 // Site footer component: company description, quick links, business
-// links, customer service links, contact placeholder and copyright.
+// links, customer service links, real contact details and copyright.
+
+import { businessInfo } from "../data/businessInfo.js";
 
 export function renderFooter() {
   const year = new Date().getFullYear();
@@ -53,8 +55,9 @@ export function renderFooter() {
         <div class="site-footer__col">
           <h4 class="footer-heading">Contact Us</h4>
           <ul class="footer-links">
-            <li>Email: hello@seasonedzgroup.com</li>
-            <li>Phone: +27 00 000 0000</li>
+            <li>Email: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a></li>
+            <li>WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a></li>
+            <li>Phone: <a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a></li>
             <li>South Africa</li>
           </ul>
         </div>

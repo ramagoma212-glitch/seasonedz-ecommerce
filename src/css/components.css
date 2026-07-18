@@ -892,6 +892,24 @@
   color: var(--color-text);
 }
 
+/* ---- Contact support note (shared across checkout, FAQ, product,
+   shipping, returns, schools, wholesale, distributor pages) ----------- */
+.contact-support-note {
+  margin-top: var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  line-height: 1.8;
+}
+
+.contact-support-note a {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.contact-support-note a:hover {
+  color: var(--color-primary-dark);
+}
+
 /* ---- Form-level banner (API errors: backend unavailable, business-rule failures) -- */
 .form-banner {
   padding: var(--space-md);

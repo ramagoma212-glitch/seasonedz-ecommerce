@@ -3,6 +3,8 @@
 // FAQ page — add new items under an existing category, or introduce a
 // new one, and the page picks it up automatically.
 
+import { businessInfo } from "./businessInfo.js";
+
 export const faqs = [
   {
     category: "Ordering",
@@ -43,8 +45,7 @@ export const faqs = [
   {
     category: "Support",
     question: "How can I contact Seasonedz Group for support?",
-    answer:
-      "You can reach us through our Contact page, by email, or by phone. Our details are also in the footer of every page. We're a small team, so please allow us a little time to respond.",
+    answer: `For help with orders, school orders, bulk orders or product questions, contact Seasonedz Group. Email: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a> WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a>. Our details are also in the footer of every page. We're a small team, so please allow us a little time to respond.`,
   },
   {
     category: "School Orders",
