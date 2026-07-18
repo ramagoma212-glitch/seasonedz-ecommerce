@@ -15,7 +15,7 @@ export function renderReturnsPolicy() {
         <h2>Damaged or Incorrect Items</h2>
         <p>
           If an item arrives damaged, faulty, or isn't what you ordered,
-          please contact us as soon as possible so we can sort it out —
+          please contact us as soon as possible so we can sort it out,
           whether that's a replacement or a refund.
         </p>
 

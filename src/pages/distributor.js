@@ -26,7 +26,7 @@ export function renderDistributor() {
         <p>
           Our current product range spans kids' educational colouring
           books, faith-based colouring books, adult mindfulness colouring,
-          and the markers and crayons that go with them — with new products
+          and the markers and crayons that go with them, with new products
           added as we grow.
         </p>
 
@@ -59,7 +59,7 @@ export function renderDistributor() {
             <strong>Applications Reviewed Manually</strong>
             <p>
               Every distributor enquiry is reviewed personally by the
-              Seasonedz Group team — there's no automated approval process.
+              Seasonedz Group team. There's no automated approval process.
               We'll respond directly once we've had a chance to review your
               enquiry.
             </p>

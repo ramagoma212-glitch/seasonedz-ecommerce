@@ -92,8 +92,8 @@ function renderPendingResult(tracking) {
       <div>
         <strong>Payment is being verified</strong>
         <p>
-          We're still waiting for PayFast to confirm this payment —
-          this can take a few minutes. Please do not place another
+          We're still waiting for PayFast to confirm this payment.
+          This can take a few minutes. Please do not place another
           order or payment attempt yet.
         </p>
       </div>

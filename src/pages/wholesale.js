@@ -25,7 +25,7 @@ export function renderWholesale() {
         <p>
           Our current range includes kids' educational colouring books,
           Bible colouring books, mindfulness colouring books for adults,
-          markers, crayons and bundled gift sets — with more products
+          markers, crayons and bundled gift sets, with more products
           planned as the range grows.
         </p>
 

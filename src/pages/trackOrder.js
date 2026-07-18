@@ -94,7 +94,7 @@ function renderTrackingForm(prefillValue) {
         <span class="form-field__error" data-error-for="orderNumber"></span>
       </div>
       <p class="track-order-form__hint">
-        You'll find your order number on your order confirmation page — it looks like <strong>SG-2026-A1B2</strong>.
+        You'll find your order number on your order confirmation page. It looks like <strong>SG-2026-A1B2</strong>.
       </p>
     </form>
   `;
@@ -107,7 +107,7 @@ function renderDemoNotice() {
       <div>
         <strong>Tracking is a Seasonedz Group backend status, not a live courier.</strong>
         <p>
-          There is no real courier integration yet — this status is
+          There is no real courier integration yet. This status is
           updated manually by Seasonedz Group, not by a live courier
           API. Real courier tracking is coming later.
         </p>

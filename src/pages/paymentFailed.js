@@ -70,7 +70,7 @@ function renderWithOrderStatus(tracking) {
     return `
       <div class="order-confirmation__success">
         <div class="order-confirmation__icon" aria-hidden="true">&#10003;</div>
-        <h1>Good News — This Order Is Already Paid</h1>
+        <h1>Good News: This Order Is Already Paid</h1>
         <p>This payment actually completed successfully.</p>
       </div>
       <div class="order-confirmation__card">
