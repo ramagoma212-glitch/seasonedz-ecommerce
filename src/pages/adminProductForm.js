@@ -11,6 +11,7 @@ import { getCurrentAdmin } from "../js/api/adminAuthApi.js";
 import { apiGet } from "../js/apiClient.js";
 import { ApiError } from "../js/apiClient.js";
 import {
+  consumePendingAdminMessage,
   isBackendUnavailable,
   isUnauthenticated,
   redirectToAdminLogin,
@@ -211,12 +212,14 @@ export async function renderAdminProductEdit({ id } = {}) {
     const [productResponse, categoriesResponse] = await Promise.all([getAdminProduct(id), apiGet("/categories")]);
     const product = productResponse.data;
     const categories = categoriesResponse.data.categories;
+    const successMessage = consumePendingAdminMessage();
 
     return `
       <section class="container admin-page">
         ${renderAdminNav("products")}
         <a class="admin-back-link" href="#/admin/products">&larr; Back to Products</a>
         <h1 class="admin-page__title">Edit ${escapeHtml(product.name)}</h1>
+        ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${renderProductForm("edit", product, categories)}
       </section>
     `;
