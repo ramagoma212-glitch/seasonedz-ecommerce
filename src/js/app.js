@@ -27,6 +27,9 @@ import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
+import { updateAdminOrderStatus } from "./api/adminDashboardApi.js";
+import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
+import { humanizeEnum } from "./adminFormat.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -46,6 +49,7 @@ function mountApp() {
   setupTrackOrderForm();
   setupEnquiryForms();
   setupAdminLoginForm();
+  setupAdminOrderStatusForm();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -614,6 +618,151 @@ async function handleAdminLogout() {
     // Ignored deliberately — see comment above.
   }
   window.location.hash = "/admin/login";
+}
+
+// Admin order status update (Version 7, Milestone 64). Delegated
+// listeners so the controls keep working no matter how many times the
+// order detail page re-renders (each status change triggers a
+// rerenderCurrentRoute(), which replaces the whole page markup).
+// adminSelectedNextStatus tracks the status the admin picked between
+// clicking a "Move to X" button and confirming the change — cleared
+// again as soon as the confirmation form is dismissed or submitted.
+const ADMIN_STATUS_NOTE_MAX_LENGTH = 500;
+let adminSelectedNextStatus = null;
+
+function setupAdminOrderStatusForm() {
+  document.addEventListener("click", (event) => {
+    const selectButton = event.target.closest('[data-action="admin-select-next-status"]');
+    if (selectButton) {
+      handleAdminSelectNextStatus(selectButton);
+      return;
+    }
+
+    const cancelButton = event.target.closest('[data-action="admin-cancel-status-update"]');
+    if (cancelButton) {
+      handleAdminCancelStatusSelection(cancelButton);
+    }
+  });
+
+  document.addEventListener("input", (event) => {
+    const textarea = event.target.closest("#adminStatusNote");
+    if (!textarea) return;
+    updateAdminStatusNoteCount(textarea);
+  });
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-status-confirm]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminStatusUpdateSubmit(form);
+  });
+}
+
+function handleAdminSelectNextStatus(button) {
+  const container = button.closest(".admin-status-update");
+  if (!container) return;
+
+  const currentStatus = container.dataset.currentStatus;
+  const nextStatus = button.dataset.status;
+  adminSelectedNextStatus = nextStatus;
+
+  const confirmForm = container.querySelector("[data-admin-status-confirm]");
+  const confirmText = container.querySelector("[data-admin-status-confirm-text]");
+  const cancelWarning = container.querySelector("[data-admin-status-cancel-warning]");
+  const noteRequiredHint = container.querySelector("[data-admin-status-note-required]");
+  const banner = container.querySelector("[data-admin-status-banner]");
+  const textarea = container.querySelector("#adminStatusNote");
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  if (textarea) textarea.value = "";
+  updateAdminStatusNoteCount(textarea);
+
+  if (confirmText) {
+    confirmText.textContent = `Confirm that you want to change this order from ${humanizeEnum(currentStatus)} to ${humanizeEnum(nextStatus)}.`;
+  }
+
+  const isCancellation = nextStatus === "CANCELLED";
+  if (cancelWarning) cancelWarning.hidden = !isCancellation;
+  if (noteRequiredHint) noteRequiredHint.hidden = !isCancellation;
+
+  if (confirmForm) {
+    confirmForm.hidden = false;
+    confirmForm.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function handleAdminCancelStatusSelection(button) {
+  const container = button.closest(".admin-status-update");
+  const confirmForm = container?.querySelector("[data-admin-status-confirm]");
+  if (confirmForm) confirmForm.hidden = true;
+  adminSelectedNextStatus = null;
+}
+
+function updateAdminStatusNoteCount(textarea) {
+  if (!textarea) return;
+  const container = textarea.closest(".admin-status-update");
+  const countEl = container?.querySelector("[data-admin-status-note-count]");
+  if (!countEl) return;
+  countEl.textContent = String(ADMIN_STATUS_NOTE_MAX_LENGTH - textarea.value.length);
+}
+
+async function handleAdminStatusUpdateSubmit(form) {
+  const container = form.closest(".admin-status-update");
+  const orderNumber = container?.dataset.orderNumber;
+  if (!container || !orderNumber || !adminSelectedNextStatus) return;
+
+  const textarea = form.querySelector("#adminStatusNote");
+  const banner = form.querySelector("[data-admin-status-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  const note = textarea ? textarea.value.trim() : "";
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  if (adminSelectedNextStatus === "CANCELLED" && !note) {
+    if (banner) {
+      banner.textContent = "A note is required when cancelling an order.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateAdminOrderStatus(orderNumber, adminSelectedNextStatus, note || undefined);
+    setPendingAdminMessage(`Order status updated to ${humanizeEnum(adminSelectedNextStatus)}.`);
+    adminSelectedNextStatus = null;
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+
+    // 400 (invalid status/transition/note) carries a specific,
+    // already-safe message from the backend; anything else (404,
+    // unreachable backend, unexpected 500) gets a generic message —
+    // never a raw stack trace or internal error string.
+    const message =
+      error instanceof ApiError && error.status === 400
+        ? error.message
+        : error instanceof ApiError && error.status === 404
+          ? "Order not found."
+          : "Something went wrong. Please try again shortly.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 // Contact/Schools/Wholesale/Distributor forms (see

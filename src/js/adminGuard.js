@@ -40,3 +40,21 @@ export function renderAdminConnectionError(unavailable) {
     </section>
   `;
 }
+
+// Version 7, Milestone 64: a one-shot success message carried across a
+// rerenderCurrentRoute() call (app.js sets it right before triggering
+// the rerender; the page's own render function reads and clears it on
+// its next render) — this is how "show a success banner after a
+// status update, then refresh the page in place" works without a full
+// navigation or a framework-level state store.
+let pendingAdminMessage = null;
+
+export function setPendingAdminMessage(message) {
+  pendingAdminMessage = message;
+}
+
+export function consumePendingAdminMessage() {
+  const message = pendingAdminMessage;
+  pendingAdminMessage = null;
+  return message;
+}

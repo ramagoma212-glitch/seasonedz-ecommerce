@@ -21,7 +21,7 @@ import {
   listEnquiriesHandler,
   listOrdersHandler,
 } from "../controllers/adminDashboard.controller.js";
-import { updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
+import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
 
 const router = Router();
 
@@ -31,6 +31,7 @@ router.get("/dashboard", getDashboardHandler);
 router.get("/orders", listOrdersHandler);
 router.get("/orders/:orderNumber", getOrderDetailHandler);
 router.patch("/orders/:orderNumber/status", updateOrderStatusHandler);
+router.get("/orders/:orderNumber/status-history", getOrderStatusHistoryHandler);
 router.get("/enquiries", listEnquiriesHandler);
 router.get("/products/low-stock", getLowStockProductsHandler);
 

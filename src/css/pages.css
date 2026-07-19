@@ -589,6 +589,106 @@
   padding-top: var(--space-sm);
 }
 
+/* ---- Order status update (Version 7, Milestone 64) ------------------------------
+   Mobile-first: option buttons and confirm actions wrap onto their
+   own lines below 480px rather than overflowing, same discipline as
+   the rest of the admin dashboard. */
+.admin-status-final {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.admin-status-update__hint {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-sm);
+}
+
+.admin-status-update__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.admin-status-confirm {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.admin-status-confirm__text {
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+
+.admin-status-confirm__warning {
+  background-color: var(--color-surface);
+  border-left: 4px solid var(--color-error);
+  color: var(--color-error);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
+.admin-status-note-count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+  margin-bottom: var(--space-md);
+}
+
+.admin-status-confirm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.admin-status-update__payment-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-sm);
+}
+
+/* ---- Status history timeline (Version 7, Milestone 64) — read only ------------ */
+.admin-status-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.admin-status-timeline__item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.admin-status-timeline__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-xs);
+}
+
+.admin-status-timeline__meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.admin-status-timeline__note {
+  margin-top: var(--space-sm);
+  font-size: var(--font-size-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* ---- Status badges (Version 7, Milestone 59) ------------------------------
    Deliberately its own class, not a modifier on the shared .badge
    (components.css) — .badge is already used elsewhere (order
@@ -624,6 +724,12 @@
   }
 
   .admin-nav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-status-update__options,
+  .admin-status-confirm__actions {
     flex-direction: column;
     align-items: stretch;
   }

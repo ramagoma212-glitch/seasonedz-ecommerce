@@ -1,6 +1,7 @@
-// Admin dashboard API client (Version 7, Milestone 59 — read only).
-// Every function here is a GET — no create/update/delete request is
-// made from this file, matching the backend's read-only-only routes.
+// Admin dashboard API client (Version 7, Milestone 59 — read only;
+// Version 7, Milestone 64 adds the one write function, updateAdminOrderStatus,
+// and the read-only status-history function — everything else here
+// remains a GET).
 
 import { adminRequest } from "./adminApiClient.js";
 
@@ -25,6 +26,20 @@ export function getAdminOrders(params = {}) {
 
 export function getAdminOrder(orderNumber) {
   return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}`, { method: "GET" });
+}
+
+export function getAdminOrderStatusHistory(orderNumber) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/status-history`, { method: "GET" });
+}
+
+// The only write call in this file — everything else above is a GET.
+// newStatus/note are validated server-side regardless of anything this
+// client does; see backend/src/services/adminOrderStatus.service.ts.
+export function updateAdminOrderStatus(orderNumber, newStatus, note) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ newStatus, note }),
+  });
 }
 
 export function getAdminEnquiries(params = {}) {
