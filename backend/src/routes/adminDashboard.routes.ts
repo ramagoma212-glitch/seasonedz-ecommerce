@@ -7,10 +7,17 @@
 // calls for, so a route added later under this router can never
 // accidentally ship unauthenticated.
 //
-// Every route was a GET until Milestone 63, which adds exactly one
-// write route (order status update) — still no enquiry update, no
-// product create/edit/delete, no delete action of any kind anywhere
-// under /api/admin.
+// Every route was a GET until Milestone 63, which added order status
+// update, and Milestone 66, which adds product create/edit — still no
+// DELETE route of any kind anywhere under /api/admin (see
+// VERSION_7_PRODUCT_MANAGEMENT_PLAN.md Section 5 — ARCHIVED status is
+// the safe alternative to deleting a product).
+//
+// Route order matters for the /products family: "/products/low-stock"
+// (a literal path, Milestone 59) must stay registered before
+// "/products/:id" (a wildcard, Milestone 66), otherwise Express would
+// match a request for "/products/low-stock" against the wildcard route
+// first, treating "low-stock" as if it were a product id.
 
 import { Router } from "express";
 import { requireAdminAuth } from "../middleware/requireAdminAuth.middleware.js";
@@ -22,6 +29,12 @@ import {
   listOrdersHandler,
 } from "../controllers/adminDashboard.controller.js";
 import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
+import {
+  createAdminProductHandler,
+  getAdminProductHandler,
+  listAdminProductsHandler,
+  updateAdminProductHandler,
+} from "../controllers/adminProduct.controller.js";
 
 const router = Router();
 
@@ -33,6 +46,10 @@ router.get("/orders/:orderNumber", getOrderDetailHandler);
 router.patch("/orders/:orderNumber/status", updateOrderStatusHandler);
 router.get("/orders/:orderNumber/status-history", getOrderStatusHistoryHandler);
 router.get("/enquiries", listEnquiriesHandler);
+router.get("/products", listAdminProductsHandler);
+router.post("/products", createAdminProductHandler);
 router.get("/products/low-stock", getLowStockProductsHandler);
+router.get("/products/:id", getAdminProductHandler);
+router.patch("/products/:id", updateAdminProductHandler);
 
 export default router;
