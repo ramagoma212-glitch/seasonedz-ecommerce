@@ -5,6 +5,7 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
+import cookieParser from "cookie-parser";
 import { allowedOrigins, env } from "./config/env.js";
 import routes from "./routes/index.js";
 import { notFoundMiddleware } from "./middleware/notFound.middleware.js";
@@ -55,6 +56,13 @@ export function createApp(): Express {
       credentials: true,
     })
   );
+
+  // Version 7, Milestone 58: signs/verifies the admin session cookie
+  // (ADMIN_SESSION_SECRET) — no customer-facing code reads cookies at
+  // all, this exists solely for admin auth. req.cookies/req.signedCookies
+  // are empty objects on every request that sends no cookies, so this
+  // has no effect on any existing customer-facing route.
+  app.use(cookieParser(env.adminSessionSecret));
 
   app.use(express.json({ limit: "1mb" }));
   // extended: false (the querystring parser, not qs) — every JSON API

@@ -404,17 +404,45 @@ model Enquiry {
 // FUTURE ADMIN
 // ============================================================================
 
-// Placeholder only. No authentication is built in Version 2 — there
-// is deliberately no password/credential field here. A future auth
-// milestone must add one as a securely hashed credential (e.g. bcrypt/
-// argon2), never plain text, designed as part of that milestone.
+// Version 7, Milestone 58: passwordHash added — a securely hashed
+// credential (bcrypt, via bcryptjs), never plain text. No row in this
+// table is created or seeded by any code in this repository; the only
+// way to create one is the manual bootstrap script
+// (prisma/scripts/setupAdminUser.ts), which must be run deliberately
+// with real values supplied as environment variables at invocation
+// time, never hardcoded and never run automatically.
 model AdminUser {
-  id       String   @id @default(cuid())
-  name     String
-  email    String   @unique
-  role     UserRole @default(STAFF)
-  isActive Boolean  @default(true)
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         UserRole  @default(STAFF)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+
+  sessions AdminSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Version 7, Milestone 58: server-side admin session storage.
+// tokenHash is a SHA-256 hash of the random session token — the raw
+// token itself is only ever sent to the browser as an HttpOnly cookie
+// and is never persisted anywhere, matching the same "never store the
+// raw secret" discipline already used for PayFast/email credentials
+// in this project. A session is looked up by hashing whatever token
+// arrives in the request cookie and comparing against tokenHash — the
+// same principle as a hashed password, applied to a session token.
+model AdminSession {
+  id          String   @id @default(cuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime  @default(now())
+
+  @@index([adminUserId])
+  @@index([expiresAt])
 }

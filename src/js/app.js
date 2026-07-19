@@ -26,6 +26,7 @@ import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
+import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -44,6 +45,7 @@ function mountApp() {
   setupCheckoutForm();
   setupTrackOrderForm();
   setupEnquiryForms();
+  setupAdminLoginForm();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -188,6 +190,8 @@ function setupProductActions() {
       adjustQuantity(actionEl, action === "qty-increase" ? 1 : -1);
     } else if (action === "retry-payfast") {
       handleRetryPayfast(actionEl);
+    } else if (action === "admin-logout") {
+      handleAdminLogout();
     }
   });
 }
@@ -538,6 +542,78 @@ function setupTrackOrderForm() {
     if (errorEl) errorEl.textContent = "";
     event.target.classList.remove("has-error");
   });
+}
+
+// Admin login form (Version 7, Milestone 58 — foundation only). Same
+// delegated-submit shape as the other forms here. On success, the
+// backend has already set the session cookie (credentials: "include",
+// see js/api/adminAuthApi.js) by the time this resolves, so a plain
+// hash navigation to /admin is enough — no token to store here.
+function setupAdminLoginForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#admin-login-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminLoginSubmit(form);
+  });
+}
+
+async function handleAdminLoginSubmit(form) {
+  const email = form.querySelector("#adminEmail")?.value.trim() || "";
+  const password = form.querySelector("#adminPassword")?.value || "";
+  const banner = form.querySelector("[data-admin-login-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  if (!email || !password) {
+    if (banner) {
+      banner.textContent = "Please enter your email and password.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await adminLogin(email, password);
+    window.location.hash = "/admin";
+  } catch (error) {
+    // Deliberately the same generic message regardless of the real
+    // cause (wrong email, wrong password, rate limited) — never hints
+    // at which part of the input was wrong. See
+    // VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md.
+    const message =
+      error instanceof ApiUnavailableError
+        ? "We could not connect to the admin system right now. Please try again shortly."
+        : "Invalid email or password.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin sign out (Version 7, Milestone 58). Clears the session
+// server-side and locally, then returns to the login page regardless
+// of whether the API call succeeded — there is nothing useful to show
+// the visitor if logout itself fails, and staying on a page that
+// requires auth would just immediately redirect back to login anyway.
+async function handleAdminLogout() {
+  try {
+    await adminLogout();
+  } catch {
+    // Ignored deliberately — see comment above.
+  }
+  window.location.hash = "/admin/login";
 }
 
 // Contact/Schools/Wholesale/Distributor forms (see

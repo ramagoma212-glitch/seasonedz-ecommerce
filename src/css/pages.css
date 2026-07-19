@@ -392,6 +392,13 @@
   margin-bottom: var(--space-xl);
 }
 
+/* ---- Admin login page (Version 7, Milestone 58) -------------------------------- */
+.admin-login-form {
+  max-width: 360px;
+  margin-inline: auto;
+  text-align: left;
+}
+
 /* ---- Order confirmation page ------------------------------------------------------- */
 .order-confirmation {
   padding-bottom: var(--space-3xl);

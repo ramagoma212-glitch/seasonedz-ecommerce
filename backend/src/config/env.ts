@@ -4,6 +4,7 @@
 // and their defaults.
 
 import dotenv from "dotenv";
+import { randomBytes } from "node:crypto";
 
 dotenv.config();
 
@@ -193,6 +194,35 @@ if (emailEnabled) {
   }
 }
 
+// Admin authentication (Version 7, Milestone 58 — foundation only).
+// No admin route is linked from the public site, and no real admin
+// user exists in production yet — see VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md.
+//
+// ADMIN_SESSION_SECRET signs the session cookie (via cookie-parser)
+// as defence-in-depth against cookie tampering — the session itself
+// is still validated server-side against AdminSession.tokenHash
+// regardless, so a missing secret is not a security hole, just a
+// missing extra layer. Unlike PAYFAST_ENABLED/EMAIL_ENABLED, there is
+// no "admin auth enabled" flag to gate this behind: the auth routes
+// always exist once this milestone ships, but they are useless
+// without a real AdminUser row, and none is ever seeded automatically
+// — so this must never be eagerly required at startup the way
+// DATABASE_URL is, or a Render deployment with no ADMIN_SESSION_SECRET
+// set would crash the entire backend, not just disable a feature.
+// Falling back to a random per-process secret is safe for this
+// foundation milestone (no real admin usage exists yet); it simply
+// means any session is invalidated on a process restart until a real
+// secret is set — logged clearly below so this is never silently
+// relied on.
+const adminSessionSecret = getOptionalEnv("ADMIN_SESSION_SECRET");
+if (!adminSessionSecret) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[admin-auth] ADMIN_SESSION_SECRET is not set — using a random, process-only secret. " +
+      "Admin sessions will not survive a restart until a real secret is set in the environment."
+  );
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -232,6 +262,9 @@ export const env = {
   emailFromName,
   emailFromAddress,
   adminNotificationEmail,
+  // Admin auth — see the block above. Falls back to a random,
+  // process-only secret when unset (never logged, never persisted).
+  adminSessionSecret: adminSessionSecret || randomBytes(32).toString("hex"),
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built
