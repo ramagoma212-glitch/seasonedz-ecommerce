@@ -35,6 +35,12 @@ import {
   listAdminProductsHandler,
   updateAdminProductHandler,
 } from "../controllers/adminProduct.controller.js";
+import {
+  listAdminProductImagesHandler,
+  updateAdminProductImageHandler,
+  uploadAdminProductImageHandler,
+  uploadProductImageMiddleware,
+} from "../controllers/adminProductImage.controller.js";
 
 const router = Router();
 
@@ -51,5 +57,13 @@ router.post("/products", createAdminProductHandler);
 router.get("/products/low-stock", getLowStockProductsHandler);
 router.get("/products/:id", getAdminProductHandler);
 router.patch("/products/:id", updateAdminProductHandler);
+// Version 7, Milestone 69: image sub-routes, still no DELETE (see this
+// file's own top-of-file note and VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
+// Section 10). No route-ordering conflict with "/products/:id" above —
+// these have one more path segment, so Express only matches them
+// against a request that actually includes "/images".
+router.get("/products/:id/images", listAdminProductImagesHandler);
+router.post("/products/:id/images", uploadProductImageMiddleware, uploadAdminProductImageHandler);
+router.patch("/products/:id/images/:imageId", updateAdminProductImageHandler);
 
 export default router;
