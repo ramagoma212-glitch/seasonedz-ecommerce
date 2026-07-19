@@ -27,7 +27,7 @@ import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { updateAdminOrderStatus } from "./api/adminDashboardApi.js";
+import { updateAdminOrderStatus, createAdminProduct, updateAdminProduct } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 
@@ -50,6 +50,8 @@ function mountApp() {
   setupEnquiryForms();
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
+  setupAdminProductFilterForm();
+  setupAdminProductForm();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -761,6 +763,176 @@ async function handleAdminStatusUpdateSubmit(form) {
       banner.textContent = message;
       banner.hidden = false;
     }
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin product filters (Version 7, Milestone 67). The filter form
+// doesn't submit to an API directly — it just rebuilds the URL hash
+// with the chosen search/status/category values (page reset to 1) and
+// lets the router's own re-render pick them up, same as every other
+// query-string-driven admin list.
+function setupAdminProductFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-product-filter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const status = form.querySelector('select[name="status"]')?.value || "";
+    const categoryId = form.querySelector('select[name="categoryId"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (status) params.set("status", status);
+    if (categoryId) params.set("categoryId", categoryId);
+    params.set("page", "1");
+
+    window.location.hash = `/admin/products?${params.toString()}`;
+  });
+}
+
+// Admin product create/edit form (Version 7, Milestone 67). One
+// delegated submit handler for both pages — data-mode on the form
+// (set by adminProductForm.js) decides whether this calls
+// createAdminProduct or updateAdminProduct. SKU/slug are never read
+// from the edit form at all (they're rendered as read-only text, not
+// inputs, on that page) — the payload sent on edit simply never
+// contains those keys, matching the backend's own restricted-fields
+// enforcement rather than relying on it alone.
+function setupAdminProductForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-product-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminProductFormSubmit(form);
+  });
+}
+
+function parseAdminProductFeatures(rawText) {
+  return rawText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .slice(0, 20);
+}
+
+function readAdminProductFormValues(form) {
+  const name = form.querySelector("#productName")?.value.trim() || "";
+  const categoryId = form.querySelector("#productCategory")?.value || "";
+  const shortDescription = form.querySelector("#productShortDescription")?.value.trim() || "";
+  const description = form.querySelector("#productDescription")?.value.trim() || "";
+  const priceRaw = form.querySelector("#productPrice")?.value;
+  const oldPriceRaw = form.querySelector("#productOldPrice")?.value;
+  const stockRaw = form.querySelector("#productStock")?.value;
+  const lowStockThresholdRaw = form.querySelector("#productLowStockThreshold")?.value;
+  const status = form.querySelector("#productStatus")?.value || "DRAFT";
+  const ageRange = form.querySelector("#productAgeRange")?.value.trim() || "";
+  const featuresText = form.querySelector("#productFeatures")?.value || "";
+  const discountLabel = form.querySelector("#productDiscountLabel")?.value.trim() || "";
+  const isFeatured = form.querySelector("#productIsFeatured")?.checked || false;
+  const isBestSeller = form.querySelector("#productIsBestSeller")?.checked || false;
+  const isNewArrival = form.querySelector("#productIsNewArrival")?.checked || false;
+
+  return {
+    name,
+    categoryId,
+    shortDescription: shortDescription || null,
+    description: description || null,
+    price: priceRaw ? Number(priceRaw) : NaN,
+    oldPrice: oldPriceRaw ? Number(oldPriceRaw) : null,
+    stockQuantity: stockRaw === "" ? NaN : Number(stockRaw),
+    lowStockThreshold: lowStockThresholdRaw === "" ? 5 : Number(lowStockThresholdRaw),
+    status,
+    ageRange: ageRange || null,
+    features: parseAdminProductFeatures(featuresText),
+    discountLabel: discountLabel || null,
+    isFeatured,
+    isBestSeller,
+    isNewArrival,
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (adminProduct.service.ts) independently re-validates every field
+// regardless and remains the final authority.
+function validateAdminProductForm(values, mode) {
+  if (!values.name) return "Name is required.";
+  if (!values.categoryId) return "Category is required.";
+  if (!Number.isFinite(values.price) || values.price <= 0) return "Price must be a number greater than 0.";
+  if (!Number.isInteger(values.stockQuantity) || values.stockQuantity < 0) return "Stock quantity must be a whole number of 0 or more.";
+  if (!Number.isInteger(values.lowStockThreshold) || values.lowStockThreshold < 0) return "Low stock threshold must be a whole number of 0 or more.";
+  if (values.oldPrice !== null && (!Number.isFinite(values.oldPrice) || values.oldPrice <= 0)) return "Old price must be a number greater than 0.";
+
+  if (mode === "create") {
+    const sku = document.getElementById("productSku")?.value.trim();
+    if (!sku) return "SKU is required.";
+  }
+
+  return null;
+}
+
+async function handleAdminProductFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-product-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminProductFormValues(form);
+  const validationError = validateAdminProductForm(values, mode);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const sku = document.getElementById("productSku")?.value.trim();
+      const slug = document.getElementById("productSlug")?.value.trim();
+
+      const payload = { ...values, sku };
+      if (slug) payload.slug = slug;
+
+      const response = await createAdminProduct(payload);
+      setPendingAdminMessage(`Product "${response.data.name}" created successfully.`);
+      window.location.hash = `/admin/products/${encodeURIComponent(response.data.id)}/edit`;
+    } else {
+      const productId = form.dataset.productId;
+      // sku/slug are never included here at all — the edit page never
+      // renders them as inputs, so there is nothing to read.
+      await updateAdminProduct(productId, values);
+      setPendingAdminMessage("Product updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiError && error.status === 404) {
+      message = "Product not found.";
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
     if (submitButton) submitButton.disabled = false;
   }
 }

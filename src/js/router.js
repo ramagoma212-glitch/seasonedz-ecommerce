@@ -63,6 +63,8 @@ import { renderAdminHome } from "../pages/adminHome.js";
 import { renderAdminOrders } from "../pages/adminOrders.js";
 import { renderAdminOrderDetail } from "../pages/adminOrderDetail.js";
 import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
+import { renderAdminProducts } from "../pages/adminProducts.js";
+import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
 
 const routeDefs = [
   { pattern: "/", render: renderHome, title: "Home" },
@@ -144,6 +146,17 @@ const routeDefs = [
   { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order" },
   { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders" },
   { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries" },
+  // Version 7, Milestone 67: admin product management. "/new" (a
+  // literal) is listed before "/:id" (a wildcard) — both have the same
+  // segment count after /admin/products, so registration order is what
+  // stops "#/admin/products/new" from being mis-matched as product id
+  // "new". "/:id" has no separate read-only detail view — it redirects
+  // straight to "/:id/edit" (VERSION_7_PRODUCT_MANAGEMENT_PLAN.md's
+  // "keep it simple" allowance).
+  { pattern: "/admin/products/new", render: renderAdminProductCreate, title: "Add Product" },
+  { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product" },
+  { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product" },
+  { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products" },
 ];
 
 // Splits "#/product/abc?ref=home" into { path: "/product/abc", query: URLSearchParams }

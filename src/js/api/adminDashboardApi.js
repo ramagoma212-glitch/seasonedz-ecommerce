@@ -1,7 +1,8 @@
 // Admin dashboard API client (Version 7, Milestone 59 — read only;
-// Version 7, Milestone 64 adds the one write function, updateAdminOrderStatus,
-// and the read-only status-history function — everything else here
-// remains a GET).
+// Version 7, Milestone 64 adds updateAdminOrderStatus and the
+// read-only status-history function; Version 7, Milestone 67 adds the
+// product management functions — createAdminProduct/updateAdminProduct
+// are the only other writes in this file, everything else is a GET).
 
 import { adminRequest } from "./adminApiClient.js";
 
@@ -16,6 +17,8 @@ function buildQuery(params) {
   if (params.status) query.set("status", params.status);
   if (params.paymentStatus) query.set("paymentStatus", params.paymentStatus);
   if (params.type) query.set("type", params.type);
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.search) query.set("search", params.search);
   const qs = query.toString();
   return qs ? `?${qs}` : "";
 }
@@ -48,4 +51,26 @@ export function getAdminEnquiries(params = {}) {
 
 export function getAdminLowStockProducts() {
   return adminRequest("/admin/products/low-stock", { method: "GET" });
+}
+
+// Version 7, Milestone 67: admin product management. Reuses the
+// existing, already-live, requireAdminAuth-protected routes from
+// Milestone 66 — nothing new on the backend.
+export function getAdminProducts(params = {}) {
+  return adminRequest(`/admin/products${buildQuery(params)}`, { method: "GET" });
+}
+
+export function getAdminProduct(id) {
+  return adminRequest(`/admin/products/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function createAdminProduct(payload) {
+  return adminRequest("/admin/products", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function updateAdminProduct(id, payload) {
+  return adminRequest(`/admin/products/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
