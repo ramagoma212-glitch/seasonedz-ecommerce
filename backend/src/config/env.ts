@@ -223,6 +223,32 @@ if (!adminSessionSecret) {
   );
 }
 
+// Product image upload (Version 7, Milestone 69 — backend only, no
+// admin upload UI yet). See VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md.
+//
+// Same "safety switch, optional until configured" pattern as
+// PAYFAST_ENABLED/EMAIL_ENABLED above, but there is no separate
+// *_ENABLED flag here — the feature is simply considered "configured"
+// when both SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are present.
+// Neither is eagerly required at startup: a Render deployment with
+// neither set must keep starting and serving every other route
+// normally, with only the new image-upload routes responding with a
+// clear "not configured" error (supabaseStorage.service.ts) instead
+// of crashing the whole backend. Never log the actual key value.
+const supabaseUrl = getOptionalEnv("SUPABASE_URL");
+const supabaseServiceRoleKey = getOptionalEnv("SUPABASE_SERVICE_ROLE_KEY");
+const productImagesBucket = getEnv("PRODUCT_IMAGES_BUCKET", "product-images");
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[product-images] SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not set — " +
+      "product image upload is not configured. Every other route is unaffected; " +
+      "only POST/GET/PATCH /api/admin/products/:id/images will respond with a " +
+      "clear configuration error until both are set. See VERSION_7_PRODUCT_IMAGE_UPLOAD_BACKEND_RESULT.md."
+  );
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -265,6 +291,11 @@ export const env = {
   // Admin auth — see the block above. Falls back to a random,
   // process-only secret when unset (never logged, never persisted).
   adminSessionSecret: adminSessionSecret || randomBytes(32).toString("hex"),
+  // Product image upload — see the block above. supabaseServiceRoleKey
+  // is undefined unless explicitly set; never logged anywhere.
+  supabaseUrl,
+  supabaseServiceRoleKey,
+  productImagesBucket,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built
