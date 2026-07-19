@@ -92,6 +92,18 @@ enum UserRole {
   STAFF
 }
 
+// Version 7, Milestone 62: distinguishes who/what produced an
+// OrderStatusHistory row. Only ADMIN_DASHBOARD is ever written by the
+// first implementation (a future milestone) — the others are reserved
+// for later, not yet wired up to anything. See
+// VERSION_7_ORDER_STATUS_AUDIT_MODEL_PLAN.md Section 5.
+enum OrderStatusHistorySource {
+  ADMIN_DASHBOARD
+  SYSTEM
+  PAYFAST_ITN
+  MANUAL_DATABASE_LEGACY
+}
+
 // ============================================================================
 // CATALOGUE: Category, Product, ProductImage, ProductTag
 // ============================================================================
@@ -281,6 +293,10 @@ model Order {
   items    OrderItem[]
   payment  Payment?
   shipping Shipping?
+  // Version 7, Milestone 62: audit trail for future admin status
+  // updates — see OrderStatusHistory below. Empty for every order that
+  // predates this feature; that is expected, not backfilled.
+  statusHistory OrderStatusHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -420,7 +436,12 @@ model AdminUser {
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
 
-  sessions AdminSession[]
+  sessions           AdminSession[]
+  // Version 7, Milestone 62: SetNull (not Cascade) — deleting an admin
+  // user must never delete the audit history of what they did. See
+  // OrderStatusHistory below and
+  // VERSION_7_ORDER_STATUS_AUDIT_MODEL_PLAN.md Section 4.
+  orderStatusHistory OrderStatusHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -445,4 +466,49 @@ model AdminSession {
 
   @@index([adminUserId])
   @@index([expiresAt])
+}
+
+// Version 7, Milestone 62: audit trail for order status changes.
+// Schema and migration only — no row is written by any code yet; the
+// future order-status-update feature (Milestone 63) is what will
+// actually create rows here, and only ever with source
+// ADMIN_DASHBOARD. See VERSION_7_ORDER_STATUS_AUDIT_MODEL_PLAN.md for
+// the full design rationale.
+//
+// orderNumberSnapshot + changedByAdminEmailSnapshot/NameSnapshot exist
+// so a history row stays fully readable even if the order's own
+// number were ever to change (it can't today, but never assume) or —
+// more importantly — if the admin who made the change is later
+// deleted. changedByAdminUserId is optional with onDelete: SetNull for
+// exactly that reason: deleting an AdminUser must never delete the
+// record of what they did.
+//
+// No old order is backfilled with fake history — every order that
+// existed before this model was added simply has no rows here, which
+// the future admin UI must display honestly ("No status history
+// recorded yet."), never invented.
+model OrderStatusHistory {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderNumberSnapshot String
+
+  changedByAdminUserId        String?
+  changedByAdminUser          AdminUser? @relation(fields: [changedByAdminUserId], references: [id], onDelete: SetNull)
+  changedByAdminEmailSnapshot String?
+  changedByAdminNameSnapshot  String?
+
+  oldStatus OrderStatus
+  newStatus OrderStatus
+
+  note   String?
+  source OrderStatusHistorySource
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId, createdAt])
+  @@index([orderNumberSnapshot])
+  @@index([changedByAdminUserId])
+  @@index([source])
+  @@index([createdAt])
 }
