@@ -1,18 +1,42 @@
-// Admin order detail page (Version 7, Milestone 59 — read only). Reuses
-// the exact same GET /api/admin/orders/:orderNumber shape the backend
-// already returns (order.service.ts's OrderOutput, admin-gated) — no
-// edit, status update, or delete control exists on this page, matching
-// the milestone's strictly-read-only scope. Visually reuses the
-// existing `.order-confirmation__card` pattern from the customer-facing
-// order confirmation page, per VERSION_7_ADMIN_DASHBOARD_PLAN.md's
-// admin UX plan.
+// Admin order detail page. Read-only order summary/items (Version 7,
+// Milestone 59) plus, since Milestone 64, a status-update control and
+// a read-only audit timeline. Status changes are submitted to the
+// existing protected PATCH /api/admin/orders/:orderNumber/status
+// route (Milestone 63) — this page never writes anything itself; it
+// only lets the admin choose a valid next status and a note, then
+// hands that off to the backend, which validates and audits it.
+//
+// The allowed-transition table below is a client-side UX convenience
+// only (so only valid buttons are ever shown) — the backend's own
+// table in adminOrderStatus.service.ts is the actual source of truth
+// and re-validates independently regardless of what this page sends.
 
-import { getAdminOrder } from "../js/api/adminDashboardApi.js";
+import { getAdminOrder, getAdminOrderStatusHistory } from "../js/api/adminDashboardApi.js";
 import { ApiError } from "../js/apiClient.js";
-import { isBackendUnavailable, isUnauthenticated, redirectToAdminLogin, renderAdminConnectionError, renderAdminRedirecting } from "../js/adminGuard.js";
+import {
+  consumePendingAdminMessage,
+  isBackendUnavailable,
+  isUnauthenticated,
+  redirectToAdminLogin,
+  renderAdminConnectionError,
+  renderAdminRedirecting,
+} from "../js/adminGuard.js";
 import { renderAdminNav } from "../components/adminNav.js";
 import { formatCurrency, formatDate, formatDateTime, humanizeEnum, renderStatusBadge } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
+
+const ALLOWED_NEXT_STATUSES = {
+  PENDING: ["CONFIRMED", "CANCELLED"],
+  CONFIRMED: ["PROCESSING", "CANCELLED"],
+  PROCESSING: ["READY_FOR_DELIVERY", "CANCELLED"],
+  READY_FOR_DELIVERY: ["OUT_FOR_DELIVERY", "CANCELLED"],
+  OUT_FOR_DELIVERY: ["DELIVERED"],
+  DELIVERED: [],
+  CANCELLED: [],
+  REFUNDED: [],
+};
+
+const NOTE_MAX_LENGTH = 500;
 
 function renderNotFound(orderNumber) {
   return `
@@ -52,18 +76,116 @@ function renderItemsTable(items) {
   `;
 }
 
+function renderStatusUpdateSection(order) {
+  const nextStatuses = ALLOWED_NEXT_STATUSES[order.status] || [];
+
+  if (nextStatuses.length === 0) {
+    return `
+      <div class="admin-status-update">
+        <h3>Update Order Status</h3>
+        <p class="admin-status-final">This order is final. No further status updates are available.</p>
+        <p class="admin-status-update__payment-note">Order status updates do not change payment status, payment records or refunds.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="admin-status-update" data-order-number="${escapeHtml(order.orderNumber)}" data-current-status="${order.status}">
+      <h3>Update Order Status</h3>
+      <p class="admin-status-update__hint">Choose the next status for this order.</p>
+      <div class="admin-status-update__options">
+        ${nextStatuses
+          .map(
+            (status) => `
+          <button type="button" class="btn btn--secondary" data-action="admin-select-next-status" data-status="${status}">
+            Move to ${escapeHtml(humanizeEnum(status))}
+          </button>
+        `
+          )
+          .join("")}
+      </div>
+
+      <form class="admin-status-confirm" data-admin-status-confirm hidden novalidate>
+        <p class="admin-status-confirm__text" data-admin-status-confirm-text></p>
+        <p class="admin-status-confirm__warning" data-admin-status-cancel-warning hidden>
+          Confirm cancellation carefully. This does not refund payment and does not send an email automatically.
+        </p>
+
+        <label class="form-field__label" for="adminStatusNote">
+          Note <span data-admin-status-note-required hidden>(required for cancellation)</span>
+        </label>
+        <textarea
+          id="adminStatusNote"
+          class="form-field__input form-field__textarea"
+          maxlength="${NOTE_MAX_LENGTH}"
+          rows="3"
+        ></textarea>
+        <p class="admin-status-note-count"><span data-admin-status-note-count>${NOTE_MAX_LENGTH}</span> characters remaining</p>
+
+        <div class="form-banner form-banner--error" data-admin-status-banner hidden></div>
+
+        <div class="admin-status-confirm__actions">
+          <button type="submit" class="btn btn--primary">Confirm Change</button>
+          <button type="button" class="btn btn--secondary" data-action="admin-cancel-status-update">Cancel</button>
+        </div>
+      </form>
+
+      <p class="admin-status-update__payment-note">Order status updates do not change payment status, payment records or refunds.</p>
+    </div>
+  `;
+}
+
+function renderStatusHistoryTimeline(history) {
+  if (!history || history.length === 0) {
+    return `<p class="admin-empty">No status history recorded yet.</p>`;
+  }
+
+  return `
+    <ul class="admin-status-timeline">
+      ${history
+        .map(
+          (entry) => `
+        <li class="admin-status-timeline__item">
+          <div class="admin-status-timeline__row">
+            ${renderStatusBadge(entry.oldStatus)}
+            <span aria-hidden="true">&rarr;</span>
+            ${renderStatusBadge(entry.newStatus)}
+          </div>
+          <p class="admin-status-timeline__meta">
+            ${formatDateTime(entry.createdAt)} &bull;
+            ${escapeHtml(entry.changedByAdminName || "Unknown admin")}
+            (${escapeHtml(entry.changedByAdminEmail || "no email on record")}) &bull;
+            ${escapeHtml(humanizeEnum(entry.source))}
+          </p>
+          ${entry.note ? `<p class="admin-status-timeline__note">${escapeHtml(entry.note)}</p>` : ""}
+        </li>
+      `
+        )
+        .join("")}
+    </ul>
+  `;
+}
+
 export async function renderAdminOrderDetail({ orderNumber } = {}) {
   if (!orderNumber) return renderNotFound("");
 
   try {
-    const response = await getAdminOrder(orderNumber);
-    const order = response.data;
+    const [orderResponse, historyResponse] = await Promise.all([
+      getAdminOrder(orderNumber),
+      getAdminOrderStatusHistory(orderNumber),
+    ]);
+    const order = orderResponse.data;
+    const statusHistory = historyResponse.data.statusHistory;
+
+    const successMessage = consumePendingAdminMessage();
 
     return `
       <section class="container admin-page">
         ${renderAdminNav("orders")}
         <a class="admin-back-link" href="#/admin/orders">&larr; Back to Orders</a>
         <h1 class="admin-page__title">Order ${escapeHtml(order.orderNumber)}</h1>
+
+        ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
 
         <div class="admin-order-detail__grid">
           <div class="order-confirmation__card">
@@ -130,6 +252,15 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "Free" : formatCurrency(order.deliveryFee)}</span></div>
           ${order.discountTotal ? `<div class="order-confirmation__row"><span>Discount</span><span>-${formatCurrency(order.discountTotal)}</span></div>` : ""}
           <div class="order-confirmation__row admin-total-row"><span>Total</span><span>${formatCurrency(order.total)}</span></div>
+        </div>
+
+        <div class="order-confirmation__card">
+          ${renderStatusUpdateSection(order)}
+        </div>
+
+        <div class="order-confirmation__card">
+          <h3>Status History</h3>
+          ${renderStatusHistoryTimeline(statusHistory)}
         </div>
       </section>
     `;

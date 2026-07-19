@@ -10,7 +10,7 @@
 
 import type { NextFunction, Request, Response } from "express";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
-import { OrderStatusUpdateError, updateOrderStatus } from "../services/adminOrderStatus.service.js";
+import { OrderStatusUpdateError, getOrderStatusHistory, updateOrderStatus } from "../services/adminOrderStatus.service.js";
 
 export async function updateOrderStatusHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -35,6 +35,29 @@ export async function updateOrderStatusHandler(req: Request, res: Response, next
       sendError(res, { message: error.message, statusCode: error.statusCode });
       return;
     }
+    next(error);
+  }
+}
+
+// Version 7, Milestone 64: read-only audit timeline for the admin
+// order detail page — see the service function's own comment for why
+// this is deliberately separate from the public order lookup.
+export async function getOrderStatusHistoryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { orderNumber } = req.params;
+    if (!orderNumber) {
+      sendError(res, { message: "Order number is required", statusCode: 400 });
+      return;
+    }
+
+    const statusHistory = await getOrderStatusHistory(orderNumber);
+    if (statusHistory === null) {
+      sendError(res, { message: `Order not found: ${orderNumber}`, statusCode: 404 });
+      return;
+    }
+
+    sendSuccess(res, { message: "Order status history retrieved successfully", data: { statusHistory } });
+  } catch (error) {
     next(error);
   }
 }

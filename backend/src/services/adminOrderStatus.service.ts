@@ -168,3 +168,54 @@ export async function updateOrderStatus(
     };
   });
 }
+
+export interface OrderStatusHistoryEntry {
+  oldStatus: OrderStatus;
+  newStatus: OrderStatus;
+  note: string | null;
+  source: OrderStatusHistorySource;
+  createdAt: Date;
+  changedByAdminName: string | null;
+  changedByAdminEmail: string | null;
+}
+
+// Version 7, Milestone 64: read-only audit timeline for the admin
+// order detail page. Deliberately its own function/route
+// (GET /api/admin/orders/:orderNumber/status-history), never added to
+// order.service.ts's getOrderByNumber() — that function is shared with
+// the public, unauthenticated, order-number-gated customer-facing
+// lookup (order.controller.ts), and admin-only audit data (who changed
+// what, an admin's name/email) must never reach that shared response.
+// `select` here is the enforcement: no passwordHash, tokenHash,
+// payment secret, or raw payment payload is ever selectable from this
+// query — only the fields this feature actually needs.
+export async function getOrderStatusHistory(orderNumber: string): Promise<OrderStatusHistoryEntry[] | null> {
+  const order = await prisma.order.findUnique({ where: { orderNumber }, select: { id: true } });
+  if (!order) {
+    return null;
+  }
+
+  const rows = await prisma.orderStatusHistory.findMany({
+    where: { orderId: order.id },
+    orderBy: { createdAt: "desc" },
+    select: {
+      oldStatus: true,
+      newStatus: true,
+      note: true,
+      source: true,
+      createdAt: true,
+      changedByAdminNameSnapshot: true,
+      changedByAdminEmailSnapshot: true,
+    },
+  });
+
+  return rows.map((row) => ({
+    oldStatus: row.oldStatus,
+    newStatus: row.newStatus,
+    note: row.note,
+    source: row.source,
+    createdAt: row.createdAt,
+    changedByAdminName: row.changedByAdminNameSnapshot,
+    changedByAdminEmail: row.changedByAdminEmailSnapshot,
+  }));
+}
