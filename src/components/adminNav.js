@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { key: "dashboard", href: "#/admin", label: "Dashboard" },
   { key: "orders", href: "#/admin/orders", label: "Orders" },
   { key: "enquiries", href: "#/admin/enquiries", label: "Enquiries" },
+  { key: "products", href: "#/admin/products", label: "Products" },
 ];
 
 export function renderAdminNav(activeKey) {
