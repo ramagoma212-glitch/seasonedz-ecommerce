@@ -60,6 +60,9 @@ import { renderBlogPost } from "../pages/blogPost.js";
 import { renderNotFound } from "../pages/notFound.js";
 import { renderAdminLogin } from "../pages/adminLogin.js";
 import { renderAdminHome } from "../pages/adminHome.js";
+import { renderAdminOrders } from "../pages/adminOrders.js";
+import { renderAdminOrderDetail } from "../pages/adminOrderDetail.js";
+import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
 
 const routeDefs = [
   { pattern: "/", render: renderHome, title: "Home" },
@@ -130,13 +133,17 @@ const routeDefs = [
   },
   { pattern: "/blog", render: renderBlog, title: "Blog" },
   { pattern: "/blog/:slug", render: renderBlogPost, title: "Blog" },
-  // Version 7, Milestone 58: admin auth foundation only. Deliberately
-  // not linked from header/footer/any customer navigation — see
-  // VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md's "Navigation Safety"
-  // section. renderAdminHome checks auth itself and redirects to
-  // /admin/login when not signed in, same as every other async page.
+  // Version 7, Milestones 58-59: admin auth + read-only dashboard.
+  // Deliberately not linked from header/footer/any customer
+  // navigation — see VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md's
+  // "Navigation Safety" section. Every render function below checks
+  // auth itself (via its own API call) and redirects to /admin/login
+  // when not signed in, same as every other async page.
   { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login" },
   { pattern: "/admin", render: renderAdminHome, title: "Admin" },
+  { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order" },
+  { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders" },
+  { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries" },
 ];
 
 // Splits "#/product/abc?ref=home" into { path: "/product/abc", query: URLSearchParams }

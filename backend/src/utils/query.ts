@@ -64,3 +64,15 @@ export function parseStockParam(raw: unknown): StockOption | undefined {
   const value = parseStringParam(raw);
   return value && (STOCK_OPTIONS as readonly string[]).includes(value) ? (value as StockOption) : undefined;
 }
+
+// Version 7, Milestone 59: pagination for admin list endpoints (orders,
+// enquiries). Same forgiving convention as sort/stock above — anything
+// that isn't a positive integer is treated as "not provided" (the
+// caller applies its own default) rather than erroring, since a typo'd
+// page/limit value shouldn't fail the whole request.
+export function parsePositiveIntParam(raw: unknown): number | undefined {
+  const value = parseStringParam(raw);
+  if (!value) return undefined;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
