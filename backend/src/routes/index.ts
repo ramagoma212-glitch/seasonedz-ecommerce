@@ -11,6 +11,7 @@ import orderRoutes from "./order.routes.js";
 import enquiryRoutes from "./enquiry.routes.js";
 import paymentRoutes from "./payment.routes.js";
 import adminAuthRoutes from "./adminAuth.routes.js";
+import adminDashboardRoutes from "./adminDashboard.routes.js";
 
 const router = Router();
 
@@ -20,9 +21,13 @@ router.use("/categories", categoryRoutes);
 router.use("/orders", orderRoutes);
 router.use("/enquiries", enquiryRoutes);
 router.use("/payments", paymentRoutes);
-// Version 7, Milestone 58: admin auth foundation only — login/logout/
-// me. No order, enquiry, customer or product admin data exists under
-// /api/admin yet; every other /api/admin/* path is a 404 today.
+// Version 7, Milestone 58: admin auth — login/logout/me.
 router.use("/admin/auth", adminAuthRoutes);
+// Version 7, Milestone 59: read-only admin dashboard (overview, order
+// list/detail, enquiry list, low-stock products). Every route here is
+// a GET, protected end-to-end by requireAdminAuth (applied at the
+// router level in adminDashboard.routes.ts) — no write/mutation admin
+// route exists anywhere under /api/admin yet.
+router.use("/admin", adminDashboardRoutes);
 
 export default router;
