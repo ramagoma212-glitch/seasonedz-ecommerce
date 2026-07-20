@@ -74,3 +74,32 @@ export function updateAdminProduct(id, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// Version 7, Milestone 70: admin product image management. Uses the
+// image routes already live from Milestone 69
+// (adminProductImage.controller.ts) — nothing new on the backend.
+export function getProductImages(productId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/images`, { method: "GET" });
+}
+
+// `file` is a File/Blob from a <input type="file">. adminApiClient.js
+// detects the FormData body and skips the default JSON Content-Type so
+// the browser can set the correct multipart boundary itself.
+export function uploadProductImage(productId, file, altText, kind) {
+  const formData = new FormData();
+  formData.append("image", file);
+  formData.append("altText", altText);
+  if (kind) formData.append("kind", kind);
+
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/images`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function updateProductImage(productId, imageId, payload) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
