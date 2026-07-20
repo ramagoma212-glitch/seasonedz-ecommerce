@@ -17,11 +17,22 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000
 export async function adminRequest(path, options = {}) {
   let response;
 
+  // Version 7, Milestone 70: a FormData body (product image upload)
+  // must never get a manual Content-Type — the browser only sets the
+  // correct "multipart/form-data; boundary=..." header itself when
+  // Content-Type is left unset. `headers` is computed after `options`
+  // in the fetch call below (not before) specifically so it always
+  // wins, regardless of what options.headers does or doesn't contain.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(options.headers || {}) }
+    : { "Content-Type": "application/json", ...(options.headers || {}) };
+
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
       credentials: "include",
       ...options,
+      headers,
     });
   } catch (error) {
     console.warn(`[Seasonedz] Could not reach the backend API at ${API_BASE_URL}${path}.`, error);

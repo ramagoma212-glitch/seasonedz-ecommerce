@@ -784,6 +784,107 @@
   color: var(--color-text-muted);
 }
 
+/* ---- Admin product images (Version 7, Milestone 70) ------------------------ */
+.admin-product-images {
+  max-width: 640px;
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--color-border);
+}
+
+.admin-page__section-title {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-md);
+}
+
+.admin-page__section-subtitle {
+  font-size: var(--font-size-md);
+  margin-block: var(--space-lg) var(--space-sm);
+}
+
+.admin-product-images__empty {
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-lg);
+}
+
+.admin-image-card-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--space-md);
+  list-style: none;
+  padding: 0;
+  margin-bottom: var(--space-lg);
+}
+
+.admin-image-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  background-color: var(--color-bg-alt);
+}
+
+.admin-image-card__preview {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-sm);
+  background-color: var(--color-border);
+}
+
+.admin-image-card__meta {
+  margin-bottom: var(--space-sm);
+}
+
+.admin-image-card__alt {
+  font-size: var(--font-size-sm);
+  margin-block: var(--space-xs);
+  word-break: break-word;
+}
+
+.admin-image-card__alt--empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.admin-image-card__order {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.admin-image-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+.admin-image-alt-form {
+  margin-top: var(--space-sm);
+}
+
+.admin-image-alt-form__actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.admin-image-upload-form {
+  max-width: 480px;
+}
+
+.admin-image-upload-form__kind {
+  display: flex;
+  gap: var(--space-lg);
+  margin-top: var(--space-xs);
+}
+
+.admin-image-upload-form__kind label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-weight: 400;
+}
+
 @media (max-width: 480px) {
   .admin-cards {
     grid-template-columns: 1fr 1fr;

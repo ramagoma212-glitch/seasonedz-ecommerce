@@ -6,7 +6,7 @@
 // control exists here — image management stays deferred to Milestones
 // 68-69, per VERSION_7_PRODUCT_MANAGEMENT_PLAN.md Section 11.
 
-import { getAdminProduct } from "../js/api/adminDashboardApi.js";
+import { getAdminProduct, getProductImages } from "../js/api/adminDashboardApi.js";
 import { getCurrentAdmin } from "../js/api/adminAuthApi.js";
 import { apiGet } from "../js/apiClient.js";
 import { ApiError } from "../js/apiClient.js";
@@ -20,6 +20,7 @@ import {
 } from "../js/adminGuard.js";
 import { renderAdminNav } from "../components/adminNav.js";
 import { escapeHtml } from "../js/search.js";
+import { withBase } from "../js/paths.js";
 
 const STATUS_HELP = {
   DRAFT: "Draft — not visible publicly.",
@@ -177,6 +178,104 @@ function renderProductForm(mode, product, categories) {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// Product Images section (Version 7, Milestone 70). Edit page only —
+// a product must already exist (have an id) before it can have
+// images, so this never appears on the create page. Uses the
+// protected image routes already live from Milestone 69
+// (GET/POST/PATCH /api/admin/products/:id/images) — still no DELETE
+// anywhere, and no drag-and-drop/bulk upload, matching this
+// milestone's explicit scope.
+// ---------------------------------------------------------------------------
+
+function renderProductImageCard(image) {
+  const resolvedUrl = withBase(image.url);
+  const altText = image.altText ? escapeHtml(image.altText) : "";
+
+  return `
+    <li class="admin-image-card" data-admin-image-card="${escapeHtml(image.id)}">
+      <img class="admin-image-card__preview" src="${escapeHtml(resolvedUrl)}" alt="${altText}" loading="lazy" />
+      <div class="admin-image-card__meta">
+        ${image.isPrimary ? '<span class="admin-badge admin-badge--success">Main image</span>' : ""}
+        <p class="admin-image-card__alt">${altText || '<span class="admin-image-card__alt--empty">No alt text</span>'}</p>
+        <p class="admin-image-card__order">Sort order: ${Number(image.sortOrder)}</p>
+      </div>
+      <div class="admin-image-card__actions">
+        ${
+          image.isPrimary
+            ? ""
+            : `<button type="button" class="btn btn--secondary" data-admin-image-set-primary="${escapeHtml(image.id)}">Set as main</button>`
+        }
+        <button type="button" class="btn btn--secondary" data-admin-image-alt-toggle="${escapeHtml(image.id)}">Edit alt text</button>
+      </div>
+      <form class="admin-image-alt-form" data-admin-image-alt-form="${escapeHtml(image.id)}" hidden>
+        <label class="form-field__label" for="altText-${escapeHtml(image.id)}">Alt text</label>
+        <input
+          type="text"
+          id="altText-${escapeHtml(image.id)}"
+          class="form-field__input"
+          maxlength="200"
+          value="${altText}"
+          data-admin-image-alt-input
+        />
+        <div class="admin-image-alt-form__actions">
+          <button type="submit" class="btn btn--primary">Save</button>
+          <button type="button" class="btn btn--secondary" data-admin-image-alt-cancel="${escapeHtml(image.id)}">Cancel</button>
+        </div>
+      </form>
+    </li>
+  `;
+}
+
+function renderImageUploadForm(productId) {
+  return `
+    <form class="admin-image-upload-form" data-admin-image-upload-form data-product-id="${escapeHtml(productId)}" novalidate>
+      <h3 class="admin-page__section-subtitle">Upload New Image</h3>
+
+      <div class="form-field">
+        <label class="form-field__label" for="productImageFile">Image file <span class="form-field__required">*</span></label>
+        <input type="file" id="productImageFile" accept="image/jpeg,image/png,image/webp" />
+      </div>
+
+      <div class="form-field">
+        <label class="form-field__label" for="productImageAltText">Alt text <span class="form-field__required">*</span></label>
+        <input type="text" id="productImageAltText" class="form-field__input" maxlength="200" />
+      </div>
+
+      <div class="form-field">
+        <span class="form-field__label">Image type</span>
+        <div class="admin-image-upload-form__kind">
+          <label><input type="radio" name="productImageKind" value="gallery" checked /> Gallery image</label>
+          <label><input type="radio" name="productImageKind" value="main" /> Main image</label>
+        </div>
+      </div>
+
+      <p class="admin-product-form__hint">
+        Allowed files: JPG, PNG or WebP, up to 5 MB. Product images are public once uploaded.
+        Image upload uses Supabase Storage and must be configured first.
+      </p>
+
+      <div class="form-banner form-banner--error" data-admin-image-upload-banner hidden></div>
+
+      <button type="submit" class="btn btn--primary">Upload Image</button>
+    </form>
+  `;
+}
+
+function renderProductImagesSection(productId, images) {
+  return `
+    <section class="admin-product-images" data-admin-product-images data-product-id="${escapeHtml(productId)}">
+      <h2 class="admin-page__section-title">Product Images</h2>
+      ${
+        images.length > 0
+          ? `<ul class="admin-image-card-list">${images.map(renderProductImageCard).join("")}</ul>`
+          : `<p class="admin-product-images__empty">No images uploaded yet for this product.</p>`
+      }
+      ${renderImageUploadForm(productId)}
+    </section>
+  `;
+}
+
 export async function renderAdminProductCreate() {
   try {
     // GET /categories is public (no auth needed) — unlike the edit
@@ -209,9 +308,14 @@ export async function renderAdminProductEdit({ id } = {}) {
   if (!id) return renderNotFound("");
 
   try {
-    const [productResponse, categoriesResponse] = await Promise.all([getAdminProduct(id), apiGet("/categories")]);
+    const [productResponse, categoriesResponse, imagesResponse] = await Promise.all([
+      getAdminProduct(id),
+      apiGet("/categories"),
+      getProductImages(id),
+    ]);
     const product = productResponse.data;
     const categories = categoriesResponse.data.categories;
+    const images = imagesResponse.data.images;
     const successMessage = consumePendingAdminMessage();
 
     return `
@@ -221,6 +325,7 @@ export async function renderAdminProductEdit({ id } = {}) {
         <h1 class="admin-page__title">Edit ${escapeHtml(product.name)}</h1>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${renderProductForm("edit", product, categories)}
+        ${renderProductImagesSection(product.id, images)}
       </section>
     `;
   } catch (error) {

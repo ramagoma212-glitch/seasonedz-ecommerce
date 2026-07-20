@@ -27,7 +27,13 @@ import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { updateAdminOrderStatus, createAdminProduct, updateAdminProduct } from "./api/adminDashboardApi.js";
+import {
+  updateAdminOrderStatus,
+  createAdminProduct,
+  updateAdminProduct,
+  uploadProductImage,
+  updateProductImage,
+} from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 
@@ -52,6 +58,7 @@ function mountApp() {
   setupAdminOrderStatusForm();
   setupAdminProductFilterForm();
   setupAdminProductForm();
+  setupAdminProductImages();
 
   window.addEventListener("hashchange", onRouteChange);
   onRouteChange();
@@ -932,6 +939,192 @@ async function handleAdminProductFormSubmit(form) {
       banner.textContent = message;
       banner.hidden = false;
     }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin product images (Version 7, Milestone 70). Uses the protected
+// image routes already live from Milestone 69 — this file only adds
+// the UI wiring, no new backend behaviour. No delete/remove action
+// exists here by design (see VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
+// Section 10) — only upload, set-primary, and alt-text edit.
+const MAX_ADMIN_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024; // kept in sync with adminProductImage.service.ts
+const ALLOWED_ADMIN_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+function setupAdminProductImages() {
+  document.addEventListener("submit", (event) => {
+    const uploadForm = event.target.closest("[data-admin-image-upload-form]");
+    if (uploadForm) {
+      event.preventDefault();
+      handleAdminImageUploadSubmit(uploadForm);
+      return;
+    }
+
+    const altForm = event.target.closest("[data-admin-image-alt-form]");
+    if (altForm) {
+      event.preventDefault();
+      handleAdminImageAltSubmit(altForm);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const setPrimaryButton = event.target.closest("[data-admin-image-set-primary]");
+    if (setPrimaryButton) {
+      handleAdminImageSetPrimary(setPrimaryButton);
+      return;
+    }
+
+    const altToggleButton = event.target.closest("[data-admin-image-alt-toggle]");
+    if (altToggleButton) {
+      const card = altToggleButton.closest("[data-admin-image-card]");
+      const form = card?.querySelector("[data-admin-image-alt-form]");
+      if (form) form.hidden = !form.hidden;
+      return;
+    }
+
+    const altCancelButton = event.target.closest("[data-admin-image-alt-cancel]");
+    if (altCancelButton) {
+      const card = altCancelButton.closest("[data-admin-image-card]");
+      const form = card?.querySelector("[data-admin-image-alt-form]");
+      const input = form?.querySelector("[data-admin-image-alt-input]");
+      if (input) input.value = input.defaultValue;
+      if (form) form.hidden = true;
+    }
+  });
+}
+
+// 503 is deliberately never shown to the admin verbatim — the backend
+// message ("Product image upload is not configured.") is accurate but
+// technical; this is the one error this milestone was explicitly asked
+// to translate into a clear, non-scary sentence.
+function friendlyAdminImageErrorMessage(error) {
+  if (error instanceof ApiError && error.status === 503) {
+    return "Image upload is not configured yet. Please finish Supabase Storage setup first.";
+  }
+  if (error instanceof ApiError && (error.status === 400 || error.status === 404)) {
+    return error.message;
+  }
+  if (error instanceof ApiUnavailableError) {
+    return "We could not connect to the admin system right now. Please try again shortly.";
+  }
+  return "Something went wrong. Please try again shortly.";
+}
+
+function getAdminImagesProductId(el) {
+  return el.closest("[data-admin-product-images]")?.dataset.productId;
+}
+
+async function handleAdminImageUploadSubmit(form) {
+  const productId = form.dataset.productId;
+  const banner = form.querySelector("[data-admin-image-upload-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  const fileInput = form.querySelector("#productImageFile");
+  const altTextInput = form.querySelector("#productImageAltText");
+  const kindInput = form.querySelector('input[name="productImageKind"]:checked');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const file = fileInput?.files?.[0];
+  const altText = altTextInput?.value.trim() || "";
+  const kind = kindInput?.value || "gallery";
+
+  // Client-side validation is a UX convenience only, mirroring
+  // adminProductImage.service.ts — the backend remains the final
+  // authority regardless of what passes here.
+  let validationError = null;
+  if (!file) {
+    validationError = "An image file is required.";
+  } else if (!ALLOWED_ADMIN_IMAGE_MIME_TYPES.includes(file.type)) {
+    validationError = "Unsupported image type. Allowed types: JPG, PNG, or WebP.";
+  } else if (file.size > MAX_ADMIN_IMAGE_FILE_SIZE_BYTES) {
+    validationError = "Image file is too large. Maximum size is 5 MB.";
+  } else if (!altText) {
+    validationError = "Alt text is required.";
+  }
+
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await uploadProductImage(productId, file, altText, kind);
+    setPendingAdminMessage("Image uploaded successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminImageErrorMessage(error);
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleAdminImageSetPrimary(button) {
+  const card = button.closest("[data-admin-image-card]");
+  const imageId = card?.dataset.adminImageCard;
+  const productId = getAdminImagesProductId(button);
+  if (!card || !imageId || !productId) return;
+
+  button.disabled = true;
+
+  try {
+    await updateProductImage(productId, imageId, { isPrimary: true });
+    setPendingAdminMessage("Main image updated.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    // No dedicated banner for this action — a browser alert is enough
+    // for this first version's rarely-hit error path (e.g. the image
+    // was removed by someone else in the meantime).
+    window.alert(friendlyAdminImageErrorMessage(error));
+  }
+}
+
+async function handleAdminImageAltSubmit(form) {
+  const card = form.closest("[data-admin-image-card]");
+  const imageId = card?.dataset.adminImageCard;
+  const productId = getAdminImagesProductId(form);
+  const input = form.querySelector("[data-admin-image-alt-input]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (!card || !imageId || !productId) return;
+
+  const altText = input?.value.trim() || "";
+  if (!altText) {
+    window.alert("Alt text is required.");
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateProductImage(productId, imageId, { altText });
+    setPendingAdminMessage("Image alt text updated.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    window.alert(friendlyAdminImageErrorMessage(error));
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
