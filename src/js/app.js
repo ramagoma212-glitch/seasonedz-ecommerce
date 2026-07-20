@@ -1015,10 +1015,45 @@ function getAdminImagesProductId(el) {
   return el.closest("[data-admin-product-images]")?.dataset.productId;
 }
 
+const ADMIN_IMAGE_UPLOAD_BUTTON_DEFAULT_TEXT = "Upload Image";
+const ADMIN_IMAGE_UPLOAD_BUTTON_UPLOADING_TEXT = "Uploading image...";
+
+// Milestone 71's live test uploaded the same image twice — the
+// button's own `disabled` attribute was set, but nothing stopped a
+// second submit (a fast double click/tap, or Enter in a text field)
+// from re-entering this handler while the first upload's request was
+// still in flight, since the function never checked for that before
+// doing any work. `form.dataset.uploading` is the actual guard now;
+// disabling every field is the visible half of the same fix.
+function setAdminImageUploadFormBusy(form, busy) {
+  const submitButton = form.querySelector('button[type="submit"]');
+  const fileInput = form.querySelector("#productImageFile");
+  const altTextInput = form.querySelector("#productImageAltText");
+  const kindInputs = form.querySelectorAll('input[name="productImageKind"]');
+
+  form.dataset.uploading = busy ? "true" : "false";
+  if (submitButton) {
+    submitButton.disabled = busy;
+    submitButton.textContent = busy ? ADMIN_IMAGE_UPLOAD_BUTTON_UPLOADING_TEXT : ADMIN_IMAGE_UPLOAD_BUTTON_DEFAULT_TEXT;
+  }
+  if (fileInput) fileInput.disabled = busy;
+  if (altTextInput) altTextInput.disabled = busy;
+  kindInputs.forEach((input) => {
+    input.disabled = busy;
+  });
+}
+
 async function handleAdminImageUploadSubmit(form) {
+  // Re-entrancy guard — see setAdminImageUploadFormBusy's comment.
+  // Checked before anything else, including validation, so a queued
+  // duplicate submit is a true no-op rather than a second validation
+  // pass that happens to also pass.
+  if (form.dataset.uploading === "true") {
+    return;
+  }
+
   const productId = form.dataset.productId;
   const banner = form.querySelector("[data-admin-image-upload-banner]");
-  const submitButton = form.querySelector('button[type="submit"]');
   const fileInput = form.querySelector("#productImageFile");
   const altTextInput = form.querySelector("#productImageAltText");
   const kindInput = form.querySelector('input[name="productImageKind"]:checked');
@@ -1054,10 +1089,17 @@ async function handleAdminImageUploadSubmit(form) {
     return;
   }
 
-  if (submitButton) submitButton.disabled = true;
+  setAdminImageUploadFormBusy(form, true);
 
   try {
     await uploadProductImage(productId, file, altText, kind);
+    // Success re-renders the whole edit page (setPendingAdminMessage +
+    // rerenderCurrentRoute, the same pattern already proven for the
+    // product save form and set-primary/alt-text actions above) — the
+    // old form element is discarded entirely, which is what clears the
+    // selected file and alt text and reloads the images list in one
+    // step, more reliably than trying to hand-reset individual fields
+    // on a form that's about to be thrown away anyway.
     setPendingAdminMessage("Image uploaded successfully.");
     rerenderCurrentRoute();
   } catch (error) {
@@ -1069,8 +1111,10 @@ async function handleAdminImageUploadSubmit(form) {
       banner.textContent = friendlyAdminImageErrorMessage(error);
       banner.hidden = false;
     }
-  } finally {
-    if (submitButton) submitButton.disabled = false;
+    // Only re-enable on failure — on success the form is about to be
+    // replaced by rerenderCurrentRoute(), so re-enabling it here would
+    // just be a wasted, briefly-visible flicker before it's discarded.
+    setAdminImageUploadFormBusy(form, false);
   }
 }
 
