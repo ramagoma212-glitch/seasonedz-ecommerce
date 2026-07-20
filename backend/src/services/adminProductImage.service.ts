@@ -1,10 +1,14 @@
 // Version 7, Milestone 69: admin product image upload/management.
 // Deliberately its own service file — same reasoning as
 // adminProduct.service.ts and adminOrderStatus.service.ts before it:
-// an independent, easy-to-find write path. No DELETE anywhere in this
-// file, by design — deleting a product image is explicitly out of
-// scope for this milestone (VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
-// Section 10 recommends deferring it).
+// an independent, easy-to-find write path.
+//
+// Version 7, Milestone 74 adds deleteProductImage — deliberately the
+// last capability added, after upload/list/set-primary/alt-text had
+// already been live and proven (VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
+// Section 10 recommended deferring delete past the very first
+// version, not skipping it forever). Still no bulk delete, and still
+// no route that touches the Product row itself.
 //
 // This file never touches Product.name/price/stockQuantity/etc — it
 // only ever reads a product's id (existence check) and writes
@@ -15,6 +19,8 @@ import {
   isProductImageUploadConfigured,
   uploadProductImage,
   removeProductImageObjectBestEffort,
+  isSupabaseStorageUrl,
+  extractStoragePathFromPublicUrl,
   ProductImageStorageError,
 } from "./supabaseStorage.service.js";
 
@@ -295,4 +301,62 @@ export async function updateProductImage(
   const images = await listProductImages(productId);
 
   return { image, images };
+}
+
+// ---------------------------------------------------------------------------
+// Delete (DELETE /api/admin/products/:id/images/:imageId). Version 7,
+// Milestone 74. Deliberately single-image only — no bulk delete route
+// exists, and this never touches the Product row itself, only the one
+// ProductImage row named in the URL.
+// ---------------------------------------------------------------------------
+
+export interface DeleteProductImageResult {
+  deletedImageId: string;
+  images: AdminProductImageRow[];
+}
+
+export async function deleteProductImage(productId: string, imageId: string): Promise<DeleteProductImageResult> {
+  await requireProductExists(productId);
+
+  const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
+  if (!existing || existing.productId !== productId) {
+    throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
+  }
+
+  // Database row is the source of truth for what the storefront shows
+  // — deleted first, in the same transaction that promotes a new
+  // primary if needed, so there is never a moment where the product
+  // has images but zero of them marked primary.
+  await prisma.$transaction(async (tx) => {
+    await tx.productImage.delete({ where: { id: imageId } });
+
+    if (existing.isPrimary) {
+      const nextPrimary = await tx.productImage.findFirst({
+        where: { productId },
+        orderBy: { sortOrder: "asc" },
+      });
+      if (nextPrimary) {
+        await tx.productImage.update({ where: { id: nextPrimary.id }, data: { isPrimary: true } });
+      }
+    }
+  });
+
+  // Storage cleanup only after the database change has succeeded, and
+  // only for a Supabase-hosted image — a root-relative static path
+  // (e.g. "/images/product-1.jpg") is a frontend build asset with no
+  // Storage object behind it at all, never something this backend
+  // deletes. Best-effort and never throws (see
+  // removeProductImageObjectBestEffort's own comment) — the database
+  // change (what actually controls what the storefront shows) has
+  // already succeeded regardless of whether this step does.
+  if (isSupabaseStorageUrl(existing.url)) {
+    const path = extractStoragePathFromPublicUrl(existing.url);
+    if (path) {
+      await removeProductImageObjectBestEffort(path);
+    }
+  }
+
+  const images = await listProductImages(productId);
+
+  return { deletedImageId: imageId, images };
 }

@@ -207,6 +207,7 @@ function renderProductImageCard(image) {
             : `<button type="button" class="btn btn--secondary" data-admin-image-set-primary="${escapeHtml(image.id)}">Set as main</button>`
         }
         <button type="button" class="btn btn--secondary" data-admin-image-alt-toggle="${escapeHtml(image.id)}">Edit alt text</button>
+        <button type="button" class="btn btn--danger" data-admin-image-remove="${escapeHtml(image.id)}">Remove</button>
       </div>
       <form class="admin-image-alt-form" data-admin-image-alt-form="${escapeHtml(image.id)}" hidden>
         <label class="form-field__label" for="altText-${escapeHtml(image.id)}">Alt text</label>

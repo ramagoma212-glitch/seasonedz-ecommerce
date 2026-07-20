@@ -2,8 +2,11 @@
 // separate from adminProduct.controller.ts (product text/price/stock)
 // for the same reason that file is kept separate from
 // adminDashboard.controller.ts — an independent, easy-to-review write
-// path. No DELETE handler exists here, by design (see
-// VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md Section 10).
+// path.
+//
+// Version 7, Milestone 74 adds deleteAdminProductImageHandler — single-
+// image delete only, still no bulk delete route and no route that
+// touches the Product row itself.
 
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
@@ -104,6 +107,22 @@ export async function updateAdminProductImageHandler(req: Request, res: Response
 
     const result = await adminProductImageService.updateProductImage(id, imageId, req.body ?? {});
     sendSuccess(res, { message: "Image updated successfully", data: result });
+  } catch (error) {
+    if (handleKnownErrors(res, error)) return;
+    next(error);
+  }
+}
+
+export async function deleteAdminProductImageHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, imageId } = req.params;
+    if (!id || !imageId) {
+      sendError(res, { message: "Product id and image id are required", statusCode: 400 });
+      return;
+    }
+
+    const result = await adminProductImageService.deleteProductImage(id, imageId);
+    sendSuccess(res, { message: "Image removed successfully", data: result });
   } catch (error) {
     if (handleKnownErrors(res, error)) return;
     next(error);

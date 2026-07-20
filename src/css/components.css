@@ -49,6 +49,21 @@
   color: var(--color-white);
 }
 
+/* Version 7, Milestone 74 — the one destructive admin action (remove
+   a product image). Outlined in the same error colour already used
+   for .admin-badge--danger, filling solid on hover, same interaction
+   pattern as .btn--secondary. */
+.btn--danger {
+  background-color: transparent;
+  color: var(--color-error);
+  border: 2px solid var(--color-error);
+}
+
+.btn--danger:hover {
+  background-color: var(--color-error);
+  color: var(--color-white);
+}
+
 .btn--block {
   width: 100%;
 }
