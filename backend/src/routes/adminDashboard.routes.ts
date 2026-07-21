@@ -8,10 +8,11 @@
 // accidentally ship unauthenticated.
 //
 // Every route was a GET until Milestone 63, which added order status
-// update, and Milestone 66, which adds product create/edit — still no
-// DELETE route of any kind anywhere under /api/admin (see
+// update, and Milestone 66, which adds product create/edit. Still no
+// DELETE route touches a Product row itself (see
 // VERSION_7_PRODUCT_MANAGEMENT_PLAN.md Section 5 — ARCHIVED status is
-// the safe alternative to deleting a product).
+// the safe alternative to deleting a product) — Milestone 74's
+// DELETE .../images/:imageId only ever removes one ProductImage row.
 //
 // Route order matters for the /products family: "/products/low-stock"
 // (a literal path, Milestone 59) must stay registered before
@@ -36,6 +37,7 @@ import {
   updateAdminProductHandler,
 } from "../controllers/adminProduct.controller.js";
 import {
+  deleteAdminProductImageHandler,
   listAdminProductImagesHandler,
   updateAdminProductImageHandler,
   uploadAdminProductImageHandler,
@@ -57,13 +59,14 @@ router.post("/products", createAdminProductHandler);
 router.get("/products/low-stock", getLowStockProductsHandler);
 router.get("/products/:id", getAdminProductHandler);
 router.patch("/products/:id", updateAdminProductHandler);
-// Version 7, Milestone 69: image sub-routes, still no DELETE (see this
-// file's own top-of-file note and VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
-// Section 10). No route-ordering conflict with "/products/:id" above —
-// these have one more path segment, so Express only matches them
-// against a request that actually includes "/images".
+// Version 7, Milestone 69: image sub-routes. No route-ordering
+// conflict with "/products/:id" above — these have one more path
+// segment, so Express only matches them against a request that
+// actually includes "/images". Milestone 74 adds DELETE — single
+// image only, never bulk, never the product itself.
 router.get("/products/:id/images", listAdminProductImagesHandler);
 router.post("/products/:id/images", uploadProductImageMiddleware, uploadAdminProductImageHandler);
 router.patch("/products/:id/images/:imageId", updateAdminProductImageHandler);
+router.delete("/products/:id/images/:imageId", deleteAdminProductImageHandler);
 
 export default router;

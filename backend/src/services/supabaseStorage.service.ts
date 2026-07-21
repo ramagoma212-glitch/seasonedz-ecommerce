@@ -87,12 +87,13 @@ export async function uploadProductImage({
 }
 
 // Best-effort cleanup only, used when a database write fails after a
-// storage upload already succeeded (adminProductImage.service.ts).
-// Deliberately never throws — a cleanup failure must never mask the
-// real error the caller already has, and per
-// VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md Section 10, an occasional
-// leftover unused object is an acceptable tradeoff for a simple first
-// version rather than a hard failure here.
+// storage upload already succeeded (adminProductImage.service.ts), or
+// after an admin-initiated image removal (Version 7, Milestone 74)
+// has already deleted the ProductImage row. Deliberately never throws
+// — a cleanup failure must never mask the real error/response the
+// caller already has, and per VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md
+// Section 10, an occasional leftover unused object is an acceptable
+// tradeoff for a simple version rather than a hard failure here.
 export async function removeProductImageObjectBestEffort(path: string): Promise<void> {
   if (!isProductImageUploadConfigured()) return;
   try {
@@ -101,4 +102,28 @@ export async function removeProductImageObjectBestEffort(path: string): Promise<
   } catch {
     // Swallowed deliberately — see comment above.
   }
+}
+
+// Version 7, Milestone 74: a ProductImage.url is either a Supabase
+// public object URL (uploaded via this backend) or a root-relative
+// static frontend asset path (e.g. "/images/product-1.jpg", the
+// original 10 products' current placeholder images). Only the former
+// has a real Storage object behind it to ever consider deleting — a
+// static path is a file bundled into the frontend's own build, never
+// something this backend can or should touch.
+export function isSupabaseStorageUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url) && url.includes("/storage/v1/object/public/");
+}
+
+// Recovers the bucket-relative object path (e.g.
+// "products/{id}/main/{timestamp}-{name}.jpg") from a full public URL
+// previously returned by uploadProductImage's getPublicUrl call.
+// Returns null if the URL doesn't match this bucket's own public URL
+// shape at all — callers must treat that as "nothing safe to delete",
+// never guess or fall back to deleting something else.
+export function extractStoragePathFromPublicUrl(url: string): string | null {
+  const marker = `/storage/v1/object/public/${env.productImagesBucket}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  return url.slice(index + marker.length);
 }

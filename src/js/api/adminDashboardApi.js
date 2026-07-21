@@ -103,3 +103,11 @@ export function updateProductImage(productId, imageId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// Version 7, Milestone 74: removes one product image. Single image
+// only — there is no bulk-delete endpoint.
+export function deleteProductImage(productId, imageId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/images/${encodeURIComponent(imageId)}`, {
+    method: "DELETE",
+  });
+}

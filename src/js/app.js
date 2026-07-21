@@ -33,6 +33,7 @@ import {
   updateAdminProduct,
   uploadProductImage,
   updateProductImage,
+  deleteProductImage,
 } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
@@ -990,6 +991,12 @@ function setupAdminProductImages() {
       const input = form?.querySelector("[data-admin-image-alt-input]");
       if (input) input.value = input.defaultValue;
       if (form) form.hidden = true;
+      return;
+    }
+
+    const removeButton = event.target.closest("[data-admin-image-remove]");
+    if (removeButton) {
+      handleAdminImageRemove(removeButton);
     }
   });
 }
@@ -1171,6 +1178,38 @@ async function handleAdminImageAltSubmit(form) {
     window.alert(friendlyAdminImageErrorMessage(error));
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Version 7, Milestone 74. Single-image delete only — there is no
+// bulk-remove action anywhere. A plain confirm() dialog is enough for
+// this first version's one destructive action; it blocks the click
+// from doing anything until the admin explicitly confirms.
+async function handleAdminImageRemove(button) {
+  const card = button.closest("[data-admin-image-card]");
+  const imageId = card?.dataset.adminImageCard;
+  const productId = getAdminImagesProductId(button);
+  if (!card || !imageId || !productId) return;
+
+  const confirmed = window.confirm("Remove this image from this product?\nThis cannot be undone.");
+  if (!confirmed) return;
+
+  button.disabled = true;
+
+  try {
+    await deleteProductImage(productId, imageId);
+    setPendingAdminMessage("Image removed successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    // Re-enable on failure — the image card is left exactly as it was,
+    // never partially removed from the visible list, since nothing
+    // here touches the DOM until the API call actually succeeds.
+    button.disabled = false;
+    window.alert(friendlyAdminImageErrorMessage(error));
   }
 }
 
