@@ -263,8 +263,12 @@ export const env = {
   databaseUrl: getEnv("DATABASE_URL"),
   directUrl: getEnv("DIRECT_URL"),
   frontendUrl,
-  // Optional second allowed CORS origin — e.g. the deployed GitHub
-  // Pages URL. See "CORS / Allowed Origins" in README.md.
+  // Optional additional allowed CORS origin(s) — e.g. the deployed
+  // GitHub Pages URL, and/or a custom domain once connected. Accepts
+  // one origin, or several separated by commas (Version 7, Milestone
+  // 81 — added to support a domain migration, where the old and new
+  // frontend origins must both be allowed at once). See "CORS /
+  // Allowed Origins" in README.md.
   frontendProductionUrl: getOptionalEnv("FRONTEND_PRODUCTION_URL"),
   // PayFast — see the block above. `mode` is validated to always be
   // one of these two literal values.
@@ -302,15 +306,26 @@ export const env = {
 // from FRONTEND_URL (always present) plus FRONTEND_PRODUCTION_URL
 // (only if set). See app.ts for how this is used.
 //
+// FRONTEND_PRODUCTION_URL accepts one origin, or multiple separated by
+// commas (e.g. "https://a.example,https://b.example") — Version 7,
+// Milestone 81 added this so a domain migration can allow the old
+// origin (e.g. GitHub Pages) and the new one (a custom domain) at the
+// same time, without a second env var or a code change needed at the
+// exact moment of cutover. Each entry is trimmed; empty entries (e.g.
+// a stray trailing comma) are dropped. A single value with no comma
+// behaves exactly as before this change.
+//
 // Important: an "origin" is scheme + host (+ port), never a path — the
 // browser's Origin header for a request from
 // https://ramagoma212-glitch.github.io/seasonedz-ecommerce/#/shop is
 // just "https://ramagoma212-glitch.github.io", with no /seasonedz-ecommerce
-// suffix. So FRONTEND_PRODUCTION_URL must be set to that bare
-// scheme+host value, not the full GitHub Pages project-site path — see
-// backend/DEPLOYMENT.md.
-export const allowedOrigins: string[] = [env.frontendUrl, env.frontendProductionUrl].filter(
-  (url): url is string => Boolean(url)
-);
+// suffix. So every entry in FRONTEND_PRODUCTION_URL must be that bare
+// scheme+host value, not a full path — see backend/DEPLOYMENT.md.
+const frontendProductionOrigins = (env.frontendProductionUrl ?? "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter((origin) => origin.length > 0);
+
+export const allowedOrigins: string[] = [env.frontendUrl, ...frontendProductionOrigins];
 
 export const isProduction = env.nodeEnv === "production";

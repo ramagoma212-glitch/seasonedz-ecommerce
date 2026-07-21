@@ -117,7 +117,7 @@ real values):
 | `DATABASE_URL` | PostgreSQL connection string used by the app at runtime (Supabase's pooled/pgbouncer connection) | **Required — no default.** Backend fails to start without it |
 | `DIRECT_URL` | Direct (non-pooled) PostgreSQL connection, used only by Prisma Migrate (Supabase's pooler doesn't support migration DDL) | **Required — no default.** Backend fails to start without it |
 | `FRONTEND_URL` | Primary allowed CORS origin | **Required.** Defaults to `http://localhost:5173` outside production; in production it must be set explicitly — no localhost fallback |
-| `FRONTEND_PRODUCTION_URL` | Optional second allowed CORS origin (e.g. deployed GitHub Pages URL) | Optional — omit if there's only one frontend origin |
+| `FRONTEND_PRODUCTION_URL` | Optional additional allowed CORS origin(s) — one, or several separated by commas (e.g. deployed GitHub Pages URL and/or a custom domain) | Optional — omit if there's only one frontend origin |
 | `PAYFAST_ENABLED` | Feature flag — real PayFast checkout stays blocked until `true` | Defaults to `false`. See "PayFast Sandbox Setup" below |
 | `PAYFAST_MODE` | `sandbox` or `production` | Defaults to `sandbox` |
 | `PAYFAST_MERCHANT_ID` / `PAYFAST_MERCHANT_KEY` | PayFast merchant credentials | **Required only if `PAYFAST_ENABLED=true`** |
@@ -158,6 +158,14 @@ explicitly — never a wildcard:
   ```
   FRONTEND_URL=http://localhost:5173
   FRONTEND_PRODUCTION_URL=https://ramagoma212-glitch.github.io
+  ```
+
+- Domain migration: `FRONTEND_PRODUCTION_URL` also accepts multiple
+  origins separated by commas, so the old and new frontend origins can
+  both be allowed at once during a cutover, for example:
+
+  ```
+  FRONTEND_PRODUCTION_URL=https://ramagoma212-glitch.github.io,https://www.example.com
   ```
 
 Full CORS behaviour (including how non-matching origins are handled)
