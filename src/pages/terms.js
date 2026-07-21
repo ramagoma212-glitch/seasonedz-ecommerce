@@ -1,5 +1,5 @@
-// Terms and conditions page. Practical, plain-language wording for a
-// frontend demo site — not formal legal advice.
+// Terms and conditions page. Practical, plain-language wording for
+// how this website actually works today — not formal legal advice.
 
 export function renderTerms() {
   return `
@@ -18,9 +18,8 @@ export function renderTerms() {
 
         <h2>Using This Website</h2>
         <p>
-          This website is provided so you can browse and learn about
-          Seasonedz Group's products, and — currently as a demo — try out
-          the shopping and checkout experience.
+          This website is provided so you can browse Seasonedz Group's
+          products and place an order using our current checkout process.
         </p>
 
         <h2>Product Information</h2>
@@ -37,19 +36,21 @@ export function renderTerms() {
           applies to your order.
         </p>
 
-        <h2>Orders and Demo Checkout</h2>
+        <h2>Placing an Order</h2>
         <p>
-          This site's checkout is currently a <strong>frontend demonstration
-          only</strong>. Orders placed here are saved to your browser's
-          Local Storage for preview purposes — no real payment is taken and
-          no goods are shipped.
+          When you place an order, it is sent to Seasonedz Group for
+          processing. You can currently pay using Bank Transfer or Cash
+          or Card on Delivery. Both place a real order with Seasonedz
+          Group. Seasonedz Group confirms your order, payment and stock
+          availability before your order is prepared for delivery.
         </p>
 
-        <h2>Future Payment Processing</h2>
+        <h2>Online Payment</h2>
         <p>
-          Once real online payment (including PayFast) is connected, these
-          terms will be updated to cover payment processing, order
-          confirmation and related terms in full.
+          Online payment through PayFast is being prepared but is not
+          available to customers yet. Once PayFast is enabled, these
+          terms will be updated to cover online payment processing in
+          full.
         </p>
 
         <h2>Delivery</h2>
@@ -68,7 +69,7 @@ export function renderTerms() {
         <p>
           We aim to keep this website accurate and running smoothly, but we
           can't guarantee it will always be error-free or uninterrupted. We
-          are not liable for issues arising from use of this demo site
+          are not liable for issues arising from use of this website
           beyond what is required by law.
         </p>
 

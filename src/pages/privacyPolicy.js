@@ -1,6 +1,9 @@
-// Privacy policy page. Written in plain language for a frontend demo
-// site — this describes what actually happens in the code (Local
-// Storage only, no server), not formal legal advice.
+// Privacy policy page. Plain-language explanation of how this website
+// actually handles information: cart and wishlist stay in the
+// customer's own browser (Local Storage), while order and delivery
+// details submitted at checkout are sent to and stored on the real
+// Seasonedz Group backend so orders can be processed. Not formal
+// legal advice.
 
 export function renderPrivacyPolicy() {
   return `
@@ -14,41 +17,49 @@ export function renderPrivacyPolicy() {
         <p>
           This page explains, in plain language, how information is
           handled on this website. It's written to be practical and
-          honest about how this site currently works — it isn't intended
+          honest about how this site currently works. It isn't intended
           as formal legal advice.
         </p>
 
         <h2>Information Collected at Checkout</h2>
         <p>
-          When you use our guest checkout, we collect the details needed to
-          process an order: your name, email address, phone number and
-          delivery address. This information is only used to fulfil and
-          communicate about your order.
+          When you place an order, we collect the details needed to
+          process it: your name, email address, phone number and
+          delivery address. This information is only used to process,
+          confirm and deliver your order, and to contact you if needed.
         </p>
 
-        <h2>How This Demo Site Stores Information</h2>
+        <h2>How Your Information Is Stored</h2>
         <p>
-          This website is currently a frontend demo with no backend server
-          or database. Your cart, wishlist and any demo orders you place
-          are stored only in your own browser's Local Storage — nothing is
-          sent to us or anyone else. Clearing your browser storage will
-          remove this information. See our
+          Your cart and wishlist are stored only in your own browser,
+          using Local Storage. This information stays on your device
+          until you complete an order. See our
           <a href="#/cookies-policy">Cookies Policy</a> for more detail.
         </p>
-
-        <h2>Looking Ahead</h2>
         <p>
-          Once real accounts and payment processing are introduced, this
-          policy will be updated to explain how that information is stored
-          and protected, including any third-party services involved (such
-          as a payment provider).
+          When you place an order, your order details, including your
+          customer and delivery information, are sent securely to the
+          Seasonedz Group website backend and stored there. This allows
+          Seasonedz Group to confirm your order, arrange delivery and
+          keep a record for order management.
+        </p>
+
+        <h2>Payment Information</h2>
+        <p>
+          Seasonedz Group currently accepts orders by Bank Transfer and
+          Cash or Card on Delivery. Neither method takes an online
+          payment through this website. Online payment through PayFast
+          is being prepared but is not available to customers yet. Once
+          PayFast is enabled, this policy will be updated to explain
+          what information is shared with PayFast to process a payment.
         </p>
 
         <h2>Your Privacy Matters to Us</h2>
         <p>
-          We only ever intend to use your information to serve you better —
-          processing orders, responding to enquiries, and improving this
-          site. If you have any questions about your information, please
+          We only ever intend to use your information to serve you
+          better: processing orders, arranging delivery, responding to
+          enquiries and improving this site. If you have any questions
+          about your information, please
           <a href="#/contact">contact us</a>.
         </p>
       </div>
