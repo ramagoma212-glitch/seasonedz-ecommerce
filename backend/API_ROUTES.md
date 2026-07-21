@@ -101,7 +101,7 @@ env.ts`):
 | Variable | Required | Purpose |
 |---|---|---|
 | `FRONTEND_URL` | Always | The primary allowed origin (local dev server, or the deployed frontend in production) |
-| `FRONTEND_PRODUCTION_URL` | Optional | A second allowed origin — e.g. the deployed GitHub Pages URL, so both a local dev frontend and the live site can call this API at once |
+| `FRONTEND_PRODUCTION_URL` | Optional | One or more additional allowed origins, separated by commas — e.g. the deployed GitHub Pages URL and/or a custom domain, so a local dev frontend, the live site, and a domain migration's old and new origins can all call this API at once |
 
 Any request whose `Origin` header isn't one of these is not blocked
 outright at the server (a non-browser client can always set any Origin
