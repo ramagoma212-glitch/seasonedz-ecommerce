@@ -35,20 +35,49 @@ function warnFallback(error) {
   );
 }
 
+// Version 7, Milestone 83: a category's own stored image (Category.imageUrl,
+// set once and never revisited) is a separate field from any product's
+// image — uploading real photos for products (Milestones 69-74) never
+// touches it, which is exactly why category cards kept showing the
+// original shared placeholder graphics after real product photos went
+// live. Rather than adding a whole separate category-image admin
+// feature, each category's card now shows one of its own products'
+// current primary image instead — always in sync with real product
+// photos, with nothing new to remember to update. Falls back to the
+// category's own stored image only if it somehow has no products at
+// all (never happens in current data, but kept as a safety net).
+function withRepresentativeCategoryImages(categories, products) {
+  return categories.map((category) => {
+    const representativeProduct = products.find((product) => product.categorySlug === category.slug);
+    return {
+      ...category,
+      image: representativeProduct ? representativeProduct.image : category.image,
+    };
+  });
+}
+
 export async function getCatalog() {
   if (cachedCatalog) return cachedCatalog;
 
   try {
     const [productsResponse, categoriesResponse] = await Promise.all([apiGet("/products"), apiGet("/categories")]);
+    const products = productsResponse.data.products.map(mapApiProductToFrontendShape);
 
     cachedCatalog = {
-      products: productsResponse.data.products.map(mapApiProductToFrontendShape),
-      categories: categoriesResponse.data.categories.map(mapApiCategoryToFrontendShape),
+      products,
+      categories: withRepresentativeCategoryImages(
+        categoriesResponse.data.categories.map(mapApiCategoryToFrontendShape),
+        products
+      ),
       source: "api",
     };
   } catch (error) {
     warnFallback(error);
-    cachedCatalog = { products: staticProducts, categories: staticCategories, source: "static" };
+    cachedCatalog = {
+      products: staticProducts,
+      categories: withRepresentativeCategoryImages(staticCategories, staticProducts),
+      source: "static",
+    };
   }
 
   return cachedCatalog;
