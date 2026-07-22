@@ -18,7 +18,7 @@ export async function renderCategories() {
         Browse our range of product categories, from colouring books to
         classroom-ready packs for schools and churches.
       </p>
-      <div class="grid grid--3">
+      <div class="category-grid">
         ${categories.map((category, index) => renderCategoryCard(category, { eager: index < 3 })).join("")}
       </div>
     </section>

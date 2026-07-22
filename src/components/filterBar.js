@@ -12,6 +12,33 @@ import {
   buildClearFiltersHref,
 } from "../js/search.js";
 
+// Version 7, Milestone 93B: mobile-only "Show Filters" button — hidden
+// entirely on desktop (see .filter-toggle in components.css), and the
+// only way to reveal the filter panel on mobile, where the panel
+// itself starts collapsed. Shared by both Shop and Search Results
+// (see FILTER_PANEL_ID), since both render the exact same filter-panel
+// markup/CSS — the panel would be permanently unreachable on mobile
+// search results without this too. Delegated click handling lives in
+// js/app.js (data-action="toggle-mobile-filters"), matching every
+// other data-action in this app — #main-content is replaced on every
+// route render, so a direct listener bound here wouldn't survive a
+// filter change.
+export const FILTER_PANEL_ID = "shop-filter-panel";
+
+export function renderFilterToggle() {
+  return `
+    <button
+      type="button"
+      class="filter-toggle"
+      data-action="toggle-mobile-filters"
+      aria-expanded="false"
+      aria-controls="${FILTER_PANEL_ID}"
+    >
+      <span data-filter-toggle-label>Show Filters</span>
+    </button>
+  `;
+}
+
 function renderSelect({ label, name, options, currentValue, allLabel }) {
   return `
     <div class="filter-panel__group">

@@ -12,10 +12,12 @@
 import { renderProductCard } from "../components/productCard.js";
 import {
   renderFilterBar,
+  renderFilterToggle,
   renderSortSelect,
   renderActiveFilters,
   renderProductCount,
   renderEmptyState,
+  FILTER_PANEL_ID,
 } from "../components/filterBar.js";
 import { getProductResults, getDistinctAgeRanges, getDistinctTags } from "../js/search.js";
 import { getCatalog } from "../js/api/productsApi.js";
@@ -55,7 +57,8 @@ export async function renderShop({ query } = {}) {
       </p>
 
       <div class="shop-layout">
-        <aside class="filter-panel" aria-label="Filter products">
+        ${renderFilterToggle()}
+        <aside class="filter-panel" id="${FILTER_PANEL_ID}" aria-label="Filter products">
           ${renderFilterBar({ path: "/shop", query, categories, ageRanges, tags })}
         </aside>
 
