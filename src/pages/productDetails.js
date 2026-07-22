@@ -11,11 +11,13 @@
 // with the real product name and its own short description, and adds
 // Product structured data (JSON-LD) — see js/seo.js. Deliberately
 // never includes aggregateRating/review fields in that structured
-// data: the rating/reviewCount shown on the page are sample data, and
+// data: rating/reviewCount are sample data, not real reviews, and
 // claiming them as real review markup to search engines would be
-// misleading — see VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md.
+// misleading — see VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md. Version 7,
+// Milestone 95: removed the visible rating/reviewCount display on this
+// page too, for the same reason.
 
-import { renderProductCard, renderStars } from "../components/productCard.js";
+import { renderProductCard } from "../components/productCard.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
@@ -181,11 +183,6 @@ export async function renderProductDetails({ slug } = {}) {
         <div class="product-details__info">
           <p class="product-details__category">${product.category}</p>
           <h1 class="product-details__title">${product.name}</h1>
-
-          <div class="product-details__rating">
-            ${renderStars(product.rating)}
-            <span>(${product.reviewCount} reviews)</span>
-          </div>
 
           <div class="product-details__price-row">
             <span class="product-details__price">R${product.price.toFixed(2)}</span>

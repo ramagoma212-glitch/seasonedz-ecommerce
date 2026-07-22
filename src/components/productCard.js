@@ -16,6 +16,11 @@ const STOCK_STATUS_CLASS = {
   "Out of Stock": "out",
 };
 
+// Version 7, Milestone 95: product cards no longer call this — the
+// rating/reviewCount they used to show was demo/sample data hardcoded
+// in src/data/products.js, not real customer reviews. Still exported
+// and used by pages/testimonials.js, which renders real curated
+// testimonial content, not product review data.
 export function renderStars(rating) {
   const rounded = Math.round(rating);
   const filled = "&#9733;".repeat(rounded);
@@ -72,11 +77,6 @@ export function renderProductCard(product, { eager = false } = {}) {
         <h3 class="card__title">
           <a href="/product/${product.slug}">${product.name}</a>
         </h3>
-
-        <div class="product-card__rating">
-          ${renderStars(product.rating)}
-          <span class="product-card__review-count">(${product.reviewCount})</span>
-        </div>
 
         <p class="product-card__desc">${product.shortDescription}</p>
 
