@@ -22,6 +22,13 @@
 // importing src/data/products.js or blogPosts.js directly, both of
 // which eagerly call js/paths.js's withBase() at module load time
 // (Vite-only; undefined under plain Node).
+//
+// Version 7, Milestone 89: also writes dist/sitemap.xml, listing the
+// exact same allowlisted routes plus real product/blog slugs — kept
+// in this same script (rather than a separate one) so there is only
+// one place that fetches product/blog data and only one definition of
+// "which routes are public," instead of two lists that could drift
+// apart over time.
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -53,6 +60,7 @@ const PUBLIC_STATIC_ROUTES = [
   "/blog",
 ];
 
+const SITE_URL = "https://www.seasonedzgroup.co.za";
 const PRODUCTS_API_URL = "https://seasonedz-ecommerce.onrender.com/api/products?limit=100";
 const PRODUCTS_FALLBACK_FILE = join(ROOT, "src/data/products.js");
 const BLOG_POSTS_FILE = join(ROOT, "src/data/blogPosts.js");
@@ -99,6 +107,16 @@ function writeRouteFile(routePath, html) {
   writeFileSync(join(targetDir, "index.html"), html);
 }
 
+// No <lastmod>/<changefreq>/<priority> — this project has no reliable
+// per-page last-modified data, and fabricating one would be worse
+// than omitting it; Google explicitly treats changefreq/priority as
+// hints it mostly ignores anyway, so a plain <loc>-only sitemap loses
+// nothing that matters.
+function buildSitemapXml(urlPaths) {
+  const urlEntries = urlPaths.map((path) => `  <url><loc>${SITE_URL}${path}</loc></url>`).join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
+}
+
 async function main() {
   if (!existsSync(INDEX_HTML_PATH)) {
     console.error("[generate-static-routes] dist/index.html not found — run `npm run build` first.");
@@ -129,6 +147,15 @@ async function main() {
 
   const total = PUBLIC_STATIC_ROUTES.length + productSlugs.length + (blogSlugs ? blogSlugs.length : 0);
   console.log(`[generate-static-routes] Done. ${total} static route file(s) written to dist/.`);
+
+  const sitemapPaths = [
+    "/",
+    ...PUBLIC_STATIC_ROUTES,
+    ...productSlugs.map((slug) => `/product/${slug}`),
+    ...(blogSlugs ? blogSlugs.map((slug) => `/blog/${slug}`) : []),
+  ];
+  writeFileSync(join(DIST, "sitemap.xml"), buildSitemapXml(sitemapPaths));
+  console.log(`[generate-static-routes] Generated sitemap.xml with ${sitemapPaths.length} URL(s).`);
 }
 
 main();

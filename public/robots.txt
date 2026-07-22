@@ -1,0 +1,15 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /wishlist
+Disallow: /track-order
+Disallow: /search
+Disallow: /order-confirmation
+Disallow: /payment-success
+Disallow: /payment-cancelled
+Disallow: /payment-failed
+
+Sitemap: https://www.seasonedzgroup.co.za/sitemap.xml
