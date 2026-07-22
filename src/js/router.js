@@ -49,6 +49,12 @@
 
 import { setPageMeta, clearPageStructuredData } from "./seo.js";
 import { navigateTo } from "./navigation.js";
+import {
+  renderProductGridSkeleton,
+  renderCategoryGridSkeleton,
+  renderProductDetailSkeleton,
+  renderHomeSkeleton,
+} from "../components/skeleton.js";
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
 import { renderCategories } from "../pages/categories.js";
@@ -86,21 +92,32 @@ import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
 import { renderAdminProducts } from "../pages/adminProducts.js";
 import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
 
+// Version 7, Milestone 92B: an optional `skeleton` per route names an
+// entry in SKELETON_RENDERERS below — shown immediately, before
+// awaiting the route's render() Promise, for routes whose content
+// depends on the async getCatalog() call (Milestone 92A found this,
+// not missing image dimensions, was the real cause of the site's high
+// CLS: these pages render completely empty until data resolves, then
+// suddenly fill with a full grid of cards). A route without one is
+// unaffected — most routes render synchronously already and have
+// nothing to reserve space for.
 const routeDefs = [
-  { pattern: "/", render: renderHome, title: "Home" },
+  { pattern: "/", render: renderHome, title: "Home", skeleton: "home" },
   {
     pattern: "/shop",
     render: renderShop,
     title: "Shop",
     description: "Browse educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons from Seasonedz Group.",
+    skeleton: "product-grid",
   },
   {
     pattern: "/categories",
     render: renderCategories,
     title: "Categories",
     description: "Shop Seasonedz Group colouring books and creative supplies by category, from kids' colouring books to mindfulness colouring for adults.",
+    skeleton: "category-grid",
   },
-  { pattern: "/product/:slug", render: renderProductDetails, title: "Product" },
+  { pattern: "/product/:slug", render: renderProductDetails, title: "Product", skeleton: "product-detail" },
   // Version 7, Milestone 88A: noindex below marks routes that are
   // either an internal search results listing (best-practice per
   // Google's own webmaster guidance — never useful as a search
@@ -108,6 +125,14 @@ const routeDefs = [
   // transactional/order-specific (checkout, order-confirmation, the
   // three payment status pages, track-order) — none of these are
   // pages a search engine should ever surface publicly.
+  // No skeleton here even though it shares getCatalog() with /shop:
+  // renderSearchResults() returns instantly (no data needed at all)
+  // for the common "no search term yet" case, but is still an async
+  // function, so a skeleton mapped here would show — and then be
+  // replaced by that small static prompt — every time, a worse look
+  // than today's plain instant render for that case. Left out of
+  // scope for this milestone rather than adding query-aware routing
+  // logic just to handle it.
   { pattern: "/search", render: renderSearchResults, title: "Search", noindex: true },
   { pattern: "/cart", render: renderCartPage, title: "Your Cart", noindex: true },
   { pattern: "/wishlist", render: renderWishlistPage, title: "Your Wishlist", noindex: true },
@@ -237,12 +262,22 @@ function matchRoute(path) {
         title: route.title,
         description: route.description,
         noindex: route.noindex,
+        skeleton: route.skeleton,
         params,
       };
     }
   }
   return null;
 }
+
+// Version 7, Milestone 92B: maps each routeDefs `skeleton` name to the
+// matching components/skeleton.js renderer.
+const SKELETON_RENDERERS = {
+  home: renderHomeSkeleton,
+  "product-grid": renderProductGridSkeleton,
+  "category-grid": renderCategoryGridSkeleton,
+  "product-detail": renderProductDetailSkeleton,
+};
 
 async function renderCurrentRoute() {
   const main = document.getElementById("main-content");
@@ -265,7 +300,20 @@ async function renderCurrentRoute() {
   });
 
   const result = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
-  main.innerHTML = result instanceof Promise ? await result : result;
+
+  if (result instanceof Promise) {
+    // The render() call above has already kicked off its data fetch
+    // (an async function runs synchronously up to its first await
+    // before returning a Promise) — showing the skeleton here doesn't
+    // delay that fetch by even a tick, it just reserves the right
+    // amount of space while it's in flight. Fully replaced once the
+    // real content resolves, so nothing needs cleaning up afterwards.
+    const skeletonRenderer = matched?.skeleton && SKELETON_RENDERERS[matched.skeleton];
+    if (skeletonRenderer) main.innerHTML = skeletonRenderer();
+    main.innerHTML = await result;
+  } else {
+    main.innerHTML = result;
+  }
 }
 
 async function resolveRoute() {

@@ -14,7 +14,22 @@ export function renderHeader() {
     <header class="site-header">
       <div class="container site-header__inner">
         <a href="/" class="logo">
-          <img src="${withBase("/images/logo-placeholder.jpeg")}" alt="Seasonedz Group logo" />
+          <!--
+            Version 7, Milestone 92A: 40x40 matches .logo img's own
+            CSS (height: 40px; width: auto) and the source file's true
+            1:1 aspect ratio (confirmed 1250x1250) — always above the
+            fold (part of the persistent header), so eager/no lazy
+            loading; decoding="async" is still safe since it only
+            affects decode scheduling, not fetch priority.
+          -->
+          <img
+            src="${withBase("/images/logo-placeholder.jpeg")}"
+            alt="Seasonedz Group logo"
+            width="40"
+            height="40"
+            loading="eager"
+            decoding="async"
+          />
           <span class="logo__text">Seasonedz</span>
         </a>
 

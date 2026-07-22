@@ -40,7 +40,26 @@ export async function renderHome() {
   return `
     <section class="container">
       <div class="hero">
-        <img class="hero__image" src="${withBase("/images/hero-banner.jpg")}" alt="Seasonedz Group colouring books and school supplies" />
+        <!--
+          Version 7, Milestone 92A: this is the homepage's LCP
+          candidate (large, full-width, first visual element) — eager
+          loading + fetchpriority="high" (used nowhere else on this
+          image type) to prioritise its download; width/height are the
+          source file's true dimensions (1400x560). .hero__image's own
+          CSS already fully fixes both width (100%) and height (420px)
+          regardless of the image's ratio, so these attributes don't
+          change layout — they're set for correctness, and the
+          fetchpriority/eager loading are the parts that actually help.
+        -->
+        <img
+          class="hero__image"
+          src="${withBase("/images/hero-banner.jpg")}"
+          alt="Seasonedz Group colouring books and school supplies"
+          width="1400"
+          height="560"
+          loading="eager"
+          fetchpriority="high"
+        />
         <div class="hero__content">
           <h1 class="hero__title">Colour, Learn and Grow with Seasonedz</h1>
           <p class="hero__subtitle">
@@ -67,7 +86,7 @@ export async function renderHome() {
         <p>Explore our range of colouring books and creative supplies.</p>
       </div>
       <div class="grid grid--3">
-        ${categories.map((category) => renderCategoryCard(category)).join("")}
+        ${categories.map((category, index) => renderCategoryCard(category, { eager: index < 3 })).join("")}
       </div>
     </section>
 

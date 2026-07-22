@@ -3,13 +3,28 @@
 // js/app.js (data-action="cart-increase" / "cart-decrease" /
 // "cart-update" / "cart-remove").
 
-export function renderCartItem(item) {
+// Version 7, Milestone 92A: width/height match .cart-item__image's own
+// fixed 72x72 CSS size exactly (unlike the square card images
+// elsewhere, this one isn't fluid, so there's a single correct value
+// rather than just a same-ratio placeholder). eager defaults to false
+// (lazy) — see productCard.js's comment; callers pass { eager: true }
+// for the first couple of items, which are typically visible without
+// scrolling on a cart page.
+export function renderCartItem(item, { eager = false } = {}) {
   const lineTotal = item.price * item.quantity;
 
   return `
     <div class="cart-item">
       <a class="cart-item__image-link" href="/product/${item.slug}">
-        <img class="cart-item__image" src="${item.image}" alt="${item.name}" />
+        <img
+          class="cart-item__image"
+          src="${item.image}"
+          alt="${item.name}"
+          width="72"
+          height="72"
+          loading="${eager ? "eager" : "lazy"}"
+          decoding="async"
+        />
       </a>
 
       <div class="cart-item__details">

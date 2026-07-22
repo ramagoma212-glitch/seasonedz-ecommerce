@@ -19,7 +19,7 @@ export async function renderCategories() {
         classroom-ready packs for schools and churches.
       </p>
       <div class="grid grid--3">
-        ${categories.map((category) => renderCategoryCard(category)).join("")}
+        ${categories.map((category, index) => renderCategoryCard(category, { eager: index < 3 })).join("")}
       </div>
     </section>
   `;

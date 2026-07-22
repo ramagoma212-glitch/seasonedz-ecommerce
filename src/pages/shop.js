@@ -69,7 +69,7 @@ export async function renderShop({ query } = {}) {
 
           ${
             results.length
-              ? `<div class="product-grid">${results.map((product) => renderProductCard(product)).join("")}</div>`
+              ? `<div class="product-grid">${results.map((product, index) => renderProductCard(product, { eager: index < 4 })).join("")}</div>`
               : renderEmptyState({
                   title: "No products found",
                   message: "Try adjusting or clearing your filters.",

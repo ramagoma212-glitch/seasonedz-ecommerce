@@ -2,11 +2,21 @@
 // card's visual language, but with a plain "Remove" button instead of
 // a heart toggle, since being on this page already means it's saved.
 
-export function renderWishlistItem(item) {
+// Version 7, Milestone 92A: see productCard.js's comment for the
+// eager/width/height reasoning — same pattern here.
+export function renderWishlistItem(item, { eager = false } = {}) {
   return `
     <article class="card wishlist-item">
       <a href="/product/${item.slug}">
-        <img class="card__image" src="${item.image}" alt="${item.name}" />
+        <img
+          class="card__image"
+          src="${item.image}"
+          alt="${item.name}"
+          width="400"
+          height="400"
+          loading="${eager ? "eager" : "lazy"}"
+          decoding="async"
+        />
       </a>
 
       <div class="card__body">

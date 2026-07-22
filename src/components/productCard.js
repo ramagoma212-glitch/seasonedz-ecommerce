@@ -23,7 +23,16 @@ export function renderStars(rating) {
   return `<span class="stars" aria-label="Rated ${rating} out of 5">${filled}${empty}</span>`;
 }
 
-export function renderProductCard(product) {
+// Version 7, Milestone 92A: eager defaults to false (lazy) — the safe
+// choice for a reusable card used across many grids/rails in
+// different fold positions. Callers that know a specific card is
+// above the fold (e.g. the first row of a grid) pass { eager: true }
+// explicitly; everywhere else is left lazy by default rather than
+// guessed. width/height match the CSS's own aspect-ratio: 1/1 (see
+// .card__image in components.css) — a fixed reference size, not the
+// actual served resolution, purely so the browser can reserve layout
+// space before the (currently full-resolution) image downloads.
+export function renderProductCard(product, { eager = false } = {}) {
   const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
   const wishlisted = isInWishlist(product.id);
 
@@ -31,7 +40,15 @@ export function renderProductCard(product) {
     <article class="card product-card">
       <div class="product-card__media">
         <a href="/product/${product.slug}">
-          <img class="card__image" src="${product.image}" alt="${product.name}" />
+          <img
+            class="card__image"
+            src="${product.image}"
+            alt="${product.name}"
+            width="400"
+            height="400"
+            loading="${eager ? "eager" : "lazy"}"
+            decoding="async"
+          />
         </a>
         ${product.discountLabel ? `<span class="badge product-card__badge">${product.discountLabel}</span>` : ""}
         <button
