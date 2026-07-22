@@ -198,9 +198,20 @@ const routeDefs = [
 // bar into { path: "/product/abc", query: URLSearchParams } — no more
 // splitting a hash string ourselves now that path and query string are
 // both native browser concepts (window.location.pathname/.search).
+//
+// Version 7, Milestone 88F: a trailing slash is stripped before
+// matching (but "/" itself is left alone — stripping its only slash
+// would leave an empty string, not the root path). GitHub Pages
+// redirects a bare generated route like /shop to /shop/ (standard
+// static-host directory-redirect behaviour, triggered by Milestone
+// 88D's per-route folders) — without this, matchRoute()'s exact-
+// pattern regex would never match that trailing-slash form and would
+// fall through to Not Found.
 function parseLocation() {
+  const rawPath = window.location.pathname || "/";
+  const path = rawPath.length > 1 && rawPath.endsWith("/") ? rawPath.slice(0, -1) : rawPath;
   return {
-    path: window.location.pathname || "/",
+    path,
     query: new URLSearchParams(window.location.search),
   };
 }
