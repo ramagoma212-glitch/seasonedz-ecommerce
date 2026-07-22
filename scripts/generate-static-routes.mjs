@@ -101,10 +101,35 @@ function getBlogSlugsSafely() {
   }
 }
 
+// Shared by the per-route canonical rewrite below and buildSitemapXml
+// — GitHub Pages redirects a bare generated route like /shop to
+// /shop/ (see router.js's own comment on this), so /shop/ is the
+// final, redirect-free URL both the sitemap and canonical tags should
+// use. Mirrors js/seo.js's buildCanonicalUrl(), which applies the same
+// rule client-side after JS runs.
+function withTrailingSlash(path) {
+  return path === "/" || path.endsWith("/") ? path : `${path}/`;
+}
+
+// Version 7, Milestone 99 Follow-Up: each generated file starts as a
+// byte-for-byte copy of dist/index.html, which still carries the
+// homepage's own static canonical tag baked in at build time — left
+// alone, every generated route's raw HTML would claim to be the
+// homepage until client-side JS corrects it (js/seo.js), which search
+// engine crawlers that don't execute JS would never see happen. This
+// rewrites that one tag to the route's real canonical before the file
+// is ever written, so the raw HTML is correct from the start —
+// js/seo.js's own per-navigation update still runs identically on top
+// of this for the client-rendered SPA experience.
+function withRouteCanonical(html, routePath) {
+  const canonicalUrl = `${SITE_URL}${withTrailingSlash(routePath)}`;
+  return html.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${canonicalUrl}" />`);
+}
+
 function writeRouteFile(routePath, html) {
   const targetDir = join(DIST, routePath.replace(/^\//, ""));
   mkdirSync(targetDir, { recursive: true });
-  writeFileSync(join(targetDir, "index.html"), html);
+  writeFileSync(join(targetDir, "index.html"), withRouteCanonical(html, routePath));
 }
 
 // No <lastmod>/<changefreq>/<priority> — this project has no reliable
@@ -113,19 +138,10 @@ function writeRouteFile(routePath, html) {
 // hints it mostly ignores anyway, so a plain <loc>-only sitemap loses
 // nothing that matters.
 //
-// Version 7, Milestone 99: each <loc> gets a trailing slash (except
-// "/" itself) — GitHub Pages redirects a bare generated route like
-// /shop to /shop/ (see router.js's own comment), so /shop/ is the
-// final, redirect-free URL, matching the same trailing-slash policy
-// js/seo.js's buildCanonicalUrl() now uses for every page's <link
-// rel="canonical">.
+// Version 7, Milestone 99: each <loc> gets the same trailing slash
+// treatment as the per-route canonical above.
 function buildSitemapXml(urlPaths) {
-  const urlEntries = urlPaths
-    .map((path) => {
-      const withTrailingSlash = path === "/" || path.endsWith("/") ? path : `${path}/`;
-      return `  <url><loc>${SITE_URL}${withTrailingSlash}</loc></url>`;
-    })
-    .join("\n");
+  const urlEntries = urlPaths.map((path) => `  <url><loc>${SITE_URL}${withTrailingSlash(path)}</loc></url>`).join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
 }
 
