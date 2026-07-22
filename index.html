@@ -10,6 +10,21 @@
     />
 
     <!--
+      Version 7, Milestone 90: favicon/icon set, cropped from the
+      existing Seasonedz Group "S" logo mark (public/images/
+      logo-placeholder.jpeg) — see scripts used to generate these for
+      the exact crop. favicon.svg embeds the same raster artwork in an
+      SVG wrapper (no vector source exists for this logo, and
+      auto-tracing it risked distorting the brand mark), so browsers
+      that support type="image/svg+xml" favicons get the same crisp
+      512px art; the .ico fallback covers everything else.
+    -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+
+    <!--
       Version 7, Milestone 89: static defaults for the very first paint
       (before any JS runs) and for any page router.js's own setPageMeta
       doesn't override — see js/seo.js, which sets the equivalent
@@ -49,6 +64,12 @@
       Version 7, Milestone 89: logo is now a fully-qualified URL, per
       Google's structured-data guidance (a relative URL isn't
       guaranteed to resolve correctly for every consumer of this data).
+      Version 7, Milestone 90: logo now points at icon-512.png (the
+      same tight square crop of the brand's "S" mark used for the
+      favicon/app icons) instead of the full logo-with-wordmark image —
+      Google's guidance for this field asks for a clean square image,
+      and the full logo file has a lot of surrounding whitespace around
+      a non-square composition.
     -->
     <script type="application/ld+json">
       {
@@ -56,7 +77,7 @@
         "@type": "Organization",
         "name": "Seasonedz Group",
         "description": "Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches.",
-        "logo": "https://www.seasonedzgroup.co.za/images/logo-placeholder.jpeg"
+        "logo": "https://www.seasonedzgroup.co.za/icon-512.png"
       }
     </script>
 
