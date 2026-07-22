@@ -14,7 +14,7 @@ export function renderBlog() {
       </p>
 
       <div class="grid grid--3 blog-grid">
-        ${blogPosts.map((post) => renderBlogCard(post)).join("")}
+        ${blogPosts.map((post, index) => renderBlogCard(post, { eager: index < 3 })).join("")}
       </div>
     </section>
   `;

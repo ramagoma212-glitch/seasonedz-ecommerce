@@ -36,7 +36,7 @@ export function renderCartPage() {
             <button type="button" class="list-clear-btn" data-action="clear-cart">Clear Cart</button>
           </div>
 
-          ${items.map((item) => renderCartItem(item)).join("")}
+          ${items.map((item, index) => renderCartItem(item, { eager: index < 2 })).join("")}
 
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>

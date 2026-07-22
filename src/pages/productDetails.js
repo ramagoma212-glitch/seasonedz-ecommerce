@@ -107,13 +107,31 @@ function renderGallery(product) {
 
   return `
     <div class="product-details__gallery">
-      <img class="product-details__main-image" src="${product.image}" alt="${product.name}" />
+      <!--
+        Version 7, Milestone 92A: this is the page's primary content
+        image (immediately visible, no scrolling needed) — eager, not
+        lazy. width/height=800 match .product-details__main-image's
+        own CSS (aspect-ratio: 1/1, width: 100%) as a same-ratio
+        reference size, not the actual served resolution.
+      -->
+      <img
+        class="product-details__main-image"
+        src="${product.image}"
+        alt="${product.name}"
+        width="800"
+        height="800"
+        loading="eager"
+        decoding="async"
+      />
       ${
         images.length > 1
           ? `
             <div class="product-details__thumbs">
               ${images
-                .map((img) => `<img class="product-details__thumb" src="${img}" alt="${product.name} thumbnail" />`)
+                .map(
+                  (img) =>
+                    `<img class="product-details__thumb" src="${img}" alt="${product.name} thumbnail" width="64" height="64" loading="lazy" decoding="async" />`
+                )
                 .join("")}
             </div>
           `

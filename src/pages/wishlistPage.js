@@ -32,7 +32,7 @@ export function renderWishlistPage() {
       </div>
 
       <div class="grid grid--3">
-        ${items.map((item) => renderWishlistItem(item)).join("")}
+        ${items.map((item, index) => renderWishlistItem(item, { eager: index < 3 })).join("")}
       </div>
     </section>
   `;
