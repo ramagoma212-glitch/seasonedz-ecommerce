@@ -4,7 +4,7 @@
 
 export function renderCategoryCard(category) {
   return `
-    <a class="card category-card" href="#/shop?category=${category.slug}">
+    <a class="card category-card" href="/shop?category=${category.slug}">
       <img class="card__image" src="${category.image}" alt="${category.name}" />
       <div class="card__body">
         <h3 class="card__title">${category.name}</h3>

@@ -34,7 +34,7 @@ export function renderPrivacyPolicy() {
           Your cart and wishlist are stored only in your own browser,
           using Local Storage. This information stays on your device
           until you complete an order. See our
-          <a href="#/cookies-policy">Cookies Policy</a> for more detail.
+          <a href="/cookies-policy">Cookies Policy</a> for more detail.
         </p>
         <p>
           When you place an order, your order details, including your
@@ -60,7 +60,7 @@ export function renderPrivacyPolicy() {
           better: processing orders, arranging delivery, responding to
           enquiries and improving this site. If you have any questions
           about your information, please
-          <a href="#/contact">contact us</a>.
+          <a href="/contact">contact us</a>.
         </p>
       </div>
     </section>

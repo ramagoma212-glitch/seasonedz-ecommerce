@@ -30,7 +30,7 @@ export function renderProductCard(product) {
   return `
     <article class="card product-card">
       <div class="product-card__media">
-        <a href="#/product/${product.slug}">
+        <a href="/product/${product.slug}">
           <img class="card__image" src="${product.image}" alt="${product.name}" />
         </a>
         ${product.discountLabel ? `<span class="badge product-card__badge">${product.discountLabel}</span>` : ""}
@@ -53,7 +53,7 @@ export function renderProductCard(product) {
         <p class="product-card__category">${product.category}</p>
 
         <h3 class="card__title">
-          <a href="#/product/${product.slug}">${product.name}</a>
+          <a href="/product/${product.slug}">${product.name}</a>
         </h3>
 
         <div class="product-card__rating">

@@ -53,7 +53,7 @@ export function renderShippingPolicy() {
         <h2>Tracking Updates</h2>
         <p>
           Once your order is placed, you can look it up on our
-          <a href="#/track-order">Track Order</a> page using your order
+          <a href="/track-order">Track Order</a> page using your order
           number to see its current processing status. Courier tracking
           details (once your order is dispatched, such as a waybill or
           tracking number) will be shared with you manually by Seasonedz

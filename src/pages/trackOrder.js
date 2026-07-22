@@ -139,7 +139,7 @@ function renderBackendTrackingResult(tracking) {
       </div>
 
       <div class="order-confirmation__actions">
-        <a class="btn btn--secondary" href="#/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
+        <a class="btn btn--secondary" href="/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
       </div>
     </div>
   `;

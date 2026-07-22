@@ -37,7 +37,7 @@ function renderNoOrderNumber() {
     <section class="stub-page container">
       <h1 class="stub-page__title">Order Confirmation</h1>
       <p class="stub-page__text">We couldn't find an order number to display.</p>
-      <a class="btn btn--primary" href="#/shop">Back to Shop</a>
+      <a class="btn btn--primary" href="/shop">Back to Shop</a>
     </section>
   `;
 }
@@ -49,7 +49,7 @@ function renderOrderNotFound(orderNumber) {
       <p class="stub-page__text">
         We couldn't find an order with the number &ldquo;${escapeHtml(orderNumber)}&rdquo;.
       </p>
-      <a class="btn btn--primary" href="#/shop">Back to Shop</a>
+      <a class="btn btn--primary" href="/shop">Back to Shop</a>
     </section>
   `;
 }
@@ -62,7 +62,7 @@ function renderBackendUnavailable(orderNumber) {
         We could not connect to the order system right now. Please try again shortly.
       </div>
       <p class="stub-page__text">Your order number was: <strong>${escapeHtml(orderNumber)}</strong></p>
-      <a class="btn btn--primary" href="#/shop">Back to Shop</a>
+      <a class="btn btn--primary" href="/shop">Back to Shop</a>
     </section>
   `;
 }
@@ -92,7 +92,7 @@ function renderPaymentNotice(order) {
 
   const payfastHint =
     order.paymentMethod === "PAYFAST"
-      ? `If you completed payment with PayFast, confirmation can take a few minutes. Check the <a href="#/payment-success?orderNumber=${encodeURIComponent(order.orderNumber)}">payment status page</a> or refresh shortly. `
+      ? `If you completed payment with PayFast, confirmation can take a few minutes. Check the <a href="/payment-success?orderNumber=${encodeURIComponent(order.orderNumber)}">payment status page</a> or refresh shortly. `
       : "";
 
   return `
@@ -141,8 +141,8 @@ function renderBackendOrderConfirmation(order) {
           </div>
 
           <div class="order-confirmation__actions">
-            <a class="btn btn--primary" href="#/shop">Continue Shopping</a>
-            <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(order.orderNumber)}">Track Order</a>
+            <a class="btn btn--primary" href="/shop">Continue Shopping</a>
+            <a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(order.orderNumber)}">Track Order</a>
           </div>
         </div>
 
@@ -205,8 +205,8 @@ function renderLocalDemoOrderConfirmation(order) {
           </div>
 
           <div class="order-confirmation__actions">
-            <a class="btn btn--primary" href="#/shop">Continue Shopping</a>
-            <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(order.orderNumber)}">Track Order</a>
+            <a class="btn btn--primary" href="/shop">Continue Shopping</a>
+            <a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(order.orderNumber)}">Track Order</a>
           </div>
         </div>
 

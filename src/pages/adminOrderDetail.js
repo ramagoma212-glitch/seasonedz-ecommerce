@@ -44,7 +44,7 @@ function renderNotFound(orderNumber) {
       ${renderAdminNav("orders")}
       <h1 class="admin-page__title">Order Not Found</h1>
       <p class="admin-page__subtitle">No order found with number &ldquo;${escapeHtml(orderNumber)}&rdquo;.</p>
-      <a class="btn btn--secondary" href="#/admin/orders">Back to Orders</a>
+      <a class="btn btn--secondary" href="/admin/orders">Back to Orders</a>
     </section>
   `;
 }
@@ -182,7 +182,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
     return `
       <section class="container admin-page">
         ${renderAdminNav("orders")}
-        <a class="admin-back-link" href="#/admin/orders">&larr; Back to Orders</a>
+        <a class="admin-back-link" href="/admin/orders">&larr; Back to Orders</a>
         <h1 class="admin-page__title">Order ${escapeHtml(order.orderNumber)}</h1>
 
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}

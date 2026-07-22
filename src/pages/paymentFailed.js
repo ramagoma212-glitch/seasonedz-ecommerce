@@ -36,9 +36,9 @@ function renderActions(orderNumber, tracking) {
   if (isPendingPayfast) {
     return `
       <div class="order-confirmation__actions">
-        <a class="btn btn--secondary" href="#/payment-failed?orderNumber=${encodeURIComponent(orderNumber)}">Check Again</a>
-        <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(orderNumber)}">Track Order</a>
-        <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
+        <a class="btn btn--secondary" href="/payment-failed?orderNumber=${encodeURIComponent(orderNumber)}">Check Again</a>
+        <a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(orderNumber)}">Track Order</a>
+        <a class="btn btn--secondary" href="/contact">Contact Seasonedz Group</a>
       </div>
     `;
   }
@@ -46,9 +46,9 @@ function renderActions(orderNumber, tracking) {
   const showPayfastRetry = tracking && isPayfastRetryEligible(tracking);
   return `
     <div class="order-confirmation__actions">
-      ${showPayfastRetry ? renderPayfastRetryButton(orderNumber) : `<a class="btn btn--primary" href="#/checkout">Try Again</a>`}
-      <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
-      ${orderNumber ? `<a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(orderNumber)}">View Order Tracking</a>` : ""}
+      ${showPayfastRetry ? renderPayfastRetryButton(orderNumber) : `<a class="btn btn--primary" href="/checkout">Try Again</a>`}
+      <a class="btn btn--secondary" href="/contact">Contact Seasonedz Group</a>
+      ${orderNumber ? `<a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(orderNumber)}">View Order Tracking</a>` : ""}
     </div>
   `;
 }
@@ -79,7 +79,7 @@ function renderWithOrderStatus(tracking) {
         <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(tracking.paymentStatus)}</span></div>
       </div>
       <div class="order-confirmation__actions">
-        <a class="btn btn--primary" href="#/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
+        <a class="btn btn--primary" href="/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
       </div>
     `;
   }

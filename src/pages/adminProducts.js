@@ -95,7 +95,7 @@ function renderProductsTable(products) {
               <td>${renderStatusBadge(product.status)}</td>
               <td>${renderFlags(product)}</td>
               <td>${formatDate(product.updatedAt)}</td>
-              <td><a href="#/admin/products/${encodeURIComponent(product.id)}/edit" class="admin-section__link">Edit</a></td>
+              <td><a href="/admin/products/${encodeURIComponent(product.id)}/edit" class="admin-section__link">Edit</a></td>
             </tr>
           `
             )
@@ -147,7 +147,7 @@ export async function renderAdminProducts({ query } = {}) {
         ${renderAdminNav("products")}
         <div class="admin-section__header">
           <h1 class="admin-page__title">Products</h1>
-          <a class="btn btn--primary btn--sm" href="#/admin/products/new">Add Product</a>
+          <a class="btn btn--primary btn--sm" href="/admin/products/new">Add Product</a>
         </div>
         <p class="admin-page__subtitle">${result.total} product${result.total === 1 ? "" : "s"} total</p>
         ${renderFilters(categories, effectiveQuery)}

@@ -47,7 +47,7 @@ export function renderFaq() {
       <p class="stub-page__text">
         Answers to common questions about ordering, delivery, payment,
         returns and more. Can't find what you're looking for?
-        <a href="#/contact">Contact us</a>.
+        <a href="/contact">Contact us</a>.
       </p>
 
       <div class="faq-page">

@@ -12,8 +12,8 @@ export function renderNotFound() {
       </p>
 
       <div class="not-found-page__actions">
-        <a class="btn btn--primary" href="#/">Back to Homepage</a>
-        <a class="btn btn--secondary" href="#/shop">Browse the Shop</a>
+        <a class="btn btn--primary" href="/">Back to Homepage</a>
+        <a class="btn btn--secondary" href="/shop">Browse the Shop</a>
       </div>
 
       <p class="not-found-page__hint">

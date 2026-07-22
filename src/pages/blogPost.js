@@ -17,7 +17,7 @@ function renderNoPostSelected() {
     <section class="stub-page container">
       <h1 class="stub-page__title">Blog Post</h1>
       <p class="stub-page__text">No blog post was selected.</p>
-      <a class="btn btn--primary" href="#/blog">Back to Blog</a>
+      <a class="btn btn--primary" href="/blog">Back to Blog</a>
     </section>
   `;
 }
@@ -30,7 +30,7 @@ function renderPostNotFound() {
         We couldn't find the blog post you were looking for. It may have
         been moved or the link may be incorrect.
       </p>
-      <a class="btn btn--primary" href="#/blog">Back to Blog</a>
+      <a class="btn btn--primary" href="/blog">Back to Blog</a>
     </section>
   `;
 }
@@ -59,7 +59,7 @@ export function renderBlogPost({ slug } = {}) {
 
   return `
     <section class="container blog-post">
-      <a class="blog-post__back" href="#/blog">&larr; Back to Blog</a>
+      <a class="blog-post__back" href="/blog">&larr; Back to Blog</a>
 
       <article class="blog-post__article">
         <p class="blog-post__meta">${post.category} &bull; ${formatBlogDate(post.date)}</p>
@@ -75,7 +75,7 @@ export function renderBlogPost({ slug } = {}) {
       <div class="info-page__cta">
         <h2>Ready to Explore Our Range?</h2>
         <p>Browse our colouring books, markers and crayons in the shop.</p>
-        <a class="btn btn--primary" href="#/shop">Shop Now</a>
+        <a class="btn btn--primary" href="/shop">Shop Now</a>
       </div>
 
       ${renderRelatedPosts(post)}

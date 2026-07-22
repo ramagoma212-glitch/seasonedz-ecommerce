@@ -27,9 +27,27 @@ function getOrCreateDescriptionTag() {
   return tag;
 }
 
-export function setPageMeta({ title, description } = {}) {
+function getOrCreateRobotsTag() {
+  let tag = document.querySelector('meta[name="robots"]');
+  if (!tag) {
+    tag = document.createElement("meta");
+    tag.setAttribute("name", "robots");
+    document.head.appendChild(tag);
+  }
+  return tag;
+}
+
+// Version 7, Milestone 88A: the robots tag is set explicitly on every
+// navigation — "index, follow" by default, "noindex, nofollow" when
+// the route asks for it — rather than only ever adding a noindex tag.
+// Otherwise a private page's noindex would wrongly persist onto the
+// next public page the visitor navigates to, the same staleness
+// problem clearPageStructuredData() already exists to avoid for
+// structured data.
+export function setPageMeta({ title, description, noindex = false } = {}) {
   if (title) document.title = `${title} | Seasonedz Group`;
   getOrCreateDescriptionTag().setAttribute("content", description || DEFAULT_DESCRIPTION);
+  getOrCreateRobotsTag().setAttribute("content", noindex ? "noindex, nofollow" : "index, follow");
 }
 
 // One JSON-LD block per page, replacing whatever the previous page set

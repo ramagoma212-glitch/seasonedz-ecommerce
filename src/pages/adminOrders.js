@@ -33,7 +33,7 @@ function renderOrdersTable(orders) {
             .map(
               (order) => `
             <tr>
-              <td><a href="#/admin/orders/${encodeURIComponent(order.orderNumber)}">${escapeHtml(order.orderNumber)}</a></td>
+              <td><a href="/admin/orders/${encodeURIComponent(order.orderNumber)}">${escapeHtml(order.orderNumber)}</a></td>
               <td>${escapeHtml(order.customerName)}</td>
               <td>${escapeHtml(order.customerEmail)}<br>${escapeHtml(order.customerPhone)}</td>
               <td>${order.itemCount}</td>

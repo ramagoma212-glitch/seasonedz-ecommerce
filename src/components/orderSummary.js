@@ -49,7 +49,7 @@ export function renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton =
         ${deliveryFee === 0 ? "This order qualifies for free delivery." : "Orders of R700 or more qualify for free delivery."}
       </p>
 
-      ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="#/checkout">Proceed to Checkout</a>` : ""}
+      ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>` : ""}
     </aside>
   `;
 }

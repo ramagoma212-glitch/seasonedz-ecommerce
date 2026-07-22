@@ -55,13 +55,13 @@ export function renderTerms() {
 
         <h2>Delivery</h2>
         <p>
-          See our <a href="#/shipping-policy">Shipping Policy</a> for
+          See our <a href="/shipping-policy">Shipping Policy</a> for
           delivery fees and general timing guidance.
         </p>
 
         <h2>Returns</h2>
         <p>
-          See our <a href="#/returns-policy">Returns Policy</a> for
+          See our <a href="/returns-policy">Returns Policy</a> for
           guidance on damaged, incorrect or unwanted items.
         </p>
 
@@ -76,7 +76,7 @@ export function renderTerms() {
         <h2>Contact</h2>
         <p>
           If you have questions about these terms, please
-          <a href="#/contact">contact us</a>.
+          <a href="/contact">contact us</a>.
         </p>
       </div>
     </section>
