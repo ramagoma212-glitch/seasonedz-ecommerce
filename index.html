@@ -10,10 +10,45 @@
     />
 
     <!--
+      Version 7, Milestone 89: static defaults for the very first paint
+      (before any JS runs) and for any page router.js's own setPageMeta
+      doesn't override — see js/seo.js, which sets the equivalent
+      per-route values (including a page-specific canonical-like URL
+      via document.title/description) on every navigation. robots here
+      matches seo.js's own default ("index, follow"); private/
+      transactional routes get "noindex, nofollow" from seo.js at
+      render time, same as before.
+    -->
+    <link rel="canonical" href="https://www.seasonedzgroup.co.za/" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#e07a3f" />
+
+    <meta property="og:site_name" content="Seasonedz Group" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Seasonedz Group | Educational Colouring Books &amp; Creative Supplies" />
+    <meta
+      property="og:description"
+      content="Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches."
+    />
+    <meta property="og:url" content="https://www.seasonedzgroup.co.za/" />
+    <meta property="og:image" content="https://www.seasonedzgroup.co.za/images/hero-banner.jpg" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Seasonedz Group | Educational Colouring Books &amp; Creative Supplies" />
+    <meta
+      name="twitter:description"
+      content="Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches."
+    />
+    <meta name="twitter:image" content="https://www.seasonedzgroup.co.za/images/hero-banner.jpg" />
+
+    <!--
       Version 6, Milestone 48: site-wide Organization structured data.
       Static and safe to ship unconditionally (no per-page data, no
       invented facts) — per-product Product structured data is added
       dynamically by src/pages/productDetails.js via src/js/seo.js.
+      Version 7, Milestone 89: logo is now a fully-qualified URL, per
+      Google's structured-data guidance (a relative URL isn't
+      guaranteed to resolve correctly for every consumer of this data).
     -->
     <script type="application/ld+json">
       {
@@ -21,7 +56,31 @@
         "@type": "Organization",
         "name": "Seasonedz Group",
         "description": "Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches.",
-        "logo": "images/logo-placeholder.jpeg"
+        "logo": "https://www.seasonedzgroup.co.za/images/logo-placeholder.jpeg"
+      }
+    </script>
+
+    <!--
+      Version 7, Milestone 89: site-wide WebSite structured data, with
+      a SearchAction pointing at the real, working /search route (see
+      src/pages/searchResults.js) — safe to include since it's a real,
+      functioning search, not a fabricated capability; /search itself
+      stays noindex (Version 7, Milestone 88A) independently of this,
+      since noindex only affects whether the results page is indexed
+      as its own page, not whether it can be used as a SearchAction
+      target.
+    -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Seasonedz Group",
+        "url": "https://www.seasonedzgroup.co.za/",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://www.seasonedzgroup.co.za/search?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
       }
     </script>
 
