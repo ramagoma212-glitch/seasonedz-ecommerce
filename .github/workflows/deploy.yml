@@ -48,6 +48,18 @@ jobs:
           VITE_PAYFAST_ENABLED: "false"
         run: npm run build
 
+      - name: Generate static route files for SEO (HTTP 200)
+        # Milestone 88C found every route except "/" returned HTTP 404
+        # (served correctly via the 404.html fallback below, but a 404
+        # status risks Google excluding the page from its index
+        # regardless of what content renders client-side). This script
+        # copies the built index.html into real per-route folders
+        # (dist/shop/index.html, dist/product/<slug>/index.html, ...)
+        # for public pages only, so GitHub Pages serves those with a
+        # genuine 200 (Version 7, Milestone 88D). Needs network access
+        # to the live products API, which this runner has.
+        run: node scripts/generate-static-routes.mjs
+
       - name: Add SPA fallback for GitHub Pages (404.html)
         # GitHub Pages is static hosting with no server-side rewrites —
         # a direct visit to a real path like /shop returns Pages' own
