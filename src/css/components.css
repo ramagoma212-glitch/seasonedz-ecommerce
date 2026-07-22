@@ -581,6 +581,24 @@
   color: var(--color-white);
 }
 
+/* ---- Homepage product row "View All" (mobile only) --------------------------
+   Version 7, Milestone 93D: hidden by default so desktop/tablet keep
+   their existing centered .section__header look untouched; the
+   heading-line wrapper only switches to a flex row (heading left,
+   link right) inside the ≤768px block in responsive.css, alongside
+   .section__view-all becoming visible there. */
+.home-product-row__heading-line {
+  text-align: inherit;
+}
+
+.section__view-all {
+  display: none;
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-secondary);
+  white-space: nowrap;
+}
+
 /* ---- Filter panel (shop + search results sidebar) --------------------------- */
 .filter-panel__heading {
   font-size: var(--font-size-base);
