@@ -23,6 +23,11 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-lg);
   }
+
+  .category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-lg);
+  }
 }
 
 @media (min-width: 1024px) {
@@ -127,10 +132,27 @@
     grid-template-columns: 1fr;
   }
 
+  /* Version 7, Milestone 93B: the filter panel is collapsed by default
+     on mobile/tablet — .filter-toggle (hidden on desktop, see
+     components.css) is the only way to reveal it, toggling this
+     .is-open class via js/app.js. Collapsed state is `display: none`
+     rather than e.g. max-height/visibility, since the panel holds real
+     form controls that must not be tabbable or submittable while
+     hidden. grid-template-columns/column-gap stay defined here so they
+     take effect the moment .is-open switches display to grid — the
+     select layout itself is unchanged from before this milestone. */
+  .filter-toggle {
+    display: inline-flex;
+  }
+
   .filter-panel {
-    display: grid;
+    display: none;
     grid-template-columns: 1fr 1fr;
     column-gap: var(--space-md);
+  }
+
+  .filter-panel.is-open {
+    display: grid;
   }
 
   .filter-panel__heading,

@@ -85,7 +85,7 @@ export async function renderHome() {
         <h2>Shop by Category</h2>
         <p>Explore our range of colouring books and creative supplies.</p>
       </div>
-      <div class="grid grid--3">
+      <div class="category-grid">
         ${categories.map((category, index) => renderCategoryCard(category, { eager: index < 3 })).join("")}
       </div>
     </section>

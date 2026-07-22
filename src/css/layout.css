@@ -143,3 +143,18 @@
   grid-auto-rows: 1fr;
   gap: var(--space-sm);
 }
+
+/* ---- Category listing grid --------------------------------------------------
+   Dedicated to category-card grids (homepage "Shop by Category" section,
+   the full Categories page) — kept separate from the generic .grid--3
+   utility above (also used by unrelated sections like the homepage trust
+   grid), so changing category mobile behaviour never affects those.
+   Version 7, Milestone 93B: 2 columns from the smallest supported width
+   (320px) — tested clean and readable with real category images/text at
+   320/360/390/414px — 3 columns from tablet width up (see responsive.css),
+   matching .grid--3's existing desktop column count. */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}

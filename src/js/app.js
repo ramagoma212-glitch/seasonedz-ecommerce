@@ -133,6 +133,23 @@ function setupFilterControls() {
   });
 }
 
+// Mobile "Show/Hide Filters" toggle (Version 7, Milestone 93B). Desktop
+// never renders this button at all (see .filter-toggle in
+// components.css), so this only ever runs on mobile/tablet widths.
+// Purely a visibility toggle — no filter/sort logic here, that's still
+// entirely setupFilterControls() above, unchanged.
+function handleToggleMobileFilters(button) {
+  const panelId = button.getAttribute("aria-controls");
+  const panel = panelId ? document.getElementById(panelId) : null;
+  if (!panel) return;
+
+  const isOpen = panel.classList.toggle("is-open");
+  button.setAttribute("aria-expanded", String(isOpen));
+
+  const label = button.querySelector("[data-filter-toggle-label]");
+  if (label) label.textContent = isOpen ? "Hide Filters" : "Show Filters";
+}
+
 // The cart page's quantity input (data-action="cart-update") is typed
 // into directly, so it needs its own "change" handler rather than the
 // click-based one below.
@@ -209,6 +226,8 @@ function setupProductActions() {
       handleRetryPayfast(actionEl);
     } else if (action === "admin-logout") {
       handleAdminLogout();
+    } else if (action === "toggle-mobile-filters") {
+      handleToggleMobileFilters(actionEl);
     }
   });
 }

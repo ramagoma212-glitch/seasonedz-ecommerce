@@ -475,6 +475,24 @@
   margin-top: var(--space-xs);
 }
 
+/* Version 7, Milestone 93B: same truncation pattern as .product-grid's
+   own title/desc rules above — keeps every 2-column category card the
+   same, tidy height regardless of how long a given category's name or
+   description happens to be. */
+.category-grid .card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.category-grid .category-card__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ---- Quantity selector -------------------------------------------------------- */
 .quantity-selector {
   display: inline-flex;
@@ -534,6 +552,33 @@
 .toast.is-visible {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* ---- Mobile filter toggle (Version 7, Milestone 93B) ------------------------
+   Hidden by default (desktop always shows the filter sidebar directly,
+   unchanged from before this milestone) — shown only at the same
+   ≤768px breakpoint where the sidebar itself collapses into a single
+   stacked column, see responsive.css. */
+.filter-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  width: 100%;
+  margin-bottom: var(--space-lg);
+  padding: var(--space-sm) var(--space-lg);
+  background-color: transparent;
+  border: 2px solid var(--color-secondary);
+  border-radius: var(--radius-md);
+  color: var(--color-secondary);
+  font-weight: 600;
+  font-size: var(--font-size-base);
+}
+
+.filter-toggle:hover,
+.filter-toggle[aria-expanded="true"] {
+  background-color: var(--color-secondary);
+  color: var(--color-white);
 }
 
 /* ---- Filter panel (shop + search results sidebar) --------------------------- */

@@ -162,8 +162,15 @@ export function getProductResults(products, categories, query) {
   return { results, term, filters, sort, activeCategory };
 }
 
-// Builds a hash href for `path` using `query` as the starting point,
-// applying `overrides` on top (a falsy value removes that key).
+// Builds a real path+query href for `path` using `query` as the
+// starting point, applying `overrides` on top (a falsy value removes
+// that key). Version 7, Milestone 93B: this previously returned a
+// "#/shop"-style hash fragment, a leftover from before the Milestone
+// 88A path-routing migration — since router.js's handleLinkClick
+// resolves a same-page anchor's pathname/search relative to the
+// CURRENT URL, a bare "#/shop" href never actually changed the path or
+// query, it just appended a dangling hash (found while verifying
+// "Clear Filters" during 93B's mobile filter-panel testing).
 export function buildHref(path, query, overrides = {}) {
   const params = new URLSearchParams(query ? query.toString() : "");
 
@@ -173,7 +180,7 @@ export function buildHref(path, query, overrides = {}) {
   });
 
   const queryString = params.toString();
-  return `#${path}${queryString ? `?${queryString}` : ""}`;
+  return `${path}${queryString ? `?${queryString}` : ""}`;
 }
 
 export function buildRemoveFilterHref(path, query, key) {
