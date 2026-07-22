@@ -196,8 +196,19 @@
   align-items: start;
 }
 
+/* Version 7, Milestone 92D: height: auto added — same bug as
+   .card__image in components.css (see its comment): with no explicit
+   author `height`, the Milestone 92A height="800" HTML attribute won
+   out as a fixed used height while width stayed fluid at 100%,
+   silently defeating aspect-ratio and rendering a ~556x800 box
+   instead of square. object-fit is intentionally left as `cover` here
+   (not `contain`) — this milestone's scope is product *cards*; the
+   product detail page's own main image was already correctly square
+   in design intent once this bug is fixed, and 11 of the 12 real
+   product photos are already square, so cover crops nothing for them. */
 .product-details__main-image {
   width: 100%;
+  height: auto;
   aspect-ratio: 1 / 1;
   object-fit: cover;
   border-radius: var(--radius-lg);
