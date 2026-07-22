@@ -287,7 +287,29 @@ function handleLinkClick(event) {
   navigateTo(`${anchor.pathname}${anchor.search}${anchor.hash}`);
 }
 
+// Version 7, Milestone 88A Follow-Up: one-time backward-compatibility
+// redirect for old saved/bookmarked/shared hash links (e.g.
+// .../#/shop, .../#/admin/login) left over from before this
+// migration. Runs once on initial load, before any route matching —
+// history.replaceState swaps the address bar to the equivalent real
+// path without adding a history entry (so pressing Back afterwards
+// doesn't return to the old hash URL), and does not reintroduce hash
+// routing in any way: every navigation from this point on only ever
+// reads/writes pathname + search, exactly as the rest of this file
+// already does. A hash that doesn't start with "/" (i.e. isn't one of
+// this app's own old routes) is left untouched.
+function redirectLegacyHashUrl() {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/")) return;
+
+  const [path, queryString] = hash.slice(1).split("?");
+  const search = queryString ? `?${queryString}` : "";
+
+  window.history.replaceState(null, "", `${path}${search}`);
+}
+
 export function initRouter() {
+  redirectLegacyHashUrl();
   window.addEventListener("popstate", resolveRoute);
   document.addEventListener("click", handleLinkClick);
   resolveRoute();
