@@ -22,6 +22,7 @@ import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
+import { getDetailImageUrl, getGalleryThumbUrl } from "../js/imageTransforms.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -118,7 +119,8 @@ function renderGallery(product) {
       -->
       <img
         class="product-details__main-image"
-        src="${product.image}"
+        src="${getDetailImageUrl(product.image)}"
+        data-original-src="${product.image}"
         alt="${product.name}"
         width="800"
         height="800"
@@ -132,7 +134,7 @@ function renderGallery(product) {
               ${images
                 .map(
                   (img) =>
-                    `<img class="product-details__thumb" src="${img}" alt="${product.name} thumbnail" width="64" height="64" loading="lazy" decoding="async" />`
+                    `<img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" data-original-src="${img}" alt="${product.name} thumbnail" width="64" height="64" loading="lazy" decoding="async" />`
                 )
                 .join("")}
             </div>

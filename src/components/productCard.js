@@ -9,6 +9,7 @@
 // product object.
 
 import { isInWishlist } from "../js/wishlist.js";
+import { getCardImageUrl } from "../js/imageTransforms.js";
 
 const STOCK_STATUS_CLASS = {
   "In Stock": "in",
@@ -47,7 +48,8 @@ export function renderProductCard(product, { eager = false } = {}) {
         <a href="/product/${product.slug}">
           <img
             class="card__image"
-            src="${product.image}"
+            src="${getCardImageUrl(product.image)}"
+            data-original-src="${product.image}"
             alt="${product.name}"
             width="400"
             height="400"

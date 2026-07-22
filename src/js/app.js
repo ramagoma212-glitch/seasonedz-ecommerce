@@ -49,6 +49,7 @@ function mountApp() {
 
   initRouter();
   setupMobileMenu();
+  setupImageFallback();
   setupHeaderSearch();
   setupFilterControls();
   setupCartQuantityInput();
@@ -92,6 +93,31 @@ function setupMobileMenu() {
   toggle.addEventListener("click", () => {
     panel.classList.toggle("is-open");
   });
+}
+
+// Version 7, Milestone 97: falls back to the original, untouched image
+// URL if a Supabase transform URL (see js/imageTransforms.js) ever
+// fails to load, so a transform-endpoint hiccup never shows a broken
+// image. "error" doesn't bubble, so this listens on the capture phase
+// at the document level instead of delegating the usual bubbling way
+// — the only way to catch it from every <img> across every page
+// without attaching a listener per-image. Checking `img.src ===
+// original` before swapping avoids an infinite loop if the original
+// URL also fails to load.
+function setupImageFallback() {
+  document.addEventListener(
+    "error",
+    (event) => {
+      const img = event.target;
+      if (!(img instanceof HTMLImageElement)) return;
+
+      const original = img.dataset.originalSrc;
+      if (!original || img.src === original) return;
+
+      img.src = original;
+    },
+    true
+  );
 }
 
 // Delegated so it keeps working no matter which page is currently
