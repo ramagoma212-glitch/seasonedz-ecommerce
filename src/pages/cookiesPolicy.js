@@ -33,7 +33,7 @@ export function renderCookiesPolicy() {
           When you place an order, your order details, including your
           customer and delivery information, are sent to and stored on
           the Seasonedz Group website backend so your order can be
-          processed. See our <a href="#/privacy-policy">Privacy Policy</a>
+          processed. See our <a href="/privacy-policy">Privacy Policy</a>
           for more detail on how that information is used.
         </p>
 

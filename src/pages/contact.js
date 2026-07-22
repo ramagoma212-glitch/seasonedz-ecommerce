@@ -19,10 +19,10 @@ export function renderContact() {
         <ul>
           <li><strong>General product questions</strong>, such as what a colouring book includes or which age it suits.</li>
           <li><strong>Order support</strong>, including help with an order you've already placed.</li>
-          <li><strong>Delivery support</strong>, such as a delivery address that needs to be corrected. See our <a href="#/shipping-policy">Shipping Policy</a> for the R80 / free from R700 delivery rule.</li>
-          <li><strong>School orders</strong>, for preschools, primary schools and classrooms. See our <a href="#/schools">Schools page</a> for more detail.</li>
-          <li><strong>Wholesale and bulk enquiries</strong>, for retailers and bulk buyers. See our <a href="#/wholesale">Wholesale page</a> for more detail.</li>
-          <li><strong>Distributor interest</strong>. See our <a href="#/distributor">Distributor page</a> for more detail.</li>
+          <li><strong>Delivery support</strong>, such as a delivery address that needs to be corrected. See our <a href="/shipping-policy">Shipping Policy</a> for the R80 / free from R700 delivery rule.</li>
+          <li><strong>School orders</strong>, for preschools, primary schools and classrooms. See our <a href="/schools">Schools page</a> for more detail.</li>
+          <li><strong>Wholesale and bulk enquiries</strong>, for retailers and bulk buyers. See our <a href="/wholesale">Wholesale page</a> for more detail.</li>
+          <li><strong>Distributor interest</strong>. See our <a href="/distributor">Distributor page</a> for more detail.</li>
         </ul>
 
         <h2>What to Include</h2>

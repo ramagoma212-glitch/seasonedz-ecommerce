@@ -5,19 +5,19 @@
 export function renderWishlistItem(item) {
   return `
     <article class="card wishlist-item">
-      <a href="#/product/${item.slug}">
+      <a href="/product/${item.slug}">
         <img class="card__image" src="${item.image}" alt="${item.name}" />
       </a>
 
       <div class="card__body">
         <p class="product-card__category">${item.category}</p>
         <h3 class="card__title">
-          <a href="#/product/${item.slug}">${item.name}</a>
+          <a href="/product/${item.slug}">${item.name}</a>
         </h3>
         <p class="product-card__price">R${item.price.toFixed(2)}</p>
 
         <div class="product-card__actions">
-          <a class="btn btn--secondary btn--sm" href="#/product/${item.slug}">View Details</a>
+          <a class="btn btn--secondary btn--sm" href="/product/${item.slug}">View Details</a>
           <button
             type="button"
             class="btn btn--primary btn--sm"

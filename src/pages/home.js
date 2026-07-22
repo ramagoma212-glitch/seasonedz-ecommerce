@@ -48,7 +48,7 @@ export async function renderHome() {
             activities, markers and crayons for parents, teachers, schools
             and churches.
           </p>
-          <a class="btn btn--primary" href="#/shop">Shop Now</a>
+          <a class="btn btn--primary" href="/shop">Shop Now</a>
         </div>
       </div>
     </section>
@@ -86,8 +86,8 @@ export async function renderHome() {
           </p>
         </div>
         <div class="wholesale-banner__actions">
-          <a class="btn btn--primary" href="#/schools">Schools</a>
-          <a class="btn btn--secondary" href="#/wholesale">Wholesale &amp; Bulk</a>
+          <a class="btn btn--primary" href="/schools">Schools</a>
+          <a class="btn btn--secondary" href="/wholesale">Wholesale &amp; Bulk</a>
         </div>
       </div>
     </section>

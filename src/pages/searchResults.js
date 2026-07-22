@@ -24,7 +24,7 @@ function renderNoSearchYet() {
       <p class="stub-page__text">
         Use the search bar above to find colouring books, markers, crayons and bundles.
       </p>
-      <a class="btn btn--primary" href="#/shop">Browse the Shop</a>
+      <a class="btn btn--primary" href="/shop">Browse the Shop</a>
     </section>
   `;
 }
@@ -44,7 +44,7 @@ export async function renderSearchResults({ query } = {}) {
       <h1 class="stub-page__title">Search Results</h1>
       <p class="stub-page__text">
         Showing results for &ldquo;${escapeHtml(term)}&rdquo;.
-        <a class="search-results__clear" href="#/shop">Clear Search</a>
+        <a class="search-results__clear" href="/shop">Clear Search</a>
       </p>
 
       <div class="shop-layout">

@@ -18,6 +18,7 @@ import {
   renderAdminConnectionError,
   renderAdminRedirecting,
 } from "../js/adminGuard.js";
+import { navigateTo } from "../js/navigation.js";
 import { renderAdminNav } from "../components/adminNav.js";
 import { escapeHtml } from "../js/search.js";
 import { withBase } from "../js/paths.js";
@@ -47,7 +48,7 @@ function renderNotFound(id) {
       ${renderAdminNav("products")}
       <h1 class="admin-page__title">Product Not Found</h1>
       <p class="admin-page__subtitle">No product found with id &ldquo;${escapeHtml(id)}&rdquo;.</p>
-      <a class="btn btn--secondary" href="#/admin/products">Back to Products</a>
+      <a class="btn btn--secondary" href="/admin/products">Back to Products</a>
     </section>
   `;
 }
@@ -291,7 +292,7 @@ export async function renderAdminProductCreate() {
     return `
       <section class="container admin-page">
         ${renderAdminNav("products")}
-        <a class="admin-back-link" href="#/admin/products">&larr; Back to Products</a>
+        <a class="admin-back-link" href="/admin/products">&larr; Back to Products</a>
         <h1 class="admin-page__title">Add Product</h1>
         ${renderProductForm("create", null, categories)}
       </section>
@@ -322,7 +323,7 @@ export async function renderAdminProductEdit({ id } = {}) {
     return `
       <section class="container admin-page">
         ${renderAdminNav("products")}
-        <a class="admin-back-link" href="#/admin/products">&larr; Back to Products</a>
+        <a class="admin-back-link" href="/admin/products">&larr; Back to Products</a>
         <h1 class="admin-page__title">Edit ${escapeHtml(product.name)}</h1>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${renderProductForm("edit", product, categories)}
@@ -345,7 +346,7 @@ export async function renderAdminProductEdit({ id } = {}) {
 // straight to the edit page, per the milestone's explicit "keep it
 // simple" allowance).
 export function renderAdminProductRedirectToEdit({ id } = {}) {
-  window.location.hash = `/admin/products/${encodeURIComponent(id || "")}/edit`;
+  navigateTo(`/admin/products/${encodeURIComponent(id || "")}/edit`);
   return `
     <section class="stub-page container">
       <p class="stub-page__text">Redirecting to the product edit page...</p>

@@ -1,12 +1,13 @@
-// Minimal hash-based router.
-// Each page module exports a render(params) function that returns an
-// HTML string. The router swaps that string into #main-content whenever
-// the URL hash changes, so every page listed in the folder structure is
-// already reachable, even the ones that are still placeholders.
+// Path-based router (Version 7, Milestone 88A — migrated from the
+// original hash router). Each page module exports a render(params)
+// function that returns an HTML string. The router swaps that string
+// into #main-content whenever the URL path changes, so every page
+// listed in the folder structure is already reachable, even the ones
+// that are still placeholders.
 //
 // Milestone 2 extends the original exact-match router with:
 //  - dynamic segments, e.g. "/product/:slug" -> { slug: "..." }
-//  - a query string, e.g. "#/shop?category=bundles" -> params.query
+//  - a query string, e.g. "/shop?category=bundles" -> params.query
 // Pages that don't need params simply ignore the argument.
 //
 // Milestone 7 adds a `title` per route, set on document.title on every
@@ -27,8 +28,27 @@
 // whose content depends on async data (currently just Product
 // details) call setPageMeta()/setPageStructuredData() again themselves
 // once they know more, overriding these generic defaults.
+//
+// Version 7, Milestone 88A: migrated from `window.location.hash` to
+// real paths via the History API (`pushState`/`popstate`), so each
+// page has its own indexable URL (e.g. /shop, /product/:slug) instead
+// of every page collapsing to the same URL from a search engine's
+// point of view. Two things a hash router got for free now need to be
+// added explicitly:
+//  - Clicking a real `<a href="/shop">` link normally triggers a full
+//    page reload (unlike a `#/shop` link, which never did) — handled
+//    below by intercepting same-origin, unmodified link clicks and
+//    routing them through navigateTo() instead.
+//  - An optional `noindex` per route, applied via js/seo.js — see its
+//    own comment for why every navigation sets this explicitly rather
+//    than only ever adding it.
+// See also js/navigation.js (navigateTo, used by every former
+// `window.location.hash = "..."` call site) and .github/workflows/
+// deploy.yml's 404.html step (GitHub Pages has no server-side
+// rewrites, so a direct visit to a real path needs that fallback).
 
 import { setPageMeta, clearPageStructuredData } from "./seo.js";
+import { navigateTo } from "./navigation.js";
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
 import { renderCategories } from "../pages/categories.js";
@@ -81,15 +101,22 @@ const routeDefs = [
     description: "Shop Seasonedz Group colouring books and creative supplies by category, from kids' colouring books to mindfulness colouring for adults.",
   },
   { pattern: "/product/:slug", render: renderProductDetails, title: "Product" },
-  { pattern: "/search", render: renderSearchResults, title: "Search" },
-  { pattern: "/cart", render: renderCartPage, title: "Your Cart" },
-  { pattern: "/wishlist", render: renderWishlistPage, title: "Your Wishlist" },
-  { pattern: "/checkout", render: renderCheckoutPage, title: "Checkout" },
-  { pattern: "/order-confirmation", render: renderOrderConfirmation, title: "Order Confirmation" },
-  { pattern: "/payment-success", render: renderPaymentSuccess, title: "Payment Successful" },
-  { pattern: "/payment-cancelled", render: renderPaymentCancelled, title: "Payment Cancelled" },
-  { pattern: "/payment-failed", render: renderPaymentFailed, title: "Payment Failed" },
-  { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order" },
+  // Version 7, Milestone 88A: noindex below marks routes that are
+  // either an internal search results listing (best-practice per
+  // Google's own webmaster guidance — never useful as a search
+  // result), private to one visitor's session (cart, wishlist), or
+  // transactional/order-specific (checkout, order-confirmation, the
+  // three payment status pages, track-order) — none of these are
+  // pages a search engine should ever surface publicly.
+  { pattern: "/search", render: renderSearchResults, title: "Search", noindex: true },
+  { pattern: "/cart", render: renderCartPage, title: "Your Cart", noindex: true },
+  { pattern: "/wishlist", render: renderWishlistPage, title: "Your Wishlist", noindex: true },
+  { pattern: "/checkout", render: renderCheckoutPage, title: "Checkout", noindex: true },
+  { pattern: "/order-confirmation", render: renderOrderConfirmation, title: "Order Confirmation", noindex: true },
+  { pattern: "/payment-success", render: renderPaymentSuccess, title: "Payment Successful", noindex: true },
+  { pattern: "/payment-cancelled", render: renderPaymentCancelled, title: "Payment Cancelled", noindex: true },
+  { pattern: "/payment-failed", render: renderPaymentFailed, title: "Payment Failed", noindex: true },
+  { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order", noindex: true },
   {
     pattern: "/about",
     render: renderAbout,
@@ -141,31 +168,40 @@ const routeDefs = [
   // "Navigation Safety" section. Every render function below checks
   // auth itself (via its own API call) and redirects to /admin/login
   // when not signed in, same as every other async page.
-  { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login" },
-  { pattern: "/admin", render: renderAdminHome, title: "Admin" },
-  { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order" },
-  { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders" },
-  { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries" },
+  // Version 7, Milestone 88A: every admin route is noindex — under the
+  // old hash router, a fragment-only "URL" like /#/admin/login was
+  // never separately fetchable by a crawler (it just rendered the
+  // homepage), which accidentally kept admin content out of Google.
+  // Real path routing removes that accident, so noindex here is now
+  // load-bearing, not just extra caution — never rely on it as the
+  // actual security boundary though; requireAdminAuth (server-side
+  // session check) remains that.
+  { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login", noindex: true },
+  { pattern: "/admin", render: renderAdminHome, title: "Admin", noindex: true },
+  { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order", noindex: true },
+  { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders", noindex: true },
+  { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries", noindex: true },
   // Version 7, Milestone 67: admin product management. "/new" (a
   // literal) is listed before "/:id" (a wildcard) — both have the same
   // segment count after /admin/products, so registration order is what
-  // stops "#/admin/products/new" from being mis-matched as product id
+  // stops "/admin/products/new" from being mis-matched as product id
   // "new". "/:id" has no separate read-only detail view — it redirects
   // straight to "/:id/edit" (VERSION_7_PRODUCT_MANAGEMENT_PLAN.md's
   // "keep it simple" allowance).
-  { pattern: "/admin/products/new", render: renderAdminProductCreate, title: "Add Product" },
-  { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product" },
-  { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product" },
-  { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products" },
+  { pattern: "/admin/products/new", render: renderAdminProductCreate, title: "Add Product", noindex: true },
+  { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product", noindex: true },
+  { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product", noindex: true },
+  { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products", noindex: true },
 ];
 
-// Splits "#/product/abc?ref=home" into { path: "/product/abc", query: URLSearchParams }
-function parseHash() {
-  const raw = window.location.hash.slice(1) || "/";
-  const [pathPart, queryPart] = raw.split("?");
+// Reads "/product/abc?ref=home" style URLs straight from the address
+// bar into { path: "/product/abc", query: URLSearchParams } — no more
+// splitting a hash string ourselves now that path and query string are
+// both native browser concepts (window.location.pathname/.search).
+function parseLocation() {
   return {
-    path: pathPart || "/",
-    query: new URLSearchParams(queryPart || ""),
+    path: window.location.pathname || "/",
+    query: new URLSearchParams(window.location.search),
   };
 }
 
@@ -185,7 +221,13 @@ function matchRoute(path) {
       paramNames.forEach((name, index) => {
         params[name] = decodeURIComponent(match[index + 1]);
       });
-      return { render: route.render, title: route.title, description: route.description, params };
+      return {
+        render: route.render,
+        title: route.title,
+        description: route.description,
+        noindex: route.noindex,
+        params,
+      };
     }
   }
   return null;
@@ -195,14 +237,21 @@ async function renderCurrentRoute() {
   const main = document.getElementById("main-content");
   if (!main) return;
 
-  const { path, query } = parseHash();
+  const { path, query } = parseLocation();
   const matched = matchRoute(path);
 
   // Cleared unconditionally before every render so a page that doesn't
   // set its own structured data never inherits stale data left over
   // from whatever the customer viewed previously — see js/seo.js.
   clearPageStructuredData();
-  setPageMeta({ title: matched ? matched.title : "Page Not Found", description: matched?.description });
+  setPageMeta({
+    title: matched ? matched.title : "Page Not Found",
+    description: matched?.description,
+    // An unmatched path (typo, stale/removed link, or straight-up not
+    // a real page) is noindexed too, same as any other error state —
+    // see js/seo.js.
+    noindex: matched ? Boolean(matched.noindex) : true,
+  });
 
   const result = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
   main.innerHTML = result instanceof Promise ? await result : result;
@@ -213,8 +262,56 @@ async function resolveRoute() {
   window.scrollTo({ top: 0, behavior: "instant" });
 }
 
+function isModifiedClick(event) {
+  return event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+}
+
+// Intercepts clicks on same-origin, unmodified, non-download,
+// non-new-tab links so ordinary in-app navigation (every header/
+// footer/"Back to Shop"-style link) uses the History API instead of a
+// full page reload — the same behaviour a `#/...` link gave for free
+// before this migration. Middle-clicks, Ctrl/Cmd/Shift/Alt-clicks,
+// target="_blank" links, download links and cross-origin/mailto:/tel:
+// links are deliberately left alone so "open in new tab" and similar
+// browser-native behaviour keeps working exactly as before.
+function handleLinkClick(event) {
+  if (isModifiedClick(event)) return;
+
+  const anchor = event.target.closest("a[href]");
+  if (!anchor) return;
+  if (anchor.target && anchor.target !== "_self") return;
+  if (anchor.hasAttribute("download")) return;
+  if (anchor.origin !== window.location.origin) return;
+
+  event.preventDefault();
+  navigateTo(`${anchor.pathname}${anchor.search}${anchor.hash}`);
+}
+
+// Version 7, Milestone 88A Follow-Up: one-time backward-compatibility
+// redirect for old saved/bookmarked/shared hash links (e.g.
+// .../#/shop, .../#/admin/login) left over from before this
+// migration. Runs once on initial load, before any route matching —
+// history.replaceState swaps the address bar to the equivalent real
+// path without adding a history entry (so pressing Back afterwards
+// doesn't return to the old hash URL), and does not reintroduce hash
+// routing in any way: every navigation from this point on only ever
+// reads/writes pathname + search, exactly as the rest of this file
+// already does. A hash that doesn't start with "/" (i.e. isn't one of
+// this app's own old routes) is left untouched.
+function redirectLegacyHashUrl() {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/")) return;
+
+  const [path, queryString] = hash.slice(1).split("?");
+  const search = queryString ? `?${queryString}` : "";
+
+  window.history.replaceState(null, "", `${path}${search}`);
+}
+
 export function initRouter() {
-  window.addEventListener("hashchange", resolveRoute);
+  redirectLegacyHashUrl();
+  window.addEventListener("popstate", resolveRoute);
+  document.addEventListener("click", handleLinkClick);
   resolveRoute();
 }
 

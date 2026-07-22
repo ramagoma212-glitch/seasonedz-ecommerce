@@ -13,7 +13,7 @@ export function renderHeader() {
   return `
     <header class="site-header">
       <div class="container site-header__inner">
-        <a href="#/" class="logo">
+        <a href="/" class="logo">
           <img src="${withBase("/images/logo-placeholder.jpeg")}" alt="Seasonedz Group logo" />
           <span class="logo__text">Seasonedz</span>
         </a>
@@ -21,12 +21,12 @@ export function renderHeader() {
         <div class="site-header__collapsible">
           <nav class="site-header__nav" aria-label="Main navigation">
             <ul class="site-header__nav-list">
-              <li><a class="nav-link" href="#/">Home</a></li>
-              <li><a class="nav-link" href="#/shop">Shop</a></li>
-              <li><a class="nav-link" href="#/categories">Categories</a></li>
-              <li><a class="nav-link" href="#/about">About</a></li>
-              <li><a class="nav-link" href="#/contact">Contact</a></li>
-              <li><a class="nav-link" href="#/faq">FAQ</a></li>
+              <li><a class="nav-link" href="/">Home</a></li>
+              <li><a class="nav-link" href="/shop">Shop</a></li>
+              <li><a class="nav-link" href="/categories">Categories</a></li>
+              <li><a class="nav-link" href="/about">About</a></li>
+              <li><a class="nav-link" href="/contact">Contact</a></li>
+              <li><a class="nav-link" href="/faq">FAQ</a></li>
             </ul>
           </nav>
 
@@ -43,11 +43,11 @@ export function renderHeader() {
         </div>
 
         <div class="site-header__actions">
-          <a class="icon-link" href="#/wishlist" aria-label="Wishlist">
+          <a class="icon-link" href="/wishlist" aria-label="Wishlist">
             &hearts;
             <span class="icon-link__badge" data-badge="wishlist">0</span>
           </a>
-          <a class="icon-link" href="#/cart" aria-label="Cart">
+          <a class="icon-link" href="/cart" aria-label="Cart">
             &#128722;
             <span class="icon-link__badge" data-badge="cart">0</span>
           </a>

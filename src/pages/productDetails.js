@@ -22,7 +22,7 @@ import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 
 function renderNotFound() {
-  setPageMeta({ title: "Product Not Found" });
+  setPageMeta({ title: "Product Not Found", noindex: true });
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Product Not Found</h1>
@@ -30,7 +30,7 @@ function renderNotFound() {
         We couldn't find the product you were looking for. It may have
         been removed or the link may be incorrect.
       </p>
-      <a class="btn btn--primary" href="#/shop">Back to Shop</a>
+      <a class="btn btn--primary" href="/shop">Back to Shop</a>
     </section>
   `;
 }
@@ -90,7 +90,7 @@ function renderDeliveryNote() {
     <p>
       Delivery is R80, or free on orders of R700 or more. Delivery is
       currently arranged manually by our small team. See our
-      <a href="#/shipping-policy">Shipping Policy</a> for details.
+      <a href="/shipping-policy">Shipping Policy</a> for details.
     </p>
   `;
 }
@@ -155,7 +155,7 @@ export async function renderProductDetails({ slug } = {}) {
 
   return `
     <section class="container product-details">
-      <a class="product-details__back" href="#/shop">&larr; Back to Shop</a>
+      <a class="product-details__back" href="/shop">&larr; Back to Shop</a>
 
       <div class="product-details__layout">
         ${renderGallery(product)}

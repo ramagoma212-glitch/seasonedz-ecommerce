@@ -8,12 +8,12 @@ export function renderCartItem(item) {
 
   return `
     <div class="cart-item">
-      <a class="cart-item__image-link" href="#/product/${item.slug}">
+      <a class="cart-item__image-link" href="/product/${item.slug}">
         <img class="cart-item__image" src="${item.image}" alt="${item.name}" />
       </a>
 
       <div class="cart-item__details">
-        <a class="cart-item__name" href="#/product/${item.slug}">${item.name}</a>
+        <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
         <p class="cart-item__price">R${item.price.toFixed(2)} each</p>
       </div>
 

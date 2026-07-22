@@ -48,6 +48,17 @@ jobs:
           VITE_PAYFAST_ENABLED: "false"
         run: npm run build
 
+      - name: Add SPA fallback for GitHub Pages (404.html)
+        # GitHub Pages is static hosting with no server-side rewrites —
+        # a direct visit to a real path like /shop returns Pages' own
+        # 404 unless a 404.html exists. Copying the built index.html to
+        # 404.html makes Pages serve the same app shell for any
+        # unmatched path (Version 7, Milestone 88A path-routing
+        # migration); router.js then reads window.location.pathname on
+        # load and renders the right page, exactly as it already does
+        # for a normal in-app navigation.
+        run: cp dist/index.html dist/404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

@@ -10,6 +10,7 @@
 import { renderHeader } from "../components/header.js";
 import { renderFooter } from "../components/footer.js";
 import { initRouter, rerenderCurrentRoute } from "./router.js";
+import { navigateTo } from "./navigation.js";
 import {
   addToCart,
   removeFromCart,
@@ -61,7 +62,7 @@ function mountApp() {
   setupAdminProductForm();
   setupAdminProductImages();
 
-  window.addEventListener("hashchange", onRouteChange);
+  window.addEventListener("popstate", onRouteChange);
   onRouteChange();
   updateHeaderCounters();
 }
@@ -69,12 +70,14 @@ function mountApp() {
 // The header is only rendered once at mount time (it never gets
 // replaced like #main-content does), so it needs to be kept in sync
 // with the route by hand: pre-fill the search box with the current
-// ?q= term, and close the mobile menu after any navigation.
+// ?q= term, and close the mobile menu after any navigation. Fires on
+// "popstate" (Back/Forward, and every navigateTo() call — see
+// js/navigation.js) as well as once directly at mount, matching the
+// old hashchange-based behaviour.
 function onRouteChange() {
   const input = document.querySelector(".site-header__search input[type=search]");
   if (input) {
-    const [, queryString] = window.location.hash.slice(1).split("?");
-    const params = new URLSearchParams(queryString || "");
+    const params = new URLSearchParams(window.location.search);
     input.value = params.get("q") || "";
   }
 
@@ -104,20 +107,20 @@ function setupHeaderSearch() {
     const term = (input?.value || "").trim();
     if (!term) return; // ignore empty/whitespace-only searches
 
-    window.location.hash = `/search?q=${encodeURIComponent(term)}`;
+    navigateTo(`/search?q=${encodeURIComponent(term)}`);
   });
 }
 
 // Any <select data-filter="..."> (category/price/age/stock/tag/sort on
 // the shop and search results pages) updates the URL query string in
-// place, which re-triggers the router via hashchange.
+// place, which re-triggers the router via navigateTo()'s popstate event.
 function setupFilterControls() {
   document.addEventListener("change", (event) => {
     const filterEl = event.target.closest("[data-filter]");
     if (!filterEl) return;
 
-    const [path, queryString] = window.location.hash.slice(1).split("?");
-    const params = new URLSearchParams(queryString || "");
+    const path = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
 
     if (filterEl.value) {
       params.set(filterEl.dataset.filter, filterEl.value);
@@ -126,7 +129,7 @@ function setupFilterControls() {
     }
 
     const nextQuery = params.toString();
-    window.location.hash = `${path}${nextQuery ? `?${nextQuery}` : ""}`;
+    navigateTo(`${path}${nextQuery ? `?${nextQuery}` : ""}`);
   });
 }
 
@@ -452,7 +455,7 @@ async function handleCheckoutSubmit(form) {
       return;
     }
 
-    window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
+    navigateTo(`/order-confirmation?order=${encodeURIComponent(orderNumber)}`);
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
       showCheckoutFormBanner(form, "We could not connect to the order system right now. Please try again shortly.");
@@ -479,7 +482,7 @@ async function redirectToPayfast(orderNumber) {
   try {
     await retryPayfastPayment(orderNumber, "checkout");
   } catch {
-    window.location.hash = `/order-confirmation?order=${encodeURIComponent(orderNumber)}`;
+    navigateTo(`/order-confirmation?order=${encodeURIComponent(orderNumber)}`);
   }
 }
 
@@ -545,7 +548,7 @@ function setupTrackOrderForm() {
       return;
     }
 
-    window.location.hash = `/track-order?order=${encodeURIComponent(value)}`;
+    navigateTo(`/track-order?order=${encodeURIComponent(value)}`);
   });
 
   document.addEventListener("input", (event) => {
@@ -596,7 +599,7 @@ async function handleAdminLoginSubmit(form) {
 
   try {
     await adminLogin(email, password);
-    window.location.hash = "/admin";
+    navigateTo("/admin");
   } catch (error) {
     // Deliberately the same generic message regardless of the real
     // cause (wrong email, wrong password, rate limited) — never hints
@@ -627,7 +630,7 @@ async function handleAdminLogout() {
   } catch {
     // Ignored deliberately — see comment above.
   }
-  window.location.hash = "/admin/login";
+  navigateTo("/admin/login");
 }
 
 // Admin order status update (Version 7, Milestone 64). Delegated
@@ -797,7 +800,7 @@ function setupAdminProductFilterForm() {
     if (categoryId) params.set("categoryId", categoryId);
     params.set("page", "1");
 
-    window.location.hash = `/admin/products?${params.toString()}`;
+    navigateTo(`/admin/products?${params.toString()}`);
   });
 }
 
@@ -914,7 +917,7 @@ async function handleAdminProductFormSubmit(form) {
 
       const response = await createAdminProduct(payload);
       setPendingAdminMessage(`Product "${response.data.name}" created successfully.`);
-      window.location.hash = `/admin/products/${encodeURIComponent(response.data.id)}/edit`;
+      navigateTo(`/admin/products/${encodeURIComponent(response.data.id)}/edit`);
     } else {
       const productId = form.dataset.productId;
       // sku/slug are never included here at all — the edit page never

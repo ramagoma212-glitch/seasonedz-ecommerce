@@ -75,8 +75,8 @@ function renderPaidResult(tracking) {
     </div>
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
-      <a class="btn btn--primary" href="#/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
-      <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(tracking.orderNumber)}">Track Order</a>
+      <a class="btn btn--primary" href="/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
+      <a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(tracking.orderNumber)}">Track Order</a>
     </div>
   `;
 }
@@ -100,9 +100,9 @@ function renderPendingResult(tracking) {
     </div>
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
-      <a class="btn btn--secondary" href="#/payment-success?orderNumber=${encodeURIComponent(tracking.orderNumber)}">Check Again</a>
-      <a class="btn btn--secondary" href="#/track-order?order=${encodeURIComponent(tracking.orderNumber)}">Track Order</a>
-      <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
+      <a class="btn btn--secondary" href="/payment-success?orderNumber=${encodeURIComponent(tracking.orderNumber)}">Check Again</a>
+      <a class="btn btn--secondary" href="/track-order?order=${encodeURIComponent(tracking.orderNumber)}">Track Order</a>
+      <a class="btn btn--secondary" href="/contact">Contact Seasonedz Group</a>
     </div>
   `;
 }
@@ -116,7 +116,7 @@ function renderUnsuccessfulResult(tracking) {
     ${renderStatusCard(tracking)}
     <div class="order-confirmation__actions">
       ${isPayfastRetryEligible(tracking) ? renderPayfastRetryButton(tracking.orderNumber) : ""}
-      <a class="btn btn--secondary" href="#/contact">Contact Seasonedz Group</a>
+      <a class="btn btn--secondary" href="/contact">Contact Seasonedz Group</a>
     </div>
   `;
 }

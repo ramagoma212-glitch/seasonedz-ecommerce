@@ -37,7 +37,7 @@ export function renderSchools() {
           Our School Starter Colouring Pack bundles our most popular
           colouring books with crayons, ready to hand out to a class. It's
           a simple starting point for classroom use, take a look on our
-          <a href="#/shop?category=schools-and-wholesale">Shop page</a>.
+          <a href="/shop?category=schools-and-wholesale">Shop page</a>.
         </p>
 
         <h2>Who We Work With</h2>

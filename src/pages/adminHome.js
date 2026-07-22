@@ -59,7 +59,7 @@ function renderRecentOrdersTable(orders) {
             .map(
               (order) => `
             <tr>
-              <td><a href="#/admin/orders/${encodeURIComponent(order.orderNumber)}">${escapeHtml(order.orderNumber)}</a></td>
+              <td><a href="/admin/orders/${encodeURIComponent(order.orderNumber)}">${escapeHtml(order.orderNumber)}</a></td>
               <td>${escapeHtml(order.customerName)}</td>
               <td>${formatCurrency(order.total)}</td>
               <td>${renderStatusBadge(order.paymentStatus)}</td>
@@ -172,7 +172,7 @@ export async function renderAdminHome() {
         <div class="admin-section">
           <div class="admin-section__header">
             <h2>Recent Orders</h2>
-            <a class="admin-section__link" href="#/admin/orders">View all</a>
+            <a class="admin-section__link" href="/admin/orders">View all</a>
           </div>
           ${renderRecentOrdersTable(dashboard.recentOrders)}
         </div>
@@ -180,7 +180,7 @@ export async function renderAdminHome() {
         <div class="admin-section">
           <div class="admin-section__header">
             <h2>Recent Enquiries</h2>
-            <a class="admin-section__link" href="#/admin/enquiries">View all</a>
+            <a class="admin-section__link" href="/admin/enquiries">View all</a>
           </div>
           ${renderRecentEnquiriesTable(dashboard.recentEnquiries)}
         </div>

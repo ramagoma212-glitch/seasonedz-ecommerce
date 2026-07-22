@@ -47,7 +47,7 @@ export function renderTestimonials() {
       <div class="info-page__cta">
         <h2>Have Feedback to Share?</h2>
         <p>We'd love to hear from you once you've tried our products.</p>
-        <a class="btn btn--primary" href="#/contact">Contact Us</a>
+        <a class="btn btn--primary" href="/contact">Contact Us</a>
       </div>
     </section>
   `;

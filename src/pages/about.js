@@ -73,7 +73,7 @@ export function renderAbout() {
         <div class="info-page__cta">
           <h2>Ready to Explore?</h2>
           <p>Browse our colouring books, markers and crayons, or get in touch if you have any questions.</p>
-          <a class="btn btn--primary" href="#/shop">Shop Now</a>
+          <a class="btn btn--primary" href="/shop">Shop Now</a>
         </div>
       </div>
     </section>

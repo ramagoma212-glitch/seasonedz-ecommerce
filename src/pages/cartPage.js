@@ -38,7 +38,7 @@ export function renderCartPage() {
 
           ${items.map((item) => renderCartItem(item)).join("")}
 
-          <a class="cart-page__continue" href="#/shop">&larr; Continue Shopping</a>
+          <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
         ${renderOrderSummary({ subtotal, deliveryFee })}

@@ -38,7 +38,7 @@ export function renderReturnsPolicy() {
         <h2>Getting in Touch</h2>
         <p>
           The easiest way to start a return is via our
-          <a href="#/contact">Contact page</a>, or reach us directly below.
+          <a href="/contact">Contact page</a>, or reach us directly below.
           We'll respond with clear next steps for your specific order.
         </p>
         ${renderContactSupportNote("Ready to start a return?")}

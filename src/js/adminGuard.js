@@ -5,6 +5,7 @@
 // than each page repeating the same markup and status check.
 
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
+import { navigateTo } from "./navigation.js";
 
 export function isUnauthenticated(error) {
   return error instanceof ApiError && error.status === 401;
@@ -15,7 +16,7 @@ export function isBackendUnavailable(error) {
 }
 
 export function redirectToAdminLogin() {
-  window.location.hash = "/admin/login";
+  navigateTo("/admin/login");
 }
 
 export function renderAdminRedirecting() {
