@@ -219,10 +219,32 @@
   text-align: left;
 }
 
+/* Version 7, Milestone 92D: fixes two things found while diagnosing
+   why product photos looked badly cropped on cards. First, an actual
+   layout bug: this rule never set an explicit `height`, so with no
+   author CSS overriding it, the Milestone 92A `height="400"` HTML
+   attribute silently won out as the *used* height (400px, fixed) —
+   while `width: 100%` (set here) independently overrode the HTML
+   `width="400"` attribute to the card's own ~198px. Two different
+   sources for the two dimensions meant `aspect-ratio: 1/1` had
+   nothing left to compute (both dimensions were already "resolved"),
+   so it was silently ignored — the real rendered box was ~198x400,
+   not square at all, and `object-fit: cover` was cropping a mostly-
+   square product photo down to less than half its height to fill
+   that badly-shaped box. `height: auto` restores aspect-ratio's
+   intended job (compute height from the resolved width). Second,
+   per this milestone's brief: object-fit switched to `contain` so no
+   product (book cover, bundle, marker pack) is ever cropped
+   regardless of its own photo's exact ratio, with the card's own
+   existing surface colour behind it so any letterboxed padding reads
+   as a clean, intentional white product-tile background rather than
+   a gap. */
 .card__image {
   width: 100%;
+  height: auto;
   aspect-ratio: 1 / 1;
-  object-fit: cover;
+  object-fit: contain;
+  background-color: var(--color-surface);
 }
 
 .card__body {
