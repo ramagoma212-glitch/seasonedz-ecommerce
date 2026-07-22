@@ -95,13 +95,19 @@
   .tracking-result__grid {
     grid-template-columns: 1fr;
   }
-}
 
-/* ---- Tablet portrait / mobile nav breakpoint -------------------------------- */
-@media (max-width: 768px) {
-  /* Nav links and the search bar share one collapsible dropdown panel,
-     opened by the hamburger button, instead of two separately-hidden
-     elements — see .site-header__collapsible in layout.css. */
+  /* Version 7, Milestone 94: fixes the long-known tablet header
+     overlap. The inline nav (6 links, nowrap) + search bar + wishlist/
+     cart icons need roughly 1080px of unbroken width to render
+     without squeezing — but the old breakpoint only collapsed them
+     behind the hamburger at max-width:768px, leaving every width from
+     769px up to ~1080px (e.g. 900px, 1024px — measured live, cart
+     icon pushed fully off-screen and "Seasonedz" overlapping "Home")
+     with no way to fit. Reuses the exact same collapsible-panel
+     treatment as the max-width:768px block below (same markup, same
+     .is-open toggle in js/app.js — nothing mobile-specific changes),
+     just triggered earlier so tablet widths get the already-working
+     mobile nav instead of a desktop layout that doesn't fit. */
   .site-header__collapsible {
     display: none;
     position: absolute;
@@ -134,6 +140,15 @@
   .site-header__actions .site-header__mobile-toggle {
     display: flex;
   }
+}
+
+/* ---- Tablet portrait / mobile nav breakpoint -------------------------------- */
+@media (max-width: 768px) {
+  /* Version 7, Milestone 94: the collapsible nav/search panel and
+     hamburger toggle rules that used to live here moved to the
+     max-width:1024px block above — 768px is already covered by that
+     wider query, so keeping a second copy here would just be
+     duplicate CSS to keep in sync. */
 
   .grid--4,
   .grid--3 {

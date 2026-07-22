@@ -38,7 +38,15 @@
   gap: var(--space-lg);
 }
 
-.site-header__logo {
+/* Version 7, Milestone 94: this was ".site-header__logo" — a class
+   the actual header markup (header.js) never uses, since the logo
+   link only carries class="logo". That mismatch meant this
+   flex-shrink:0 protection never applied to anything; the real logo
+   defaulted to the initial flex-shrink:1, so once the header ran out
+   of room (see the tablet overlap fix in responsive.css) it got
+   squeezed narrower than its own text content and "Seasonedz"
+   visually overflowed into the nav links next to it. */
+.logo {
   flex-shrink: 0;
 }
 
