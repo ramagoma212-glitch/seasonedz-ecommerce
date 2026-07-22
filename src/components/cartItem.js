@@ -3,6 +3,8 @@
 // js/app.js (data-action="cart-increase" / "cart-decrease" /
 // "cart-update" / "cart-remove").
 
+import { getCardImageUrl } from "../js/imageTransforms.js";
+
 // Version 7, Milestone 92A: width/height match .cart-item__image's own
 // fixed 72x72 CSS size exactly (unlike the square card images
 // elsewhere, this one isn't fluid, so there's a single correct value
@@ -18,7 +20,8 @@ export function renderCartItem(item, { eager = false } = {}) {
       <a class="cart-item__image-link" href="/product/${item.slug}">
         <img
           class="cart-item__image"
-          src="${item.image}"
+          src="${getCardImageUrl(item.image)}"
+          data-original-src="${item.image}"
           alt="${item.name}"
           width="72"
           height="72"

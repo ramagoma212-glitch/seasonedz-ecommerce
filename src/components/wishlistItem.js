@@ -2,6 +2,8 @@
 // card's visual language, but with a plain "Remove" button instead of
 // a heart toggle, since being on this page already means it's saved.
 
+import { getCardImageUrl } from "../js/imageTransforms.js";
+
 // Version 7, Milestone 92A: see productCard.js's comment for the
 // eager/width/height reasoning — same pattern here.
 export function renderWishlistItem(item, { eager = false } = {}) {
@@ -10,7 +12,8 @@ export function renderWishlistItem(item, { eager = false } = {}) {
       <a href="/product/${item.slug}">
         <img
           class="card__image"
-          src="${item.image}"
+          src="${getCardImageUrl(item.image)}"
+          data-original-src="${item.image}"
           alt="${item.name}"
           width="400"
           height="400"
