@@ -112,8 +112,20 @@ function writeRouteFile(routePath, html) {
 // than omitting it; Google explicitly treats changefreq/priority as
 // hints it mostly ignores anyway, so a plain <loc>-only sitemap loses
 // nothing that matters.
+//
+// Version 7, Milestone 99: each <loc> gets a trailing slash (except
+// "/" itself) — GitHub Pages redirects a bare generated route like
+// /shop to /shop/ (see router.js's own comment), so /shop/ is the
+// final, redirect-free URL, matching the same trailing-slash policy
+// js/seo.js's buildCanonicalUrl() now uses for every page's <link
+// rel="canonical">.
 function buildSitemapXml(urlPaths) {
-  const urlEntries = urlPaths.map((path) => `  <url><loc>${SITE_URL}${path}</loc></url>`).join("\n");
+  const urlEntries = urlPaths
+    .map((path) => {
+      const withTrailingSlash = path === "/" || path.endsWith("/") ? path : `${path}/`;
+      return `  <url><loc>${SITE_URL}${withTrailingSlash}</loc></url>`;
+    })
+    .join("\n");
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
 }
 
