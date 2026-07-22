@@ -374,17 +374,6 @@
   color: var(--color-secondary);
 }
 
-.product-card__rating {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  font-size: var(--font-size-sm);
-}
-
-.product-card__review-count {
-  color: var(--color-text-muted);
-}
-
 .product-card__desc {
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
