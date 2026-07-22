@@ -16,6 +16,31 @@
   .product-grid {
     grid-template-columns: 1fr;
   }
+
+  /* Version 7, Milestone 93D: unlike the Shop/Search grids above,
+     homepage rows only ever show 2 cards on mobile (see
+     .home-product-grid's item-count cap below), so there's no reason
+     to drop to 1 column at 320px the way the full Shop grid does —
+     tested clean and readable (title/price/stock/Add to Cart all
+     legible) with real product data at 320px, and keeping 2 columns
+     here is what makes each row a single clean row instead of two. */
+  .home-product-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Version 7, Milestone 93D: caps each homepage row to its first 2
+   cards (one clean row) below tablet width only. Deliberately
+   max-width: 767px, NOT 768px — the tablet rule two blocks up
+   switches .home-product-grid to 3 columns starting exactly at
+   768px, and capping the item count at that same pixel left only 2
+   of 3 columns filled, an obvious empty gap. Kept in its own block
+   rather than folded into the shared max-width:768px block below
+   (used by .filter-toggle etc.) specifically to avoid that overlap. */
+@media (max-width: 767px) {
+  .home-product-grid > *:nth-child(n + 3) {
+    display: none;
+  }
 }
 
 @media (min-width: 768px) {
@@ -158,6 +183,27 @@
   .filter-panel__heading,
   .filter-panel__clear {
     grid-column: 1 / -1;
+  }
+
+  /* Version 7, Milestone 93D: homepage product rows only — reveals
+     the "View All" link and reduces each row to one clean product
+     row instead of wrapping the full MAX_PER_ROW=4 (home.js) onto a
+     second line. .home-product-grid always carries .product-grid too
+     (see home.js), so it still inherits every existing product-grid
+     rule (card sizing, title clamp, column count); this only adds the
+     item-count cap, which .product-grid alone never needed since the
+     Shop/Search/Related grids show every matching product, not a
+     fixed row of 4. */
+  .home-product-row__heading-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    text-align: left;
+  }
+
+  .section__view-all {
+    display: inline-block;
   }
 
   .cart-layout {

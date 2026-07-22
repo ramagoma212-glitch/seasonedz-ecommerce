@@ -14,16 +14,25 @@ import { getCatalog } from "../js/api/productsApi.js";
 
 const MAX_PER_ROW = 4;
 
-function renderProductRow(heading, subtext, list) {
+// Version 7, Milestone 93D: mobile-only "View All" link next to each
+// homepage row's heading — hidden on desktop/tablet (see
+// .section__view-all in components.css), the only visual addition at
+// those widths. Goes to a real path href (never "#/shop") so
+// router.js's handleLinkClick navigates it the same way as every
+// other in-app link.
+function renderProductRow(heading, subtext, list, viewAllHref) {
   if (!list.length) return "";
 
   return `
     <section class="section container">
       <div class="section__header">
-        <h2>${heading}</h2>
+        <div class="home-product-row__heading-line">
+          <h2>${heading}</h2>
+          <a class="section__view-all" href="${viewAllHref}">View All</a>
+        </div>
         <p>${subtext}</p>
       </div>
-      <div class="product-grid">
+      <div class="product-grid home-product-grid">
         ${list.slice(0, MAX_PER_ROW).map((product) => renderProductCard(product)).join("")}
       </div>
     </section>
@@ -90,9 +99,9 @@ export async function renderHome() {
       </div>
     </section>
 
-    ${renderProductRow("Featured Products", "A few customer favourites to get you started.", featured)}
-    ${renderProductRow("Best Sellers", "The colouring books and supplies our customers love most.", bestSellers)}
-    ${renderProductRow("New Arrivals", "Fresh additions to the Seasonedz Group range.", newArrivals)}
+    ${renderProductRow("Featured Products", "A few customer favourites to get you started.", featured, "/shop")}
+    ${renderProductRow("Best Sellers", "The colouring books and supplies our customers love most.", bestSellers, "/shop")}
+    ${renderProductRow("New Arrivals", "Fresh additions to the Seasonedz Group range.", newArrivals, "/shop?sort=newest")}
 
     <section class="section container">
       <div class="wholesale-banner">
