@@ -80,10 +80,10 @@ function renderPaymentNotice(order) {
         <div>
           <strong>Payment confirmed.</strong>
           <p>
-            Your order is now being prepared for delivery. Seasonedz
-            Group will share courier tracking details once it's
-            dispatched. There's no live courier tracking yet, so
-            please allow some time.
+            Your order is now being prepared for delivery, using The
+            Courier Guy where applicable. Seasonedz Group will share
+            tracking details once it's dispatched — this isn't live,
+            real-time tracking, so please allow some time.
           </p>
         </div>
       </div>

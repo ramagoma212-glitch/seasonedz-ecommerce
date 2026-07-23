@@ -143,7 +143,7 @@ export async function renderHome() {
         <div class="trust-item">
           <div class="trust-item__icon" aria-hidden="true">&#10003;</div>
           <h4 class="trust-item__title">Delivery Across South Africa</h4>
-          <p class="trust-item__text">R80 delivery, free from R700. Handled with care by our small team.</p>
+          <p class="trust-item__text">R80 delivery, free from R700, via The Courier Guy where applicable. Handled with care by our small team.</p>
         </div>
       </div>
     </section>

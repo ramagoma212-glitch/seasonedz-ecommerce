@@ -22,7 +22,7 @@ export const faqs = [
     category: "Delivery",
     question: "Do you deliver countrywide in South Africa?",
     answer:
-      "We're focused on delivering across South Africa. Exact courier coverage will be confirmed once courier integration is complete.",
+      "We're focused on delivering across South Africa. We use The Courier Guy for courier deliveries where applicable, alongside other couriers as needed.",
   },
   {
     category: "Delivery",
@@ -34,13 +34,13 @@ export const faqs = [
     category: "Delivery",
     question: "How is my order delivered?",
     answer:
-      "Delivery is currently arranged manually by Seasonedz Group rather than through a live courier system. Once your order and payment are confirmed, we pack your order, book a courier and arrange delivery ourselves.",
+      "Delivery is currently arranged manually by Seasonedz Group. Once your order and payment are confirmed, we pack your order, book delivery with The Courier Guy where applicable and arrange delivery ourselves.",
   },
   {
     category: "Delivery",
     question: "Can I track my delivery?",
     answer:
-      "You can look up your order on our Track Order page using your order number. This is not yet live, real time courier tracking. Once your order is dispatched, Seasonedz Group will share tracking details, such as a waybill or tracking number, with you manually.",
+      "You can look up your order on our Track Order page using your order number. This is not live, real-time courier tracking. Once your order is dispatched via The Courier Guy where applicable, Seasonedz Group will share tracking details, such as a waybill or tracking number, with you manually.",
   },
   {
     category: "Delivery",
@@ -115,6 +115,6 @@ export const faqs = [
     category: "Order Tracking",
     question: "How can I track my order?",
     answer:
-      "Use our Track Order page with the order number from your confirmation page. Note that this is currently a demo tracking experience, not live courier tracking.",
+      "Use our Track Order page with the order number from your confirmation page. Note that this is a manually-updated status, not live courier tracking.",
   },
 ];

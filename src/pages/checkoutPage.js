@@ -72,18 +72,21 @@ function renderPaymentMethods() {
 // Version 6, Milestone 54: a dedicated delivery note, separate from
 // the payment notice above — Seasonedz Group confirms and arranges
 // delivery manually after the order is placed; no instant delivery or
-// automatic tracking is promised (see VERSION_6_COURIER_INTEGRATION_PLAN.md).
+// automatic tracking is promised. Version 7, Milestone 114 names The
+// Courier Guy explicitly (Seasonedz Group's real courier), without
+// implying any customer-facing quote/booking or live tracking exists.
 function renderDeliveryNote() {
   return `
     <div class="demo-notice">
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
-        <strong>Delivery is arranged manually.</strong>
+        <strong>Delivery is arranged after your order is confirmed.</strong>
         <p>
-          Delivery is R80, or free on orders of R700 or more. Seasonedz
-          Group will confirm and arrange delivery once your order is
-          placed. Tracking details will be shared with you manually
-          once your order is dispatched.
+          Delivery is R80, or free on orders of R700 or more. We use
+          The Courier Guy for courier deliveries where applicable.
+          Seasonedz Group will confirm your order and arrange delivery;
+          tracking details are shared once your order has been packed
+          and booked.
         </p>
         ${renderContactSupportNote("Need help with delivery?")}
       </div>

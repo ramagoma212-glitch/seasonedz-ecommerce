@@ -1,8 +1,11 @@
 // Shipping policy page. General, honest wording only — no specific
-// delivery dates are promised since real courier integration isn't
-// connected yet (the delivery fee logic itself lives in js/cart.js on
-// the frontend and backend/src/config/delivery.ts on the backend —
-// both use the same R80 / R700 rule).
+// delivery dates are promised, since courier booking/tracking is still
+// handled by admin staff rather than shown live to customers (the
+// delivery fee logic itself lives in js/cart.js on the frontend and
+// backend/src/config/delivery.ts on the backend — both use the same
+// R80 / R700 rule). Version 7, Milestone 114 names The Courier Guy
+// explicitly, since Seasonedz Group now has a real account with them —
+// still no customer-facing quote, booking, or live tracking.
 
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 
@@ -19,8 +22,9 @@ export function renderShippingPolicy() {
         <p>
           Delivery is available across South Africa. Seasonedz Group is
           a small team, so delivery is currently arranged manually
-          rather than through a live, automated courier system. Every
-          order is packed, booked with a courier and tracked by hand.
+          rather than through a live, automated courier system. We use
+          The Courier Guy for courier deliveries where applicable —
+          every order is packed, booked and tracked by hand.
         </p>
 
         <h2>Delivery Fees</h2>
@@ -34,10 +38,8 @@ export function renderShippingPolicy() {
         <h2>Delivery Times</h2>
         <p>
           We aim to process and prepare orders promptly, but delivery times
-          will vary depending on your location and the courier used. We'll
-          share more specific delivery estimates once courier integration
-          is live. For now, please treat any delivery timing as a general
-          guide rather than a guaranteed date.
+          will vary depending on your location. Please treat any delivery
+          timing as a general guide rather than a guaranteed date.
         </p>
 
         <h2>Manual Courier Arrangement</h2>
@@ -45,9 +47,9 @@ export function renderShippingPolicy() {
           Your order is prepared for delivery once payment is confirmed.
           For PayFast, that's once payment is verified; for bank transfer
           or cash/card on delivery, once Seasonedz Group has confirmed
-          your order. We then choose a courier and book delivery
-          ourselves; this is currently handled manually by Seasonedz
-          Group rather than through a live courier system.
+          your order. We then book delivery with The Courier Guy where
+          applicable; this is currently handled manually by Seasonedz
+          Group rather than automatically.
         </p>
 
         <h2>Tracking Updates</h2>
@@ -57,9 +59,8 @@ export function renderShippingPolicy() {
           number to see its current processing status. Courier tracking
           details (once your order is dispatched, such as a waybill or
           tracking number) will be shared with you manually by Seasonedz
-          Group directly. This is not yet live, real-time courier
-          tracking; that will be added once courier integration is
-          complete.
+          Group directly. This is not live, real-time courier tracking —
+          Seasonedz Group updates it by hand.
         </p>
 
         <h2>Delivery Support</h2>
