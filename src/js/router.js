@@ -161,7 +161,12 @@ const routeDefs = [
     description: "Answers to common questions about ordering, delivery, payment and returns at Seasonedz Group.",
   },
   { pattern: "/policies", render: renderPolicies, title: "Policies" },
-  { pattern: "/shipping-policy", render: renderShippingPolicy, title: "Shipping Policy" },
+  {
+    pattern: "/shipping-policy",
+    render: renderShippingPolicy,
+    title: "Shipping Policy",
+    description: "Delivery available nationwide through The Courier Guy where applicable. R80 delivery, free from R700.",
+  },
   { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
   { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },
   { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },

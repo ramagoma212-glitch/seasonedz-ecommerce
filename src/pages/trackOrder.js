@@ -105,11 +105,11 @@ function renderDemoNotice() {
     <div class="demo-notice">
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
-        <strong>Tracking is a Seasonedz Group backend status, not a live courier.</strong>
+        <strong>Tracking is a Seasonedz Group backend status, not a live courier feed.</strong>
         <p>
-          There is no real courier integration yet. This status is
-          updated manually by Seasonedz Group, not by a live courier
-          API. Real courier tracking is coming later.
+          We use The Courier Guy for courier deliveries where
+          applicable. This status is updated manually by Seasonedz
+          Group, not from a live tracking feed.
         </p>
       </div>
     </div>
