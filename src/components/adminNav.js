@@ -8,11 +8,17 @@
 // delegated click handler already wired in js/app.js since Milestone
 // 58 — no new event wiring needed here.
 
+// Hotfix 106C: these were still hash-style ("#/admin/...") left over
+// from before the Milestone 88A hash-to-path routing migration, which
+// missed this file (a mechanical `href="#/..."` find-replace across
+// ~35 files didn't catch these, since they're built from a `href:`
+// object property, not a literal HTML attribute string). Real paths
+// only, matching every other admin link in the codebase.
 const NAV_LINKS = [
-  { key: "dashboard", href: "#/admin", label: "Dashboard" },
-  { key: "orders", href: "#/admin/orders", label: "Orders" },
-  { key: "enquiries", href: "#/admin/enquiries", label: "Enquiries" },
-  { key: "products", href: "#/admin/products", label: "Products" },
+  { key: "dashboard", href: "/admin", label: "Dashboard" },
+  { key: "orders", href: "/admin/orders", label: "Orders" },
+  { key: "enquiries", href: "/admin/enquiries", label: "Enquiries" },
+  { key: "products", href: "/admin/products", label: "Products" },
 ];
 
 export function renderAdminNav(activeKey) {
