@@ -48,6 +48,22 @@ jobs:
           VITE_PAYFAST_ENABLED: "false"
         run: npm run build
 
+      - name: Install Playwright browser (Chromium only)
+        # Version 7, Milestone 103: only the one browser the smoke
+        # suite's config actually uses — installing every engine
+        # Playwright supports would be unnecessary weight for a
+        # deliberately small suite.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        # Runs only the "local" project (see playwright.config.js) —
+        # its own webServer step rebuilds dist/ and regenerates static
+        # routes/sitemap.xml/404.html itself, so this is fully self-
+        # contained and never touches the live frontend. Deliberately
+        # gates the deploy: if this fails, the steps below (which
+        # produce the real deployed artifact) never run.
+        run: npm run test:smoke
+
       - name: Generate static route files and sitemap.xml for SEO
         # Milestone 88C found every route except "/" returned HTTP 404
         # (served correctly via the 404.html fallback below, but a 404

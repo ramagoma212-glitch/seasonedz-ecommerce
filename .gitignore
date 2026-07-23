@@ -6,6 +6,11 @@ dist
 dist-ssr
 *.local
 
+# Playwright smoke-test output (Version 7, Milestone 103)
+test-results/
+playwright-report/
+blob-report/
+
 # Logs
 logs
 *.log
