@@ -249,6 +249,75 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
   );
 }
 
+// Courier Guy (Version 7, Milestone 108 — admin-only RATE QUOTE only).
+// See backend/src/services/courierGuy.service.ts's own header comment:
+// nothing in this codebase ever calls a booking/shipment-creation
+// endpoint, only POST {baseUrl}/rates.
+//
+// Same "safety switch, optional until configured" pattern as
+// PAYFAST_ENABLED/EMAIL_ENABLED above: real quote calls stay blocked
+// until this is explicitly "true", so the backend must keep starting
+// normally without anyone having to add Courier Guy credentials for a
+// feature that's still fully disabled by default. Once enabled, the
+// API key and every collection-address field are eagerly required —
+// a quote request needs a real "from" address, not just a "to" one.
+const courierGuyEnabled = getEnv("COURIER_GUY_ENABLED", "false").trim().toLowerCase() === "true";
+const courierGuyApiKey = getOptionalEnv("COURIER_GUY_API_KEY");
+// ShipLogic's sandbox base URL (api.shiplogic.com) is also The Courier
+// Guy's own developer-portal sandbox — see backend/DELIVERY_SETUP.md.
+// Defaulted so local/dev startup never requires this to be set just to
+// leave the feature disabled; only meaningful once courierGuyEnabled.
+const courierGuyBaseUrl = getEnv("COURIER_GUY_BASE_URL", "https://api.shiplogic.com");
+const courierGuyCollectionCompany = getOptionalEnv("COURIER_GUY_COLLECTION_COMPANY");
+const courierGuyCollectionStreetAddress = getOptionalEnv("COURIER_GUY_COLLECTION_STREET_ADDRESS");
+const courierGuyCollectionLocalArea = getOptionalEnv("COURIER_GUY_COLLECTION_LOCAL_AREA");
+const courierGuyCollectionCity = getOptionalEnv("COURIER_GUY_COLLECTION_CITY");
+const courierGuyCollectionZone = getOptionalEnv("COURIER_GUY_COLLECTION_ZONE");
+const courierGuyCollectionCountry = getEnv("COURIER_GUY_COLLECTION_COUNTRY", "ZA");
+const courierGuyCollectionCode = getOptionalEnv("COURIER_GUY_COLLECTION_CODE");
+// "business" is the only realistic value for Seasonedz Group's own
+// collection address (never a residential pickup) — optional to set
+// explicitly, per the task's own env variable list.
+const courierGuyCollectionType = getEnv("COURIER_GUY_COLLECTION_TYPE", "business");
+// Safe defaults for a small book/marker-pack parcel (Milestone 107's
+// planning review) — always overridable by the admin per-quote in the
+// UI, never assumed to be exactly right for every order.
+const courierGuyDefaultParcelWeightKg = Number(getEnv("COURIER_GUY_DEFAULT_PARCEL_WEIGHT_KG", "0.3"));
+const courierGuyDefaultParcelLengthCm = Number(getEnv("COURIER_GUY_DEFAULT_PARCEL_LENGTH_CM", "30"));
+const courierGuyDefaultParcelWidthCm = Number(getEnv("COURIER_GUY_DEFAULT_PARCEL_WIDTH_CM", "22"));
+const courierGuyDefaultParcelHeightCm = Number(getEnv("COURIER_GUY_DEFAULT_PARCEL_HEIGHT_CM", "3"));
+
+for (const [name, value] of [
+  ["COURIER_GUY_DEFAULT_PARCEL_WEIGHT_KG", courierGuyDefaultParcelWeightKg],
+  ["COURIER_GUY_DEFAULT_PARCEL_LENGTH_CM", courierGuyDefaultParcelLengthCm],
+  ["COURIER_GUY_DEFAULT_PARCEL_WIDTH_CM", courierGuyDefaultParcelWidthCm],
+  ["COURIER_GUY_DEFAULT_PARCEL_HEIGHT_CM", courierGuyDefaultParcelHeightCm],
+] as const) {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${name} must be a positive number — got: "${process.env[name]}".`);
+  }
+}
+
+if (courierGuyEnabled) {
+  // Named individually (never the values) — same intent as the
+  // PayFast/email checks above: a missing-config startup failure tells
+  // you exactly what to fix.
+  const missing: string[] = [];
+  if (!courierGuyApiKey) missing.push("COURIER_GUY_API_KEY");
+  if (!courierGuyCollectionCompany) missing.push("COURIER_GUY_COLLECTION_COMPANY");
+  if (!courierGuyCollectionStreetAddress) missing.push("COURIER_GUY_COLLECTION_STREET_ADDRESS");
+  if (!courierGuyCollectionLocalArea) missing.push("COURIER_GUY_COLLECTION_LOCAL_AREA");
+  if (!courierGuyCollectionCity) missing.push("COURIER_GUY_COLLECTION_CITY");
+  if (!courierGuyCollectionZone) missing.push("COURIER_GUY_COLLECTION_ZONE");
+  if (!courierGuyCollectionCode) missing.push("COURIER_GUY_COLLECTION_CODE");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `COURIER_GUY_ENABLED is true but missing required Courier Guy environment variable(s): ${missing.join(", ")}. Set these in backend/.env, or set COURIER_GUY_ENABLED=false until Courier Guy is ready — see backend/DELIVERY_SETUP.md.`
+    );
+  }
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -300,6 +369,23 @@ export const env = {
   supabaseUrl,
   supabaseServiceRoleKey,
   productImagesBucket,
+  // Courier Guy — see the block above. courierGuyApiKey is undefined
+  // unless explicitly set; never logged anywhere.
+  courierGuyEnabled,
+  courierGuyApiKey,
+  courierGuyBaseUrl,
+  courierGuyCollectionCompany,
+  courierGuyCollectionStreetAddress,
+  courierGuyCollectionLocalArea,
+  courierGuyCollectionCity,
+  courierGuyCollectionZone,
+  courierGuyCollectionCountry,
+  courierGuyCollectionCode,
+  courierGuyCollectionType,
+  courierGuyDefaultParcelWeightKg,
+  courierGuyDefaultParcelLengthCm,
+  courierGuyDefaultParcelWidthCm,
+  courierGuyDefaultParcelHeightCm,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built

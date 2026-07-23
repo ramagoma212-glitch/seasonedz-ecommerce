@@ -31,6 +31,7 @@ import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
 import {
   updateAdminOrderStatus,
   updateAdminShipping,
+  getAdminCourierQuote,
   createAdminProduct,
   updateAdminProduct,
   uploadProductImage,
@@ -39,6 +40,7 @@ import {
 } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
+import { escapeHtml } from "./search.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -61,6 +63,7 @@ function mountApp() {
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
   setupAdminShippingForm();
+  setupAdminCourierQuoteForm();
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
@@ -889,6 +892,107 @@ async function handleAdminShippingUpdateSubmit(form) {
       banner.textContent = message;
       banner.hidden = false;
     }
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin Courier Guy rate quote (Version 7, Milestone 108). Delegated
+// the same way as the shipping form above. Never navigates away and
+// never mutates the order — courierGuy.service.ts only ever calls
+// Courier Guy's /rates endpoint, no booking/shipment endpoint exists
+// anywhere in this codebase. A successful response is rendered
+// directly into the form's own results container; disabled/error
+// responses (Courier Guy not enabled, invalid parcel/address, etc.)
+// show the same inline banner every other admin form here already
+// uses. serviceName/serviceLevelCode come from an external provider
+// (Courier Guy), so — unlike this file's own hardcoded status
+// messages — they're escaped before being placed in innerHTML.
+function setupAdminCourierQuoteForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest(".admin-courier-quote-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminCourierQuoteSubmit(form);
+  });
+}
+
+function renderCourierQuoteOption(option) {
+  const etaFrom = option.etaFrom !== null && option.etaFrom !== undefined ? escapeHtml(String(option.etaFrom)) : null;
+  const etaTo = option.etaTo !== null && option.etaTo !== undefined ? escapeHtml(String(option.etaTo)) : null;
+  const eta = etaFrom || etaTo ? `<span class="admin-courier-quote-option__eta">ETA: ${etaFrom ?? "?"}${etaTo && etaTo !== etaFrom ? `–${etaTo}` : ""}</span>` : "";
+  const code = option.serviceLevelCode ? `<span class="admin-courier-quote-option__code">${escapeHtml(option.serviceLevelCode)}</span>` : "";
+  const price = Number(option.price);
+
+  return `
+    <li class="admin-courier-quote-option">
+      <span class="admin-courier-quote-option__name">${escapeHtml(option.serviceName)}</span>
+      ${code}
+      <span class="admin-courier-quote-option__price">${Number.isFinite(price) ? `R${price.toFixed(2)}` : "—"}</span>
+      ${eta}
+    </li>
+  `;
+}
+
+async function handleAdminCourierQuoteSubmit(form) {
+  const orderNumber = form.dataset.orderNumber;
+  if (!orderNumber) return;
+
+  const banner = form.querySelector("[data-admin-courier-banner]");
+  const results = form.querySelector("[data-admin-courier-results]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  if (results) results.innerHTML = "";
+
+  const formData = new FormData(form);
+  const payload = {
+    weightKg: formData.get("weightKg"),
+    lengthCm: formData.get("lengthCm"),
+    widthCm: formData.get("widthCm"),
+    heightCm: formData.get("heightCm"),
+    declaredValue: formData.get("declaredValue") || undefined,
+  };
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const response = await getAdminCourierQuote(orderNumber, payload);
+    const { options, message } = response.data;
+
+    if (results) {
+      if (!options || options.length === 0) {
+        results.innerHTML = `<p class="admin-empty">${escapeHtml(message || "No courier quote options were returned for this address and parcel.")}</p>`;
+      } else {
+        results.innerHTML = `<ul class="admin-courier-quote-options">${options.map(renderCourierQuoteOption).join("")}</ul>`;
+      }
+    }
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+
+    // 503 (Courier Guy not enabled), 400 (invalid parcel/address), 500
+    // (enabled but misconfigured), and 502 (Courier Guy unreachable or
+    // returned something this normalizer couldn't recognise) all carry
+    // a specific, already-safe message from the backend; anything else
+    // gets a generic message.
+    const message =
+      error instanceof ApiError && [400, 500, 502, 503].includes(error.status)
+        ? error.message
+        : error instanceof ApiError && error.status === 404
+          ? "Order not found."
+          : "Something went wrong. Please try again shortly.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
     if (submitButton) submitButton.disabled = false;
   }
 }

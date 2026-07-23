@@ -31,6 +31,7 @@ import {
 } from "../controllers/adminDashboard.controller.js";
 import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
 import { updateShippingHandler } from "../controllers/adminShipping.controller.js";
+import { getCourierQuoteHandler } from "../controllers/adminCourier.controller.js";
 import {
   createAdminProductHandler,
   getAdminProductHandler,
@@ -59,6 +60,12 @@ router.get("/orders/:orderNumber/status-history", getOrderStatusHistoryHandler);
 // Order.fulfilmentStatus and Shipping.status are written together.
 // No courier API is called anywhere behind this route.
 router.patch("/orders/:orderNumber/shipping", updateShippingHandler);
+// Version 7, Milestone 108: admin-only Courier Guy RATE QUOTE only —
+// see courierGuy.service.ts's own header comment for why no booking/
+// shipment endpoint is ever called from here. Never mutates the order,
+// shipping, or payment; POST only because a quote request carries
+// parcel dimensions in its body, not because anything is created.
+router.post("/orders/:orderNumber/courier/quote", getCourierQuoteHandler);
 router.get("/enquiries", listEnquiriesHandler);
 router.get("/products", listAdminProductsHandler);
 router.post("/products", createAdminProductHandler);
