@@ -49,6 +49,39 @@ export function renderCategoryGridSkeleton(count = 6) {
 // placeholder beside a few text-line placeholders, loosely matching
 // .product-details__layout's two-column shape without needing to
 // replicate every field.
+//
+// Version 7, Milestone 100: Milestone 98's audit measured this page's
+// CLS at ~0.1244 — this skeleton only ever reserved space for the
+// upper gallery+info layout, not the description area (Product
+// Description, Features, Good For, Delivery, Support) or the "You May
+// Also Like" related products grid that render below it, so real
+// content arriving pushed the footer down by roughly that much extra
+// height. One heading+paragraph pair per description section, plus
+// the same renderProductGridSkeleton() the Shop/Search grids already
+// use for "You May Also Like", now reserves that space too — still no
+// fake product names/prices/text, same neutral blocks as everywhere
+// else on this page.
+function renderProductDetailDescriptionSkeleton() {
+  return `
+    <div class="product-details__description" aria-hidden="true">
+      <div class="skeleton-block skeleton-detail-line--section-heading"></div>
+      <div class="skeleton-block skeleton-detail-line--paragraph"></div>
+
+      <div class="skeleton-block skeleton-detail-line--section-heading"></div>
+      <div class="skeleton-block skeleton-detail-line--paragraph"></div>
+
+      <div class="skeleton-block skeleton-detail-line--section-heading"></div>
+      <div class="skeleton-block skeleton-detail-line--paragraph"></div>
+
+      <div class="skeleton-block skeleton-detail-line--section-heading"></div>
+      <div class="skeleton-block skeleton-detail-line--paragraph"></div>
+
+      <div class="skeleton-block skeleton-detail-line--section-heading"></div>
+      <div class="skeleton-block skeleton-detail-line--paragraph"></div>
+    </div>
+  `;
+}
+
 export function renderProductDetailSkeleton() {
   return `
     <section class="container product-details" aria-hidden="true">
@@ -61,6 +94,13 @@ export function renderProductDetailSkeleton() {
           <div class="skeleton-block skeleton-detail-line skeleton-detail-line--desc"></div>
         </div>
       </div>
+
+      ${renderProductDetailDescriptionSkeleton()}
+
+      <section class="section" aria-hidden="true">
+        <div class="skeleton-block skeleton-heading"></div>
+        ${renderProductGridSkeleton(4)}
+      </section>
     </section>
   `;
 }
