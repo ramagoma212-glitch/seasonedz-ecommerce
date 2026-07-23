@@ -97,7 +97,17 @@ export async function getOrderDetailHandler(req: Request, res: Response, next: N
       return;
     }
 
-    sendSuccess(res, { message: "Order retrieved successfully", data: order });
+    // Version 7, Milestone 112: Courier Guy booking fields
+    // (courierShipmentId/courierCost/etc.) are admin-only — merged in
+    // here, never added to getOrderByNumber()/toOrderOutput() itself,
+    // since that function is shared with the public customer
+    // tracking endpoint. See adminDashboard.service.ts's own comment.
+    const courierBookingFields = await adminDashboardService.getCourierBookingFieldsForOrder(orderNumber);
+    const orderWithCourierFields = order.shipping
+      ? { ...order, shipping: { ...order.shipping, ...courierBookingFields } }
+      : order;
+
+    sendSuccess(res, { message: "Order retrieved successfully", data: orderWithCourierFields });
   } catch (error) {
     next(error);
   }

@@ -1,32 +1,45 @@
-// Courier Guy admin-only RATE QUOTE service (Version 7, Milestone 108).
+// Courier Guy admin-only RATE QUOTE + BOOKING service (Version 7,
+// Milestone 108 quote, Milestone 112 booking).
 //
-// Calls ONLY POST {baseUrl}/rates — The Courier Guy's own developer-
-// portal quote endpoint (built on the ShipLogic platform; sandbox base
-// URL api.shiplogic.com). This file must NEVER call a booking/
-// shipment-creation endpoint (e.g. POST /shipments) — that is
-// explicitly out of scope for this milestone and is not implemented
-// anywhere in this codebase. No booking is ever created, no waybill is
-// ever generated, no order/shipping/payment row is ever written to
-// from this file.
+// Quote calls ONLY POST {baseUrl}/rates. Booking calls ONLY POST
+// {baseUrl}/shipments, and ONLY when both env.courierGuyEnabled AND
+// env.courierGuyBookingEnabled are true — the booking flag is
+// deliberately separate and defaults to false, since a booking creates
+// a real, billable Courier Guy shipment while a quote is read-only.
+// This file must NEVER call a label/waybill-download endpoint (e.g.
+// POST /shipments/label) — that is explicitly out of scope for
+// Milestone 112 (see bookCourierShipment()'s own comment) and is not
+// implemented anywhere in this codebase.
 //
-// Fails closed: if COURIER_GUY_ENABLED is false, this throws before
-// building any request, looking up any order, or making any network
-// call — the same discipline env.payfastEnabled/PayFast already use.
+// Fails closed: quote fails before any network call if
+// courierGuyEnabled is false; booking fails before any network call if
+// either courierGuyEnabled or courierGuyBookingEnabled is false — the
+// same discipline env.payfastEnabled/PayFast already uses.
 //
 // Parcel field names (submitted_length_cm/width_cm/height_cm/weight_kg)
 // and address fields (company/street_address/local_area/city/zone/
 // country/code/type) match ShipLogic's own publicly documented rate-
-// request schema — the same address field names the task's own env
-// variable list already confirmed. The exact RESPONSE shape for a
-// successful quote was not included in what this milestone was given,
-// so normalizeQuoteResponse() below deliberately does not assume one
-// fixed shape — it tries several plausible common field names per rate
-// option and skips (never crashes on) any entry it can't make sense
-// of, only failing with a clear, distinct error if literally nothing
-// in the response can be recognised as a rate option at all. Verify
-// this against the real sandbox response the first time
-// COURIER_GUY_ENABLED is turned on with real credentials.
+// request schema — the same address field names the Milestone 108 task
+// confirmed. The exact RESPONSE shape for a successful quote was not
+// included in what that milestone was given, so normalizeQuoteResponse()
+// below deliberately does not assume one fixed shape — it tries several
+// plausible common field names per rate option and skips (never
+// crashes on) any entry it can't make sense of, only failing with a
+// clear, distinct error if literally nothing in the response can be
+// recognised as a rate option at all. This was verified against the
+// real sandbox and production /rates responses in Milestones 109/110.
+//
+// Booking's collection_contact/delivery_contact field names
+// (name/mobile_number/email) are a best-effort assumption based on
+// ShipLogic's typical contact-object schema — Milestone 112's own task
+// did not include an exact contact-field spec (only that
+// collection_contact/delivery_contact objects are required), so this
+// must be verified against a real sandbox booking response before
+// COURIER_GUY_BOOKING_ENABLED is ever set to true, exactly the same
+// "verify before relying on it" caveat the quote code already applied
+// to service_level/response fields.
 
+import { FulfilmentStatus, PaymentStatus, Prisma } from "@prisma/client";
 import { courierGuyConfig } from "../config/courierGuy.js";
 import { isProduction } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
@@ -71,34 +84,46 @@ export interface QuoteResult {
   message?: string;
 }
 
-function parseParcelNumber(raw: unknown, fieldName: string, fallback: number, min: number, max: number): number {
+// validateParcel()/validateOrderDeliveryAddress() below are shared by
+// both getCourierQuote() and bookCourierShipment() — each caller's own
+// controller only catches its own error class (getCourierQuoteHandler
+// catches CourierQuoteError, bookCourierShipmentHandler catches
+// CourierBookingError), so a shared validator must throw whichever
+// class its caller passes in, not a hardcoded one — otherwise a
+// booking-time validation failure would fall through to a generic
+// unhandled-error 500 instead of the clean 400 it should be.
+interface CourierErrorConstructor {
+  new (message: string, statusCode?: number): Error & { statusCode: number };
+}
+
+function parseParcelNumber(raw: unknown, fieldName: string, fallback: number, min: number, max: number, ErrorClass: CourierErrorConstructor): number {
   if (raw === undefined || raw === null || raw === "") return fallback;
 
   const value = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(value)) {
-    throw new CourierQuoteError(`${fieldName} must be a number.`);
+    throw new ErrorClass(`${fieldName} must be a number.`);
   }
   if (value < min || value > max) {
-    throw new CourierQuoteError(`${fieldName} must be between ${min} and ${max}.`);
+    throw new ErrorClass(`${fieldName} must be between ${min} and ${max}.`);
   }
   return value;
 }
 
-function parseOptionalDeclaredValue(raw: unknown): number | undefined {
+function parseOptionalDeclaredValue(raw: unknown, ErrorClass: CourierErrorConstructor): number | undefined {
   if (raw === undefined || raw === null || raw === "") return undefined;
   const value = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(value) || value < 0) {
-    throw new CourierQuoteError("declaredValue must be a non-negative number.");
+    throw new ErrorClass("declaredValue must be a non-negative number.");
   }
   return value;
 }
 
-function validateParcel(input: ParcelInput) {
-  const weightKg = parseParcelNumber(input.weightKg, "weightKg", courierGuyConfig.defaultParcel.weightKg, MIN_PARCEL_WEIGHT_KG, MAX_PARCEL_WEIGHT_KG);
-  const lengthCm = parseParcelNumber(input.lengthCm, "lengthCm", courierGuyConfig.defaultParcel.lengthCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM);
-  const widthCm = parseParcelNumber(input.widthCm, "widthCm", courierGuyConfig.defaultParcel.widthCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM);
-  const heightCm = parseParcelNumber(input.heightCm, "heightCm", courierGuyConfig.defaultParcel.heightCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM);
-  const declaredValue = parseOptionalDeclaredValue(input.declaredValue);
+function validateParcel(input: ParcelInput, ErrorClass: CourierErrorConstructor) {
+  const weightKg = parseParcelNumber(input.weightKg, "weightKg", courierGuyConfig.defaultParcel.weightKg, MIN_PARCEL_WEIGHT_KG, MAX_PARCEL_WEIGHT_KG, ErrorClass);
+  const lengthCm = parseParcelNumber(input.lengthCm, "lengthCm", courierGuyConfig.defaultParcel.lengthCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM, ErrorClass);
+  const widthCm = parseParcelNumber(input.widthCm, "widthCm", courierGuyConfig.defaultParcel.widthCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM, ErrorClass);
+  const heightCm = parseParcelNumber(input.heightCm, "heightCm", courierGuyConfig.defaultParcel.heightCm, MIN_PARCEL_DIMENSION_CM, MAX_PARCEL_DIMENSION_CM, ErrorClass);
+  const declaredValue = parseOptionalDeclaredValue(input.declaredValue, ErrorClass);
 
   return { weightKg, lengthCm, widthCm, heightCm, declaredValue };
 }
@@ -128,7 +153,7 @@ export interface OrderDeliveryFields {
   deliveryCountry: string;
 }
 
-function validateOrderDeliveryAddress(order: OrderDeliveryFields) {
+function validateOrderDeliveryAddress(order: OrderDeliveryFields, ErrorClass: CourierErrorConstructor) {
   const missing: string[] = [];
   if (!order.deliveryStreetAddress?.trim()) missing.push("street address");
   if (!order.deliverySuburb?.trim()) missing.push("suburb");
@@ -138,7 +163,7 @@ function validateOrderDeliveryAddress(order: OrderDeliveryFields) {
   if (!order.deliveryCountry?.trim()) missing.push("country");
 
   if (missing.length > 0) {
-    throw new CourierQuoteError(`This order's delivery address is missing: ${missing.join(", ")}.`, 400);
+    throw new ErrorClass(`This order's delivery address is missing: ${missing.join(", ")}.`, 400);
   }
 }
 
@@ -328,8 +353,8 @@ export async function getCourierQuote(orderNumber: string, input: GetCourierQuot
     throw new CourierQuoteError(`Order not found: ${orderNumber}`, 404);
   }
 
-  validateOrderDeliveryAddress(order);
-  const parcel = validateParcel(input.parcel);
+  validateOrderDeliveryAddress(order, CourierQuoteError);
+  const parcel = validateParcel(input.parcel, CourierQuoteError);
 
   const body: Record<string, unknown> = {
     collection_address: buildCollectionAddress(),
@@ -372,4 +397,429 @@ export async function getCourierQuote(orderNumber: string, input: GetCourierQuot
   }
 
   return normalizeQuoteResponse(json);
+}
+
+// =============================================================================
+// BOOKING (Version 7, Milestone 112)
+// =============================================================================
+//
+// Calls ONLY POST {baseUrl}/shipments — never a label/waybill endpoint
+// (e.g. POST /shipments/label or /shipments/label/stickers). Label/
+// waybill download is explicitly out of scope for this milestone; see
+// VERSION_7_COURIER_GUY_BOOKING_PLAN.md (Milestone 111) for why —
+// recommended as its own later milestone once booking itself is proven
+// safe and boring in production.
+
+export class CourierBookingError extends Error {
+  statusCode: number;
+
+  constructor(message: string, statusCode = 400) {
+    super(message);
+    this.name = "CourierBookingError";
+    this.statusCode = statusCode;
+  }
+}
+
+const BOOKING_REQUEST_TIMEOUT_MS = 15_000;
+const MAX_SERVICE_FIELD_LENGTH = 200;
+
+// Payment statuses that permanently block booking, no admin override —
+// unlike PENDING (blocked unless the admin explicitly confirms below),
+// these represent a payment that is known NOT to be good.
+const HARD_BLOCKED_PAYMENT_STATUSES: PaymentStatus[] = [PaymentStatus.FAILED, PaymentStatus.CANCELLED, PaymentStatus.REFUNDED];
+
+export interface BookCourierShipmentInput {
+  parcel: ParcelInput;
+  serviceLevelCode?: unknown;
+  serviceLevelId?: unknown;
+  // Milestone 111's own audit found paymentStatus can never actually
+  // become PAID for a BANK_TRANSFER/CASH_ON_DELIVERY order today (no
+  // admin route sets it, and PayFast's ITN — the only thing that does
+  // — is disabled) — so PAID-only would make booking permanently
+  // unusable for every real order the business currently has. This
+  // explicit admin attestation is the safe alternative for a PENDING
+  // order, required by the backend (never trusted from the frontend
+  // alone) and recorded via courierBookedAt/the booking itself
+  // succeeding, exactly as planned.
+  paymentConfirmed?: unknown;
+  specialInstructionsCollection?: unknown;
+  specialInstructionsDelivery?: unknown;
+}
+
+export interface BookingResult {
+  orderNumber: string;
+  fulfilmentStatus: FulfilmentStatus;
+  shipping: {
+    status: FulfilmentStatus;
+    courierName: string | null;
+    courierProvider: string | null;
+    courierShipmentId: string | null;
+    courierServiceCode: string | null;
+    courierServiceName: string | null;
+    courierCost: Prisma.Decimal | null;
+    courierBookedAt: Date | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    estimatedDelivery: Date | null;
+  };
+}
+
+interface OrderBookingFields {
+  id: string;
+  orderNumber: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerEmail: string;
+  customerPhone: string;
+  paymentStatus: PaymentStatus;
+  fulfilmentStatus: FulfilmentStatus;
+  deliveryStreetAddress: string;
+  deliverySuburb: string;
+  deliveryCity: string;
+  deliveryProvince: string;
+  deliveryPostalCode: string;
+  deliveryCountry: string;
+  shipping: {
+    trackingNumber: string | null;
+    courierShipmentId: string | null;
+    courierBookedAt: Date | null;
+  } | null;
+}
+
+// Returns the exact snake_case key ShipLogic's /shipments payload
+// expects — this is spread directly into the request body, so the key
+// name here IS the wire field name, not an internal alias.
+function parseServiceLevel(input: BookCourierShipmentInput): { service_level_code: string } | { service_level_id: string } {
+  const code = typeof input.serviceLevelCode === "string" ? input.serviceLevelCode.trim() : "";
+  const id = typeof input.serviceLevelId === "string" || typeof input.serviceLevelId === "number" ? String(input.serviceLevelId).trim() : "";
+
+  if (!code && !id) {
+    throw new CourierBookingError("A courier service must be selected from the quote before booking.", 400);
+  }
+
+  return code ? { service_level_code: code } : { service_level_id: id };
+}
+
+function validateBookingCollectionContact() {
+  const { collectionContact } = courierGuyConfig;
+  const missing: string[] = [];
+  if (!collectionContact.name) missing.push("collection contact name");
+  if (!collectionContact.phone && !collectionContact.email) missing.push("collection contact phone or email");
+
+  if (missing.length > 0) {
+    throw new CourierBookingError(`Courier Guy booking is enabled but not fully configured — missing: ${missing.join(", ")}.`, 500);
+  }
+}
+
+function validateDeliveryContact(order: OrderBookingFields) {
+  const missing: string[] = [];
+  if (!order.customerEmail?.trim()) missing.push("email");
+  if (!order.customerPhone?.trim()) missing.push("phone");
+
+  if (missing.length > 0) {
+    throw new CourierBookingError(`This order's customer contact details are missing: ${missing.join(", ")}.`, 400);
+  }
+}
+
+function checkDuplicateBooking(order: OrderBookingFields) {
+  const shipping = order.shipping;
+  if (shipping && (shipping.trackingNumber || shipping.courierShipmentId || shipping.courierBookedAt)) {
+    throw new CourierBookingError("This order already has a courier booking — booking again is not allowed.", 409);
+  }
+}
+
+function checkPaymentSafety(order: OrderBookingFields, paymentConfirmed: unknown) {
+  if (HARD_BLOCKED_PAYMENT_STATUSES.includes(order.paymentStatus)) {
+    throw new CourierBookingError(
+      `This order's payment status (${order.paymentStatus}) does not allow courier booking.`,
+      400
+    );
+  }
+
+  if (order.paymentStatus === PaymentStatus.PAID) return;
+
+  // PENDING (the only remaining case) requires the admin's explicit,
+  // backend-enforced attestation — see BookCourierShipmentInput's own
+  // comment for why PAID-only isn't workable today.
+  if (paymentConfirmed !== true) {
+    throw new CourierBookingError(
+      "This order is not marked as paid. Confirm payment has been checked before booking a courier.",
+      400
+    );
+  }
+}
+
+// Best-effort mapping — see this file's header comment. Verify against
+// a real sandbox booking response before COURIER_GUY_BOOKING_ENABLED is
+// ever set to true.
+function buildCollectionContact() {
+  const { collectionContact } = courierGuyConfig;
+  return {
+    name: collectionContact.name,
+    mobile_number: collectionContact.phone,
+    email: collectionContact.email,
+  };
+}
+
+function buildDeliveryContact(order: OrderBookingFields) {
+  return {
+    name: `${order.customerFirstName} ${order.customerLastName}`.trim(),
+    mobile_number: order.customerPhone,
+    email: order.customerEmail,
+  };
+}
+
+function truncateServiceField(raw: string): string {
+  return raw.length > MAX_SERVICE_FIELD_LENGTH ? raw.slice(0, MAX_SERVICE_FIELD_LENGTH) : raw;
+}
+
+interface MappedBookingResponse {
+  shipmentId: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  serviceLevelCode: string | null;
+  serviceLevelName: string | null;
+  cost: number | null;
+  estimatedDeliveryFrom: string | null;
+}
+
+// Defensive mapper, same discipline as normalizeQuoteResponse() above —
+// tries several plausible field names, and only fails loudly (never
+// silently saves a hollow "booking") if literally neither a shipment
+// ID nor a tracking reference can be found anywhere in the response.
+function mapBookingResponse(raw: unknown): MappedBookingResponse {
+  if (!raw || typeof raw !== "object") {
+    throw new CourierBookingError(
+      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying — no booking details were saved.",
+      502
+    );
+  }
+
+  const obj = raw as Record<string, unknown>;
+
+  const shipmentIdRaw = pickFirst(obj, ["id", "shipment_id"]);
+  const trackingRaw = pickFirst(obj, ["short_tracking_reference", "custom_tracking_reference", "tracking_reference"]);
+  const trackingUrlRaw = pickFirst(obj, ["tracking_url", "trackingUrl", "waybill_url"]);
+  const serviceLevelCodeRaw = pickFirst(obj, ["service_level.code", "service_level_code"]);
+  const serviceLevelNameRaw = pickFirst(obj, ["service_level.name", "service_level_name"]);
+  const rateRaw = pickFirst(obj, ["rate", "total_charge", "total", "price"]);
+  const etaFromRaw = pickFirst(obj, ["estimated_delivery_from", "delivery_date_from"]);
+
+  const shipmentId = shipmentIdRaw !== undefined ? String(shipmentIdRaw) : null;
+  const trackingNumber = trackingRaw !== undefined ? String(trackingRaw) : null;
+
+  // A response with neither a shipment ID nor any tracking reference
+  // can't be trusted as "a shipment was actually created" — fail
+  // loudly rather than saving an empty-looking booking record that
+  // would then block any real retry via the duplicate-booking check.
+  if (!shipmentId && !trackingNumber) {
+    throw new CourierBookingError(
+      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying — no booking details were saved.",
+      502
+    );
+  }
+
+  let trackingUrl: string | null = null;
+  if (typeof trackingUrlRaw === "string") {
+    try {
+      const url = new URL(trackingUrlRaw);
+      if (url.protocol === "http:" || url.protocol === "https:") trackingUrl = trackingUrlRaw;
+    } catch {
+      // Not a valid URL — leave trackingUrl null rather than saving
+      // something the admin can't click through to.
+    }
+  }
+
+  const rate = typeof rateRaw === "number" ? rateRaw : Number(rateRaw);
+
+  return {
+    shipmentId,
+    trackingNumber,
+    trackingUrl,
+    serviceLevelCode: typeof serviceLevelCodeRaw === "string" ? truncateServiceField(serviceLevelCodeRaw) : null,
+    serviceLevelName: typeof serviceLevelNameRaw === "string" ? truncateServiceField(serviceLevelNameRaw) : null,
+    cost: Number.isFinite(rate) ? rate : null,
+    estimatedDeliveryFrom: typeof etaFromRaw === "string" ? etaFromRaw : null,
+  };
+}
+
+export async function bookCourierShipment(orderNumber: string, input: BookCourierShipmentInput): Promise<BookingResult> {
+  // Fails closed before anything else, in order — quote must be
+  // enabled (booking is meaningless without it), then booking itself.
+  if (!courierGuyConfig.enabled) {
+    throw new CourierBookingError("Courier quote is not enabled yet.", 503);
+  }
+  if (!courierGuyConfig.bookingEnabled) {
+    throw new CourierBookingError("Courier booking is not enabled yet.", 503);
+  }
+
+  // Same defensive re-check discipline as getCourierQuote() above.
+  const missingConfig: string[] = [];
+  if (!courierGuyConfig.apiKey) missingConfig.push("API key");
+  if (!courierGuyConfig.collection.company) missingConfig.push("collection company");
+  if (!courierGuyConfig.collection.streetAddress) missingConfig.push("collection street address");
+  if (!courierGuyConfig.collection.localArea) missingConfig.push("collection local area");
+  if (!courierGuyConfig.collection.city) missingConfig.push("collection city");
+  if (!courierGuyConfig.collection.zone) missingConfig.push("collection zone");
+  if (!courierGuyConfig.collection.code) missingConfig.push("collection postal code");
+  if (missingConfig.length > 0) {
+    throw new CourierBookingError(`Courier Guy is enabled but not fully configured — missing: ${missingConfig.join(", ")}.`, 500);
+  }
+  validateBookingCollectionContact();
+
+  const order = await prisma.order.findUnique({
+    where: { orderNumber },
+    select: {
+      id: true,
+      orderNumber: true,
+      customerFirstName: true,
+      customerLastName: true,
+      customerEmail: true,
+      customerPhone: true,
+      paymentStatus: true,
+      fulfilmentStatus: true,
+      deliveryStreetAddress: true,
+      deliverySuburb: true,
+      deliveryCity: true,
+      deliveryProvince: true,
+      deliveryPostalCode: true,
+      deliveryCountry: true,
+      shipping: {
+        select: { trackingNumber: true, courierShipmentId: true, courierBookedAt: true },
+      },
+    },
+  });
+
+  if (!order) {
+    throw new CourierBookingError(`Order not found: ${orderNumber}`, 404);
+  }
+  if (!order.shipping) {
+    // Never happens today — order.service.ts always creates a Shipping
+    // row alongside every order — handled explicitly rather than
+    // assumed, same discipline as adminShipping.service.ts.
+    throw new CourierBookingError("This order has no shipping record to book against.", 404);
+  }
+
+  // Duplicate-booking is an irreversible-state check, so it short-
+  // circuits everything else regardless of input validity. Input
+  // validation (address/contact/parcel/service) runs next, so a
+  // malformed request gets a clear, specific 400 about the actual
+  // problem; the payment-safety gate — "is this action allowed at
+  // all" — runs last, only once the request itself is known to be
+  // well-formed.
+  checkDuplicateBooking(order);
+  validateOrderDeliveryAddress(order, CourierBookingError);
+  validateDeliveryContact(order);
+  const parcel = validateParcel(input.parcel, CourierBookingError);
+  const service = parseServiceLevel(input);
+  checkPaymentSafety(order, input.paymentConfirmed);
+
+  const specialInstructionsCollection =
+    typeof input.specialInstructionsCollection === "string" && input.specialInstructionsCollection.trim()
+      ? input.specialInstructionsCollection.trim().slice(0, 500)
+      : undefined;
+  const specialInstructionsDelivery =
+    typeof input.specialInstructionsDelivery === "string" && input.specialInstructionsDelivery.trim()
+      ? input.specialInstructionsDelivery.trim().slice(0, 500)
+      : undefined;
+
+  const body: Record<string, unknown> = {
+    collection_address: buildCollectionAddress(),
+    collection_contact: buildCollectionContact(),
+    delivery_address: buildDeliveryAddress(order),
+    delivery_contact: buildDeliveryContact(order),
+    parcels: buildParcels(parcel),
+    customer_reference: order.orderNumber,
+    customer_reference_name: "Order No",
+    // Never muted without a reason — the default Courier Guy customer
+    // notification behaviour is left untouched.
+    mute_notifications: false,
+    ...service,
+  };
+  if (parcel.declaredValue !== undefined) body.declared_value = parcel.declaredValue;
+  if (specialInstructionsCollection) body.special_instructions_collection = specialInstructionsCollection;
+  if (specialInstructionsDelivery) body.special_instructions_delivery = specialInstructionsDelivery;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), BOOKING_REQUEST_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    response = await fetch(`${courierGuyConfig.baseUrl}/shipments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${courierGuyConfig.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch {
+    throw new CourierBookingError("Could not reach Courier Guy. Please try again shortly — no booking was created.", 502);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    throw new CourierBookingError(`Courier Guy booking request failed (${response.status}). No booking was created.`, 502);
+  }
+
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    throw new CourierBookingError("Courier Guy returned a response that could not be read. Check the Courier Guy account directly before retrying.", 502);
+  }
+
+  const mapped = mapBookingResponse(json);
+
+  const newFulfilmentStatus = order.fulfilmentStatus === FulfilmentStatus.NOT_STARTED ? FulfilmentStatus.PACKING : undefined;
+
+  const shippingData: Prisma.ShippingUpdateInput = {
+    courierName: "The Courier Guy",
+    courierProvider: "courier-guy",
+    courierShipmentId: mapped.shipmentId,
+    courierServiceCode: mapped.serviceLevelCode,
+    courierServiceName: mapped.serviceLevelName,
+    courierCost: mapped.cost !== null ? new Prisma.Decimal(mapped.cost) : undefined,
+    courierBookedAt: new Date(),
+  };
+  if (mapped.trackingNumber) shippingData.trackingNumber = mapped.trackingNumber;
+  if (mapped.trackingUrl) shippingData.trackingUrl = mapped.trackingUrl;
+  if (newFulfilmentStatus) shippingData.status = newFulfilmentStatus;
+  if (mapped.estimatedDeliveryFrom) {
+    const parsedEta = new Date(mapped.estimatedDeliveryFrom);
+    if (!Number.isNaN(parsedEta.getTime())) shippingData.estimatedDelivery = parsedEta;
+  }
+
+  const [updatedOrder, updatedShipping] = await prisma.$transaction([
+    prisma.order.update({
+      where: { id: order.id },
+      data: newFulfilmentStatus ? { fulfilmentStatus: newFulfilmentStatus } : {},
+      select: { orderNumber: true, fulfilmentStatus: true },
+    }),
+    prisma.shipping.update({
+      where: { orderId: order.id },
+      data: shippingData,
+      select: {
+        status: true,
+        courierName: true,
+        courierProvider: true,
+        courierShipmentId: true,
+        courierServiceCode: true,
+        courierServiceName: true,
+        courierCost: true,
+        courierBookedAt: true,
+        trackingNumber: true,
+        trackingUrl: true,
+        estimatedDelivery: true,
+      },
+    }),
+  ]);
+
+  return {
+    orderNumber: updatedOrder.orderNumber,
+    fulfilmentStatus: updatedOrder.fulfilmentStatus,
+    shipping: updatedShipping,
+  };
 }

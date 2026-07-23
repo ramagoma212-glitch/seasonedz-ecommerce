@@ -73,6 +73,20 @@ export function getAdminCourierQuote(orderNumber, payload) {
   });
 }
 
+// Version 7, Milestone 112: admin-only Courier Guy BOOKING — creates a
+// real Courier Guy shipment (never a label/waybill). Gated server-side
+// behind COURIER_GUY_BOOKING_ENABLED (separate from the quote flag
+// above, defaults false) — see courierGuy.service.ts's own header
+// comment. paymentConfirmed is the admin's own explicit attestation,
+// required by the backend whenever the order's paymentStatus isn't
+// already PAID; never assumed true here.
+export function bookAdminCourier(orderNumber, payload) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/courier/book`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getAdminEnquiries(params = {}) {
   return adminRequest(`/admin/enquiries${buildQuery(params)}`, { method: "GET" });
 }

@@ -238,20 +238,23 @@ function renderShippingUpdateForm(order) {
 }
 
 // Version 7, Milestone 108: admin-only Courier Guy rate quote — submits
-// to the new protected POST /api/admin/orders/:orderNumber/courier/quote
+// to the protected POST /api/admin/orders/:orderNumber/courier/quote
 // route (courierGuy.service.ts), which only ever calls Courier Guy's
-// /rates endpoint. No booking is ever created; nothing here writes to
-// the order or shipping. Deliberately no "Book Courier" button and no
-// customer-facing courier choice — this card is for the admin's own
-// reference only. When Courier Guy isn't enabled/configured yet, the
+// /rates endpoint. Version 7, Milestone 112 adds real booking on top:
+// once a quote returns options, the admin can select one and click
+// Book Courier (see setupAdminBookCourierArea/handleAdminBookCourierSubmit
+// in app.js), which submits to the protected POST /api/admin/orders/
+// :orderNumber/courier/book route — the only place in this codebase
+// that ever calls Courier Guy's /shipments endpoint. No customer-facing
+// courier choice exists anywhere; this card is for the admin's own use
+// only. When Courier Guy/booking isn't enabled or configured yet, the
 // backend responds with a clear error (503/500), shown in the same
-// banner every other admin form here already uses — see
-// handleAdminCourierQuoteSubmit in app.js.
+// banner every other admin form here already uses.
 function renderCourierQuoteForm(order) {
   return `
-    <form class="admin-courier-quote-form" data-order-number="${escapeHtml(order.orderNumber)}" novalidate>
+    <form class="admin-courier-quote-form" data-order-number="${escapeHtml(order.orderNumber)}" data-payment-status="${escapeHtml(order.paymentStatus)}" novalidate>
       <h3>Courier Quote</h3>
-      <p class="admin-status-update__hint">Admin-only quote. No courier booking is created.</p>
+      <p class="admin-status-update__hint">Admin-only quote. No courier booking is created until you select a service and confirm.</p>
 
       <div class="form-grid">
         <div class="form-field">
@@ -284,6 +287,35 @@ function renderCourierQuoteForm(order) {
       </div>
     </form>
   `;
+}
+
+// Version 7, Milestone 112: shown instead of the live quote/booking
+// form once Shipping already has a courier booking (trackingNumber or
+// courierShipmentId set) — server-truth-driven, not client-side state,
+// so "disable further booking" survives a page reload and correctly
+// re-applies after any future rerenderCurrentRoute(). The duplicate-
+// booking check in courierGuy.service.ts is the real enforcement; this
+// is just the admin-facing reflection of that same fact.
+function renderCourierBookedSummary(order) {
+  const shipping = order.shipping;
+  const cost = shipping.courierCost !== null && shipping.courierCost !== undefined ? Number(shipping.courierCost) : null;
+
+  return `
+    <h3>Courier Quote</h3>
+    <p class="admin-status-update__hint">A courier shipment has already been booked for this order. Booking again is not allowed.</p>
+    <div class="admin-status-confirm">
+      <div class="order-confirmation__row"><span>Service</span><span>${escapeHtml(shipping.courierServiceName || "—")}${shipping.courierServiceCode ? ` (${escapeHtml(shipping.courierServiceCode)})` : ""}</span></div>
+      ${cost !== null ? `<div class="order-confirmation__row"><span>Courier Cost</span><span>${formatCurrency(cost)}</span></div>` : ""}
+      ${shipping.trackingNumber ? `<div class="order-confirmation__row"><span>Tracking Number</span><span>${escapeHtml(shipping.trackingNumber)}</span></div>` : ""}
+      ${shipping.courierBookedAt ? `<div class="order-confirmation__row"><span>Booked At</span><span>${formatDateTime(shipping.courierBookedAt)}</span></div>` : ""}
+    </div>
+  `;
+}
+
+function renderCourierSection(order) {
+  const shipping = order.shipping;
+  const alreadyBooked = Boolean(shipping && (shipping.trackingNumber || shipping.courierShipmentId));
+  return alreadyBooked ? renderCourierBookedSummary(order) : renderCourierQuoteForm(order);
 }
 
 function renderStatusHistoryTimeline(history) {
@@ -399,7 +431,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
         }
 
         <div class="order-confirmation__card">
-          ${renderCourierQuoteForm(order)}
+          ${renderCourierSection(order)}
         </div>
 
         <div class="order-confirmation__card">
