@@ -30,6 +30,7 @@ import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
 import {
   updateAdminOrderStatus,
+  updateAdminShipping,
   createAdminProduct,
   updateAdminProduct,
   uploadProductImage,
@@ -59,6 +60,7 @@ function mountApp() {
   setupEnquiryForms();
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
+  setupAdminShippingForm();
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
@@ -808,6 +810,74 @@ async function handleAdminStatusUpdateSubmit(form) {
     // already-safe message from the backend; anything else (404,
     // unreachable backend, unexpected 500) gets a generic message —
     // never a raw stack trace or internal error string.
+    const message =
+      error instanceof ApiError && error.status === 400
+        ? error.message
+        : error instanceof ApiError && error.status === 404
+          ? "Order not found."
+          : "Something went wrong. Please try again shortly.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin manual shipping update (Version 7, Milestone 106). Delegated
+// the same way as the order status form above — the order detail page
+// can re-render (rerenderCurrentRoute()) after a successful save, so a
+// direct listener bound once at render time wouldn't survive that.
+// Every field is always sent, even blank — an intentionally-blanked
+// optional field means "clear it" server-side (adminShipping.service.
+// ts's parseOptionalText/parseOptionalDate).
+function setupAdminShippingForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest(".admin-shipping-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminShippingUpdateSubmit(form);
+  });
+}
+
+async function handleAdminShippingUpdateSubmit(form) {
+  const orderNumber = form.dataset.orderNumber;
+  if (!orderNumber) return;
+
+  const banner = form.querySelector("[data-admin-shipping-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const formData = new FormData(form);
+  const fields = {
+    status: formData.get("status"),
+    courierName: formData.get("courierName") || "",
+    trackingNumber: formData.get("trackingNumber") || "",
+    trackingUrl: formData.get("trackingUrl") || "",
+    estimatedDelivery: formData.get("estimatedDelivery") || "",
+  };
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateAdminShipping(orderNumber, fields);
+    setPendingAdminMessage("Shipping details updated.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+
+    // 400 (invalid status/URL/date) carries a specific, already-safe
+    // message from the backend; anything else (404, unreachable
+    // backend, unexpected 500) gets a generic message.
     const message =
       error instanceof ApiError && error.status === 400
         ? error.message

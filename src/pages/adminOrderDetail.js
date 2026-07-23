@@ -38,6 +38,14 @@ const ALLOWED_NEXT_STATUSES = {
 
 const NOTE_MAX_LENGTH = 500;
 
+// Version 7, Milestone 106: mirrors backend/prisma/schema.prisma's
+// FulfilmentStatus enum exactly — see adminShipping.service.ts for why
+// this is the same enum Order.fulfilmentStatus uses.
+const SHIPPING_STATUS_OPTIONS = ["NOT_STARTED", "PACKING", "READY", "SHIPPED", "DELIVERED", "RETURNED"];
+const COURIER_NAME_MAX_LENGTH = 100;
+const TRACKING_NUMBER_MAX_LENGTH = 100;
+const TRACKING_URL_MAX_LENGTH = 500;
+
 function renderNotFound(orderNumber) {
   return `
     <section class="container admin-page">
@@ -135,6 +143,91 @@ function renderStatusUpdateSection(order) {
   `;
 }
 
+// Version 7, Milestone 106: manual shipping update — submitted to the
+// new protected PATCH /api/admin/orders/:orderNumber/shipping route
+// (adminShipping.service.ts), which validates and saves it; no
+// courier API is called anywhere behind this. Every field is always
+// sent (even when blank), since an intentionally-blanked optional
+// field (courierName/trackingNumber/trackingUrl/estimatedDelivery)
+// means "clear this field" — see that service's own parseOptionalText/
+// parseOptionalDate for the matching server-side behaviour.
+function renderShippingUpdateForm(order) {
+  const shipping = order.shipping;
+  if (!shipping) return "";
+
+  // order.shipping.estimatedDelivery is an ISO datetime string (JSON
+  // over the wire) — an HTML date input needs just the "YYYY-MM-DD"
+  // portion.
+  const estimatedDeliveryValue = shipping.estimatedDelivery ? shipping.estimatedDelivery.slice(0, 10) : "";
+
+  return `
+    <form class="admin-shipping-form" data-order-number="${escapeHtml(order.orderNumber)}" novalidate>
+      <h3>Update Shipping</h3>
+      <p class="admin-status-update__hint">Manual entry only — no courier account is connected yet.</p>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-field__label" for="shippingStatus">Shipping Status</label>
+          <select id="shippingStatus" name="status" class="form-field__input">
+            ${SHIPPING_STATUS_OPTIONS.map(
+              (status) => `<option value="${status}" ${status === shipping.status ? "selected" : ""}>${escapeHtml(humanizeEnum(status))}</option>`
+            ).join("")}
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label class="form-field__label" for="courierName">Courier Name <span class="form-field__optional">(optional)</span></label>
+          <input
+            type="text"
+            id="courierName"
+            name="courierName"
+            class="form-field__input"
+            value="${escapeHtml(shipping.courierName || "")}"
+            maxlength="${COURIER_NAME_MAX_LENGTH}"
+            placeholder="e.g. The Courier Guy"
+          />
+        </div>
+
+        <div class="form-field">
+          <label class="form-field__label" for="trackingNumber">Tracking Number <span class="form-field__optional">(optional)</span></label>
+          <input
+            type="text"
+            id="trackingNumber"
+            name="trackingNumber"
+            class="form-field__input"
+            value="${escapeHtml(shipping.trackingNumber || "")}"
+            maxlength="${TRACKING_NUMBER_MAX_LENGTH}"
+          />
+        </div>
+
+        <div class="form-field form-field--full">
+          <label class="form-field__label" for="trackingUrl">Tracking URL <span class="form-field__optional">(optional)</span></label>
+          <input
+            type="url"
+            id="trackingUrl"
+            name="trackingUrl"
+            class="form-field__input"
+            value="${escapeHtml(shipping.trackingUrl || "")}"
+            maxlength="${TRACKING_URL_MAX_LENGTH}"
+            placeholder="https://..."
+          />
+        </div>
+
+        <div class="form-field">
+          <label class="form-field__label" for="estimatedDelivery">Estimated Delivery <span class="form-field__optional">(optional)</span></label>
+          <input type="date" id="estimatedDelivery" name="estimatedDelivery" class="form-field__input" value="${estimatedDeliveryValue}" />
+        </div>
+      </div>
+
+      <div class="form-banner form-banner--error" data-admin-shipping-banner hidden></div>
+
+      <div class="admin-status-confirm__actions">
+        <button type="submit" class="btn btn--primary">Save Shipping Details</button>
+      </div>
+    </form>
+  `;
+}
+
 function renderStatusHistoryTimeline(history) {
   if (!history || history.length === 0) {
     return `<p class="admin-empty">No status history recorded yet.</p>`;
@@ -228,22 +321,24 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
               : ""
           }
 
+        </div>
+
+        ${
+          order.shipping
+            ? `
+        <div class="order-confirmation__card">
           ${
-            order.shipping
-              ? `
-          <div class="order-confirmation__card">
-            <h3>Shipping</h3>
-            <div class="order-confirmation__row"><span>Status</span>${renderStatusBadge(order.shipping.status)}</div>
-            ${order.shipping.courierName ? `<div class="order-confirmation__row"><span>Courier</span><span>${escapeHtml(order.shipping.courierName)}</span></div>` : ""}
-            ${order.shipping.trackingNumber ? `<div class="order-confirmation__row"><span>Tracking #</span><span>${escapeHtml(order.shipping.trackingNumber)}</span></div>` : ""}
-            ${order.shipping.estimatedDelivery ? `<div class="order-confirmation__row"><span>Estimated Delivery</span><span>${formatDate(order.shipping.estimatedDelivery)}</span></div>` : ""}
-            ${order.shipping.shippedAt ? `<div class="order-confirmation__row"><span>Shipped At</span><span>${formatDateTime(order.shipping.shippedAt)}</span></div>` : ""}
-            ${order.shipping.deliveredAt ? `<div class="order-confirmation__row"><span>Delivered At</span><span>${formatDateTime(order.shipping.deliveredAt)}</span></div>` : ""}
-          </div>
-          `
+            order.shipping.trackingUrl
+              ? `<div class="order-confirmation__row"><span>Tracking Link</span><a href="${escapeHtml(order.shipping.trackingUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(order.shipping.trackingUrl)}</a></div>`
               : ""
           }
+          ${order.shipping.shippedAt ? `<div class="order-confirmation__row"><span>Shipped At</span><span>${formatDateTime(order.shipping.shippedAt)}</span></div>` : ""}
+          ${order.shipping.deliveredAt ? `<div class="order-confirmation__row"><span>Delivered At</span><span>${formatDateTime(order.shipping.deliveredAt)}</span></div>` : ""}
+          ${renderShippingUpdateForm(order)}
         </div>
+        `
+            : ""
+        }
 
         <div class="order-confirmation__card">
           <h3>Items</h3>
