@@ -32,6 +32,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright browser (Chromium only)
+        # Version 7, Milestone 103: only the one browser the smoke
+        # suite's config actually uses — installing every engine
+        # Playwright supports would be unnecessary weight for a
+        # deliberately small suite.
+        run: npx playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        # Runs only the "local" project (see playwright.config.js) —
+        # its own webServer step builds and serves its own throwaway
+        # dist/ (deliberately without VITE_API_BASE_URL, so its
+        # content is 100% deterministic — see playwright.config.js's
+        # own header comment). Deliberately gates the deploy: if this
+        # fails, the steps below (which produce the real deployed
+        # artifact) never run.
+        #
+        # Hotfix 103C: this step must run BEFORE the real production
+        # Build step below, not after. Milestone 103 originally placed
+        # it after Build — but `vite build` empties and rewrites dist/
+        # on every run, so the smoke suite's own env-var-free rebuild
+        # was silently clobbering the correctly-configured production
+        # dist/ that Build had just produced, and that clobbered
+        # dist/ (with VITE_API_BASE_URL unset, baked-in fallback
+        # "http://localhost:5000/api") is what got uploaded and
+        # deployed live. Running smoke tests first means their
+        # throwaway build happens before the real one, so the real
+        # Build step's output is always the last thing written to
+        # dist/ before it gets uploaded.
+        run: npm run test:smoke
+
       - name: Build
         # VITE_API_BASE_URL is not secret — it's baked into the built JS
         # either way (any visitor's browser can see it), so it's safe to
@@ -43,26 +73,14 @@ jobs:
         # code already defaults to false when this is unset, but setting
         # it explicitly means production safety doesn't depend on a
         # reader knowing that default. See VERSION_3_PRE_MERGE_SAFETY_CHECK.md.
+        #
+        # Hotfix 103C: must run AFTER "Run smoke tests" above, so this
+        # is the last build to touch dist/ before the steps below read
+        # it — see that step's comment for why order matters here.
         env:
           VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
           VITE_PAYFAST_ENABLED: "false"
         run: npm run build
-
-      - name: Install Playwright browser (Chromium only)
-        # Version 7, Milestone 103: only the one browser the smoke
-        # suite's config actually uses — installing every engine
-        # Playwright supports would be unnecessary weight for a
-        # deliberately small suite.
-        run: npx playwright install --with-deps chromium
-
-      - name: Run smoke tests
-        # Runs only the "local" project (see playwright.config.js) —
-        # its own webServer step rebuilds dist/ and regenerates static
-        # routes/sitemap.xml/404.html itself, so this is fully self-
-        # contained and never touches the live frontend. Deliberately
-        # gates the deploy: if this fails, the steps below (which
-        # produce the real deployed artifact) never run.
-        run: npm run test:smoke
 
       - name: Generate static route files and sitemap.xml for SEO
         # Milestone 88C found every route except "/" returned HTTP 404
