@@ -28,6 +28,17 @@ export interface CourierGuyAddressDefaults {
   type: string;
 }
 
+// Version 7, Milestone 112: the collection contact person for a real
+// booking — separate from CourierGuyAddressDefaults above, which only
+// describes the collection *address*. ShipLogic's documented booking
+// schema lists collection_contact as its own object alongside
+// collection_address.
+export interface CourierGuyContactDefaults {
+  name: string | undefined;
+  phone: string | undefined;
+  email: string | undefined;
+}
+
 export interface CourierGuyParcelDefaults {
   weightKg: number;
   lengthCm: number;
@@ -37,14 +48,17 @@ export interface CourierGuyParcelDefaults {
 
 export interface CourierGuyConfig {
   enabled: boolean;
+  bookingEnabled: boolean;
   apiKey: string | undefined;
   baseUrl: string;
   collection: CourierGuyAddressDefaults;
+  collectionContact: CourierGuyContactDefaults;
   defaultParcel: CourierGuyParcelDefaults;
 }
 
 export const courierGuyConfig: CourierGuyConfig = {
   enabled: env.courierGuyEnabled,
+  bookingEnabled: env.courierGuyBookingEnabled,
   apiKey: env.courierGuyApiKey,
   baseUrl: env.courierGuyBaseUrl,
   collection: {
@@ -56,6 +70,11 @@ export const courierGuyConfig: CourierGuyConfig = {
     country: env.courierGuyCollectionCountry,
     code: env.courierGuyCollectionCode,
     type: env.courierGuyCollectionType,
+  },
+  collectionContact: {
+    name: env.courierGuyCollectionContactName,
+    phone: env.courierGuyCollectionContactPhone,
+    email: env.courierGuyCollectionContactEmail,
   },
   defaultParcel: {
     weightKg: env.courierGuyDefaultParcelWeightKg,

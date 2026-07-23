@@ -318,6 +318,39 @@ if (courierGuyEnabled) {
   }
 }
 
+// Courier Guy BOOKING (Version 7, Milestone 112 — real shipment
+// creation, separate from the quote flag above). Deliberately its own
+// flag, not folded into COURIER_GUY_ENABLED: quote (Milestone 108) is
+// already live and safe (read-only against Courier Guy), but a real
+// POST /shipments call creates a real courier booking, so it stays
+// behind its own explicit switch until sandbox booking is
+// deliberately tested and approved — see
+// backend/src/services/courierGuy.service.ts's own header comment.
+// Same "safety switch, optional until configured" pattern as every
+// other *_ENABLED flag in this file: the backend must keep starting
+// normally with this "false" and none of the variables below set.
+const courierGuyBookingEnabled = getEnv("COURIER_GUY_BOOKING_ENABLED", "false").trim().toLowerCase() === "true";
+const courierGuyCollectionContactName = getOptionalEnv("COURIER_GUY_COLLECTION_CONTACT_NAME");
+const courierGuyCollectionContactPhone = getOptionalEnv("COURIER_GUY_COLLECTION_CONTACT_PHONE");
+const courierGuyCollectionContactEmail = getOptionalEnv("COURIER_GUY_COLLECTION_CONTACT_EMAIL");
+
+if (courierGuyBookingEnabled) {
+  const missing: string[] = [];
+  if (!courierGuyCollectionContactName) missing.push("COURIER_GUY_COLLECTION_CONTACT_NAME");
+  // A courier needs at least one way to reach the collection contact —
+  // phone OR email is enough, not both, so this isn't in the simple
+  // per-variable list above.
+  if (!courierGuyCollectionContactPhone && !courierGuyCollectionContactEmail) {
+    missing.push("COURIER_GUY_COLLECTION_CONTACT_PHONE or COURIER_GUY_COLLECTION_CONTACT_EMAIL");
+  }
+
+  if (missing.length > 0) {
+    throw new Error(
+      `COURIER_GUY_BOOKING_ENABLED is true but missing required Courier Guy booking environment variable(s): ${missing.join(", ")}. Set these in backend/.env, or set COURIER_GUY_BOOKING_ENABLED=false until booking is ready — see backend/DELIVERY_SETUP.md.`
+    );
+  }
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -386,6 +419,12 @@ export const env = {
   courierGuyDefaultParcelLengthCm,
   courierGuyDefaultParcelWidthCm,
   courierGuyDefaultParcelHeightCm,
+  // Courier Guy booking — see the block above. All undefined unless
+  // COURIER_GUY_BOOKING_ENABLED is explicitly set.
+  courierGuyBookingEnabled,
+  courierGuyCollectionContactName,
+  courierGuyCollectionContactPhone,
+  courierGuyCollectionContactEmail,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built

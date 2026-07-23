@@ -31,7 +31,7 @@ import {
 } from "../controllers/adminDashboard.controller.js";
 import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
 import { updateShippingHandler } from "../controllers/adminShipping.controller.js";
-import { getCourierQuoteHandler } from "../controllers/adminCourier.controller.js";
+import { bookCourierShipmentHandler, getCourierQuoteHandler } from "../controllers/adminCourier.controller.js";
 import {
   createAdminProductHandler,
   getAdminProductHandler,
@@ -66,6 +66,11 @@ router.patch("/orders/:orderNumber/shipping", updateShippingHandler);
 // shipping, or payment; POST only because a quote request carries
 // parcel dimensions in its body, not because anything is created.
 router.post("/orders/:orderNumber/courier/quote", getCourierQuoteHandler);
+// Version 7, Milestone 112: admin-only Courier Guy BOOKING — gated
+// behind COURIER_GUY_BOOKING_ENABLED (defaults false) in addition to
+// COURIER_GUY_ENABLED; see courierGuy.service.ts's own header comment.
+// Only ever calls POST /shipments — never a label/waybill endpoint.
+router.post("/orders/:orderNumber/courier/book", bookCourierShipmentHandler);
 router.get("/enquiries", listEnquiriesHandler);
 router.get("/products", listAdminProductsHandler);
 router.post("/products", createAdminProductHandler);

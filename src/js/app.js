@@ -32,6 +32,7 @@ import {
   updateAdminOrderStatus,
   updateAdminShipping,
   getAdminCourierQuote,
+  bookAdminCourier,
   createAdminProduct,
   updateAdminProduct,
   uploadProductImage,
@@ -64,6 +65,7 @@ function mountApp() {
   setupAdminOrderStatusForm();
   setupAdminShippingForm();
   setupAdminCourierQuoteForm();
+  setupAdminBookCourierArea();
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
@@ -896,17 +898,21 @@ async function handleAdminShippingUpdateSubmit(form) {
   }
 }
 
-// Admin Courier Guy rate quote (Version 7, Milestone 108). Delegated
-// the same way as the shipping form above. Never navigates away and
-// never mutates the order — courierGuy.service.ts only ever calls
-// Courier Guy's /rates endpoint, no booking/shipment endpoint exists
-// anywhere in this codebase. A successful response is rendered
-// directly into the form's own results container; disabled/error
-// responses (Courier Guy not enabled, invalid parcel/address, etc.)
-// show the same inline banner every other admin form here already
-// uses. serviceName/serviceLevelCode come from an external provider
-// (Courier Guy), so — unlike this file's own hardcoded status
-// messages — they're escaped before being placed in innerHTML.
+// Admin Courier Guy rate quote (Version 7, Milestone 108) + booking
+// (Version 7, Milestone 112). Delegated the same way as the shipping
+// form above. A quote request never mutates the order —
+// courierGuy.service.ts's getCourierQuote() only ever calls Courier
+// Guy's /rates endpoint. A successful quote response is rendered
+// directly into the form's own results container as a selectable list
+// (see renderCourierQuoteOption) plus a hidden Book Courier area (see
+// renderBookCourierArea/setupAdminBookCourierArea below) — selecting a
+// service reveals the Book Courier button; nothing books automatically.
+// Disabled/error responses (Courier Guy not enabled, invalid parcel/
+// address, etc.) show the same inline banner every other admin form
+// here already uses. serviceName/serviceLevelCode come from an
+// external provider (Courier Guy), so — unlike this file's own
+// hardcoded status messages — they're escaped before being placed in
+// innerHTML.
 function setupAdminCourierQuoteForm() {
   document.addEventListener("submit", (event) => {
     const form = event.target.closest(".admin-courier-quote-form");
@@ -917,20 +923,74 @@ function setupAdminCourierQuoteForm() {
   });
 }
 
-function renderCourierQuoteOption(option) {
+function renderCourierQuoteOption(option, index) {
   const etaFrom = option.etaFrom !== null && option.etaFrom !== undefined ? escapeHtml(String(option.etaFrom)) : null;
   const etaTo = option.etaTo !== null && option.etaTo !== undefined ? escapeHtml(String(option.etaTo)) : null;
   const eta = etaFrom || etaTo ? `<span class="admin-courier-quote-option__eta">ETA: ${etaFrom ?? "?"}${etaTo && etaTo !== etaFrom ? `–${etaTo}` : ""}</span>` : "";
   const code = option.serviceLevelCode ? `<span class="admin-courier-quote-option__code">${escapeHtml(option.serviceLevelCode)}</span>` : "";
   const price = Number(option.price);
+  const priceDisplay = Number.isFinite(price) ? `R${price.toFixed(2)}` : "—";
 
+  // Version 7, Milestone 112: radio, not a plain list item — this is
+  // what "quote options must become selectable" means in practice.
+  // data-service-code/-id/-name carry exactly what bookCourierShipment()
+  // needs; read back out in handleAdminBookCourierSubmit via the
+  // checked radio's own dataset, no separate state to keep in sync.
   return `
     <li class="admin-courier-quote-option">
-      <span class="admin-courier-quote-option__name">${escapeHtml(option.serviceName)}</span>
-      ${code}
-      <span class="admin-courier-quote-option__price">${Number.isFinite(price) ? `R${price.toFixed(2)}` : "—"}</span>
-      ${eta}
+      <label class="admin-courier-quote-option__label">
+        <input
+          type="radio"
+          name="courierServiceSelection"
+          class="admin-courier-quote-option__radio"
+          value="${index}"
+          data-service-code="${option.serviceLevelCode ? escapeHtml(option.serviceLevelCode) : ""}"
+          data-service-id="${option.serviceLevelId ? escapeHtml(String(option.serviceLevelId)) : ""}"
+          data-service-name="${escapeHtml(option.serviceName)}"
+        />
+        <span class="admin-courier-quote-option__name">${escapeHtml(option.serviceName)}</span>
+        ${code}
+        <span class="admin-courier-quote-option__price">${priceDisplay}</span>
+        ${eta}
+      </label>
     </li>
+  `;
+}
+
+// Version 7, Milestone 112: hidden until a service radio above is
+// selected. The payment-confirmation checkbox only renders when the
+// order isn't already paymentStatus PAID (courierGuy.service.ts's own
+// checkPaymentSafety() is the real enforcement — this is just the UI
+// asking for the same attestation the backend will require). Reuses
+// .admin-status-confirm/.admin-status-confirm__actions, the same
+// visual weight the order-status-update confirmation already uses for
+// "an important, deliberate action."
+function renderBookCourierArea(paymentStatus) {
+  const needsPaymentConfirmation = paymentStatus !== "PAID";
+
+  return `
+    <div class="admin-book-courier-area" data-admin-book-courier-area hidden>
+      <button type="button" class="btn btn--secondary" data-admin-book-courier-trigger>Book Courier</button>
+      <div class="admin-status-confirm" data-admin-book-courier-confirm hidden>
+        <p class="admin-status-confirm__text">This will create a real Courier Guy shipment.</p>
+        <p class="admin-status-confirm__warning">Confirm the delivery address and parcel size are correct before continuing.</p>
+        ${
+          needsPaymentConfirmation
+            ? `
+        <label class="admin-status-update__hint">
+          <input type="checkbox" data-admin-book-courier-payment-confirmed />
+          I confirm the payment has been checked and this order is ready for courier booking.
+        </label>
+        `
+            : ""
+        }
+        <div class="form-banner form-banner--error" data-admin-book-courier-banner hidden></div>
+        <div class="admin-status-confirm__actions">
+          <button type="button" class="btn btn--primary" data-admin-book-courier-confirm-button>Confirm Booking</button>
+          <button type="button" class="btn btn--secondary" data-admin-book-courier-cancel>Cancel</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -967,7 +1027,8 @@ async function handleAdminCourierQuoteSubmit(form) {
       if (!options || options.length === 0) {
         results.innerHTML = `<p class="admin-empty">${escapeHtml(message || "No courier quote options were returned for this address and parcel.")}</p>`;
       } else {
-        results.innerHTML = `<ul class="admin-courier-quote-options">${options.map(renderCourierQuoteOption).join("")}</ul>`;
+        const paymentStatus = form.dataset.paymentStatus || "";
+        results.innerHTML = `<ul class="admin-courier-quote-options">${options.map(renderCourierQuoteOption).join("")}</ul>${renderBookCourierArea(paymentStatus)}`;
       }
     }
   } catch (error) {
@@ -994,6 +1055,114 @@ async function handleAdminCourierQuoteSubmit(form) {
     }
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Admin Courier Guy BOOKING (Version 7, Milestone 112). Three delegated
+// interactions inside the Book Courier area rendered above: selecting
+// a service radio reveals the Book Courier button; clicking it reveals
+// the confirmation block (never books yet); clicking Confirm Booking
+// actually submits. Clicking Cancel collapses the confirmation back
+// without booking. None of this books automatically — every step is a
+// deliberate admin click, and the backend re-validates payment/parcel/
+// address/duplicate-booking regardless of what this UI already checked.
+function setupAdminBookCourierArea() {
+  document.addEventListener("change", (event) => {
+    if (event.target.name !== "courierServiceSelection") return;
+
+    const area = event.target.closest("form")?.querySelector("[data-admin-book-courier-area]");
+    if (area) area.hidden = false;
+  });
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-admin-book-courier-trigger]");
+    if (trigger) {
+      const area = trigger.closest("[data-admin-book-courier-area]");
+      trigger.hidden = true;
+      area.querySelector("[data-admin-book-courier-confirm]").hidden = false;
+      return;
+    }
+
+    const cancel = event.target.closest("[data-admin-book-courier-cancel]");
+    if (cancel) {
+      const area = cancel.closest("[data-admin-book-courier-area]");
+      area.querySelector("[data-admin-book-courier-confirm]").hidden = true;
+      area.querySelector("[data-admin-book-courier-trigger]").hidden = false;
+      return;
+    }
+
+    const confirmButton = event.target.closest("[data-admin-book-courier-confirm-button]");
+    if (confirmButton) {
+      const form = confirmButton.closest(".admin-courier-quote-form");
+      if (form) handleAdminBookCourierSubmit(form);
+    }
+  });
+}
+
+async function handleAdminBookCourierSubmit(form) {
+  const orderNumber = form.dataset.orderNumber;
+  if (!orderNumber) return;
+
+  const selectedRadio = form.querySelector('input[name="courierServiceSelection"]:checked');
+  if (!selectedRadio) return;
+
+  const banner = form.querySelector("[data-admin-book-courier-banner]");
+  const confirmButton = form.querySelector("[data-admin-book-courier-confirm-button]");
+  const paymentConfirmedInput = form.querySelector("[data-admin-book-courier-payment-confirmed]");
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const formData = new FormData(form);
+  const payload = {
+    weightKg: formData.get("weightKg"),
+    lengthCm: formData.get("lengthCm"),
+    widthCm: formData.get("widthCm"),
+    heightCm: formData.get("heightCm"),
+    declaredValue: formData.get("declaredValue") || undefined,
+    serviceLevelCode: selectedRadio.dataset.serviceCode || undefined,
+    serviceLevelId: selectedRadio.dataset.serviceId || undefined,
+    // Only meaningful when the checkbox actually rendered (order not
+    // already PAID) — undefined otherwise, which
+    // courierGuy.service.ts's checkPaymentSafety() correctly treats as
+    // "not confirmed" for a PENDING order and simply ignores for a PAID
+    // one.
+    paymentConfirmed: paymentConfirmedInput ? paymentConfirmedInput.checked : undefined,
+  };
+
+  if (confirmButton) confirmButton.disabled = true;
+
+  try {
+    await bookAdminCourier(orderNumber, payload);
+    // Full re-render (not just a local DOM update) so the Shipping
+    // card's read-only summary, the Update Shipping form's pre-filled
+    // values, and this card's own "already booked" state (server-
+    // truth-driven, see renderCourierSection) all reflect the booking
+    // that just happened — same pattern as handleAdminShippingUpdateSubmit.
+    setPendingAdminMessage("Courier shipment booked successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+
+    // 400 (invalid parcel/address/unpaid), 404 (order not found), 409
+    // (already booked), 500 (misconfigured), 502 (provider error/
+    // unrecognised response), and 503 (courier/booking disabled) all
+    // carry a specific, already-safe message from the backend.
+    const message =
+      error instanceof ApiError && [400, 404, 409, 500, 502, 503].includes(error.status)
+        ? error.message
+        : "Something went wrong. Please try again shortly.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+    if (confirmButton) confirmButton.disabled = false;
   }
 }
 

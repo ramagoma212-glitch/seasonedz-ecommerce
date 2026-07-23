@@ -255,3 +255,47 @@ export async function listEnquiriesForAdmin(filters: AdminEnquiryListFilters): P
     totalPages: Math.max(1, Math.ceil(total / filters.limit)),
   };
 }
+
+export interface CourierBookingFields {
+  courierProvider: string | null;
+  courierShipmentId: string | null;
+  courierServiceCode: string | null;
+  courierServiceName: string | null;
+  courierCost: number | null;
+  courierBookedAt: Date | null;
+}
+
+// Version 7, Milestone 112: the admin order detail view needs the
+// Courier Guy booking fields (courierShipmentId/courierCost/etc.),
+// but order.service.ts's getOrderByNumber()/toOrderOutput() is shared
+// with the public, unauthenticated customer order-tracking endpoint —
+// adding these fields there would leak an internal shipment ID and
+// what Seasonedz Group actually pays for courier to any customer who
+// knows their own order number. This is a small, admin-only
+// augmentation queried separately and merged into the response only
+// by adminDashboard.controller.ts's getOrderDetailHandler, never
+// touching the shared customer-facing shape.
+export async function getCourierBookingFieldsForOrder(orderNumber: string): Promise<CourierBookingFields | null> {
+  const shipping = await prisma.shipping.findFirst({
+    where: { order: { orderNumber } },
+    select: {
+      courierProvider: true,
+      courierShipmentId: true,
+      courierServiceCode: true,
+      courierServiceName: true,
+      courierCost: true,
+      courierBookedAt: true,
+    },
+  });
+
+  if (!shipping) return null;
+
+  return {
+    courierProvider: shipping.courierProvider,
+    courierShipmentId: shipping.courierShipmentId,
+    courierServiceCode: shipping.courierServiceCode,
+    courierServiceName: shipping.courierServiceName,
+    courierCost: shipping.courierCost ? Number(shipping.courierCost) : null,
+    courierBookedAt: shipping.courierBookedAt,
+  };
+}

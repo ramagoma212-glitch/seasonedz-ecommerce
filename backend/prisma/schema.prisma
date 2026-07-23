@@ -376,6 +376,22 @@ model Shipping {
   shippedAt         DateTime?
   deliveredAt       DateTime?
 
+  // Version 7, Milestone 112: admin-only Courier Guy booking. All
+  // nullable — every existing row (and any order created before
+  // booking exists) simply has these unset, exactly like every other
+  // optional field above. Only ever written by
+  // courierGuy.service.ts's bookCourierShipment(), inside the same
+  // transaction as everything else in this model — see that file's
+  // own header comment for the full safety discipline (no booking
+  // without COURIER_GUY_BOOKING_ENABLED, no duplicate booking, no
+  // automatic booking).
+  courierProvider    String?
+  courierShipmentId  String?
+  courierServiceCode String?
+  courierServiceName String?
+  courierCost        Decimal?  @db.Decimal(10, 2)
+  courierBookedAt    DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
