@@ -59,6 +59,20 @@ export function updateAdminShipping(orderNumber, fields) {
   });
 }
 
+// Version 7, Milestone 108: admin-only Courier Guy rate quote — no
+// booking/shipment endpoint is called anywhere behind this (see
+// backend/src/services/courierGuy.service.ts's own header comment).
+// Returns a clean disabled/error message when Courier Guy isn't
+// enabled or configured yet — never requires a real API key on the
+// frontend, since the backend is the only thing that ever calls
+// Courier Guy directly.
+export function getAdminCourierQuote(orderNumber, payload) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/courier/quote`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getAdminEnquiries(params = {}) {
   return adminRequest(`/admin/enquiries${buildQuery(params)}`, { method: "GET" });
 }

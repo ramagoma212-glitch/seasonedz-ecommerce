@@ -46,6 +46,15 @@ const COURIER_NAME_MAX_LENGTH = 100;
 const TRACKING_NUMBER_MAX_LENGTH = 100;
 const TRACKING_URL_MAX_LENGTH = 500;
 
+// Version 7, Milestone 108: safe starting defaults for a small book/
+// marker-pack parcel (matches backend COURIER_GUY_DEFAULT_PARCEL_*),
+// always adjustable by the admin before requesting a quote — most
+// current Seasonedz products are books or small marker packs.
+const COURIER_DEFAULT_PARCEL_WEIGHT_KG = 0.3;
+const COURIER_DEFAULT_PARCEL_LENGTH_CM = 30;
+const COURIER_DEFAULT_PARCEL_WIDTH_CM = 22;
+const COURIER_DEFAULT_PARCEL_HEIGHT_CM = 3;
+
 function renderNotFound(orderNumber) {
   return `
     <section class="container admin-page">
@@ -228,6 +237,55 @@ function renderShippingUpdateForm(order) {
   `;
 }
 
+// Version 7, Milestone 108: admin-only Courier Guy rate quote — submits
+// to the new protected POST /api/admin/orders/:orderNumber/courier/quote
+// route (courierGuy.service.ts), which only ever calls Courier Guy's
+// /rates endpoint. No booking is ever created; nothing here writes to
+// the order or shipping. Deliberately no "Book Courier" button and no
+// customer-facing courier choice — this card is for the admin's own
+// reference only. When Courier Guy isn't enabled/configured yet, the
+// backend responds with a clear error (503/500), shown in the same
+// banner every other admin form here already uses — see
+// handleAdminCourierQuoteSubmit in app.js.
+function renderCourierQuoteForm(order) {
+  return `
+    <form class="admin-courier-quote-form" data-order-number="${escapeHtml(order.orderNumber)}" novalidate>
+      <h3>Courier Quote</h3>
+      <p class="admin-status-update__hint">Admin-only quote. No courier booking is created.</p>
+
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="form-field__label" for="courierWeightKg">Parcel Weight (kg)</label>
+          <input type="number" id="courierWeightKg" name="weightKg" class="form-field__input" min="0.01" max="50" step="0.01" value="${COURIER_DEFAULT_PARCEL_WEIGHT_KG}" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="courierLengthCm">Length (cm)</label>
+          <input type="number" id="courierLengthCm" name="lengthCm" class="form-field__input" min="1" max="200" step="1" value="${COURIER_DEFAULT_PARCEL_LENGTH_CM}" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="courierWidthCm">Width (cm)</label>
+          <input type="number" id="courierWidthCm" name="widthCm" class="form-field__input" min="1" max="200" step="1" value="${COURIER_DEFAULT_PARCEL_WIDTH_CM}" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="courierHeightCm">Height (cm)</label>
+          <input type="number" id="courierHeightCm" name="heightCm" class="form-field__input" min="1" max="200" step="1" value="${COURIER_DEFAULT_PARCEL_HEIGHT_CM}" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="courierDeclaredValue">Declared Value <span class="form-field__optional">(optional)</span></label>
+          <input type="number" id="courierDeclaredValue" name="declaredValue" class="form-field__input" min="0" step="0.01" placeholder="e.g. 250.00" />
+        </div>
+      </div>
+
+      <div class="form-banner form-banner--error" data-admin-courier-banner hidden></div>
+      <div data-admin-courier-results></div>
+
+      <div class="admin-status-confirm__actions">
+        <button type="submit" class="btn btn--primary">Get Courier Quote</button>
+      </div>
+    </form>
+  `;
+}
+
 function renderStatusHistoryTimeline(history) {
   if (!history || history.length === 0) {
     return `<p class="admin-empty">No status history recorded yet.</p>`;
@@ -339,6 +397,10 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
         `
             : ""
         }
+
+        <div class="order-confirmation__card">
+          ${renderCourierQuoteForm(order)}
+        </div>
 
         <div class="order-confirmation__card">
           <h3>Items</h3>
