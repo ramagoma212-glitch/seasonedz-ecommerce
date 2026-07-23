@@ -57,11 +57,13 @@ function renderPagination(result, basePath) {
   const prevDisabled = result.page <= 1;
   const nextDisabled = result.page >= result.totalPages;
 
+  // Hotfix 106C: real path, not a hash fragment — see adminNav.js's own
+  // comment for why this was missed by the Milestone 88A migration.
   return `
     <div class="admin-pagination">
-      ${prevDisabled ? `<span class="btn btn--secondary btn--sm is-disabled">Previous</span>` : `<a class="btn btn--secondary btn--sm" href="#${basePath}?page=${result.page - 1}">Previous</a>`}
+      ${prevDisabled ? `<span class="btn btn--secondary btn--sm is-disabled">Previous</span>` : `<a class="btn btn--secondary btn--sm" href="${basePath}?page=${result.page - 1}">Previous</a>`}
       <span class="admin-pagination__label">Page ${result.page} of ${result.totalPages}</span>
-      ${nextDisabled ? `<span class="btn btn--secondary btn--sm is-disabled">Next</span>` : `<a class="btn btn--secondary btn--sm" href="#${basePath}?page=${result.page + 1}">Next</a>`}
+      ${nextDisabled ? `<span class="btn btn--secondary btn--sm is-disabled">Next</span>` : `<a class="btn btn--secondary btn--sm" href="${basePath}?page=${result.page + 1}">Next</a>`}
     </div>
   `;
 }

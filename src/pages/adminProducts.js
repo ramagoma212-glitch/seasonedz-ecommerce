@@ -112,10 +112,12 @@ function renderPagination(result, query) {
   const prevDisabled = result.page <= 1;
   const nextDisabled = result.page >= result.totalPages;
 
+  // Hotfix 106C: real path, not a hash fragment — see adminNav.js's own
+  // comment for why this was missed by the Milestone 88A migration.
   function pageLink(page) {
     const params = new URLSearchParams(query);
     params.set("page", page);
-    return `#/admin/products?${params.toString()}`;
+    return `/admin/products?${params.toString()}`;
   }
 
   return `
