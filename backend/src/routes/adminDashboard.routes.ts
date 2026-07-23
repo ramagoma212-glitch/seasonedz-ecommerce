@@ -30,6 +30,7 @@ import {
   listOrdersHandler,
 } from "../controllers/adminDashboard.controller.js";
 import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
+import { updateShippingHandler } from "../controllers/adminShipping.controller.js";
 import {
   createAdminProductHandler,
   getAdminProductHandler,
@@ -53,6 +54,11 @@ router.get("/orders", listOrdersHandler);
 router.get("/orders/:orderNumber", getOrderDetailHandler);
 router.patch("/orders/:orderNumber/status", updateOrderStatusHandler);
 router.get("/orders/:orderNumber/status-history", getOrderStatusHistoryHandler);
+// Version 7, Milestone 106: manual shipping update — see
+// adminShipping.service.ts's own header comment for why
+// Order.fulfilmentStatus and Shipping.status are written together.
+// No courier API is called anywhere behind this route.
+router.patch("/orders/:orderNumber/shipping", updateShippingHandler);
 router.get("/enquiries", listEnquiriesHandler);
 router.get("/products", listAdminProductsHandler);
 router.post("/products", createAdminProductHandler);

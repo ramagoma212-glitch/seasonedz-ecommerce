@@ -45,6 +45,20 @@ export function updateAdminOrderStatus(orderNumber, newStatus, note) {
   });
 }
 
+// Version 7, Milestone 106: manual shipping update — no courier API is
+// called anywhere behind this; every field here is validated server-
+// side regardless (backend/src/services/adminShipping.service.ts). An
+// empty-string field value intentionally clears that field (courier
+// name/tracking number/tracking URL/estimated delivery are all
+// optional) — see adminOrderDetail.js's own form for why every field
+// is always sent, never omitted.
+export function updateAdminShipping(orderNumber, fields) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/shipping`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+
 export function getAdminEnquiries(params = {}) {
   return adminRequest(`/admin/enquiries${buildQuery(params)}`, { method: "GET" });
 }
