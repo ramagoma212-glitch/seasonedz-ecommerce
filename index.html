@@ -26,13 +26,13 @@
 
     <!--
       Version 7, Milestone 89: static defaults for the very first paint
-      (before any JS runs) and for any page router.js's own setPageMeta
-      doesn't override — see js/seo.js, which sets the equivalent
-      per-route values (including a page-specific canonical-like URL
-      via document.title/description) on every navigation. robots here
-      matches seo.js's own default ("index, follow"); private/
-      transactional routes get "noindex, nofollow" from seo.js at
-      render time, same as before.
+      (before any JS runs), for the homepage itself, and as a fallback
+      for the brief moment before router.js's first render — js/seo.js
+      then sets the real per-route title, description, robots and
+      (Version 7, Milestone 99) canonical href on every navigation,
+      overriding these. robots here matches seo.js's own default
+      ("index, follow"); private/transactional routes get "noindex,
+      nofollow" from seo.js at render time, same as before.
     -->
     <link rel="canonical" href="https://www.seasonedzgroup.co.za/" />
     <meta name="robots" content="index, follow" />
