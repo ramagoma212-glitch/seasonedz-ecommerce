@@ -18,7 +18,7 @@ export function renderCartPage() {
         ${renderEmptyState({
           title: "Your cart is empty",
           message: "Looks like you haven't added anything yet.",
-          actionHref: "#/shop",
+          actionHref: "/shop",
           actionLabel: "Continue Shopping",
         })}
       </section>

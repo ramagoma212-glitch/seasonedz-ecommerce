@@ -129,7 +129,7 @@ export function renderCheckoutPage() {
         ${renderEmptyState({
           title: "Your cart is empty",
           message: "Add a few products to your cart before checking out.",
-          actionHref: "#/shop",
+          actionHref: "/shop",
           actionLabel: "Continue Shopping",
         })}
       </section>

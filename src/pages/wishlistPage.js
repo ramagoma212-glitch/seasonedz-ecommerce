@@ -17,7 +17,7 @@ export function renderWishlistPage() {
         ${renderEmptyState({
           title: "Your wishlist is empty",
           message: "Save products you love to find them again easily.",
-          actionHref: "#/shop",
+          actionHref: "/shop",
           actionLabel: "Browse Products",
         })}
       </section>
