@@ -1,16 +1,28 @@
 // Email template rendering (Version 3, Milestone 24 — preparation
-// only). Plain-text bodies, kept simple, professional and warm rather
-// than salesy — South African English throughout ("colouring", not
-// "coloring"). Nothing here sends anything; see email.service.ts.
+// only; Version 7, Milestone 117 — wired to a real send via Brevo,
+// still off by default). Plain-text bodies, kept simple, professional
+// and warm rather than salesy — South African English throughout
+// ("colouring", not "coloring"). Nothing here sends anything itself;
+// see email.service.ts.
 //
-// No fake bank account details are ever included — bank transfer
-// orders use a placeholder line, exactly as instructed, until
-// Seasonedz Group's real banking details are safely configured
-// somewhere (not yet, and not part of this milestone).
+// No fake bank account details are ever included — a BANK_TRANSFER
+// order gets an honest "Seasonedz Group will follow up directly" line
+// until real banking details are safely configured somewhere (not
+// part of this milestone; a future milestone would add them via
+// Render env, never hardcoded here).
 
-import type { EnquiryEmailData, OrderEmailData, RenderedEmail } from "./email.types.js";
+import type { EnquiryEmailData, OrderEmailData, OrderEmailItem, RenderedEmail } from "./email.types.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
+
+// Version 7, Milestone 117: explicit contact details for the
+// order-created customer email specifically — the same real,
+// already-public WhatsApp number used everywhere else on the site,
+// and the reply-to inbox this email's own "Reply" button actually
+// reaches (Brevo's replyTo, set to this same address).
+const ORDER_CONTACT_BLOCK = `Seasonedz Group
+Email: seasonedzgroup@outlook.com
+WhatsApp: +27 72 844 5644`;
 
 function formatRand(amount: number): string {
   return `R${amount.toFixed(2)}`;
@@ -24,10 +36,31 @@ function humanizeEnum(value: string): string {
     .join(" ");
 }
 
+function formatItemsList(items: OrderEmailItem[]): string {
+  return items.map((item) => `- ${item.productName} x${item.quantity} — ${formatRand(item.lineTotal)}`).join("\n");
+}
+
+function formatDeliveryNote(order: OrderEmailData): string {
+  const lines = [
+    order.deliveryStreetAddress,
+    order.deliverySuburb,
+    `${order.deliveryCity}, ${order.deliveryProvince} ${order.deliveryPostalCode}`.trim(),
+  ];
+  if (order.deliveryNotes) lines.push(`Notes: ${order.deliveryNotes}`);
+  return lines.filter(Boolean).join("\n");
+}
+
+// Version 7, Milestone 117: the BANK_TRANSFER line no longer implies
+// any specific banking detail exists to share yet — no real bank
+// account has been configured anywhere in this codebase, and none is
+// invented here. This says only that Seasonedz Group will follow up
+// directly, which is both honest and safe regardless of when real
+// banking details are eventually added (a future milestone, via
+// Render env if needed — never hardcoded).
 function paymentInstructions(paymentMethod: string): string {
   switch (paymentMethod) {
     case "BANK_TRANSFER":
-      return "Bank transfer details will be shared by Seasonedz Group.";
+      return "Seasonedz Group will confirm payment details and next steps with you directly.";
     case "PAYFAST":
       return "Your PayFast payment is being processed. We'll email you again as soon as it's confirmed.";
     case "CASH_ON_DELIVERY":
@@ -61,13 +94,22 @@ export function renderOrderCreatedEmail(order: OrderEmailData): RenderedEmail {
 
 Thank you for your order with Seasonedz Group! We've received order ${order.orderNumber} and it's now being processed.
 
+Items Ordered:
+${formatItemsList(order.items)}
+
 Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}
 
 ${paymentInstructions(order.paymentMethod)}
 
-${CONTACT_LINE}
+Delivering To:
+${formatDeliveryNote(order)}
+
+Delivery is arranged manually by our small team once your order is confirmed — we'll be in touch with tracking details once it's packed and booked.
+
+Any questions? Reach us directly:
+${ORDER_CONTACT_BLOCK}
 
 Warm regards,
 Seasonedz Group`;
@@ -162,17 +204,36 @@ Seasonedz Group`;
   return { subject, body };
 }
 
+// Version 7, Milestone 117: expanded with full contact/delivery/item
+// detail so the admin alert alone is enough to start preparing the
+// order without needing to open the dashboard first — deliberately
+// says nothing about Courier Guy quoting/booking (that stays an
+// admin-dashboard-only action, never mentioned in an email).
 export function renderAdminNewOrderEmail(order: OrderEmailData): RenderedEmail {
   const subject = `New Order Received: ${order.orderNumber}`;
+  const bankTransferReminder =
+    order.paymentMethod === "BANK_TRANSFER"
+      ? "\n\nThis is a Bank Transfer order — check the business bank account and confirm payment before packing."
+      : "";
+
   const body = `A new order has been placed on Seasonedz Group.
 
 Order Number: ${order.orderNumber}
 Customer: ${order.customerFirstName} ${order.customerLastName}
+Customer Phone: ${order.customerPhone}
+Customer Email: ${order.customerEmail}
+
+Items Ordered:
+${formatItemsList(order.items)}
+
 Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
-Payment Status: ${humanizeEnum(order.paymentStatus)}
+Payment Status: ${humanizeEnum(order.paymentStatus)}${bankTransferReminder}
 
-Please review this order and prepare it for processing.`;
+Delivering To:
+${formatDeliveryNote(order)}
+
+Please review this order in the admin dashboard and prepare it for processing.`;
 
   return { subject, body };
 }

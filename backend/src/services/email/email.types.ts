@@ -30,14 +30,34 @@ export interface RenderedEmail {
   body: string;
 }
 
+// Version 7, Milestone 117: minimal per-line-item shape a template
+// needs — deliberately not OrderItemOutput (order.service.ts), same
+// "independent small shape" reasoning as OrderEmailData itself.
+export interface OrderEmailItem {
+  productName: string;
+  quantity: number;
+  lineTotal: number;
+}
+
 export interface OrderEmailData {
   orderNumber: string;
   customerFirstName: string;
   customerLastName: string;
   customerEmail: string;
+  // Version 7, Milestone 117: added for the admin new-order alert
+  // (contacting the customer directly, e.g. to confirm a bank
+  // transfer) and for a fuller order-created email.
+  customerPhone: string;
   total: number;
   paymentStatus: string;
   paymentMethod: string;
+  items: OrderEmailItem[];
+  deliveryStreetAddress: string;
+  deliverySuburb: string;
+  deliveryCity: string;
+  deliveryProvince: string;
+  deliveryPostalCode: string;
+  deliveryNotes: string | null;
 }
 
 export interface EnquiryEmailData {

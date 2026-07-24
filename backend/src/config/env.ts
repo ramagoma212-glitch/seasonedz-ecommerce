@@ -174,14 +174,22 @@ const emailProvider = getEnv("EMAIL_PROVIDER", "console");
 const emailFromName = getEnv("EMAIL_FROM_NAME", "Seasonedz Group");
 const emailFromAddress = getOptionalEnv("EMAIL_FROM_ADDRESS");
 const adminNotificationEmail = getOptionalEnv("ADMIN_NOTIFICATION_EMAIL");
+// Version 7, Milestone 117: the address a reply to a transactional
+// email actually reaches — separate from emailFromAddress (the
+// authenticated sending address), since Brevo's API accepts a
+// distinct replyTo field. Optional in general (only "brevo" actually
+// reads it), required specifically when EMAIL_PROVIDER=brevo — see
+// the brevo-specific check below.
+const emailReplyTo = getOptionalEnv("EMAIL_REPLY_TO");
 
-// Provider API keys (RESEND_API_KEY, SENDGRID_API_KEY, SMTP_*) are
-// deliberately NOT validated here, even when EMAIL_ENABLED is true —
-// no provider is actually wired up yet (Milestone 24 is templates +
-// a console-only service), so requiring them now would just be
-// busywork with nothing to check against. A future milestone that
-// picks a real provider should add that provider's specific
+// Provider API keys (RESEND_API_KEY, SENDGRID_API_KEY, SMTP_*, and now
+// BREVO_API_KEY) are deliberately NOT validated here for any provider
+// this backend doesn't actually use yet — see the brevo-specific
+// block below for the one that now is. A future milestone that picks
+// a different provider should add that provider's specific
 // requirement here, at the point it actually starts being used.
+const brevoApiKey = getOptionalEnv("BREVO_API_KEY");
+
 if (emailEnabled) {
   const missing: string[] = [];
   if (!emailFromAddress) missing.push("EMAIL_FROM_ADDRESS");
@@ -191,6 +199,22 @@ if (emailEnabled) {
     throw new Error(
       `EMAIL_ENABLED is true but missing required email environment variable(s): ${missing.join(", ")}. Set these in backend/.env, or set EMAIL_ENABLED=false until email is ready — see backend/EMAIL_SETUP.md.`
     );
+  }
+
+  // Version 7, Milestone 117: Brevo-specific requirements, checked
+  // only when it's the active provider — an unrelated EMAIL_PROVIDER
+  // value (e.g. "console") must never be blocked from starting just
+  // because BREVO_API_KEY/EMAIL_REPLY_TO aren't set.
+  if (emailProvider === "brevo") {
+    const missingBrevo: string[] = [];
+    if (!brevoApiKey) missingBrevo.push("BREVO_API_KEY");
+    if (!emailReplyTo) missingBrevo.push("EMAIL_REPLY_TO");
+
+    if (missingBrevo.length > 0) {
+      throw new Error(
+        `EMAIL_ENABLED is true and EMAIL_PROVIDER=brevo but missing required Brevo environment variable(s): ${missingBrevo.join(", ")}. Set these in backend/.env, or set EMAIL_ENABLED=false until Brevo is ready — see backend/EMAIL_SETUP.md.`
+      );
+    }
   }
 }
 
@@ -387,13 +411,16 @@ export const env = {
   payfastSourceVerificationMode,
   payfastValidateServer,
   trustProxy,
-  // Email — see the block above. No provider credentials are read
-  // here; a real provider integration adds its own vars when it exists.
+  // Email — see the block above.
   emailEnabled,
   emailProvider,
   emailFromName,
   emailFromAddress,
   adminNotificationEmail,
+  emailReplyTo,
+  // Brevo — undefined unless BREVO_API_KEY is explicitly set; never
+  // logged anywhere.
+  brevoApiKey,
   // Admin auth — see the block above. Falls back to a random,
   // process-only secret when unset (never logged, never persisted).
   adminSessionSecret: adminSessionSecret || randomBytes(32).toString("hex"),
