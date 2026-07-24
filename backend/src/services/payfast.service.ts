@@ -39,6 +39,8 @@ import { env } from "../config/env.js";
 import { generatePayfastSignature, verifyPayfastSignature } from "../utils/payfastSignature.js";
 import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
 import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
+import { sendPaymentConfirmedEmail, sendPaymentFailedEmail } from "./email/email.service.js";
+import type { OrderEmailData } from "./email/email.types.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -251,6 +253,49 @@ export interface PayfastNotifyResult {
   message: string;
 }
 
+// Version 7, Milestone 117: maps the raw Order row already loaded
+// above (customerFirstName/deliveryStreetAddress/etc. are the Order
+// model's own columns, already present with zero extra query needed)
+// onto the small OrderEmailData shape the payment-confirmed/failed
+// templates need. `items` is deliberately empty — neither template
+// renders order line items, and this deliberately doesn't add an
+// `include: { items: true }` to the sensitive, already-audited order
+// lookup above just to populate a field nothing here reads.
+function toPaymentOrderEmailData(order: {
+  orderNumber: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerEmail: string;
+  customerPhone: string;
+  total: Prisma.Decimal;
+  paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethod;
+  deliveryStreetAddress: string;
+  deliverySuburb: string;
+  deliveryCity: string;
+  deliveryProvince: string;
+  deliveryPostalCode: string;
+  deliveryNotes: string | null;
+}): OrderEmailData {
+  return {
+    orderNumber: order.orderNumber,
+    customerFirstName: order.customerFirstName,
+    customerLastName: order.customerLastName,
+    customerEmail: order.customerEmail,
+    customerPhone: order.customerPhone,
+    total: order.total.toNumber(),
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    items: [],
+    deliveryStreetAddress: order.deliveryStreetAddress,
+    deliverySuburb: order.deliverySuburb,
+    deliveryCity: order.deliveryCity,
+    deliveryProvince: order.deliveryProvince,
+    deliveryPostalCode: order.deliveryPostalCode,
+    deliveryNotes: order.deliveryNotes,
+  };
+}
+
 // `req` is used only for source verification (Step 5 below), when
 // PAYFAST_SOURCE_VERIFICATION_MODE isn't "off" — passed through from
 // the controller rather than reconstructed here, since Express's
@@ -443,6 +488,17 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         }),
       ]);
 
+      // Version 7, Milestone 117: only reached on a genuinely newly-
+      // resolved COMPLETE (the early-return above already handled the
+      // idempotent duplicate-notification case) — a repeated ITN for
+      // an already-PAID order can never reach this line, so this can
+      // never double-send. Fire-and-forget, same discipline as
+      // order.controller.ts; sendPaymentConfirmedEmail never throws.
+      void sendPaymentConfirmedEmail({
+        ...toPaymentOrderEmailData(order),
+        paymentStatus: PaymentStatus.PAID,
+      }).catch(() => {});
+
       return { message: "Payment verified and marked as PAID." };
     }
 
@@ -473,6 +529,14 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         data: { paymentStatus: PaymentStatus.FAILED },
       });
 
+      // Version 7, Milestone 117: only reached on a newly-resolved
+      // FAILED (the already-PAID early-return above never reaches
+      // here) — same never-double-send guarantee as COMPLETE above.
+      void sendPaymentFailedEmail({
+        ...toPaymentOrderEmailData(order),
+        paymentStatus: PaymentStatus.FAILED,
+      }).catch(() => {});
+
       return { message: "Payment marked as FAILED." };
     }
 
@@ -495,6 +559,15 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         where: { id: order.id },
         data: { paymentStatus: PaymentStatus.CANCELLED },
       });
+
+      // Version 7, Milestone 117: only reached on a newly-resolved
+      // CANCELLED — same never-double-send guarantee as COMPLETE/
+      // FAILED above. renderPaymentFailedOrCancelledEmail() already
+      // handles both statuses' wording via humanizeEnum(paymentStatus).
+      void sendPaymentFailedEmail({
+        ...toPaymentOrderEmailData(order),
+        paymentStatus: PaymentStatus.CANCELLED,
+      }).catch(() => {});
 
       return { message: "Payment marked as CANCELLED." };
     }

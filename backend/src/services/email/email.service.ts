@@ -1,21 +1,33 @@
 // Email service (Version 3, Milestone 24 — preparation only; templates
-// and dry-run log format extended in Version 6, Milestone 53).
+// and dry-run log format extended in Version 6, Milestone 53; Brevo
+// wired in as a real provider in Version 7, Milestone 117 — still off
+// by default).
 //
-// No real email is sent by anything in this file:
+// No real email is sent by anything in this file unless explicitly
+// turned on:
 //  - EMAIL_ENABLED=false (the default) makes every send*Email function
 //    a safe no-op.
-//  - EMAIL_PROVIDER="console" (the only supported value right now)
-//    logs only safe metadata — template name, recipient role, a masked
-//    recipient address, an order number/enquiry id, the subject, and a
-//    short, non-sensitive preview line. It never logs the full
-//    rendered body, a full email address, a raw PayFast payload, or
-//    any other personal detail.
+//  - EMAIL_PROVIDER="console" (the default provider) logs only safe
+//    metadata — template name, recipient role, a masked recipient
+//    address, an order number/enquiry id, the subject, and a short,
+//    non-sensitive preview line. It never logs the full rendered
+//    body, a full email address, a raw PayFast payload, or any other
+//    personal detail.
+//  - EMAIL_PROVIDER="brevo" sends a real transactional email via
+//    brevo.provider.ts's sendViaBrevo() — but a Brevo failure (bad
+//    key, network error, timeout, 4xx/5xx) is always caught here and
+//    logged as a safe warning, never thrown further. Order creation,
+//    enquiry creation, and PayFast ITN processing must all succeed
+//    independently of whether the email actually sent — the same
+//    "safe no-op on failure" guarantee EMAIL_ENABLED=false already
+//    gives when disabled, just extended to cover a real provider
+//    actually failing while enabled.
 //  - Any other EMAIL_PROVIDER value is treated as "not implemented
 //    yet" and logs a warning instead of guessing at a real send.
 //
-// Nothing here is called automatically by order/payment/enquiry
-// creation yet — see backend/EMAIL_SETUP.md's "Where Emails Will Be
-// Triggered Later" for the planned hook points.
+// See backend/EMAIL_SETUP.md's "Where Emails Will Be Triggered Later"
+// for the hook points this milestone wires up in order.controller.ts,
+// enquiry.controller.ts, and payfast.service.ts.
 
 import { env } from "../../config/env.js";
 import {
@@ -27,6 +39,7 @@ import {
   renderPaymentFailedOrCancelledEmail,
   renderPaymentPendingEmail,
 } from "./emailTemplates.js";
+import { sendViaBrevo } from "./providers/brevo.provider.js";
 import type { EmailRecipientRole, EmailTemplateName, EnquiryEmailData, OrderEmailData, RenderedEmail } from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
@@ -77,7 +90,8 @@ async function dispatch(
   recipientRole: EmailRecipientRole,
   recipientEmail: string | undefined,
   reference: string,
-  rendered: RenderedEmail
+  rendered: RenderedEmail,
+  recipientName?: string
 ): Promise<void> {
   if (!env.emailEnabled) return; // safe no-op — the default state
 
@@ -91,7 +105,25 @@ async function dispatch(
     return;
   }
 
-  // No real provider is integrated yet. A future milestone that adds
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: recipientEmail, name: recipientName }, rendered);
+    } catch (error) {
+      // Never allowed to reach the caller — order creation, enquiry
+      // creation, and PayFast ITN processing must all succeed
+      // regardless of whether this email actually sent. Never logs
+      // the API key, a header, or the full recipient address/body —
+      // only the safe metadata already used for console mode, plus
+      // the error's own message (BrevoSendError's messages are
+      // themselves already safe — see brevo.provider.ts).
+      console.warn(
+        `[email:brevo] Send failed for template="${templateName}" role="${recipientRole}" to="${maskEmail(recipientEmail)}" ref="${reference}": ${error instanceof Error ? error.message : "Unknown error"}`
+      );
+    }
+    return;
+  }
+
+  // No other provider is integrated. A future milestone that adds
   // Resend/SendGrid/SMTP replaces this branch with a real send, still
   // behind the same env.emailEnabled gate above.
   console.warn(
@@ -100,15 +132,36 @@ async function dispatch(
 }
 
 export async function sendOrderCreatedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("order-created", "customer", order.customerEmail, order.orderNumber, renderOrderCreatedEmail(order));
+  await dispatch(
+    "order-created",
+    "customer",
+    order.customerEmail,
+    order.orderNumber,
+    renderOrderCreatedEmail(order),
+    `${order.customerFirstName} ${order.customerLastName}`.trim()
+  );
 }
 
 export async function sendPaymentPendingEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("payment-pending", "customer", order.customerEmail, order.orderNumber, renderPaymentPendingEmail(order));
+  await dispatch(
+    "payment-pending",
+    "customer",
+    order.customerEmail,
+    order.orderNumber,
+    renderPaymentPendingEmail(order),
+    `${order.customerFirstName} ${order.customerLastName}`.trim()
+  );
 }
 
 export async function sendPaymentConfirmedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("payment-confirmed", "customer", order.customerEmail, order.orderNumber, renderPaymentConfirmedEmail(order));
+  await dispatch(
+    "payment-confirmed",
+    "customer",
+    order.customerEmail,
+    order.orderNumber,
+    renderPaymentConfirmedEmail(order),
+    `${order.customerFirstName} ${order.customerLastName}`.trim()
+  );
 }
 
 export async function sendPaymentFailedEmail(order: OrderEmailData): Promise<void> {
@@ -117,12 +170,13 @@ export async function sendPaymentFailedEmail(order: OrderEmailData): Promise<voi
     "customer",
     order.customerEmail,
     order.orderNumber,
-    renderPaymentFailedOrCancelledEmail(order)
+    renderPaymentFailedOrCancelledEmail(order),
+    `${order.customerFirstName} ${order.customerLastName}`.trim()
   );
 }
 
 export async function sendEnquiryReceivedEmail(enquiry: EnquiryEmailData): Promise<void> {
-  await dispatch("enquiry-received", "customer", enquiry.email, enquiry.id, renderEnquiryReceivedEmail(enquiry));
+  await dispatch("enquiry-received", "customer", enquiry.email, enquiry.id, renderEnquiryReceivedEmail(enquiry), enquiry.name);
 }
 
 export async function sendAdminNewOrderEmail(order: OrderEmailData): Promise<void> {
