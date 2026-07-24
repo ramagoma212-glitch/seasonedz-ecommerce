@@ -31,7 +31,7 @@ function renderNoOrderNumber() {
   return renderEmptyState({
     title: "We couldn't find an order to check",
     message: "No order number was provided. If you just completed a payment, try tracking your order using its order number instead.",
-    actionHref: "#/track-order",
+    actionHref: "/track-order",
     actionLabel: "Track an Order",
   });
 }
@@ -40,7 +40,7 @@ function renderOrderNotFound(orderNumber) {
   return renderEmptyState({
     title: "Order not found",
     message: `We couldn't find an order with the number &ldquo;${escapeHtml(orderNumber)}&rdquo;.`,
-    actionHref: "#/contact",
+    actionHref: "/contact",
     actionLabel: "Contact Us",
   });
 }
