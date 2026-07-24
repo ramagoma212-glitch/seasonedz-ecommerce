@@ -5,11 +5,11 @@
 // reasonable landing spot for anyone who lands on #/policies directly.
 
 const POLICY_LINKS = [
-  { href: "#/shipping-policy", label: "Shipping Policy", description: "Delivery fees, timing and tracking." },
-  { href: "#/returns-policy", label: "Returns Policy", description: "Damaged, incorrect or unwanted items." },
-  { href: "#/privacy-policy", label: "Privacy Policy", description: "How your information is handled." },
-  { href: "#/terms", label: "Terms & Conditions", description: "The basics of using this website." },
-  { href: "#/cookies-policy", label: "Cookies Policy", description: "Local Storage and browser data." },
+  { href: "/shipping-policy", label: "Shipping Policy", description: "Delivery fees, timing and tracking." },
+  { href: "/returns-policy", label: "Returns Policy", description: "Damaged, incorrect or unwanted items." },
+  { href: "/privacy-policy", label: "Privacy Policy", description: "How your information is handled." },
+  { href: "/terms", label: "Terms & Conditions", description: "The basics of using this website." },
+  { href: "/cookies-policy", label: "Cookies Policy", description: "Local Storage and browser data." },
 ];
 
 export function renderPolicies() {

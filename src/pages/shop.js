@@ -76,7 +76,7 @@ export async function renderShop({ query } = {}) {
               : renderEmptyState({
                   title: "No products found",
                   message: "Try adjusting or clearing your filters.",
-                  actionHref: "#/shop",
+                  actionHref: "/shop",
                   actionLabel: "View All Products",
                 })
           }

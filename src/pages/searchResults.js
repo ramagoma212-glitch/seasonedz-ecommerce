@@ -69,7 +69,7 @@ export async function renderSearchResults({ query } = {}) {
               : renderEmptyState({
                   title: `No results for &ldquo;${escapeHtml(term)}&rdquo;`,
                   message: "Try a different search term, or browse our full range instead.",
-                  actionHref: "#/shop",
+                  actionHref: "/shop",
                   actionLabel: "Back to Shop",
                 })
           }

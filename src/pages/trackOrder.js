@@ -204,7 +204,7 @@ async function renderResultForQuery(rawOrderNumber) {
     return renderEmptyState({
       title: "That doesn't look like a valid order number",
       message: `Order numbers look like &ldquo;SG-2026-A1B2&rdquo;. Please check the number and try again.`,
-      actionHref: "#/shop",
+      actionHref: "/shop",
       actionLabel: "Continue Shopping",
     });
   }
@@ -222,7 +222,7 @@ async function renderResultForQuery(rawOrderNumber) {
       return renderEmptyState({
         title: "Order not found",
         message: `We couldn't find an order with the number &ldquo;${escapeHtml(trimmed)}&rdquo;. Please double-check the number and try again.`,
-        actionHref: "#/contact",
+        actionHref: "/contact",
         actionLabel: "Contact Us",
       });
     }
