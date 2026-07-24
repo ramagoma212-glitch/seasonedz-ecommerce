@@ -79,7 +79,7 @@ jobs:
         # it — see that step's comment for why order matters here.
         env:
           VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
-          VITE_PAYFAST_ENABLED: "false"
+          VITE_PAYFAST_ENABLED: "true"
         run: npm run build
 
       - name: Generate static route files and sitemap.xml for SEO
