@@ -12,6 +12,7 @@ import enquiryRoutes from "./enquiry.routes.js";
 import paymentRoutes from "./payment.routes.js";
 import adminAuthRoutes from "./adminAuth.routes.js";
 import adminDashboardRoutes from "./adminDashboard.routes.js";
+import customerRoutes from "./customer.routes.js";
 
 const router = Router();
 
@@ -29,5 +30,10 @@ router.use("/admin/auth", adminAuthRoutes);
 // router level in adminDashboard.routes.ts) — no write/mutation admin
 // route exists anywhere under /api/admin yet.
 router.use("/admin", adminDashboardRoutes);
+// Version 7, Milestone 127: customer auth backend foundation —
+// register/login/logout/me only, no order history yet, and not linked
+// from any public frontend page yet. Fully separate from adminAuth
+// above — see customerAuth.service.ts's own header comment.
+router.use("/customers", customerRoutes);
 
 export default router;
