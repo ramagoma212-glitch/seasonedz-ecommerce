@@ -215,11 +215,21 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
 // — customerFirstName/customerLastName/customerEmail/customerPhone
 // below are unchanged either way; they're always the snapshot the
 // customer actually typed at checkout, not derived from the account.
-export async function createOrder(input: ValidatedOrderInput, customerId: string | null = null): Promise<OrderOutput> {
+//
+// Version 7, Milestone 131: `isRegisteredCustomer` is likewise always
+// sourced from the same verified session (req.customerUser.type ===
+// "REGISTERED" in order.controller.ts) — never from the request body.
+// It only affects calculateDeliveryFee() below; nothing else about
+// order creation changes based on it.
+export async function createOrder(
+  input: ValidatedOrderInput,
+  customerId: string | null = null,
+  isRegisteredCustomer: boolean = false
+): Promise<OrderOutput> {
   const verifiedItems = await verifyItems(input.items);
 
   const subtotal = verifiedItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
-  const deliveryFee = calculateDeliveryFee(subtotal);
+  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
   const discountTotal = new Prisma.Decimal(0);
   const total = subtotal.plus(deliveryFee).minus(discountTotal);
 

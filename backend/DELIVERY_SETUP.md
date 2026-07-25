@@ -9,14 +9,24 @@ entirely manual.
 ## Current Delivery Fee Rule
 
 - Standard delivery: **R80** flat rate.
-- Free delivery: subtotal of **R700 or more**.
-- This is unchanged from earlier milestones — Milestone 25 only moved
-  where the numbers live (see "What Changed" below), not the rule
-  itself.
+- Free delivery: only for a **logged-in registered customer**, on a
+  subtotal of **R500 or more**. A guest checkout always pays R80,
+  regardless of subtotal.
+- Version 7, Milestone 131 replaced the old flat "free from R700 for
+  everyone" rule with this registered-account benefit — see
+  `backend/src/config/delivery.ts`'s own header comment for the full
+  rule and rationale.
+
+Eligibility is decided **only** from the verified `customer_session`
+cookie (`req.customerUser.type === "REGISTERED"`, read in
+`order.controller.ts` via `optionalCustomerAuth` and passed into
+`order.service.ts`'s `createOrder()`) — never from anything a request
+body claims.
 
 Single source of truth: `backend/src/config/delivery.ts`
-(`STANDARD_DELIVERY_FEE`, `FREE_DELIVERY_THRESHOLD`). `backend/src/utils/money.ts`'s
-`calculateDeliveryFee()` (Decimal-based, used directly by
+(`STANDARD_DELIVERY_FEE`, `REGISTERED_FREE_DELIVERY_THRESHOLD`).
+`backend/src/utils/money.ts`'s `calculateDeliveryFee(subtotal,
+isRegisteredCustomer)` (Decimal-based, used directly by
 `order.service.ts`'s real order transaction) and
 `backend/src/services/delivery.service.ts`'s plain-number
 `calculateDeliveryFee()`/`getDeliverySummary()` (for anything else that
@@ -24,8 +34,8 @@ needs the rule) both read from this one config module. The frontend's
 own copy (`src/js/cart.js`, used for the cart/checkout display before
 an order is even created) still has its own matching constants — this
 duplication is intentional (client-side display estimate vs.
-server-side authoritative calculation), not something Milestone 25
-changed; the backend never trusts a client-supplied delivery fee
+server-side authoritative calculation); the backend never trusts a
+client-supplied delivery fee, customerId, or registered status
 regardless.
 
 ## Manual Courier Process

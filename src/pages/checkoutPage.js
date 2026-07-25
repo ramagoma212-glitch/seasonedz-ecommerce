@@ -125,11 +125,12 @@ function renderDeliveryNote() {
       <div>
         <strong>Delivery is arranged after your order is confirmed.</strong>
         <p>
-          Delivery is R80, or free on orders of R700 or more. We use
-          The Courier Guy for courier deliveries where applicable.
-          Seasonedz Group will confirm your order and arrange delivery;
-          tracking details are shared once your order has been packed
-          and booked.
+          Delivery is R80. Registered Seasonedz Group customers get
+          free delivery on orders of R500 or more. We use The Courier
+          Guy for courier deliveries where applicable. Seasonedz Group
+          will confirm your order and arrange delivery; tracking
+          details are shared once your order has been packed and
+          booked.
         </p>
         ${renderContactSupportNote("Need help with delivery?")}
       </div>
@@ -163,7 +164,7 @@ function renderDemoNotice() {
 }
 
 export async function renderCheckoutPage() {
-  const { items, subtotal, deliveryFee } = getCartSummary();
+  const { items } = getCartSummary();
 
   if (!items.length) {
     return `
@@ -183,6 +184,13 @@ export async function renderCheckoutPage() {
   // slow/failed lookup beyond this one awaited call — a guest sees
   // exactly the same page either way, just without prefilled fields.
   const customer = await getLoggedInCustomerSafely();
+  // Version 7, Milestone 131: re-reads the cart now that the customer's
+  // registered status is known, so the displayed delivery fee/total
+  // already reflects the same rule the backend will apply at order
+  // creation — a purely client-side estimate for display, never
+  // trusted by the backend itself.
+  const isRegisteredCustomer = customer?.type === "REGISTERED";
+  const { subtotal, deliveryFee } = getCartSummary(isRegisteredCustomer);
 
   return `
     <section class="stub-page container checkout-page">
@@ -245,7 +253,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

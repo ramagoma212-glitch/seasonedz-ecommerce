@@ -13,13 +13,19 @@ import { getStorageItem, setStorageItem, clearStorageItem } from "./storage.js";
 const CART_KEY = "seasonedz_cart";
 
 const STANDARD_DELIVERY_FEE = 80;
-const FREE_DELIVERY_THRESHOLD = 700;
+const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
 
-// Flat-rate placeholder delivery fee: R80 standard, free on orders of
-// R700 or more. This will be replaced by real courier-calculated rates
-// once courier integration exists — see the milestone roadmap.
-export function calculateDeliveryFee(subtotal) {
-  return subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
+// Version 7, Milestone 131: free delivery is a registered-account
+// benefit, not a flat subtotal threshold for every visitor — R80
+// standard, free only for a logged-in registered customer on orders of
+// R500 or more. This is a client-side estimate for display purposes
+// only (cart/checkout pages) — the backend independently recalculates
+// the real fee at order-creation time from the verified customer
+// session, never trusting anything this function returns. Will be
+// replaced by real courier-calculated rates once courier integration
+// exists — see the milestone roadmap.
+export function calculateDeliveryFee(subtotal, isRegisteredCustomer = false) {
+  return isRegisteredCustomer && subtotal >= REGISTERED_FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
 }
 
 export function getCart() {
@@ -104,12 +110,15 @@ export function getCartSubtotal() {
 
 // Convenience bundle for pages that need the items, count, subtotal,
 // delivery fee and total together (avoids reading/looping over the
-// cart several separate times).
-export function getCartSummary() {
+// cart several separate times). `isRegisteredCustomer` defaults to
+// false (guest) — callers that already know the logged-in state
+// (cartPage.js, checkoutPage.js — via GET /api/customers/me) pass it
+// through explicitly.
+export function getCartSummary(isRegisteredCustomer = false) {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const deliveryFee = calculateDeliveryFee(subtotal);
+  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
   const total = subtotal + deliveryFee;
   return { items, itemCount, subtotal, deliveryFee, total };
 }

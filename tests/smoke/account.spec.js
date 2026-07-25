@@ -139,6 +139,46 @@ test.describe("Customer account smoke checks", () => {
     // Deliberately stops here — never submits the form or creates an order.
   });
 
+  // Version 7, Milestone 131: writes a synthetic cart directly into
+  // Local Storage (same shape/key as js/cart.js) so the subtotal is
+  // deterministic, rather than depending on real product prices —
+  // never touches a real order or the live backend either way.
+  async function setSyntheticCart(page, { price, quantity }) {
+    await page.goto("/");
+    await page.evaluate(
+      ({ price, quantity }) => {
+        localStorage.setItem(
+          "seasonedz_cart",
+          JSON.stringify([{ productId: "mock-product-id", slug: "mock-product", name: "Mock Product", price, quantity, image: null }])
+        );
+      },
+      { price, quantity }
+    );
+  }
+
+  test("logged-in checkout shows free delivery when subtotal is R500 or more", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 250, quantity: 3 }); // subtotal R750
+
+    await page.goto("/checkout");
+    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
+
+    // No auth token ever touches localStorage — only the plain cart
+    // array (already asserted elsewhere to contain no session data).
+    const localStorageKeys = await page.evaluate(() => Object.keys(localStorage));
+    expect(localStorageKeys.every((key) => !key.toLowerCase().includes("session") && !key.toLowerCase().includes("token"))).toBe(true);
+  });
+
+  test("logged-in checkout shows R80 delivery when subtotal is below R500", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200
+
+    await page.goto("/checkout");
+    await expect(page.getByText("Registered customers get free delivery on orders of R500 or more.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+  });
+
   // Version 7, Milestone 130: My Orders — every /customers/orders* call
   // is mocked, so none of these tests ever touch a real account or the
   // live backend.

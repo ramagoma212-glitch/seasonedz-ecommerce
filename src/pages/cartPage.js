@@ -7,9 +7,23 @@ import { getCartSummary } from "../js/cart.js";
 import { renderCartItem } from "../components/cartItem.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
+import { getCurrentCustomer } from "../js/api/customerApi.js";
 
-export function renderCartPage() {
-  const { items, subtotal, deliveryFee } = getCartSummary();
+// Version 7, Milestone 131: best-effort only, same discipline as
+// checkoutPage.js's own helper — being logged out (or the request
+// failing) is never an error on the cart page, just the guest state.
+async function isLoggedInRegisteredCustomer() {
+  try {
+    const response = await getCurrentCustomer();
+    return response?.data?.customer?.type === "REGISTERED";
+  } catch {
+    return false;
+  }
+}
+
+export async function renderCartPage() {
+  const isRegisteredCustomer = await isLoggedInRegisteredCustomer();
+  const { items, subtotal, deliveryFee } = getCartSummary(isRegisteredCustomer);
 
   if (!items.length) {
     return `
@@ -41,7 +55,7 @@ export function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, deliveryFee })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer })}
       </div>
     </section>
   `;

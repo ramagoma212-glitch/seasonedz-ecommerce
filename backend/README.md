@@ -217,10 +217,12 @@ enquiry flow calls the email service automatically. Full detail
 Full detail in [`DELIVERY_SETUP.md`](./DELIVERY_SETUP.md); short
 version:
 
-- Delivery fee rule (unchanged): **R80** flat rate, **free from R700**.
-  Single source of truth is now `src/config/delivery.ts`
-  (`STANDARD_DELIVERY_FEE`, `FREE_DELIVERY_THRESHOLD`) — `utils/money.ts`
-  and `services/delivery.service.ts` both read from it instead of
+- Delivery fee rule (Version 7, Milestone 131): **R80** flat rate,
+  **free only for a logged-in registered customer** on a subtotal of
+  **R500 or more** — a guest checkout always pays R80. Single source
+  of truth is `src/config/delivery.ts` (`STANDARD_DELIVERY_FEE`,
+  `REGISTERED_FREE_DELIVERY_THRESHOLD`) — `utils/money.ts` and
+  `services/delivery.service.ts` both read from it instead of
   hardcoding the numbers.
 - `src/services/delivery.service.ts` (new) — `calculateDeliveryFee`,
   `getDeliverySummary`, `getManualCourierStatus`. No courier provider

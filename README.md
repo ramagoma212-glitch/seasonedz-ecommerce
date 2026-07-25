@@ -58,9 +58,10 @@ involve.
 > Full detail in `VERSION_3_PAYMENT_READINESS_AUDIT.md` and
 > `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
 > (templates + a console-only service) but not yet wired to send
-> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rules (R80
-> standard, free from R700) are unchanged but now live in one backend
-> config module; courier fulfilment is still entirely manual — see
+> automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rule (R80
+> standard, free for a logged-in registered customer from R500 —
+> Version 7, Milestone 131) lives in one backend config module;
+> courier fulfilment is still entirely manual — see
 > `backend/DELIVERY_SETUP.md`.
 >
 > **Version 4 (complete, merged, deployed): proved PayFast actually

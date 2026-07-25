@@ -28,7 +28,7 @@ export const faqs = [
     category: "Delivery",
     question: "How much does delivery cost, and when is it free?",
     answer:
-      "Standard delivery is a flat R80. Orders of R700 or more qualify for free delivery. See our Shipping Policy for full details.",
+      "Standard delivery is a flat R80. Registered Seasonedz Group customers get free delivery on orders of R500 or more when signed in at checkout. See our Shipping Policy for full details.",
   },
   {
     category: "Delivery",
