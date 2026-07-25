@@ -162,3 +162,71 @@ PayFast remains fully disabled throughout this domain preparation work and is un
 ## Product Images Status
 
 The shared placeholder product images (confirmed in Milestone 73 and re-confirmed in Milestone 75/80) are unaffected by the domain connection and remain the owner's own content work to complete separately, whenever convenient — before or after the domain is connected. Connecting the domain does not fix or require fixing this.
+
+## API Subdomain Migration: api.seasonedzgroup.co.za (Milestone 133)
+
+**Planning + code changes only in this milestone. DNS has not been changed and the Render custom domain has not been added yet.** This section is the step-by-step plan for when the owner is ready to actually connect `api.seasonedzgroup.co.za`.
+
+### Why
+
+Milestone 132B found that customer login works on laptop but not on iPhone: the login request succeeds server-side (a real session is created), but iOS Safari/Chrome — both required by Apple to use the WebKit engine — silently refuses to store the `customer_session` cookie. Root cause: the frontend (`www.seasonedzgroup.co.za`) and backend (`seasonedz-ecommerce.onrender.com`) are different registrable domains, making the cookie genuinely cross-site. WebKit's cross-site tracking prevention can discard such cookies even when `SameSite=None; Secure` is set correctly, which is exactly what was happening.
+
+Moving the API to `api.seasonedzgroup.co.za` — a subdomain of the same `seasonedzgroup.co.za` site the frontend is already on — makes every frontend→API request same-site instead of cross-site. Same-site requests aren't subject to WebKit's cross-site tracking prevention, and the cookie can then also be tightened from `SameSite=None` to the more restrictive `SameSite=Lax`.
+
+### Code changes already made in this milestone (branch `version-7-same-site-api-domain`)
+
+- `.github/workflows/deploy.yml` — production build's `VITE_API_BASE_URL` changed from `https://seasonedz-ecommerce.onrender.com/api` to `https://api.seasonedzgroup.co.za/api`.
+- `.env.production.example` — same value, for documentation consistency.
+- `backend/src/controllers/customerAuth.controller.ts` and `backend/src/controllers/adminAuth.controller.ts` — `sameSite` changed from `isProduction ? "none" : "lax"` to always `"lax"`.
+
+**Both changes must deploy together, and only after DNS is ready** — see "Deployment Order" below. Deploying the `SameSite=Lax` cookie change while the frontend still calls the `onrender.com` origin would make the cookie genuinely cross-site again, and Lax blocks cross-site cookies entirely — breaking login for everyone, not just iPhone users.
+
+### What stays exactly as it is
+
+- The old `https://seasonedz-ecommerce.onrender.com` URL keeps working — nothing is removed from Render, no old Render URL is deleted.
+- PayFast's `PAYFAST_RETURN_URL`, `PAYFAST_CANCEL_URL`, `PAYFAST_NOTIFY_URL`, and `BACKEND_PUBLIC_URL` Render environment variables are **not changed** in this milestone — they can keep pointing at the `onrender.com` URL indefinitely; there is no requirement for PayFast's own callback URLs to move to the new API subdomain.
+- `FRONTEND_URL`/`FRONTEND_PRODUCTION_URL` (CORS allow-list) do not need to change — the frontend's own origin (`www.seasonedzgroup.co.za`) is unchanged by this migration; only the API's origin moves.
+- Password reset links continue to point at `https://www.seasonedzgroup.co.za/account/reset-password?token=...` (the frontend), never the API domain — unaffected by this migration.
+
+### Render Steps (Not Applied Yet — Owner Must Do This Manually)
+
+1. Open the Render dashboard for the backend service.
+2. Go to **Settings → Custom Domains** (naming may vary slightly by Render's current UI).
+3. Click **Add Custom Domain** and enter:
+   ```
+   api.seasonedzgroup.co.za
+   ```
+4. Render will display the exact DNS record it needs — almost always a `CNAME` record pointing `api` at a Render-provided target hostname (something like `<service-name>.onrender.com` or a Render-specific verification hostname). **Use exactly what Render's own dashboard shows at the time of setup, not a guessed value** — Render's target hostname format can change and this document deliberately does not guess it.
+5. It is safe to share that DNS host/name/value here in chat if you want a second pair of eyes on it — a CNAME record is a public DNS record, not a secret, unlike an API key or password.
+
+### DNS Steps (Not Applied Yet — Owner Must Do This Manually)
+
+At the domain registrar/DNS provider for `seasonedzgroup.co.za`:
+
+| Type | Host/Name | Value |
+|---|---|---|
+| CNAME | `api` | *(exactly what Render's dashboard shows in the step above)* |
+
+Wait for DNS to propagate and for Render to show the custom domain as verified/active (Render typically also auto-issues an HTTPS certificate for it once DNS is confirmed — this can take anywhere from a few minutes to a few hours).
+
+### Verification Before Deploying the Code Change
+
+Once Render shows `api.seasonedzgroup.co.za` as active:
+
+```
+GET https://api.seasonedzgroup.co.za/api/health
+```
+
+should return `200`, from the exact same backend the `onrender.com` URL already serves (this is one backend service with two working hostnames now, not a second deployment).
+
+### Deployment Order
+
+1. Confirm the health check above passes.
+2. Push and merge the `version-7-same-site-api-domain` branch (bundles the `VITE_API_BASE_URL` change and the `SameSite=Lax` cookie change together — they must land in the same deploy).
+3. Wait for both the Render backend redeploy and the GitHub Pages frontend redeploy to complete.
+4. Re-verify the live frontend bundle actually requests `api.seasonedzgroup.co.za`, not `onrender.com`.
+5. Test customer login on laptop, then on iPhone (the actual point of this migration).
+
+### Rollback
+
+If something goes wrong: revert the branch's merge commit (`git revert`) and push — this restores `VITE_API_BASE_URL` to the `onrender.com` origin and `sameSite` to the previous `isProduction ? "none" : "lax"` behaviour in one step, since both changes shipped together. The `api.seasonedzgroup.co.za` custom domain and DNS record can simply be left in place afterward (harmless if unused) or removed later at the owner's convenience.

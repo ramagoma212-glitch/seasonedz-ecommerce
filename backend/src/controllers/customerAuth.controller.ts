@@ -42,15 +42,15 @@ function resetPasswordBaseUrl(): string {
   return preferredOrigin || env.frontendUrl;
 }
 
-// Same reasoning as adminAuth.controller.ts's sessionCookieOptions():
-// SameSite=None+Secure is required in production for a cross-site
-// frontend->backend cookie; SameSite=Lax without Secure works for
-// local HTTP dev where frontend and backend share "localhost".
+// Version 7, Milestone 133: SameSite=Lax in production too, not
+// "none" — see adminAuth.controller.ts's sessionCookieOptions() for
+// the full reasoning (same cookie architecture, same fix, same
+// same-site-domain-migration timing requirement).
 function sessionCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
+    sameSite: "lax",
     signed: true,
     path: "/",
   };

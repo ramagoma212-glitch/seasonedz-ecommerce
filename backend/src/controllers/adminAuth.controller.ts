@@ -13,18 +13,38 @@ import {
   verifyCredentials,
 } from "../services/adminAuth.service.js";
 
-// SameSite=None is required for the cookie to be sent on cross-site
-// requests (GitHub Pages frontend -> Render backend are different
-// registrable domains) — browsers require Secure whenever SameSite is
-// None, so this is only safe in production (HTTPS). In local dev, the
-// frontend (localhost:5173) and backend (localhost:5000) share the
-// "localhost" site, so SameSite=Lax works without needing Secure —
-// letting admin login be tested over plain HTTP locally.
+// Version 7, Milestone 133: SameSite=Lax in production, not "none".
+// Before this milestone, the frontend (GitHub Pages, then
+// www.seasonedzgroup.co.za) and the backend (onrender.com) were
+// different registrable domains, so this cookie was genuinely
+// cross-site and SameSite=None+Secure was required for browsers to
+// send it at all. Now that the API is served from
+// api.seasonedzgroup.co.za — a subdomain of the same
+// seasonedzgroup.co.za site as the frontend — a fetch() from one to
+// the other is same-site, not cross-site: SameSite=Lax cookies ARE
+// sent on same-site fetch/XHR requests (Lax only restricts cross-site
+// ones). This matters beyond just tidiness: WebKit (Safari, and every
+// iOS browser, which must use WebKit) applies cross-site tracking
+// prevention that was silently discarding this style of cookie on
+// iPhone even with SameSite=None+Secure set correctly — Lax on a
+// genuinely same-site request isn't subject to that at all (see
+// customerAuth.controller.ts's own copy of this reasoning, found live
+// during Milestone 132B's iPhone customer-login test).
+//
+// In local dev, frontend (localhost:5173) and backend (localhost:5000)
+// already share the "localhost" site, so "lax" there is unchanged from
+// before.
+//
+// This must not go live before api.seasonedzgroup.co.za is actually
+// connected in Render with DNS propagated — deploying it while the
+// frontend still calls onrender.com would make the cookie genuinely
+// cross-site again, and Lax would then block it entirely, breaking
+// admin login everywhere rather than just on iPhone.
 function sessionCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: isProduction,
-    sameSite: isProduction ? "none" : "lax",
+    sameSite: "lax",
     signed: true,
     path: "/",
   };
