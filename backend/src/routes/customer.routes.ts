@@ -1,13 +1,25 @@
 // Customer auth + order history routes (Version 7, Milestone 127
-// backend foundation; order history added Milestone 130). Mounted at
-// /api/customers in routes/index.ts. Password reset is still a later
-// milestone.
+// backend foundation; order history added Milestone 130; password
+// reset added Milestone 132). Mounted at /api/customers in
+// routes/index.ts.
 
 import { Router } from "express";
-import { loginHandler, logoutHandler, meHandler, registerHandler } from "../controllers/customerAuth.controller.js";
+import {
+  forgotPasswordHandler,
+  loginHandler,
+  logoutHandler,
+  meHandler,
+  registerHandler,
+  resetPasswordHandler,
+} from "../controllers/customerAuth.controller.js";
 import { getCustomerOrderHandler, listCustomerOrdersHandler } from "../controllers/customerOrder.controller.js";
 import { requireCustomerAuth } from "../middleware/requireCustomerAuth.middleware.js";
-import { customerLoginRateLimiter, customerRegisterRateLimiter } from "../middleware/rateLimit.middleware.js";
+import {
+  customerForgotPasswordRateLimiter,
+  customerLoginRateLimiter,
+  customerRegisterRateLimiter,
+  customerResetPasswordRateLimiter,
+} from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
 
@@ -15,6 +27,11 @@ router.post("/register", customerRegisterRateLimiter, registerHandler);
 router.post("/login", customerLoginRateLimiter, loginHandler);
 router.post("/logout", logoutHandler);
 router.get("/me", requireCustomerAuth, meHandler);
+
+// Version 7, Milestone 132: neither requires requireCustomerAuth — a
+// customer forgetting their password is, by definition, not logged in.
+router.post("/forgot-password", customerForgotPasswordRateLimiter, forgotPasswordHandler);
+router.post("/reset-password", customerResetPasswordRateLimiter, resetPasswordHandler);
 
 // Version 7, Milestone 130: both require requireCustomerAuth — a
 // logged-out request never reaches customerOrder.controller.ts at all.

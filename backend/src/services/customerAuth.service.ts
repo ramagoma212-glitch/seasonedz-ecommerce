@@ -22,6 +22,10 @@ import { prisma } from "../config/prisma.js";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, same as admin
 const BCRYPT_SALT_ROUNDS = 12;
 const MIN_PASSWORD_LENGTH = 8;
+// Version 7, Milestone 132: within the 30-60 minute range required —
+// 60 is the more generous end, matching EMAIL_SETUP.md's own
+// documented default for this kind of link.
+const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 // Shared cookie name/max-age so the controller (sets it) and
 // middleware (reads it) never drift apart — deliberately distinct from
@@ -197,4 +201,73 @@ export async function getCustomerBySessionToken(rawToken: string): Promise<SafeC
 // an error, it just means there is nothing left to clear.
 export async function destroyCustomerSession(rawToken: string): Promise<void> {
   await prisma.customerSession.deleteMany({ where: { tokenHash: hashToken(rawToken) } });
+}
+
+export interface PasswordResetRequestResult {
+  customer: SafeCustomerProfile;
+  rawToken: string;
+}
+
+// Version 7, Milestone 132: returns null for every case that must never
+// be revealed to the caller — unknown email, inactive customer, or a
+// hypothetical guest-only row with no passwordHash — so the controller
+// can respond with the exact same generic "if an account exists..."
+// message regardless of which case it was, the same no-enumeration
+// discipline verifyCustomerCredentials() already applies to login.
+// Only the SHA-256 hash of the reset token is ever stored — the raw
+// token is returned here just once, for the caller to put in the
+// reset-link email, and must never be logged or persisted anywhere
+// else. Never sends anything itself — email dispatch is the
+// controller's job (see customerAuth.controller.ts), same separation
+// order.controller.ts already keeps from order.service.ts.
+export async function requestPasswordReset(email: string): Promise<PasswordResetRequestResult | null> {
+  const customer = await prisma.customer.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!customer || !customer.isActive || !customer.passwordHash) return null;
+
+  const rawToken = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_TTL_MS);
+
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: { passwordResetTokenHash: hashToken(rawToken), passwordResetExpiresAt: expiresAt },
+  });
+
+  return { customer: toSafeProfile(customer), rawToken };
+}
+
+// Version 7, Milestone 132: looks up a customer by hashing the
+// incoming raw token — never by comparing raw values directly, same
+// discipline as getCustomerBySessionToken(). A single CustomerAuthError
+// message covers "no matching token", "token expired", and "customer
+// no longer active" — deliberately generic, since a reset link is
+// itself a bearer credential and shouldn't hint at why it failed.
+// On success: hashes the new password, clears the reset token fields
+// (single use), and destroys every existing session for this customer
+// (a real password change must not leave an old, possibly-compromised
+// session still valid).
+export async function resetPasswordWithToken(rawToken: string, newPassword: string): Promise<SafeCustomerProfile> {
+  const passwordError = validatePasswordStrength(newPassword);
+  if (passwordError) {
+    throw new CustomerAuthError(passwordError, 400);
+  }
+
+  const customer = await prisma.customer.findFirst({
+    where: { passwordResetTokenHash: hashToken(rawToken), passwordResetExpiresAt: { gt: new Date() }, isActive: true },
+  });
+
+  if (!customer) {
+    throw new CustomerAuthError("This reset link is invalid or has expired.", 400);
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  const [updatedCustomer] = await prisma.$transaction([
+    prisma.customer.update({
+      where: { id: customer.id },
+      data: { passwordHash, passwordResetTokenHash: null, passwordResetExpiresAt: null },
+    }),
+    prisma.customerSession.deleteMany({ where: { customerId: customer.id } }),
+  ]);
+
+  return toSafeProfile(updatedCustomer);
 }

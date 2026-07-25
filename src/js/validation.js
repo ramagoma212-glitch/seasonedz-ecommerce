@@ -114,3 +114,42 @@ export function validateCustomerLoginForm(data) {
 
   return { isValid: Object.keys(errors).length === 0, errors };
 }
+
+// Version 7, Milestone 132: email-only — the backend's forgot-password
+// endpoint always returns the same generic success response regardless
+// of input, so this client-side check exists only to catch an empty or
+// malformed field before it's even sent, never to hint at whether an
+// account exists.
+export function validateForgotPasswordForm(data) {
+  const errors = {};
+
+  if (!isRequired(data.email)) {
+    errors.email = "Email address is required.";
+  } else if (!isValidEmail(data.email)) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+// Version 7, Milestone 132: same MIN_PASSWORD_LENGTH/confirm-match
+// rules as validateCustomerRegisterForm above — the reset token itself
+// is the real security boundary; this is just the same client-side
+// head start.
+export function validateResetPasswordForm(data) {
+  const errors = {};
+
+  if (!isRequired(data.password)) {
+    errors.password = "Password is required.";
+  } else if (data.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+
+  if (!isRequired(data.confirmPassword)) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (data.password !== data.confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}

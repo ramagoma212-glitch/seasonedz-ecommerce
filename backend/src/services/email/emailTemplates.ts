@@ -11,7 +11,7 @@
 // part of this milestone; a future milestone would add them via
 // Render env, never hardcoded here).
 
-import type { EnquiryEmailData, OrderEmailData, OrderEmailItem, RenderedEmail } from "./email.types.js";
+import type { EnquiryEmailData, OrderEmailData, OrderEmailItem, PasswordResetEmailData, RenderedEmail } from "./email.types.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
 
@@ -234,6 +234,32 @@ Delivering To:
 ${formatDeliveryNote(order)}
 
 Please review this order in the admin dashboard and prepare it for processing.`;
+
+  return { subject, body };
+}
+
+// Version 7, Milestone 132: plain-text, same tone as every other
+// template here. Deliberately says nothing about the account's
+// password, current or new — only the reset link itself, which
+// already carries the one-time, 60-minute-expiring token. Safe to send
+// even if the request wasn't genuinely made by the account holder
+// (the "if you didn't request this" line), since clicking the link
+// alone changes nothing — a new password still has to be typed in.
+export function renderPasswordResetEmail(data: PasswordResetEmailData): RenderedEmail {
+  const subject = "Reset your Seasonedz Group password";
+  const body = `Hi ${data.customerFirstName},
+
+We received a request to reset the password for your Seasonedz Group account.
+
+Reset your password using the link below:
+${data.resetUrl}
+
+This link expires in 60 minutes. If you didn't request this, you can safely ignore this email — your password won't be changed.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
 
   return { subject, body };
 }

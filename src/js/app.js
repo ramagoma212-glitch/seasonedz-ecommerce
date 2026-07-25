@@ -22,13 +22,19 @@ import {
   getCartItemCount,
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } from "./wishlist.js";
-import { validateCheckoutForm, validateCustomerLoginForm, validateCustomerRegisterForm } from "./validation.js";
+import {
+  validateCheckoutForm,
+  validateCustomerLoginForm,
+  validateCustomerRegisterForm,
+  validateForgotPasswordForm,
+  validateResetPasswordForm,
+} from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { registerCustomer, loginCustomer, logoutCustomer } from "./api/customerApi.js";
+import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword } from "./api/customerApi.js";
 import {
   updateAdminOrderStatus,
   updateAdminShipping,
@@ -698,7 +704,9 @@ function clearAccountFormErrors(form) {
   form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
   form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
 
-  const bannerEl = form.querySelector("[data-customer-login-banner], [data-customer-register-banner]");
+  const bannerEl = form.querySelector(
+    "[data-customer-login-banner], [data-customer-register-banner], [data-customer-forgot-password-banner], [data-customer-reset-password-banner]"
+  );
   if (bannerEl) {
     bannerEl.textContent = "";
     bannerEl.hidden = true;
@@ -719,7 +727,9 @@ function showAccountFormErrors(form, errors) {
 }
 
 function showAccountFormBanner(form, message) {
-  const bannerEl = form.querySelector("[data-customer-login-banner], [data-customer-register-banner]");
+  const bannerEl = form.querySelector(
+    "[data-customer-login-banner], [data-customer-register-banner], [data-customer-forgot-password-banner], [data-customer-reset-password-banner]"
+  );
   if (bannerEl) {
     bannerEl.textContent = message;
     bannerEl.hidden = false;
@@ -766,6 +776,20 @@ function setupCustomerAccountForms() {
     if (loginForm) {
       event.preventDefault();
       handleCustomerLoginSubmit(loginForm);
+      return;
+    }
+
+    const forgotPasswordForm = event.target.closest("#customer-forgot-password-form");
+    if (forgotPasswordForm) {
+      event.preventDefault();
+      handleCustomerForgotPasswordSubmit(forgotPasswordForm);
+      return;
+    }
+
+    const resetPasswordForm = event.target.closest("#customer-reset-password-form");
+    if (resetPasswordForm) {
+      event.preventDefault();
+      handleCustomerResetPasswordSubmit(resetPasswordForm);
     }
   });
 }
@@ -833,6 +857,83 @@ async function handleCustomerLoginSubmit(form) {
     // cause (wrong email, wrong password) — never hints at which part
     // of the input was wrong, same discipline as admin login.
     const message = unavailableOrGenericMessage(error, "Invalid email or password.");
+    showAccountFormBanner(form, message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Version 7, Milestone 132: always shows the same generic success
+// message on a successful call, whatever the entered email actually
+// was — the backend already guarantees an identical response for
+// every case, so this never tries to infer anything beyond "the
+// request went through". A connection failure is the only thing shown
+// differently (via unavailableOrGenericMessage), since that's a real,
+// visible problem distinct from the generic response.
+async function handleCustomerForgotPasswordSubmit(form) {
+  clearAccountFormErrors(form);
+
+  const data = { email: form.querySelector("#forgotPasswordEmail")?.value.trim() || "" };
+
+  const { isValid, errors } = validateForgotPasswordForm(data);
+  if (!isValid) {
+    showAccountFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await forgotPassword(data.email);
+    // `.checkout-form` sets `display: flex` (see css/pages.css), which
+    // beats the browser's default `[hidden] { display: none }` at equal
+    // specificity — setting form.hidden alone would leave the form
+    // visually in place. The inline style guarantees it actually hides.
+    form.hidden = true;
+    form.style.display = "none";
+    const successEl = form.closest(".account-page")?.querySelector("[data-customer-forgot-password-success]");
+    if (successEl) successEl.hidden = false;
+  } catch (error) {
+    const message = unavailableOrGenericMessage(error, "We could not process your request right now. Please try again.");
+    showAccountFormBanner(form, message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Version 7, Milestone 132: the reset token itself never touches
+// localStorage/sessionStorage — it's read straight off the form's
+// data-reset-token attribute (set once at render time from the query
+// string, see resetPasswordPage.js) and sent directly in the API call.
+async function handleCustomerResetPasswordSubmit(form) {
+  clearAccountFormErrors(form);
+
+  const data = {
+    password: form.querySelector("#resetPasswordNew")?.value || "",
+    confirmPassword: form.querySelector("#resetPasswordConfirm")?.value || "",
+  };
+
+  const { isValid, errors } = validateResetPasswordForm(data);
+  if (!isValid) {
+    showAccountFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const token = form.dataset.resetToken || "";
+    await resetPassword(token, data.password, data.confirmPassword);
+    // See the same note in handleCustomerForgotPasswordSubmit above —
+    // form.hidden alone doesn't visually hide a `.checkout-form`.
+    form.hidden = true;
+    form.style.display = "none";
+    const successEl = form.closest(".account-page")?.querySelector("[data-customer-reset-password-success]");
+    if (successEl) successEl.hidden = false;
+  } catch (error) {
+    const message = unavailableOrGenericMessage(error, "This reset link is invalid or has expired.");
     showAccountFormBanner(form, message);
   } finally {
     if (submitButton) submitButton.disabled = false;
