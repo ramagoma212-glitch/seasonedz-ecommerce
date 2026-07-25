@@ -35,12 +35,20 @@ import {
   renderAdminNewOrderEmail,
   renderEnquiryReceivedEmail,
   renderOrderCreatedEmail,
+  renderPasswordResetEmail,
   renderPaymentConfirmedEmail,
   renderPaymentFailedOrCancelledEmail,
   renderPaymentPendingEmail,
 } from "./emailTemplates.js";
 import { sendViaBrevo } from "./providers/brevo.provider.js";
-import type { EmailRecipientRole, EmailTemplateName, EnquiryEmailData, OrderEmailData, RenderedEmail } from "./email.types.js";
+import type {
+  EmailRecipientRole,
+  EmailTemplateName,
+  EnquiryEmailData,
+  OrderEmailData,
+  PasswordResetEmailData,
+  RenderedEmail,
+} from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
 // domain's first label, e.g. "jane.doe@example.com" -> "j***@e***.com"
@@ -185,4 +193,13 @@ export async function sendAdminNewOrderEmail(order: OrderEmailData): Promise<voi
 
 export async function sendAdminNewEnquiryEmail(enquiry: EnquiryEmailData): Promise<void> {
   await dispatch("admin-new-enquiry", "admin", env.adminNotificationEmail, enquiry.id, renderAdminNewEnquiryEmail(enquiry));
+}
+
+// Version 7, Milestone 132: "password-reset" as the reference (never
+// the raw token, never an internal customer ID) — dispatch()'s own
+// console-mode logging only ever prints template name, role, masked
+// email and this reference, so this stays exactly as safe as every
+// other send*Email call here.
+export async function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<void> {
+  await dispatch("password-reset", "customer", data.customerEmail, "password-reset", renderPasswordResetEmail(data), data.customerFirstName);
 }

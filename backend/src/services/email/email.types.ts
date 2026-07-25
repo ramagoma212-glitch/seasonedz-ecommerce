@@ -18,7 +18,8 @@ export type EmailTemplateName =
   | "payment-failed-or-cancelled"
   | "enquiry-received"
   | "admin-new-order"
-  | "admin-new-enquiry";
+  | "admin-new-enquiry"
+  | "password-reset";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -66,4 +67,15 @@ export interface EnquiryEmailData {
   name: string;
   email: string;
   message: string;
+}
+
+// Version 7, Milestone 132: deliberately narrow, same "independent
+// small shape" reasoning as the two above — resetUrl already contains
+// the raw token (it's the only place the raw token ever appears
+// outside the customer_session-style hashing discipline), so this
+// interface itself carries no other sensitive field.
+export interface PasswordResetEmailData {
+  customerFirstName: string;
+  customerEmail: string;
+  resetUrl: string;
 }

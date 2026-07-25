@@ -36,3 +36,18 @@ export function getCustomerOrders() {
 export function getCustomerOrder(orderNumber) {
   return customerRequest(`/customers/orders/${encodeURIComponent(orderNumber)}`, { method: "GET" });
 }
+
+// Version 7, Milestone 132: neither endpoint requires a logged-in
+// session (forgot/reset password are, by definition, logged-out
+// flows). Never stores the token or password anywhere here — both are
+// passed straight through to the backend in the request body.
+export function forgotPassword(email) {
+  return customerRequest("/customers/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export function resetPassword(token, password, confirmPassword) {
+  return customerRequest("/customers/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, password, confirmPassword }),
+  });
+}

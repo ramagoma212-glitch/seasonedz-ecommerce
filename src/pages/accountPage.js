@@ -69,7 +69,7 @@ function renderLoginForm() {
       <div class="form-banner form-banner--error" data-customer-login-banner hidden></div>
 
       <button type="submit" class="btn btn--primary btn--block">Log In</button>
-      <p class="account-form__note">Forgot password support will be added soon.</p>
+      <p class="account-form__note"><a href="/account/forgot-password">Forgot password?</a></p>
     </form>
   `;
 }

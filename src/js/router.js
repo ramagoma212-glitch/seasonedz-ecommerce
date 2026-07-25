@@ -70,6 +70,8 @@ import { renderPaymentFailed } from "../pages/paymentFailed.js";
 import { renderTrackOrder } from "../pages/trackOrder.js";
 import { renderAccount } from "../pages/accountPage.js";
 import { renderAccountOrderDetail } from "../pages/accountOrderDetail.js";
+import { renderForgotPassword } from "../pages/forgotPasswordPage.js";
+import { renderResetPassword } from "../pages/resetPasswordPage.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
 import { renderFaq } from "../pages/faq.js";
@@ -154,6 +156,13 @@ const routeDefs = [
   // backend/src/controllers/customerOrder.controller.ts), so this page
   // never needs to check ownership itself.
   { pattern: "/account/orders/:orderNumber", render: renderAccountOrderDetail, title: "Order Details", noindex: true },
+  // Version 7, Milestone 132: forgot/reset password — both logged-out
+  // flows, noindex like every other account page. reset-password reads
+  // its token from the query string (query.get("token")), not a route
+  // param, so the router's flattened { ...params, query } call
+  // convention already covers it without any extra pattern segment.
+  { pattern: "/account/forgot-password", render: renderForgotPassword, title: "Forgot Password", noindex: true },
+  { pattern: "/account/reset-password", render: renderResetPassword, title: "Reset Password", noindex: true },
   {
     pattern: "/about",
     render: renderAbout,

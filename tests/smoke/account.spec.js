@@ -278,4 +278,83 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/track-order");
     await expect(page.locator("#track-order-form")).toBeVisible();
   });
+
+  // Version 7, Milestone 132: forgot/reset password. Neither endpoint
+  // is called for real in the "local" project (no local backend runs
+  // during this suite — see this file's own header comment) — the one
+  // test that needs a successful response mocks it explicitly, same
+  // convention as mockLoggedInCustomer() above.
+  test("login page has a Forgot password link", async ({ page }) => {
+    await page.goto("/account");
+    const link = page.locator('#customer-login-form a[href="/account/forgot-password"]');
+    await expect(link).toBeVisible();
+    await expect(link).toHaveText("Forgot password?");
+  });
+
+  test("forgot password page loads", async ({ page }) => {
+    await page.goto("/account/forgot-password");
+    await expect(page.locator("#customer-forgot-password-form")).toBeVisible();
+    await expect(page.locator("#forgotPasswordEmail")).toBeVisible();
+  });
+
+  test("forgot password form validates email client-side without a network call", async ({ page }) => {
+    await page.goto("/account/forgot-password");
+    const form = page.locator("#customer-forgot-password-form");
+    await form.locator('button[type=submit]').click();
+    await expect(form.locator('[data-error-for="email"]')).not.toHaveText("");
+  });
+
+  // The backend always returns the same generic message regardless of
+  // whether the email matches a real account (see
+  // backend/src/controllers/customerAuth.controller.ts's
+  // forgotPasswordHandler) — mocked here purely so the test doesn't
+  // depend on a live backend connection; the message itself is never
+  // account-specific either way.
+  test("forgot password success message is generic", async ({ page }) => {
+    await page.route("**/api/customers/forgot-password", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, message: "If an account exists for that email, a reset link has been sent." }),
+      })
+    );
+
+    await page.goto("/account/forgot-password");
+    await page.locator("#forgotPasswordEmail").fill("someone@example.com");
+    await page.locator("#customer-forgot-password-form button[type=submit]").click();
+
+    await expect(page.getByText("If an account exists for that email, a reset link has been sent.")).toBeVisible();
+    await expect(page.locator("#customer-forgot-password-form")).toBeHidden();
+  });
+
+  test("reset password page loads with a token present in the URL", async ({ page }) => {
+    await page.goto("/account/reset-password?token=smoke-test-token-not-real");
+    await expect(page.locator("#customer-reset-password-form")).toBeVisible();
+    await expect(page.locator("#resetPasswordNew")).toBeVisible();
+    await expect(page.locator("#resetPasswordConfirm")).toBeVisible();
+  });
+
+  test("reset password page without a token shows a safe invalid-link message", async ({ page }) => {
+    await page.goto("/account/reset-password");
+    await expect(page.locator("#customer-reset-password-form")).toHaveCount(0);
+    await expect(page.getByText("This reset link is invalid or has expired.")).toBeVisible();
+  });
+
+  test("reset password validates minimum password length", async ({ page }) => {
+    await page.goto("/account/reset-password?token=smoke-test-token-not-real");
+    const form = page.locator("#customer-reset-password-form");
+    await form.locator("#resetPasswordNew").fill("short");
+    await form.locator("#resetPasswordConfirm").fill("short");
+    await form.locator('button[type=submit]').click();
+    await expect(form.locator('[data-error-for="password"]')).not.toHaveText("");
+  });
+
+  test("reset password validates that confirm password matches", async ({ page }) => {
+    await page.goto("/account/reset-password?token=smoke-test-token-not-real");
+    const form = page.locator("#customer-reset-password-form");
+    await form.locator("#resetPasswordNew").fill("LongEnoughPassword1");
+    await form.locator("#resetPasswordConfirm").fill("DoesNotMatch1");
+    await form.locator('button[type=submit]').click();
+    await expect(form.locator('[data-error-for="confirmPassword"]')).not.toHaveText("");
+  });
 });

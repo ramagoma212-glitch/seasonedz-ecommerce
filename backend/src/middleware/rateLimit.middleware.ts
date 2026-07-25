@@ -97,3 +97,29 @@ export const customerLoginRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Customer forgot-password (Version 7, Milestone 132) — same tight
+// limit as login above: even though the response is always identical
+// regardless of outcome, repeated calls could still be used to spam a
+// real customer's inbox with reset emails, so this stays tight rather
+// than as generous as registration/order creation.
+export const customerForgotPasswordRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Customer reset-password (Version 7, Milestone 132) — a valid call
+// already requires a genuine 32-byte random token (astronomically hard
+// to guess), so this is a generous backstop against automated abuse
+// rather than a credential-guessing defence like the two limiters
+// above.
+export const customerResetPasswordRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
