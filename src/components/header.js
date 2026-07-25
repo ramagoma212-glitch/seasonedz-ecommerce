@@ -42,6 +42,7 @@ export function renderHeader() {
               <li><a class="nav-link" href="/about">About</a></li>
               <li><a class="nav-link" href="/contact">Contact</a></li>
               <li><a class="nav-link" href="/faq">FAQ</a></li>
+              <li><a class="nav-link" href="/account">My Account</a></li>
             </ul>
           </nav>
 

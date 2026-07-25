@@ -68,6 +68,7 @@ import { renderPaymentSuccess } from "../pages/paymentSuccess.js";
 import { renderPaymentCancelled } from "../pages/paymentCancelled.js";
 import { renderPaymentFailed } from "../pages/paymentFailed.js";
 import { renderTrackOrder } from "../pages/trackOrder.js";
+import { renderAccount } from "../pages/accountPage.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
 import { renderFaq } from "../pages/faq.js";
@@ -142,6 +143,11 @@ const routeDefs = [
   { pattern: "/payment-cancelled", render: renderPaymentCancelled, title: "Payment Cancelled", noindex: true },
   { pattern: "/payment-failed", render: renderPaymentFailed, title: "Payment Failed", noindex: true },
   { pattern: "/track-order", render: renderTrackOrder, title: "Track Your Order", noindex: true },
+  // Version 7, Milestone 128: customer account foundation — login,
+  // registration, and a simple logged-in overview only, no order
+  // history yet. noindex like every other visitor-private/account page
+  // here (cart, wishlist, checkout, track-order).
+  { pattern: "/account", render: renderAccount, title: "My Account", noindex: true },
   {
     pattern: "/about",
     render: renderAbout,
