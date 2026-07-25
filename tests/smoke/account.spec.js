@@ -76,4 +76,59 @@ test.describe("Customer account smoke checks", () => {
     const adminLinks = page.locator('a[href*="/admin"]');
     expect(await adminLinks.count()).toBe(0);
   });
+
+  // Version 7, Milestone 129: no local backend runs during this suite,
+  // so GET /api/customers/me naturally fails (nothing listening on the
+  // fallback localhost URL) and checkoutPage.js's own try/catch treats
+  // that exactly like a logged-out 401 — no mocking needed for this
+  // one. Confirms the soft, non-blocking sign-in invitation renders and
+  // never replaces or hides any of the checkout form.
+  test("checkout shows the optional sign-in note when logged out", async ({ page }) => {
+    await page.goto("/shop");
+    await page.locator('[data-action="add-to-cart"]').first().click();
+    await page.goto("/checkout");
+
+    await expect(page.getByText("Have an account?")).toBeVisible();
+    await expect(page.locator('a[href="/account"]', { hasText: "Sign in" })).toBeVisible();
+    await expect(page.locator("#checkout-form")).toBeVisible();
+  });
+
+  // Mocks GET /api/customers/me only — the one call checkoutPage.js
+  // makes to decide logged-in vs. guest — so this exercises the real
+  // prefill code path without ever touching a real account or the live
+  // backend. Order creation itself is never invoked in this test.
+  test("logged-in checkout prefills customer details from a mocked session", async ({ page }) => {
+    await page.route("**/api/customers/me", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "Current customer retrieved successfully.",
+          data: {
+            customer: {
+              id: "mock-customer-id",
+              email: "mock-smoke-test@example.com",
+              firstName: "Mock",
+              lastName: "Smoke",
+              phone: "0821234567",
+              type: "REGISTERED",
+              createdAt: new Date().toISOString(),
+            },
+          },
+        }),
+      })
+    );
+
+    await page.goto("/shop");
+    await page.locator('[data-action="add-to-cart"]').first().click();
+    await page.goto("/checkout");
+
+    await expect(page.getByText("Signed in as mock-smoke-test@example.com")).toBeVisible();
+    await expect(page.locator("#firstName")).toHaveValue("Mock");
+    await expect(page.locator("#lastName")).toHaveValue("Smoke");
+    await expect(page.locator("#email")).toHaveValue("mock-smoke-test@example.com");
+    await expect(page.locator("#phone")).toHaveValue("0821234567");
+    // Deliberately stops here — never submits the form or creates an order.
+  });
 });

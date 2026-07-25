@@ -29,8 +29,12 @@ export function buildOrderPayload({ customer, deliveryAddress, deliveryNotes, pa
   };
 }
 
+// Version 7, Milestone 129: credentials: "include" so a logged-in
+// customer's customer_session cookie reaches the backend — the backend
+// only ever reads it via optionalCustomerAuth, which never requires it
+// and never blocks a guest checkout either way.
 export function createOrder(payload) {
-  return apiPost("/orders", payload);
+  return apiPost("/orders", payload, { credentials: "include" });
 }
 
 export function getOrderByNumber(orderNumber) {
