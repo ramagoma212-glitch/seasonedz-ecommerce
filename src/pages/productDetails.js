@@ -91,7 +91,8 @@ function renderDeliveryNote() {
   return `
     <h3>Delivery</h3>
     <p>
-      Delivery is R80, or free on orders of R700 or more. We use The
+      Delivery is R80. Registered Seasonedz Group customers get free
+      delivery on orders of R500 or more when signed in. We use The
       Courier Guy for courier deliveries where applicable, arranged
       manually by our small team. See our
       <a href="/shipping-policy">Shipping Policy</a> for details.

@@ -3,10 +3,29 @@
 // confirmation page.
 //
 // Delivery fee is a flat placeholder (see calculateDeliveryFee in
-// cart.js — R80 standard, free from R700) until real courier
-// integration calculates actual rates.
+// cart.js — R80 standard, free for a registered account from R500)
+// until real courier integration calculates actual rates.
 
-export function renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton = true, showItems = false, items = [] }) {
+// Version 7, Milestone 131: `isRegisteredCustomer` is only ever used
+// to pick the right *guidance* text when delivery isn't already free —
+// whether delivery is actually free is decided entirely by
+// `deliveryFee` itself (computed by cart.js for cart/checkout display,
+// or already the real backend-charged value for order confirmation).
+// Order confirmation doesn't pass isRegisteredCustomer at all (that
+// page never fetches customer state) — the default `false` still
+// produces an accurate, harmless message either way: "free" shows
+// correctly whenever deliveryFee is actually 0, and the R80 case falls
+// back to the same safe "sign in" wording used for a guest.
+function getDeliveryNote(deliveryFee, isRegisteredCustomer) {
+  if (deliveryFee === 0) {
+    return "Free delivery applied for your registered Seasonedz Group account.";
+  }
+  return isRegisteredCustomer
+    ? "Registered customers get free delivery on orders of R500 or more."
+    : "Sign in or create an account to get free delivery on orders of R500 or more.";
+}
+
+export function renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer = false, showCheckoutButton = true, showItems = false, items = [] }) {
   const total = subtotal + deliveryFee;
 
   return `
@@ -46,7 +65,7 @@ export function renderOrderSummary({ subtotal, deliveryFee, showCheckoutButton =
       </div>
 
       <p class="order-summary__note">
-        ${deliveryFee === 0 ? "This order qualifies for free delivery." : "Orders of R700 or more qualify for free delivery."}
+        ${getDeliveryNote(deliveryFee, isRegisteredCustomer)}
       </p>
 
       ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>` : ""}

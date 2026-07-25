@@ -469,10 +469,12 @@ included — the same convention as the Product API (Milestone 12).
   so it would be misleading to mark the order itself `CONFIRMED`
   automatically. A staff member (or, once real payment integration
   exists, a payment webhook) is what should move it to `CONFIRMED`.
-- **Delivery fee rule** (`src/utils/money.ts`): flat R80, free at a
-  subtotal of R700 or more — the same rule as the frontend's demo cart
-  (`src/js/cart.js`). Comment in the code notes a real courier API
-  will replace this later.
+- **Delivery fee rule** (`src/utils/money.ts`): flat R80, free only for
+  a logged-in registered customer at a subtotal of R500 or more
+  (Version 7, Milestone 131) — eligibility is read from the verified
+  `customer_session` cookie, never the request body. Same rule as the
+  frontend's demo cart (`src/js/cart.js`). Comment in the code notes a
+  real courier API will replace this later.
 - **Stock is decremented inside the same database transaction that
   creates the order**, using an atomic `UPDATE ... WHERE stockQuantity
   >= quantity` guard per item — if any item's stock is insufficient at

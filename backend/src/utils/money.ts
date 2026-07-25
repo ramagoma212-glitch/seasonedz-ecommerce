@@ -3,16 +3,19 @@
 // same type Product.price etc. are already stored and read as.
 
 import { Prisma } from "@prisma/client";
-import { STANDARD_DELIVERY_FEE, FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
+import { STANDARD_DELIVERY_FEE, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 
 const standardDeliveryFee = new Prisma.Decimal(STANDARD_DELIVERY_FEE);
-const freeDeliveryThreshold = new Prisma.Decimal(FREE_DELIVERY_THRESHOLD);
+const registeredFreeDeliveryThreshold = new Prisma.Decimal(REGISTERED_FREE_DELIVERY_THRESHOLD);
 
-// Flat-rate placeholder delivery fee — same current business rule as
-// the frontend's demo cart (src/js/cart.js): R80 standard, free once
-// the subtotal reaches R700 (see config/delivery.ts for the single
-// source of truth on these numbers). Courier API will replace this
+// Version 7, Milestone 131: free delivery is now a registered-account
+// benefit, not a flat subtotal threshold for everyone — see
+// config/delivery.ts's own header comment for the full rule.
+// `isRegisteredCustomer` must always come from the caller's own
+// verified session lookup (order.service.ts's createOrder(), sourced
+// from req.customerUser.type via optionalCustomerAuth) — never from
+// anything a request body claims. Courier API will replace this
 // later with real, address-based rates.
-export function calculateDeliveryFee(subtotal: Prisma.Decimal): Prisma.Decimal {
-  return subtotal.gte(freeDeliveryThreshold) ? new Prisma.Decimal(0) : standardDeliveryFee;
+export function calculateDeliveryFee(subtotal: Prisma.Decimal, isRegisteredCustomer: boolean): Prisma.Decimal {
+  return isRegisteredCustomer && subtotal.gte(registeredFreeDeliveryThreshold) ? new Prisma.Decimal(0) : standardDeliveryFee;
 }

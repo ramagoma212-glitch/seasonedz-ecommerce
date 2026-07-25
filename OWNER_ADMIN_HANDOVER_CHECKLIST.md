@@ -133,7 +133,7 @@ There is no live courier tracking system connected yet. Delivery works like this
 3. Update the order status to Processing, then Ready For Delivery, then Out For Delivery, then Delivered, as the order moves along.
 4. If you have a tracking number or waybill number from the courier, share it with the customer directly by email or WhatsApp, using the contact details on their order.
 
-Delivery fees are already worked out automatically by the website: R80 for orders under R700, and free delivery for orders of R700 or more. You do not need to calculate this yourself.
+Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R500 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
 
 ## What Not to Touch
 

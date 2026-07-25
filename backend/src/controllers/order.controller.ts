@@ -42,7 +42,15 @@ export async function createOrderHandler(req: Request, res: Response, next: Next
     // Version 7, Milestone 129: req.customerUser is only ever set by
     // optionalCustomerAuth (order.routes.ts) — never trusted from the
     // request body. undefined (logged out) becomes null (guest order).
-    const order = await orderService.createOrder(validation.value, req.customerUser?.id ?? null);
+    // Version 7, Milestone 131: registered-customer free delivery
+    // eligibility is likewise read only from this same verified
+    // session — req.customerUser.type, never anything the request
+    // body claims.
+    const order = await orderService.createOrder(
+      validation.value,
+      req.customerUser?.id ?? null,
+      req.customerUser?.type === "REGISTERED"
+    );
 
     // Version 7, Milestone 117: fire-and-forget, deliberately not
     // awaited into the response — sendOrderCreatedEmail/
