@@ -6,13 +6,32 @@
 // only thing proving a session is valid is the HttpOnly customer_session
 // cookie itself, which this page never reads directly.
 //
-// Deliberately no order history yet (see js/app.js's own comment on
-// setupCustomerAccountForms) — the logged-in view says so plainly
-// rather than showing an empty/broken section.
+// Version 7, Milestone 130: My Orders now shows real orders linked to
+// this account (GET /api/customers/orders) — only orders placed while
+// signed in ever appear here (Order.customerId set at checkout time,
+// see backend/src/services/order.service.ts). Guest orders are never
+// matched by email; a customer looking for one is pointed at the
+// existing public /track-order page instead.
 
-import { getCurrentCustomer } from "../js/api/customerApi.js";
+import { getCurrentCustomer, getCustomerOrders } from "../js/api/customerApi.js";
 import { ApiError } from "../js/apiClient.js";
 import { escapeHtml } from "../js/search.js";
+
+function humanizeEnum(value) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function formatDate(isoString) {
+  return new Date(isoString).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
+}
+
+function formatRand(amount) {
+  return `R${Number(amount).toFixed(2)}`;
+}
 
 // `id` is the unique DOM id (this page renders login and register
 // forms at once, so field ids are prefixed per form to stay unique);
@@ -89,7 +108,62 @@ function renderLoggedOutView() {
   `;
 }
 
-function renderLoggedInView(customer) {
+function renderOrderCard(order) {
+  return `
+    <div class="order-confirmation__card account-order-card">
+      <div class="account-order-card__header">
+        <div>
+          <p class="tracking-result__label">Order Number</p>
+          <h3>${escapeHtml(order.orderNumber)}</h3>
+        </div>
+        <span class="badge">${humanizeEnum(order.status)}</span>
+      </div>
+      <div class="order-confirmation__row"><span>Date</span><span>${formatDate(order.createdAt)}</span></div>
+      <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(order.paymentStatus)}</span></div>
+      <div class="order-confirmation__row"><span>Total</span><span>${formatRand(order.total)}</span></div>
+      <div class="order-confirmation__actions">
+        <a class="btn btn--secondary" href="/account/orders/${encodeURIComponent(order.orderNumber)}">View Details</a>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrdersEmptyState() {
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div>
+        <strong>You do not have any account orders yet.</strong>
+        <p>Orders placed while signed in will appear here.</p>
+        <p>Looking for a guest order? Use <a href="/track-order">Track Order</a>.</p>
+      </div>
+    </div>
+  `;
+}
+
+// Best-effort: an order-history fetch failure never breaks the whole
+// account page — it just shows the same empty state a genuinely
+// order-free account would, since there's nothing actionable a
+// customer can do about a transient backend error here beyond what a
+// reload already offers.
+async function renderMyOrdersSection() {
+  let orders = [];
+  try {
+    const response = await getCustomerOrders();
+    orders = response?.data?.orders || [];
+  } catch {
+    orders = [];
+  }
+
+  return `
+    <div class="account-orders">
+      <h2 class="checkout-section__label">My Orders</h2>
+      ${orders.length ? `<div class="account-orders__list">${orders.map(renderOrderCard).join("")}</div>` : renderOrdersEmptyState()}
+    </div>
+  `;
+}
+
+async function renderLoggedInView(customer) {
   return `
     <section class="container account-page">
       <h1 class="stub-page__title">My Account</h1>
@@ -101,13 +175,7 @@ function renderLoggedInView(customer) {
         <div class="order-confirmation__row"><span>Account Status</span><span class="badge">Active</span></div>
       </div>
 
-      <div class="demo-notice">
-        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-        <div>
-          <strong>My Orders will be available soon.</strong>
-          <p>You can still track any order using its order number on our <a href="/track-order">Track Order</a> page.</p>
-        </div>
-      </div>
+      ${await renderMyOrdersSection()}
 
       <button type="button" id="customer-logout-button" class="btn btn--secondary">Logout</button>
     </section>
@@ -117,7 +185,7 @@ function renderLoggedInView(customer) {
 export async function renderAccount() {
   try {
     const response = await getCurrentCustomer();
-    return renderLoggedInView(response.data.customer);
+    return await renderLoggedInView(response.data.customer);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       return renderLoggedOutView();

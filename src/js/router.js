@@ -69,6 +69,7 @@ import { renderPaymentCancelled } from "../pages/paymentCancelled.js";
 import { renderPaymentFailed } from "../pages/paymentFailed.js";
 import { renderTrackOrder } from "../pages/trackOrder.js";
 import { renderAccount } from "../pages/accountPage.js";
+import { renderAccountOrderDetail } from "../pages/accountOrderDetail.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
 import { renderFaq } from "../pages/faq.js";
@@ -148,6 +149,11 @@ const routeDefs = [
   // history yet. noindex like every other visitor-private/account page
   // here (cart, wishlist, checkout, track-order).
   { pattern: "/account", render: renderAccount, title: "My Account", noindex: true },
+  // Version 7, Milestone 130: real order history — the backend already
+  // scopes every lookup to the logged-in customer's own orders (see
+  // backend/src/controllers/customerOrder.controller.ts), so this page
+  // never needs to check ownership itself.
+  { pattern: "/account/orders/:orderNumber", render: renderAccountOrderDetail, title: "Order Details", noindex: true },
   {
     pattern: "/about",
     render: renderAbout,

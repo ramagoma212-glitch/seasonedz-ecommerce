@@ -25,3 +25,14 @@ export function logoutCustomer() {
 export function getCurrentCustomer() {
   return customerRequest("/customers/me", { method: "GET" });
 }
+
+// Version 7, Milestone 130: both require the caller to already be
+// logged in (backend returns 401 otherwise) — never called from a
+// context that hasn't already confirmed a logged-in customer.
+export function getCustomerOrders() {
+  return customerRequest("/customers/orders", { method: "GET" });
+}
+
+export function getCustomerOrder(orderNumber) {
+  return customerRequest(`/customers/orders/${encodeURIComponent(orderNumber)}`, { method: "GET" });
+}
