@@ -197,27 +197,43 @@ model ProductTag {
 // CUSTOMERS & ADDRESSES
 // ============================================================================
 
-// Represents both guest and (later) registered customers — `type`
-// distinguishes them. Deliberately has NO password/credential field:
-// Version 2 does not build login. When an auth milestone adds it, that
-// field must be a securely hashed credential, never plain text, and
-// should be designed as part of that milestone rather than bolted on
-// here.
+// Represents both guest and registered customers — `type` distinguishes
+// them. Version 7, Milestone 127 adds real login (`type: REGISTERED`,
+// `passwordHash` set) on top of this same model rather than a separate
+// table — see CustomerSession below and backend/src/services/
+// customerAuth.service.ts. `passwordHash` is null for a guest-only row;
+// no guest-checkout code path creates a Customer row at all today (see
+// order.service.ts), so `email` unique is safe to add here — every
+// Customer row that will ever exist from this point on is created only
+// by registration, one per email.
 model Customer {
   id        String       @id @default(cuid())
   type      CustomerType @default(GUEST)
   firstName String
   lastName  String
-  email     String
+  email     String       @unique
   phone     String?
+
+  // Version 7, Milestone 127: null for a guest-only row. Never returned
+  // or logged by anything — see customerAuth.service.ts's toSafeProfile().
+  passwordHash           String?
+  isActive               Boolean   @default(true)
+  emailVerifiedAt        DateTime?
+  lastLoginAt            DateTime?
+  // SHA-256 hash of a password-reset token, same "never store the raw
+  // secret" discipline as CustomerSession.tokenHash below — the raw
+  // token only ever exists in a reset-link email. Unused until a future
+  // milestone builds password reset; present now so that milestone is
+  // additive, not another schema change.
+  passwordResetTokenHash String?
+  passwordResetExpiresAt DateTime?
 
   orders    Order[]
   addresses Address[]
+  sessions  CustomerSession[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@index([email])
 }
 
 // Saved addresses for a customer (useful once accounts exist so a
@@ -241,6 +257,29 @@ model Address {
   updatedAt DateTime @updatedAt
 
   @@index([customerId])
+}
+
+// Version 7, Milestone 127: server-side customer session storage —
+// deliberately the same tokenHash/HttpOnly-cookie pattern as
+// AdminSession above, but a fully separate table. A customer session
+// must never authenticate an admin route, and an admin session must
+// never authenticate a customer route; keeping these as two distinct
+// models (rather than one shared "Session" table with a role column)
+// makes that separation structural, not just a runtime check that
+// could be gotten wrong later. tokenHash is a SHA-256 hash of the raw
+// session token — the raw token is only ever sent to the browser as an
+// HttpOnly cookie (name: customer_session) and is never persisted.
+model CustomerSession {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([expiresAt])
 }
 
 // ============================================================================
@@ -290,9 +329,9 @@ model Order {
   // Internal/admin notes — not shown to the customer.
   notes String?
 
-  items    OrderItem[]
-  payment  Payment?
-  shipping Shipping?
+  items         OrderItem[]
+  payment       Payment?
+  shipping      Shipping?
   // Version 7, Milestone 62: audit trail for future admin status
   // updates — see OrderStatusHistory below. Empty for every order that
   // predates this feature; that is expected, not backfilled.
@@ -472,7 +511,7 @@ model AdminUser {
 // arrives in the request cookie and comparing against tokenHash — the
 // same principle as a hashed password, applied to a session token.
 model AdminSession {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   adminUserId String
   adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
   tokenHash   String    @unique
@@ -504,9 +543,9 @@ model AdminSession {
 // the future admin UI must display honestly ("No status history
 // recorded yet."), never invented.
 model OrderStatusHistory {
-  id      String @id @default(cuid())
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id                  String @id @default(cuid())
+  orderId             String
+  order               Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderNumberSnapshot String
 
   changedByAdminUserId        String?

@@ -72,3 +72,28 @@ export const adminLoginRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Customer registration (Version 7, Milestone 127) — own counter, same
+// shape of risk as order/enquiry creation (unauthenticated, writes
+// data), not shared with adminLoginRateLimiter below or with the
+// order/enquiry limiters above.
+export const customerRegisterRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Customer login (Version 7, Milestone 127) — same tight limit and
+// same reasoning as adminLoginRateLimiter above (credential-guessing
+// risk, not accidental double-submission), kept as its own counter so
+// a burst of customer login attempts never affects the admin login
+// budget or vice versa.
+export const customerLoginRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
