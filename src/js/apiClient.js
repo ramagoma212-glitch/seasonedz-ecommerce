@@ -65,6 +65,11 @@ export function apiGet(path) {
   return request(path, { method: "GET" });
 }
 
-export function apiPost(path, data) {
-  return request(path, { method: "POST", body: JSON.stringify(data) });
+// Version 7, Milestone 129: `options` lets a specific call (order
+// creation) opt into `credentials: "include"` so the customer_session
+// cookie (if any) reaches the backend's optionalCustomerAuth — every
+// other apiPost caller passes nothing extra and behaves exactly as
+// before.
+export function apiPost(path, data, options = {}) {
+  return request(path, { method: "POST", body: JSON.stringify(data), ...options });
 }

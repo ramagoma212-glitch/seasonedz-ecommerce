@@ -10,6 +10,20 @@ import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { PAYMENT_METHODS } from "../js/orders.js";
+import { getCurrentCustomer } from "../js/api/customerApi.js";
+import { escapeHtml } from "../js/search.js";
+
+// Version 7, Milestone 129: best-effort only — being logged out (or
+// the request failing) is never an error on the checkout page, just
+// the ordinary guest state. Never throws.
+async function getLoggedInCustomerSafely() {
+  try {
+    const response = await getCurrentCustomer();
+    return response?.data?.customer || null;
+  } catch {
+    return null;
+  }
+}
 
 const PROVINCES = [
   "Eastern Cape",
@@ -23,7 +37,7 @@ const PROVINCES = [
   "Western Cape",
 ];
 
-function renderField({ id, label, type = "text", required = true, placeholder = "", span = "" }) {
+function renderField({ id, label, type = "text", required = true, placeholder = "", span = "", value = "" }) {
   return `
     <div class="form-field ${span}">
       <label class="form-field__label" for="${id}">
@@ -36,9 +50,38 @@ function renderField({ id, label, type = "text", required = true, placeholder = 
         name="${id}"
         class="form-field__input"
         placeholder="${placeholder}"
+        value="${escapeHtml(value)}"
         ${required ? "required" : ""}
       />
       <span class="form-field__error" data-error-for="${id}"></span>
+    </div>
+  `;
+}
+
+// Version 7, Milestone 129: sits above the delivery form — never
+// forces a decision, just states the current state plainly. Logged in:
+// confirms the order will be linked to the account. Logged out: a
+// soft, easy-to-ignore invitation, never a requirement — checkout
+// proceeds identically either way.
+function renderAccountNote(customer) {
+  if (customer) {
+    return `
+      <div class="demo-notice">
+        <span class="demo-notice__icon" aria-hidden="true">&#10003;</span>
+        <div>
+          <strong>Signed in as ${escapeHtml(customer.email)}.</strong>
+          <p>This order will be saved to your account.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div>
+        <p>Have an account? <a href="/account">Sign in</a> to save this order.</p>
+      </div>
     </div>
   `;
 }
@@ -119,7 +162,7 @@ function renderDemoNotice() {
   `;
 }
 
-export function renderCheckoutPage() {
+export async function renderCheckoutPage() {
   const { items, subtotal, deliveryFee } = getCartSummary();
 
   if (!items.length) {
@@ -136,6 +179,11 @@ export function renderCheckoutPage() {
     `;
   }
 
+  // Version 7, Milestone 129: never blocks or delays checkout on a
+  // slow/failed lookup beyond this one awaited call — a guest sees
+  // exactly the same page either way, just without prefilled fields.
+  const customer = await getLoggedInCustomerSafely();
+
   return `
     <section class="stub-page container checkout-page">
       <h1 class="stub-page__title">Checkout</h1>
@@ -143,15 +191,17 @@ export function renderCheckoutPage() {
         Enter your delivery details below to place your order. No account needed.
       </p>
 
+      ${renderAccountNote(customer)}
+
       <div class="checkout-layout">
         <form id="checkout-form" class="checkout-form" novalidate>
           <div class="checkout-section">
             <h2 class="checkout-section__label">Delivery Details</h2>
             <div class="form-grid">
-              ${renderField({ id: "firstName", label: "First Name", placeholder: "Thandiwe" })}
-              ${renderField({ id: "lastName", label: "Last Name", placeholder: "Nkosi" })}
-              ${renderField({ id: "email", label: "Email Address", type: "email", placeholder: "you@example.com" })}
-              ${renderField({ id: "phone", label: "Phone Number", type: "tel", placeholder: "082 123 4567" })}
+              ${renderField({ id: "firstName", label: "First Name", placeholder: "Thandiwe", value: customer?.firstName || "" })}
+              ${renderField({ id: "lastName", label: "Last Name", placeholder: "Nkosi", value: customer?.lastName || "" })}
+              ${renderField({ id: "email", label: "Email Address", type: "email", placeholder: "you@example.com", value: customer?.email || "" })}
+              ${renderField({ id: "phone", label: "Phone Number", type: "tel", placeholder: "082 123 4567", value: customer?.phone || "" })}
               ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane" })}
               ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside" })}
               ${renderField({ id: "city", label: "City", placeholder: "Pretoria" })}

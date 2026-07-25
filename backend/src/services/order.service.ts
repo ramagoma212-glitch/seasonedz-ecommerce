@@ -205,7 +205,17 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
 // automatically confirm at this point. A staff member (or, once real
 // PayFast integration exists, a payment webhook) is what should move
 // an order to CONFIRMED.
-export async function createOrder(input: ValidatedOrderInput): Promise<OrderOutput> {
+//
+// Version 7, Milestone 129: `customerId` is deliberately a separate
+// parameter, never part of `ValidatedOrderInput` — it comes from the
+// verified session (req.customerUser.id via optionalCustomerAuth),
+// never from anything the client's request body claims, the same
+// "never trust the body for identity" discipline order.validator.ts
+// already applies to price/total. Defaults to null for guest checkout
+// — customerFirstName/customerLastName/customerEmail/customerPhone
+// below are unchanged either way; they're always the snapshot the
+// customer actually typed at checkout, not derived from the account.
+export async function createOrder(input: ValidatedOrderInput, customerId: string | null = null): Promise<OrderOutput> {
   const verifiedItems = await verifyItems(input.items);
 
   const subtotal = verifiedItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
@@ -237,6 +247,7 @@ export async function createOrder(input: ValidatedOrderInput): Promise<OrderOutp
     return tx.order.create({
       data: {
         orderNumber,
+        customerId,
         customerEmail: input.customer.email,
         customerPhone: input.customer.phone,
         customerFirstName: input.customer.firstName,

@@ -39,7 +39,10 @@ export async function createOrderHandler(req: Request, res: Response, next: Next
       return;
     }
 
-    const order = await orderService.createOrder(validation.value);
+    // Version 7, Milestone 129: req.customerUser is only ever set by
+    // optionalCustomerAuth (order.routes.ts) — never trusted from the
+    // request body. undefined (logged out) becomes null (guest order).
+    const order = await orderService.createOrder(validation.value, req.customerUser?.id ?? null);
 
     // Version 7, Milestone 117: fire-and-forget, deliberately not
     // awaited into the response — sendOrderCreatedEmail/
