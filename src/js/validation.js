@@ -59,3 +59,58 @@ export function validateCheckoutForm(data) {
 
   return { isValid: Object.keys(errors).length === 0, errors };
 }
+
+// Version 7, Milestone 128: customer account forms. Password minimum
+// length (8) matches the backend's own validatePasswordStrength() in
+// customerAuth.service.ts — kept in sync by convention, not by a
+// shared constant, since these are two genuinely separate layers (this
+// is only ever a client-side head start; the backend always re-checks
+// independently regardless of what this says).
+const MIN_PASSWORD_LENGTH = 8;
+
+export function validateCustomerRegisterForm(data) {
+  const errors = {};
+
+  if (!isRequired(data.firstName)) errors.firstName = "First name is required.";
+  if (!isRequired(data.lastName)) errors.lastName = "Last name is required.";
+
+  if (!isRequired(data.email)) {
+    errors.email = "Email address is required.";
+  } else if (!isValidEmail(data.email)) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  // Phone is optional here, matching the backend's own registerCustomer()
+  // — only validated for format if the visitor actually entered one.
+  if (isRequired(data.phone) && !isValidSAPhone(data.phone)) {
+    errors.phone = "Please enter a valid South African phone number, e.g. 082 123 4567.";
+  }
+
+  if (!isRequired(data.password)) {
+    errors.password = "Password is required.";
+  } else if (data.password.length < MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+
+  if (!isRequired(data.confirmPassword)) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (data.password !== data.confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}
+
+export function validateCustomerLoginForm(data) {
+  const errors = {};
+
+  if (!isRequired(data.email)) {
+    errors.email = "Email address is required.";
+  } else if (!isValidEmail(data.email)) {
+    errors.email = "Please enter a valid email address.";
+  }
+
+  if (!isRequired(data.password)) errors.password = "Password is required.";
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}

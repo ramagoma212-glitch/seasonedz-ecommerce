@@ -22,12 +22,13 @@ import {
   getCartItemCount,
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } from "./wishlist.js";
-import { validateCheckoutForm } from "./validation.js";
+import { validateCheckoutForm, validateCustomerLoginForm, validateCustomerRegisterForm } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
+import { registerCustomer, loginCustomer, logoutCustomer } from "./api/customerApi.js";
 import {
   updateAdminOrderStatus,
   updateAdminShipping,
@@ -61,6 +62,7 @@ function mountApp() {
   setupCheckoutForm();
   setupTrackOrderForm();
   setupEnquiryForms();
+  setupCustomerAccountForms();
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
   setupAdminShippingForm();
@@ -683,6 +685,168 @@ async function handleAdminLogout() {
     // Ignored deliberately — see comment above.
   }
   navigateTo("/admin/login");
+}
+
+// Customer account forms (Version 7, Milestone 128) — /account's
+// login/register toggle, form submission, and logout. Deliberately no
+// order history wiring here yet — see accountPage.js's own comment.
+// The customer_session cookie is HttpOnly and set entirely by the
+// backend; nothing here ever reads, stores, or logs a password or
+// session token.
+function clearAccountFormErrors(form) {
+  form.querySelectorAll(".form-field__error").forEach((el) => (el.textContent = ""));
+  form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
+  form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+
+  const bannerEl = form.querySelector("[data-customer-login-banner], [data-customer-register-banner]");
+  if (bannerEl) {
+    bannerEl.textContent = "";
+    bannerEl.hidden = true;
+  }
+}
+
+function showAccountFormErrors(form, errors) {
+  Object.entries(errors).forEach(([field, message]) => {
+    const errorEl = form.querySelector(`[data-error-for="${field}"]`);
+    if (errorEl) errorEl.textContent = message;
+
+    const inputEl = form.querySelector(`[name="${field}"]`);
+    if (inputEl) {
+      inputEl.classList.add("has-error");
+      inputEl.setAttribute("aria-invalid", "true");
+    }
+  });
+}
+
+function showAccountFormBanner(form, message) {
+  const bannerEl = form.querySelector("[data-customer-login-banner], [data-customer-register-banner]");
+  if (bannerEl) {
+    bannerEl.textContent = message;
+    bannerEl.hidden = false;
+  }
+}
+
+function unavailableOrGenericMessage(error, genericMessage) {
+  return error instanceof ApiUnavailableError ? "We could not connect right now. Please try again." : genericMessage;
+}
+
+function setupCustomerAccountForms() {
+  document.addEventListener("click", (event) => {
+    const tabButton = event.target.closest("[data-account-tab]");
+    if (tabButton) {
+      const targetTab = tabButton.dataset.accountTab;
+      const container = tabButton.closest(".account-page");
+      if (!container) return;
+
+      container.querySelectorAll("[data-account-tab]").forEach((btn) => {
+        const isActive = btn.dataset.accountTab === targetTab;
+        btn.classList.toggle("is-active", isActive);
+        btn.setAttribute("aria-selected", String(isActive));
+      });
+      container.querySelectorAll("[data-account-panel]").forEach((panel) => {
+        panel.hidden = panel.dataset.accountPanel !== targetTab;
+      });
+      return;
+    }
+
+    if (event.target.closest("#customer-logout-button")) {
+      handleCustomerLogout();
+    }
+  });
+
+  document.addEventListener("submit", (event) => {
+    const registerForm = event.target.closest("#customer-register-form");
+    if (registerForm) {
+      event.preventDefault();
+      handleCustomerRegisterSubmit(registerForm);
+      return;
+    }
+
+    const loginForm = event.target.closest("#customer-login-form");
+    if (loginForm) {
+      event.preventDefault();
+      handleCustomerLoginSubmit(loginForm);
+    }
+  });
+}
+
+async function handleCustomerRegisterSubmit(form) {
+  clearAccountFormErrors(form);
+
+  const data = {
+    firstName: form.querySelector("#registerFirstName")?.value.trim() || "",
+    lastName: form.querySelector("#registerLastName")?.value.trim() || "",
+    email: form.querySelector("#registerEmail")?.value.trim() || "",
+    phone: form.querySelector("#registerPhone")?.value.trim() || "",
+    password: form.querySelector("#registerPassword")?.value || "",
+    confirmPassword: form.querySelector("#registerConfirmPassword")?.value || "",
+  };
+
+  const { isValid, errors } = validateCustomerRegisterForm(data);
+  if (!isValid) {
+    showAccountFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await registerCustomer(data);
+    // Registration also signs the customer in (see
+    // customerAuth.controller.ts's registerHandler) — re-rendering
+    // /account now correctly shows the logged-in overview.
+    rerenderCurrentRoute();
+  } catch (error) {
+    const message =
+      error instanceof ApiError && error.status === 409
+        ? "An account with this email already exists. Please log in."
+        : unavailableOrGenericMessage(error, "We could not create your account right now. Please try again.");
+    showAccountFormBanner(form, message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleCustomerLoginSubmit(form) {
+  clearAccountFormErrors(form);
+
+  const data = {
+    email: form.querySelector("#loginEmail")?.value.trim() || "",
+    password: form.querySelector("#loginPassword")?.value || "",
+  };
+
+  const { isValid, errors } = validateCustomerLoginForm(data);
+  if (!isValid) {
+    showAccountFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await loginCustomer(data.email, data.password);
+    rerenderCurrentRoute();
+  } catch (error) {
+    // Deliberately the same generic message regardless of the real
+    // cause (wrong email, wrong password) — never hints at which part
+    // of the input was wrong, same discipline as admin login.
+    const message = unavailableOrGenericMessage(error, "Invalid email or password.");
+    showAccountFormBanner(form, message);
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleCustomerLogout() {
+  try {
+    await logoutCustomer();
+  } catch {
+    // Ignored deliberately — same reasoning as admin logout above:
+    // nothing useful to show if logout itself fails.
+  }
+  rerenderCurrentRoute();
 }
 
 // Admin order status update (Version 7, Milestone 64). Delegated
