@@ -93,12 +93,11 @@ test.describe("Customer account smoke checks", () => {
     await expect(page.locator("#checkout-form")).toBeVisible();
   });
 
-  // Mocks GET /api/customers/me only — the one call checkoutPage.js
-  // makes to decide logged-in vs. guest — so this exercises the real
-  // prefill code path without ever touching a real account or the live
-  // backend. Order creation itself is never invoked in this test.
-  test("logged-in checkout prefills customer details from a mocked session", async ({ page }) => {
-    await page.route("**/api/customers/me", (route) =>
+  // Version 7, Milestone 130: shared mock helper for /api/customers/me —
+  // used by both the checkout-prefill test below and the new My Orders
+  // tests, so each test only has to add its own /customers/orders* mock.
+  function mockLoggedInCustomer(page) {
+    return page.route("**/api/customers/me", (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -119,6 +118,14 @@ test.describe("Customer account smoke checks", () => {
         }),
       })
     );
+  }
+
+  // Mocks GET /api/customers/me only — the one call checkoutPage.js
+  // makes to decide logged-in vs. guest — so this exercises the real
+  // prefill code path without ever touching a real account or the live
+  // backend. Order creation itself is never invoked in this test.
+  test("logged-in checkout prefills customer details from a mocked session", async ({ page }) => {
+    await mockLoggedInCustomer(page);
 
     await page.goto("/shop");
     await page.locator('[data-action="add-to-cart"]').first().click();
@@ -130,5 +137,105 @@ test.describe("Customer account smoke checks", () => {
     await expect(page.locator("#email")).toHaveValue("mock-smoke-test@example.com");
     await expect(page.locator("#phone")).toHaveValue("0821234567");
     // Deliberately stops here — never submits the form or creates an order.
+  });
+
+  // Version 7, Milestone 130: My Orders — every /customers/orders* call
+  // is mocked, so none of these tests ever touch a real account or the
+  // live backend.
+  test("logged-in account with no orders shows the empty state", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await page.route("**/api/customers/orders", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "Orders retrieved successfully.", data: { orders: [] } }) })
+    );
+
+    await page.goto("/account");
+    await expect(page.getByText("You do not have any account orders yet.")).toBeVisible();
+    await expect(page.locator(".account-orders a[href=\"/track-order\"]", { hasText: "Track Order" })).toBeVisible();
+  });
+
+  test("logged-in account with mocked orders shows an order card", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await page.route("**/api/customers/orders", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "Orders retrieved successfully.",
+          data: {
+            orders: [
+              {
+                orderNumber: "SG-2026-MOCK",
+                status: "CONFIRMED",
+                paymentStatus: "PAID",
+                paymentMethod: "BANK_TRANSFER",
+                subtotal: 200,
+                deliveryFee: 0,
+                total: 200,
+                createdAt: new Date().toISOString(),
+                itemCount: 2,
+                firstItemName: "Mock Colouring Book",
+                firstItemImageUrl: null,
+              },
+            ],
+          },
+        }),
+      })
+    );
+
+    await page.goto("/account");
+    await expect(page.getByText("SG-2026-MOCK")).toBeVisible();
+    await expect(page.locator('a[href="/account/orders/SG-2026-MOCK"]', { hasText: "View Details" })).toBeVisible();
+  });
+
+  test("order detail page renders safe mocked order data", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await page.route("**/api/customers/orders/SG-2026-MOCK", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "Order retrieved successfully.",
+          data: {
+            order: {
+              orderNumber: "SG-2026-MOCK",
+              status: "CONFIRMED",
+              paymentStatus: "PAID",
+              paymentMethod: "BANK_TRANSFER",
+              subtotal: 200,
+              deliveryFee: 0,
+              discountTotal: 0,
+              total: 200,
+              createdAt: new Date().toISOString(),
+              customer: { firstName: "Mock", lastName: "Smoke", email: "mock-smoke-test@example.com", phone: "0821234567" },
+              deliveryAddress: { streetAddress: "1 Mock Street", suburb: "Mockville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+              items: [{ productName: "Mock Colouring Book", productSlug: "mock-colouring-book", quantity: 2, unitPrice: 100, lineTotal: 200, imageUrl: null }],
+              shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
+            },
+          },
+        }),
+      })
+    );
+
+    await page.goto("/account/orders/SG-2026-MOCK");
+    await expect(page.getByText("SG-2026-MOCK")).toBeVisible();
+    await expect(page.getByText("Mock Colouring Book")).toBeVisible();
+    await expect(page.getByText("R200.00").first()).toBeVisible();
+  });
+
+  test("order detail page shows a safe not-found message on 404", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await page.route("**/api/customers/orders/SG-2026-NOPE", (route) =>
+      route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ success: false, message: "Order not found in this account." }) })
+    );
+
+    await page.goto("/account/orders/SG-2026-NOPE");
+    await expect(page.getByText("Order not found in this account.")).toBeVisible();
+  });
+
+  test("public track-order page still works for guests", async ({ page }) => {
+    await page.goto("/track-order");
+    await expect(page.locator("#track-order-form")).toBeVisible();
   });
 });
