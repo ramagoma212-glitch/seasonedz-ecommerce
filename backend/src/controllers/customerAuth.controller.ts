@@ -20,14 +20,26 @@ import {
 import { sendPasswordResetEmail } from "../services/email/email.service.js";
 import { asRecord, isNonEmptyString, isValidEmail } from "../validators/shared.js";
 
-// Version 7, Milestone 132: prefers the configured production frontend
-// origin (FRONTEND_PRODUCTION_URL, comma-separated — see env.ts's own
-// comment on domain-migration support) so the reset link always points
-// at the real live site once deployed, falling back to FRONTEND_URL for
-// local/dev. Never hardcodes a domain directly in code.
+// Version 7, Milestone 132B fix: FRONTEND_PRODUCTION_URL is a CORS
+// allow-list (see DOMAIN_CONNECTION_PLAN_CO_ZA.md's "Backend CORS"
+// section), not an ordered list of preference — Render's actual value
+// lists the legacy GitHub Pages origin FIRST (kept only so old
+// bookmarks/links still work during the domain transition), then the
+// real www.seasonedzgroup.co.za origin. Blindly taking index 0 (the
+// original approach) sent real password-reset emails with a dead
+// github.io link — found live during Milestone 132B's owner-facing
+// test. Fix: skip any github.io origin and prefer the first remaining
+// one, falling back to FRONTEND_URL for local/dev where
+// FRONTEND_PRODUCTION_URL isn't set at all.
 function resetPasswordBaseUrl(): string {
-  const firstProductionOrigin = env.frontendProductionUrl?.split(",")[0]?.trim();
-  return firstProductionOrigin || env.frontendUrl;
+  const productionOrigins = (env.frontendProductionUrl ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  const preferredOrigin = productionOrigins.find((origin) => !origin.includes("github.io")) ?? productionOrigins[0];
+
+  return preferredOrigin || env.frontendUrl;
 }
 
 // Same reasoning as adminAuth.controller.ts's sessionCookieOptions():
