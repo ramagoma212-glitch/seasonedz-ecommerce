@@ -392,17 +392,39 @@ if (courierGuyBookingEnabled) {
 // misconfiguration. This startup warning exists only so the missing
 // value is visible immediately in logs, not to gate anything.
 const courierGuyAutoBookingEnabled = getEnv("COURIER_GUY_AUTO_BOOKING_ENABLED", "false").trim().toLowerCase() === "true";
-// The one, pre-confirmed service code auto-booking uses for every
-// order — see courierGuy.service.ts's own header comment on why a
-// fixed code is safer at launch than picking a service automatically.
-// Only meaningful once courierGuyAutoBookingEnabled is true.
+
+// Version 7, Milestone 141: replaces the single fixed service code as
+// the primary selection mechanism. Milestone 140's real quote checks
+// found Courier Guy's /rates response depends on delivery zone
+// (Gauteng only offers "Local" codes like LOF, everywhere else only
+// offers "national" codes like ECO — the two never co-occur), so one
+// fixed code can never work for every order. autoBookCourierForPaidOrder()
+// now quotes first, then picks the first of these codes (in priority
+// order) that the quote actually returned. LOF (Local Overnight) and
+// ECO (Economy) were chosen as the cheapest non-premium tier in each
+// zone respectively — see DELIVERY_SETUP.md's "Milestone 140 finding"
+// section for the real pricing data this is based on. Deliberately
+// excludes SDX (Same Day Express) and any other premium/emergency
+// service — those are never chosen automatically, only ever by an
+// admin manually.
+const courierGuyAutoBookingServiceCodes = getEnv("COURIER_GUY_AUTO_BOOKING_SERVICE_CODES", "LOF,ECO")
+  .split(",")
+  .map((code) => code.trim().toUpperCase())
+  .filter((code) => code.length > 0);
+
+// Version 7, Milestone 139: the original single fixed service code.
+// Kept only as a legacy/reference value — autoBookCourierForPaidOrder()
+// no longer reads this at all; COURIER_GUY_AUTO_BOOKING_SERVICE_CODES
+// above is the only mechanism it uses. Left optional and unused by
+// default rather than removed outright, in case a future rollback or
+// migration ever needs to see what the old single-code value was.
 const courierGuyDefaultServiceCode = getOptionalEnv("COURIER_GUY_DEFAULT_SERVICE_CODE");
 
-if (courierGuyAutoBookingEnabled && !courierGuyDefaultServiceCode) {
+if (courierGuyAutoBookingEnabled && courierGuyAutoBookingServiceCodes.length === 0) {
   // eslint-disable-next-line no-console
   console.warn(
-    "[courier-guy] COURIER_GUY_AUTO_BOOKING_ENABLED is true but COURIER_GUY_DEFAULT_SERVICE_CODE is not set — " +
-      "automatic booking will safely skip every order until this is set. Manual admin booking is unaffected."
+    "[courier-guy] COURIER_GUY_AUTO_BOOKING_ENABLED is true but COURIER_GUY_AUTO_BOOKING_SERVICE_CODES is empty — " +
+      "automatic booking will safely skip every order until an approved service code list is set. Manual admin booking is unaffected."
   );
 }
 
@@ -483,11 +505,12 @@ export const env = {
   courierGuyCollectionContactName,
   courierGuyCollectionContactPhone,
   courierGuyCollectionContactEmail,
-  // Courier Guy automatic booking — see the block above. Defaults
-  // false/undefined; never logged anywhere (courierGuyDefaultServiceCode
-  // is a service code, not a secret, but still only ever surfaced via
-  // safe internal logging, never in a customer-facing response).
+  // Courier Guy automatic booking — see the block above. Service codes
+  // are not secrets, but are still only ever surfaced via safe internal
+  // logging, never in a customer-facing response.
   courierGuyAutoBookingEnabled,
+  courierGuyAutoBookingServiceCodes,
+  // Legacy/reference only — not read by the current selection logic.
   courierGuyDefaultServiceCode,
 };
 

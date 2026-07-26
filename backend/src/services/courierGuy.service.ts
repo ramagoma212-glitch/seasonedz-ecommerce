@@ -832,7 +832,8 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
 }
 
 // =============================================================================
-// AUTOMATIC BOOKING (Version 7, Milestone 139 — foundation only)
+// AUTOMATIC BOOKING (Version 7, Milestone 139 — foundation; Milestone
+// 141 — quote-first service selection)
 // =============================================================================
 //
 // Called ONLY from payfast.service.ts's processPayfastNotification(),
@@ -840,9 +841,9 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
 // — the same point sendPaymentConfirmedEmail() already fires from, and
 // the same guarantee applies: that call site can only ever reach this
 // once per order (a duplicate ITN hits an early return before ever
-// getting there), so this function itself needs no separate
-// idempotency layer beyond what bookCourierShipment() already has
-// (checkDuplicateBooking).
+// getting there). This function additionally checks for an existing
+// booking itself, before ever calling getCourierQuote() — so a
+// duplicate/retried call never re-quotes, not just never re-books.
 //
 // This function must NEVER throw to its caller — every failure path
 // below is caught internally, logged safely, and (for a genuine
@@ -852,16 +853,55 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
 // A PayFast ITN's response, and the order's paymentStatus, must never
 // depend on anything in this function succeeding.
 //
-// Milestone 139 deliberately does NOT call getCourierQuote() first —
-// unlike the admin's manual flow, automatic booking always uses the
-// one pre-confirmed COURIER_GUY_DEFAULT_SERVICE_CODE (see env.ts's own
-// comment on why a fixed code is safer than picking automatically at
-// this stage), so there is nothing to choose between and no reason for
-// an extra network round-trip.
+// Version 7, Milestone 141: Milestone 140's real quote checks found
+// Courier Guy's /rates response depends on delivery zone (Gauteng only
+// offers "Local" codes like LOF, everywhere else only offers "national"
+// codes like ECO — the two never co-occur), so a single fixed service
+// code can never work for every order. This now quotes first (reusing
+// getCourierQuote() and its existing response mapper unchanged), then
+// books using the first code from courierGuyConfig.autoBookingServiceCodes
+// (in priority order) that the quote actually returned — never
+// inventing a "cheapest available" choice outside that approved list,
+// and never SDX/Same Day Express or any other premium service, which
+// is deliberately excluded from the default list.
 function safeBookingFailureMessage(error: unknown): string {
   if (error instanceof CourierBookingError) return error.message;
   if (error instanceof CourierQuoteError) return error.message;
   return "Automatic courier booking failed unexpectedly.";
+}
+
+// Picks the first approved code (in priority order) that appears
+// anywhere in the quote results. If more than one option shares that
+// same code (shouldn't normally happen, but not assumed), the cheapest
+// is chosen; ties keep the first-occurrence order (Array.prototype.sort
+// has been stable since ES2019, which Node has long since adopted).
+function selectApprovedServiceOption(options: QuoteOption[], approvedCodes: readonly string[]): QuoteOption | null {
+  for (const rawApprovedCode of approvedCodes) {
+    // Normalized here too, not just when env.ts parses
+    // COURIER_GUY_AUTO_BOOKING_SERVICE_CODES — defensive re-check, same
+    // discipline as every other function in this file, in case this is
+    // ever called with a config value that bypassed that parsing.
+    const approvedCode = rawApprovedCode.trim().toUpperCase();
+    const matches = options.filter((option) => option.serviceLevelCode?.trim().toUpperCase() === approvedCode);
+    if (matches.length === 0) continue;
+    return [...matches].sort((a, b) => a.price - b.price)[0] ?? null;
+  }
+  return null;
+}
+
+async function recordBookingFailure(orderId: string, orderNumber: string, safeMessage: string): Promise<void> {
+  console.warn(`[courier-guy] Automatic booking failed for order=${orderNumber}: ${safeMessage}`);
+  try {
+    await prisma.shipping.update({
+      where: { orderId },
+      data: { courierBookingAttemptedAt: new Date(), courierBookingError: safeMessage.slice(0, 500) },
+    });
+  } catch {
+    // Best-effort only — the booking attempt itself already failed
+    // safely (no shipment was created, the order stays PAID); if even
+    // this follow-up write fails, there is nothing further to do here,
+    // and the caller must still never see this as an error.
+  }
 }
 
 export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<void> {
@@ -874,11 +914,6 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
     return;
   }
 
-  if (!courierGuyConfig.defaultServiceCode) {
-    console.warn(`[courier-guy] Automatic booking skipped for order=${orderNumber}: COURIER_GUY_DEFAULT_SERVICE_CODE is not set.`);
-    return;
-  }
-
   // Defensive re-check of exactly what the caller (the PayFast ITN
   // handler) already guarantees before ever reaching this function —
   // never trusted blindly, same discipline as every other function in
@@ -887,7 +922,13 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
   // not an error.
   const order = await prisma.order.findUnique({
     where: { orderNumber },
-    select: { id: true, paymentMethod: true, paymentStatus: true, status: true },
+    select: {
+      id: true,
+      paymentMethod: true,
+      paymentStatus: true,
+      status: true,
+      shipping: { select: { trackingNumber: true, courierShipmentId: true, courierBookedAt: true } },
+    },
   });
 
   if (!order) return;
@@ -895,14 +936,54 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
   if (order.paymentStatus !== PaymentStatus.PAID) return;
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) return;
 
+  // Checked here, before ever calling getCourierQuote() — a duplicate
+  // ITN (or any other repeat call) for an already-booked order should
+  // neither re-quote nor re-book. bookCourierShipment()'s own
+  // checkDuplicateBooking() is a second, independent safety net below.
+  const shipping = order.shipping;
+  if (shipping && (shipping.trackingNumber || shipping.courierShipmentId || shipping.courierBookedAt)) {
+    console.log(`[courier-guy] Automatic booking skipped for order=${orderNumber}: already booked.`);
+    return;
+  }
+
+  // A genuine configuration problem (not a per-order issue), but still
+  // recorded per-order — see env.ts's own startup warning for this same
+  // condition, surfaced here too so an admin looking at this specific
+  // order sees why it was never booked, not just silence.
+  if (courierGuyConfig.autoBookingServiceCodes.length === 0) {
+    await recordBookingFailure(order.id, orderNumber, "No approved Courier Guy service codes are configured for automatic booking.");
+    return;
+  }
+
+  let quote;
   try {
-    await bookCourierShipment(orderNumber, { parcel: {}, serviceLevelCode: courierGuyConfig.defaultServiceCode });
-    console.log(`[courier-guy] Automatic booking succeeded for order=${orderNumber}.`);
+    quote = await getCourierQuote(orderNumber, { parcel: {} });
+  } catch {
+    // Deliberately a fixed message regardless of the underlying error —
+    // never varies by error type, so nothing courier-specific is ever
+    // echoed back for a quote-stage failure.
+    await recordBookingFailure(
+      order.id,
+      orderNumber,
+      "Automatic courier booking failed because no approved courier quote could be selected."
+    );
+    return;
+  }
+
+  const selected = selectApprovedServiceOption(quote.options, courierGuyConfig.autoBookingServiceCodes);
+  if (!selected || !selected.serviceLevelCode) {
+    await recordBookingFailure(order.id, orderNumber, "No approved Courier Guy service was available for automatic booking.");
+    return;
+  }
+
+  try {
+    await bookCourierShipment(orderNumber, { parcel: {}, serviceLevelCode: selected.serviceLevelCode });
+    console.log(`[courier-guy] Automatic booking succeeded for order=${orderNumber} using service=${selected.serviceLevelCode}.`);
   } catch (error) {
     // A duplicate-booking rejection (409) is a benign, correct no-op —
-    // this order was already booked (manually, or by an earlier auto-
-    // booking attempt that this ITN redelivery is racing against) —
-    // never recorded as a failure, since nothing actually went wrong.
+    // this order was booked by a concurrent attempt between the check
+    // above and this call — never recorded as a failure, since nothing
+    // actually went wrong.
     if (error instanceof CourierBookingError && error.statusCode === 409) {
       console.log(`[courier-guy] Automatic booking skipped for order=${orderNumber}: already booked.`);
       return;
@@ -914,19 +995,6 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
     // real failure worth surfacing to the admin. Only ever a short,
     // pre-written safe message (never the raw Courier Guy response
     // body, a header, or an API key) — see safeBookingFailureMessage().
-    const safeMessage = safeBookingFailureMessage(error).slice(0, 500);
-    console.warn(`[courier-guy] Automatic booking failed for order=${orderNumber}: ${safeMessage}`);
-
-    try {
-      await prisma.shipping.update({
-        where: { orderId: order.id },
-        data: { courierBookingAttemptedAt: new Date(), courierBookingError: safeMessage },
-      });
-    } catch {
-      // Best-effort only — the booking attempt itself already failed
-      // safely (no shipment was created, the order stays PAID); if
-      // even this follow-up write fails, there is nothing further to
-      // do here, and the caller must still never see this as an error.
-    }
+    await recordBookingFailure(order.id, orderNumber, safeBookingFailureMessage(error));
   }
 }
