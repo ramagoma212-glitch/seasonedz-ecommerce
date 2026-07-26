@@ -68,6 +68,20 @@ jobs:
         # set directly in the workflow rather than as a repo secret. See
         # VERSION_2_INTEGRATION_NOTES.md.
         #
+        # Version 7, Milestone 133: moved from the onrender.com origin
+        # to api.seasonedzgroup.co.za, a same-site subdomain of the
+        # frontend's own domain (www.seasonedzgroup.co.za). iOS
+        # Safari/WebKit's cross-site tracking prevention was blocking the
+        # customer_session cookie when the API lived on a genuinely
+        # different site (onrender.com) — a same-site subdomain isn't
+        # subject to that restriction. The old onrender.com URL is left
+        # running on Render (not removed) so nothing depending on it
+        # (e.g. the PayFast notify URL, deliberately unchanged — see
+        # DOMAIN_CONNECTION_PLAN_CO_ZA.md) breaks during the transition.
+        # Do not deploy this change until the api.seasonedzgroup.co.za
+        # custom domain is actually connected in Render and DNS has
+        # propagated — see that same doc for the manual setup steps.
+        #
         # VITE_PAYFAST_ENABLED is explicitly "false" here for production
         # safety/clarity (Version 3 pre-merge hardening) — the frontend
         # code already defaults to false when this is unset, but setting
@@ -78,7 +92,7 @@ jobs:
         # is the last build to touch dist/ before the steps below read
         # it — see that step's comment for why order matters here.
         env:
-          VITE_API_BASE_URL: https://seasonedz-ecommerce.onrender.com/api
+          VITE_API_BASE_URL: https://api.seasonedzgroup.co.za/api
           VITE_PAYFAST_ENABLED: "true"
         run: npm run build
 
