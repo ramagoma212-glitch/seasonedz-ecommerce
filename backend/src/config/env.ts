@@ -375,6 +375,37 @@ if (courierGuyBookingEnabled) {
   }
 }
 
+// Courier Guy AUTOMATIC booking (Version 7, Milestone 139 — foundation
+// only; stays "false" in production until the owner explicitly
+// approves turning it on). Deliberately a THIRD, separate flag from
+// COURIER_GUY_ENABLED (quote) and COURIER_GUY_BOOKING_ENABLED (manual
+// admin booking) — auto-booking can only ever run if all three are
+// true, but turning auto-booking off never disables the admin's own
+// manual quote/book flow, and vice versa.
+//
+// Unlike the *_ENABLED flags above, a missing COURIER_GUY_DEFAULT_SERVICE_CODE
+// deliberately does NOT crash the whole backend at startup — see
+// autoBookCourierForPaidOrder() in courierGuy.service.ts, which
+// re-checks this at the moment of each booking attempt and safely skips
+// (logging a warning, never throwing) rather than blocking a real
+// customer's PayFast payment confirmation over a courier
+// misconfiguration. This startup warning exists only so the missing
+// value is visible immediately in logs, not to gate anything.
+const courierGuyAutoBookingEnabled = getEnv("COURIER_GUY_AUTO_BOOKING_ENABLED", "false").trim().toLowerCase() === "true";
+// The one, pre-confirmed service code auto-booking uses for every
+// order — see courierGuy.service.ts's own header comment on why a
+// fixed code is safer at launch than picking a service automatically.
+// Only meaningful once courierGuyAutoBookingEnabled is true.
+const courierGuyDefaultServiceCode = getOptionalEnv("COURIER_GUY_DEFAULT_SERVICE_CODE");
+
+if (courierGuyAutoBookingEnabled && !courierGuyDefaultServiceCode) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[courier-guy] COURIER_GUY_AUTO_BOOKING_ENABLED is true but COURIER_GUY_DEFAULT_SERVICE_CODE is not set — " +
+      "automatic booking will safely skip every order until this is set. Manual admin booking is unaffected."
+  );
+}
+
 export const env = {
   nodeEnv,
   port: Number(getEnv("PORT", "5000")),
@@ -452,6 +483,12 @@ export const env = {
   courierGuyCollectionContactName,
   courierGuyCollectionContactPhone,
   courierGuyCollectionContactEmail,
+  // Courier Guy automatic booking — see the block above. Defaults
+  // false/undefined; never logged anywhere (courierGuyDefaultServiceCode
+  // is a service code, not a secret, but still only ever surfaced via
+  // safe internal logging, never in a customer-facing response).
+  courierGuyAutoBookingEnabled,
+  courierGuyDefaultServiceCode,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built

@@ -263,6 +263,11 @@ export interface CourierBookingFields {
   courierServiceName: string | null;
   courierCost: number | null;
   courierBookedAt: Date | null;
+  // Version 7, Milestone 139: admin-only failure visibility — same
+  // "never touches the shared customer-facing shape" boundary as every
+  // field above (see this function's own comment).
+  courierBookingAttemptedAt: Date | null;
+  courierBookingError: string | null;
 }
 
 // Version 7, Milestone 112: the admin order detail view needs the
@@ -285,6 +290,8 @@ export async function getCourierBookingFieldsForOrder(orderNumber: string): Prom
       courierServiceName: true,
       courierCost: true,
       courierBookedAt: true,
+      courierBookingAttemptedAt: true,
+      courierBookingError: true,
     },
   });
 
@@ -297,5 +304,7 @@ export async function getCourierBookingFieldsForOrder(orderNumber: string): Prom
     courierServiceName: shipping.courierServiceName,
     courierCost: shipping.courierCost ? Number(shipping.courierCost) : null,
     courierBookedAt: shipping.courierBookedAt,
+    courierBookingAttemptedAt: shipping.courierBookingAttemptedAt,
+    courierBookingError: shipping.courierBookingError,
   };
 }
