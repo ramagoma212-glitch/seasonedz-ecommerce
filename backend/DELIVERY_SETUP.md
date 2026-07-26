@@ -176,6 +176,44 @@ consistently returns for a typical Seasonedz Group parcel. Leaving it
 unset is safe — automatic booking simply skips every order and logs a
 warning until it's set.
 
+### Milestone 140 finding: a single fixed code is not enough
+
+Real quote checks (2026-07-26, against 4 real orders covering Pretoria,
+Johannesburg/Sandton, Polokwane, and Cape Town — all deleted afterward)
+found that Courier Guy's own `/rates` response depends on the
+**delivery zone relative to the collection address**, not just parcel
+size:
+
+- **Gauteng addresses** (Pretoria, Johannesburg/Sandton both confirmed
+  identical): only "Local" tier codes are offered — `LOF` (Local
+  Overnight, ~R117), `LSF`/`LSE` (Local Same Day Flyer/Economy,
+  ~R134), `LOX` (Local Overnight Parcel, ~R135), plus `SDX` (Same Day
+  Express, premium, ~R1031).
+- **Everywhere else** (Polokwane, Cape Town both confirmed identical in
+  code set, though `OVN`/`SDX` pricing varies by distance): only
+  "national" tier codes are offered — `ECO` (Economy, ~R117), `OVN`
+  (Overnight, R187-R197 depending on distance), plus `SDX` again.
+
+**`ECO` and `LOF` never appear in the same quote response.** A fixed
+`COURIER_GUY_DEFAULT_SERVICE_CODE` set to either one will make
+automatic booking fail (safely — see below — but still fail) for
+every order in the *other* zone. Since Seasonedz Group's collection
+address is in Gauteng, this means roughly half of South Africa's
+provinces would never auto-book successfully with a single fixed
+code — not a rare edge case.
+
+**Recommendation: do not enable `COURIER_GUY_AUTO_BOOKING_ENABLED`
+with a single fixed code.** Before enabling broadly, extend
+`autoBookCourierForPaidOrder()` to call `getCourierQuote()` first (it
+already exists and is read-only/safe), then pick the first match from
+a short approved list tried in priority order — e.g. `["LOF", "ECO"]`
+— rather than assuming one code is always present. Only if neither
+approved code appears should the attempt fail safely and record
+`courierBookingError`, exactly as it already does today. This is a
+small, scoped code change, not a large rebuild — the quote-then-book
+two-call pattern this recommends is the same one the admin's own
+manual flow already uses.
+
 ### What happens on a real PayFast payment once enabled
 
 `processPayfastNotification()`'s `"COMPLETE"` handling calls
