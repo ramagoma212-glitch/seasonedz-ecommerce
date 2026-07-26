@@ -33,7 +33,7 @@ export function renderShippingPolicy() {
           Standard delivery is a flat rate of <strong>R80</strong>.
           Registered Seasonedz Group customers get free delivery on
           orders of <strong>R500 or more</strong> when signed in at
-          checkout — this benefit is not available on guest checkout.
+          checkout. This benefit is not available on guest checkout.
           Any applicable delivery fee is shown at checkout before you
           place your order.
         </p>

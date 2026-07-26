@@ -95,7 +95,7 @@ function renderLoggedOutView() {
   return `
     <section class="container account-page">
       <h1 class="stub-page__title">My Account</h1>
-      <p class="stub-page__text">Log in to your Seasonedz Group account, or create a new one — you can always check out as a guest instead.</p>
+      <p class="stub-page__text">Log in to your Seasonedz Group account, or create a new one. You can always check out as a guest instead.</p>
 
       <div class="account-auth-toggle" role="tablist" aria-label="Account access">
         <button type="button" class="account-auth-toggle__btn is-active" data-account-tab="login" role="tab" aria-selected="true">Log In</button>
