@@ -145,7 +145,7 @@ once a real courier provider is chosen and integrated in a future
 milestone, at which point tracking data would come from that
 provider's API/webhooks instead of manual entry.
 
-## Automatic Courier Guy Booking (Version 7, Milestone 139 — foundation built, DISABLED by default)
+## Automatic Courier Guy Booking (Version 7, Milestones 139-141 — foundation built, DISABLED by default)
 
 Courier Guy quoting (Milestone 108) and manual admin booking (Milestone
 112) are both real and live, gated behind `COURIER_GUY_ENABLED` and
@@ -163,18 +163,80 @@ be `true` for automatic booking to ever run. Turning automatic booking
 off never disables the admin's own manual quote/book flow, and vice
 versa. **Defaults to `false`.**
 
-### `COURIER_GUY_DEFAULT_SERVICE_CODE` — must be confirmed before enabling
+### `COURIER_GUY_AUTO_BOOKING_SERVICE_CODES` — the approved priority list (Milestone 141)
 
-Automatic booking always uses this one, fixed service code — it does
-not pick a service automatically (see `courierGuy.service.ts`'s own
-header comment on why a fixed code is safer at launch than a "cheapest
-service" heuristic, which relies on Courier Guy's service naming
-staying stable). **Do not set `COURIER_GUY_AUTO_BOOKING_ENABLED=true`
-until this value has been confirmed** by manually booking a few real
-orders as an admin first and checking which service code Courier Guy
-consistently returns for a typical Seasonedz Group parcel. Leaving it
-unset is safe — automatic booking simply skips every order and logs a
-warning until it's set.
+Automatic booking no longer relies on one fixed service code. Instead,
+`autoBookCourierForPaidOrder()` calls the existing, read-only
+`getCourierQuote()` first, then picks the **first code from this list
+(in order) that actually appears in that order's live quote**:
+
+```
+COURIER_GUY_AUTO_BOOKING_SERVICE_CODES=LOF,ECO
+```
+
+- Comma-separated, case-insensitive, trimmed. Matched against each
+  quote option's `serviceLevelCode` only (not `serviceLevelId`).
+- If multiple quote options share the same approved code, the cheapest
+  is chosen (first occurrence if tied on price).
+- If the list is missing or empty, automatic booking safely skips
+  every order and records `courierBookingError` — it never falls back
+  to picking an arbitrary/cheapest service outside this list.
+- **`SDX` (Same Day Express) is deliberately never included by
+  default.** It is the one code that appears in *every* zone's quote
+  (see the Milestone 140 finding below), which would make it tempting
+  to include as a universal fallback — but it is a premium, same-day
+  price tier, not an appropriate default for ordinary automatic
+  fulfilment. Only `LOF` and `ECO` — the respective cheapest tier in
+  each of the two zone families Seasonedz Group actually ships to —
+  are approved by default.
+- If neither `LOF` nor `ECO` appears in a quote (e.g. only `SDX` was
+  returned), the attempt fails safely and is recorded, exactly like any
+  other automatic-booking failure — no booking is ever made outside the
+  approved list.
+
+### `COURIER_GUY_DEFAULT_SERVICE_CODE` — legacy/reference only, no longer used
+
+This single fixed-code variable predates the quote-first approach above
+(Milestone 139) and is **no longer read by the automatic-booking
+selection logic**. It is kept in code only for reference/rollback and
+can be left unset. Do not rely on it — set
+`COURIER_GUY_AUTO_BOOKING_SERVICE_CODES` instead.
+
+### Milestone 140 finding: a single fixed code is not enough
+
+Real quote checks (2026-07-26, against 4 real orders covering Pretoria,
+Johannesburg/Sandton, Polokwane, and Cape Town — all deleted afterward)
+found that Courier Guy's own `/rates` response depends on the
+**delivery zone relative to the collection address**, not just parcel
+size:
+
+- **Gauteng addresses** (Pretoria, Johannesburg/Sandton both confirmed
+  identical): only "Local" tier codes are offered — `LOF` (Local
+  Overnight, ~R117), `LSF`/`LSE` (Local Same Day Flyer/Economy,
+  ~R134), `LOX` (Local Overnight Parcel, ~R135), plus `SDX` (Same Day
+  Express, premium, ~R1031).
+- **Everywhere else** (Polokwane, Cape Town both confirmed identical in
+  code set, though `OVN`/`SDX` pricing varies by distance): only
+  "national" tier codes are offered — `ECO` (Economy, ~R117), `OVN`
+  (Overnight, R187-R197 depending on distance), plus `SDX` again.
+
+**`ECO` and `LOF` never appear in the same quote response.** A fixed
+`COURIER_GUY_DEFAULT_SERVICE_CODE` set to either one will make
+automatic booking fail (safely — see below — but still fail) for
+every order in the *other* zone. Since Seasonedz Group's collection
+address is in Gauteng, this means roughly half of South Africa's
+provinces would never auto-book successfully with a single fixed
+code — not a rare edge case.
+
+**Implemented in Milestone 141:** `autoBookCourierForPaidOrder()` now
+calls `getCourierQuote()` first, then picks the first match from the
+approved `COURIER_GUY_AUTO_BOOKING_SERVICE_CODES` list (default
+`LOF,ECO`) tried in priority order, rather than assuming one fixed code
+is always present. If neither approved code appears in the quote, the
+attempt fails safely and records `courierBookingError`, exactly as it
+already did before. Automatic booking is still disabled by default
+(`COURIER_GUY_AUTO_BOOKING_ENABLED=false`) until a real, controlled
+live test is explicitly approved — see the checklist below.
 
 ### What happens on a real PayFast payment once enabled
 
@@ -209,7 +271,7 @@ booked.
 
 ### Before ever setting `COURIER_GUY_AUTO_BOOKING_ENABLED=true` in production
 
-1. Confirm `COURIER_GUY_DEFAULT_SERVICE_CODE` against real, manually-confirmed bookings first.
+1. Confirm `COURIER_GUY_AUTO_BOOKING_SERVICE_CODES` (default `LOF,ECO`) still matches what Courier Guy actually returns, via a real, manually-confirmed quote first.
 2. Get explicit owner approval for a real, controlled live test.
 3. Watch the very first automatically-booked order closely in the admin dashboard.
 4. Know how to cancel/correct a booking in the Courier Guy portal before you need to.

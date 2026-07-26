@@ -52,6 +52,11 @@ export interface CourierGuyConfig {
   // Version 7, Milestone 139: separate from bookingEnabled — see
   // env.ts's own comment on why this is a third, independent flag.
   autoBookingEnabled: boolean;
+  // Version 7, Milestone 141: the approved priority list auto-booking
+  // selects from after quoting — see env.ts's own comment for the
+  // reasoning (Milestone 140's real quote findings).
+  autoBookingServiceCodes: string[];
+  // Legacy/reference only — not read by the current selection logic.
   defaultServiceCode: string | undefined;
   apiKey: string | undefined;
   baseUrl: string;
@@ -64,6 +69,7 @@ export const courierGuyConfig: CourierGuyConfig = {
   enabled: env.courierGuyEnabled,
   bookingEnabled: env.courierGuyBookingEnabled,
   autoBookingEnabled: env.courierGuyAutoBookingEnabled,
+  autoBookingServiceCodes: env.courierGuyAutoBookingServiceCodes,
   defaultServiceCode: env.courierGuyDefaultServiceCode,
   apiKey: env.courierGuyApiKey,
   baseUrl: env.courierGuyBaseUrl,
