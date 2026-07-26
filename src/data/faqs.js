@@ -56,7 +56,7 @@ export const faqs = [
     category: "Payment",
     question: "What payment methods will you accept?",
     answer:
-      "You can check out today using Bank Transfer or Cash / Card on Delivery, both of which place a real order. Online card payment through PayFast is coming soon.",
+      "You can pay online using PayFast. We also support manual bank transfer where available. All payment options are shown clearly at checkout.",
   },
   {
     category: "Returns",
