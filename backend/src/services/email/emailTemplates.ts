@@ -20,9 +20,18 @@ const CONTACT_LINE = "If you have any questions, just reply to this email or rea
 // already-public WhatsApp number used everywhere else on the site,
 // and the reply-to inbox this email's own "Reply" button actually
 // reaches (Brevo's replyTo, set to this same address).
+//
+// Version 7, Milestone 134: WhatsApp number updated to match the new
+// public number (src/data/businessInfo.js). The email stays as
+// seasonedzgroup@outlook.com — matching both EMAIL_REPLY_TO (Brevo's
+// actual replyTo) and the public site's own contact email, which is
+// also still outlook.com for now (info@seasonedzgroup.co.za has no
+// mailbox yet — see businessInfo.js). Update this once EMAIL_REPLY_TO
+// itself moves to a real, tested info@ mailbox, not before, or a
+// customer's "Reply" would go somewhere unmonitored.
 const ORDER_CONTACT_BLOCK = `Seasonedz Group
 Email: seasonedzgroup@outlook.com
-WhatsApp: +27 72 844 5644`;
+WhatsApp: +27 69 526 9941`;
 
 function formatRand(amount: number): string {
   return `R${amount.toFixed(2)}`;

@@ -7,10 +7,13 @@
 
 export const businessInfo = {
   businessName: "Seasonedz Group",
-  email: "Nedzamb1a@gmail.com",
-  phoneDisplay: "+27 72 844 5644",
-  phoneE164: "+27728445644",
-  whatsappUrl: "https://wa.me/27728445644",
-  mailtoUrl: "mailto:Nedzamb1a@gmail.com",
-  telUrl: "tel:+27728445644",
+  // Version 7, Milestone 134 correction: stays on seasonedzgroup@outlook.com
+  // for now — info@seasonedzgroup.co.za has no mailbox yet (email hosting
+  // is planned via Afrihost). Update once that mailbox exists and is tested.
+  email: "seasonedzgroup@outlook.com",
+  phoneDisplay: "069 526 9941",
+  phoneE164: "+27695269941",
+  whatsappUrl: "https://wa.me/27695269941",
+  mailtoUrl: "mailto:seasonedzgroup@outlook.com",
+  telUrl: "tel:+27695269941",
 };
