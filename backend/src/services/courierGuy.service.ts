@@ -39,7 +39,7 @@
 // "verify before relying on it" caveat the quote code already applied
 // to service_level/response fields.
 
-import { FulfilmentStatus, PaymentStatus, Prisma } from "@prisma/client";
+import { FulfilmentStatus, OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 import { courierGuyConfig } from "../config/courierGuy.js";
 import { isProduction } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
@@ -783,6 +783,13 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
     courierServiceName: mapped.serviceLevelName,
     courierCost: mapped.cost !== null ? new Prisma.Decimal(mapped.cost) : undefined,
     courierBookedAt: new Date(),
+    // Version 7, Milestone 139: a successful booking supersedes any
+    // earlier failed attempt this order may have had (e.g. a failed
+    // auto-booking followed by a successful manual retry) — clear both
+    // so the admin view never shows a stale failure alongside a real,
+    // completed booking.
+    courierBookingAttemptedAt: null,
+    courierBookingError: null,
   };
   if (mapped.trackingNumber) shippingData.trackingNumber = mapped.trackingNumber;
   if (mapped.trackingUrl) shippingData.trackingUrl = mapped.trackingUrl;
@@ -822,4 +829,104 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
     fulfilmentStatus: updatedOrder.fulfilmentStatus,
     shipping: updatedShipping,
   };
+}
+
+// =============================================================================
+// AUTOMATIC BOOKING (Version 7, Milestone 139 — foundation only)
+// =============================================================================
+//
+// Called ONLY from payfast.service.ts's processPayfastNotification(),
+// fire-and-forget, immediately after an order's PAID transition commits
+// — the same point sendPaymentConfirmedEmail() already fires from, and
+// the same guarantee applies: that call site can only ever reach this
+// once per order (a duplicate ITN hits an early return before ever
+// getting there), so this function itself needs no separate
+// idempotency layer beyond what bookCourierShipment() already has
+// (checkDuplicateBooking).
+//
+// This function must NEVER throw to its caller — every failure path
+// below is caught internally, logged safely, and (for a genuine
+// booking failure, not a benign "already booked" case) recorded on the
+// Shipping row via courierBookingAttemptedAt/courierBookingError so an
+// admin can tell "attempted and failed" apart from "never attempted".
+// A PayFast ITN's response, and the order's paymentStatus, must never
+// depend on anything in this function succeeding.
+//
+// Milestone 139 deliberately does NOT call getCourierQuote() first —
+// unlike the admin's manual flow, automatic booking always uses the
+// one pre-confirmed COURIER_GUY_DEFAULT_SERVICE_CODE (see env.ts's own
+// comment on why a fixed code is safer than picking automatically at
+// this stage), so there is nothing to choose between and no reason for
+// an extra network round-trip.
+function safeBookingFailureMessage(error: unknown): string {
+  if (error instanceof CourierBookingError) return error.message;
+  if (error instanceof CourierQuoteError) return error.message;
+  return "Automatic courier booking failed unexpectedly.";
+}
+
+export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<void> {
+  // Three independent flags, all required — see env.ts's own comment
+  // on why auto-booking is deliberately separate from both the quote
+  // flag and the manual-booking flag. Silent no-op when off: this is
+  // the expected, default-safe state in every environment until the
+  // owner explicitly turns automatic booking on.
+  if (!courierGuyConfig.enabled || !courierGuyConfig.bookingEnabled || !courierGuyConfig.autoBookingEnabled) {
+    return;
+  }
+
+  if (!courierGuyConfig.defaultServiceCode) {
+    console.warn(`[courier-guy] Automatic booking skipped for order=${orderNumber}: COURIER_GUY_DEFAULT_SERVICE_CODE is not set.`);
+    return;
+  }
+
+  // Defensive re-check of exactly what the caller (the PayFast ITN
+  // handler) already guarantees before ever reaching this function —
+  // never trusted blindly, same discipline as every other function in
+  // this file. A non-PayFast or non-PAID order is silently skipped,
+  // not logged as a failure — this is a normal "not applicable" case,
+  // not an error.
+  const order = await prisma.order.findUnique({
+    where: { orderNumber },
+    select: { id: true, paymentMethod: true, paymentStatus: true, status: true },
+  });
+
+  if (!order) return;
+  if (order.paymentMethod !== PaymentMethod.PAYFAST) return;
+  if (order.paymentStatus !== PaymentStatus.PAID) return;
+  if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) return;
+
+  try {
+    await bookCourierShipment(orderNumber, { parcel: {}, serviceLevelCode: courierGuyConfig.defaultServiceCode });
+    console.log(`[courier-guy] Automatic booking succeeded for order=${orderNumber}.`);
+  } catch (error) {
+    // A duplicate-booking rejection (409) is a benign, correct no-op —
+    // this order was already booked (manually, or by an earlier auto-
+    // booking attempt that this ITN redelivery is racing against) —
+    // never recorded as a failure, since nothing actually went wrong.
+    if (error instanceof CourierBookingError && error.statusCode === 409) {
+      console.log(`[courier-guy] Automatic booking skipped for order=${orderNumber}: already booked.`);
+      return;
+    }
+
+    // Every other failure path — Courier Guy unreachable, a non-2xx
+    // response, missing/invalid config, an unrecognisable response
+    // body, or a genuinely incomplete delivery address/contact — is a
+    // real failure worth surfacing to the admin. Only ever a short,
+    // pre-written safe message (never the raw Courier Guy response
+    // body, a header, or an API key) — see safeBookingFailureMessage().
+    const safeMessage = safeBookingFailureMessage(error).slice(0, 500);
+    console.warn(`[courier-guy] Automatic booking failed for order=${orderNumber}: ${safeMessage}`);
+
+    try {
+      await prisma.shipping.update({
+        where: { orderId: order.id },
+        data: { courierBookingAttemptedAt: new Date(), courierBookingError: safeMessage },
+      });
+    } catch {
+      // Best-effort only — the booking attempt itself already failed
+      // safely (no shipment was created, the order stays PAID); if
+      // even this follow-up write fails, there is nothing further to
+      // do here, and the caller must still never see this as an error.
+    }
+  }
 }

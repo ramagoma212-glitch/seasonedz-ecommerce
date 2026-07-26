@@ -144,3 +144,72 @@ here, a status field isn't a live courier feed). This will only change
 once a real courier provider is chosen and integrated in a future
 milestone, at which point tracking data would come from that
 provider's API/webhooks instead of manual entry.
+
+## Automatic Courier Guy Booking (Version 7, Milestone 139 — foundation built, DISABLED by default)
+
+Courier Guy quoting (Milestone 108) and manual admin booking (Milestone
+112) are both real and live, gated behind `COURIER_GUY_ENABLED` and
+`COURIER_GUY_BOOKING_ENABLED`. Milestone 139 adds the foundation for
+**automatic** booking — triggered by the backend itself the moment a
+PayFast payment is confirmed PAID, with no admin action needed — but
+**this stays fully disabled in production until the owner explicitly
+approves turning it on.**
+
+### The new flag: `COURIER_GUY_AUTO_BOOKING_ENABLED`
+
+A third, independent flag — separate from `COURIER_GUY_ENABLED` (quote)
+and `COURIER_GUY_BOOKING_ENABLED` (manual admin booking). All three must
+be `true` for automatic booking to ever run. Turning automatic booking
+off never disables the admin's own manual quote/book flow, and vice
+versa. **Defaults to `false`.**
+
+### `COURIER_GUY_DEFAULT_SERVICE_CODE` — must be confirmed before enabling
+
+Automatic booking always uses this one, fixed service code — it does
+not pick a service automatically (see `courierGuy.service.ts`'s own
+header comment on why a fixed code is safer at launch than a "cheapest
+service" heuristic, which relies on Courier Guy's service naming
+staying stable). **Do not set `COURIER_GUY_AUTO_BOOKING_ENABLED=true`
+until this value has been confirmed** by manually booking a few real
+orders as an admin first and checking which service code Courier Guy
+consistently returns for a typical Seasonedz Group parcel. Leaving it
+unset is safe — automatic booking simply skips every order and logs a
+warning until it's set.
+
+### What happens on a real PayFast payment once enabled
+
+`processPayfastNotification()`'s `"COMPLETE"` handling calls
+`autoBookCourierForPaidOrder(orderNumber)` immediately after an order's
+`paymentStatus` genuinely transitions to `PAID` for the first time —
+fire-and-forget, exactly like the existing payment-confirmation email.
+A duplicate ITN can never trigger a second attempt (the same
+idempotency guard that protects the email protects this too). If
+Courier Guy accepts the booking, the order gets the same
+`courierShipmentId`/`trackingNumber`/etc. fields a manual booking would
+save. If Courier Guy rejects it, is unreachable, or the order is
+missing something it needs, the attempt fails safely: **the PayFast
+payment itself is never affected, the order stays `PAID`**, and
+`Shipping.courierBookingAttemptedAt`/`courierBookingError` are set so
+an admin can see something needs attention — visible on the admin
+order detail page. Retrying is simply using the existing manual
+quote/book form on that same page; no separate "retry" button exists
+because none is needed.
+
+### Rollback and cancellation warning — read this before ever enabling
+
+**Once a real Courier Guy shipment is created via the API, turning
+`COURIER_GUY_AUTO_BOOKING_ENABLED` back to `false` (or reverting the
+code) does not cancel that shipment.** The booking already happened on
+Courier Guy's side and is a real, billable, physical-world commitment.
+This codebase has no cancellation API call implemented anywhere. **A
+wrong-address booking, or any booking that needs to be undone, must be
+handled directly in the Courier Guy portal or via their support** —
+never assume disabling the website feature undoes anything already
+booked.
+
+### Before ever setting `COURIER_GUY_AUTO_BOOKING_ENABLED=true` in production
+
+1. Confirm `COURIER_GUY_DEFAULT_SERVICE_CODE` against real, manually-confirmed bookings first.
+2. Get explicit owner approval for a real, controlled live test.
+3. Watch the very first automatically-booked order closely in the admin dashboard.
+4. Know how to cancel/correct a booking in the Courier Guy portal before you need to.

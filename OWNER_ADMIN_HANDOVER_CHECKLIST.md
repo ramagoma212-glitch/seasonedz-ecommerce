@@ -135,6 +135,10 @@ There is no live courier tracking system connected yet. Delivery works like this
 
 Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R500 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
 
+### About Automatic Courier Booking (not turned on yet)
+
+The site now has the groundwork for the website to automatically book a courier with The Courier Guy the moment a customer's PayFast payment is confirmed, saving you the manual booking step above. **This is built but switched off** — nothing changes in how you handle delivery today. Please don't ask anyone to turn this on until it has been discussed and confirmed with whoever manages the technical side of the site, and please read that discussion carefully: once a real booking is made automatically, it cannot simply be undone by switching a setting back off — a wrong booking would need to be sorted out directly with Courier Guy.
+
 ## What Not to Touch
 
 - Do not change a product's SKU or slug. These cannot be edited once set, and are not shown as editable fields for this reason.
@@ -142,6 +146,7 @@ Delivery fees are already worked out automatically by the website: R80 standard 
 - Do not delete a product. If a product should no longer be sold, set its status to Archived instead.
 - Do not run any setup scripts or developer tools. If you see technical instructions you do not understand, stop and ask whoever manages the site for you before continuing.
 - Do not turn on PayFast online payments yourself without first checking with whoever manages the technical side of the site, since this involves real payment settings.
+- Do not turn on automatic courier booking yourself without first checking with whoever manages the technical side of the site — see "About Automatic Courier Booking" above.
 
 ## Never Share Passwords or Keys
 

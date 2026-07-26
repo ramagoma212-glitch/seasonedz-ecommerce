@@ -431,6 +431,18 @@ model Shipping {
   courierCost        Decimal?  @db.Decimal(10, 2)
   courierBookedAt    DateTime?
 
+  // Version 7, Milestone 139: automatic-booking failure visibility.
+  // Both nullable, additive — every existing row simply has these
+  // unset. Only ever written by courierGuy.service.ts's
+  // autoBookCourierForPaidOrder() when a real booking attempt fails,
+  // so an admin can tell "attempted and failed" apart from "never
+  // attempted" (both otherwise look identical: every courier* field
+  // above still null either way). courierBookingError is always a
+  // short, safe internal message — never the raw Courier Guy response
+  // body, an API key, or any other secret.
+  courierBookingAttemptedAt DateTime?
+  courierBookingError       String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

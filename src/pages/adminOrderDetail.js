@@ -312,10 +312,36 @@ function renderCourierBookedSummary(order) {
   `;
 }
 
+// Version 7, Milestone 139: shown when an automatic (or manual) booking
+// attempt failed and left no real booking behind — otherwise this looks
+// identical to "nobody has ever tried," which would leave an admin with
+// no reason to check a paid order that actually needs manual booking.
+// Internal-only: never shown on any customer-facing page (see
+// adminDashboard.service.ts's own comment — these fields are queried
+// and returned separately from the shared customer order shape).
+// Retrying is just the normal quote/book form below this notice — no
+// separate "retry" control exists because none is needed.
+function renderCourierBookingFailedNotice(shipping) {
+  return `
+    <div class="form-banner form-banner--error">
+      Automatic courier booking was attempted and failed.
+      <br />
+      Attempted at: ${formatDateTime(shipping.courierBookingAttemptedAt)}
+      <br />
+      Reason: ${escapeHtml(shipping.courierBookingError || "Unknown error")}
+      <br />
+      You can retry booking manually below.
+    </div>
+  `;
+}
+
 function renderCourierSection(order) {
   const shipping = order.shipping;
   const alreadyBooked = Boolean(shipping && (shipping.trackingNumber || shipping.courierShipmentId));
-  return alreadyBooked ? renderCourierBookedSummary(order) : renderCourierQuoteForm(order);
+  if (alreadyBooked) return renderCourierBookedSummary(order);
+
+  const bookingFailed = Boolean(shipping && shipping.courierBookingAttemptedAt);
+  return `${bookingFailed ? renderCourierBookingFailedNotice(shipping) : ""}${renderCourierQuoteForm(order)}`;
 }
 
 function renderStatusHistoryTimeline(history) {

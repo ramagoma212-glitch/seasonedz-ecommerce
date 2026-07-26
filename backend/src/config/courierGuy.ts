@@ -49,6 +49,10 @@ export interface CourierGuyParcelDefaults {
 export interface CourierGuyConfig {
   enabled: boolean;
   bookingEnabled: boolean;
+  // Version 7, Milestone 139: separate from bookingEnabled — see
+  // env.ts's own comment on why this is a third, independent flag.
+  autoBookingEnabled: boolean;
+  defaultServiceCode: string | undefined;
   apiKey: string | undefined;
   baseUrl: string;
   collection: CourierGuyAddressDefaults;
@@ -59,6 +63,8 @@ export interface CourierGuyConfig {
 export const courierGuyConfig: CourierGuyConfig = {
   enabled: env.courierGuyEnabled,
   bookingEnabled: env.courierGuyBookingEnabled,
+  autoBookingEnabled: env.courierGuyAutoBookingEnabled,
+  defaultServiceCode: env.courierGuyDefaultServiceCode,
   apiKey: env.courierGuyApiKey,
   baseUrl: env.courierGuyBaseUrl,
   collection: {

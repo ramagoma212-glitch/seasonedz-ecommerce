@@ -41,6 +41,7 @@ import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
 import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
 import { sendPaymentConfirmedEmail, sendPaymentFailedEmail } from "./email/email.service.js";
 import type { OrderEmailData } from "./email/email.types.js";
+import { autoBookCourierForPaidOrder } from "./courierGuy.service.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -498,6 +499,18 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         ...toPaymentOrderEmailData(order),
         paymentStatus: PaymentStatus.PAID,
       }).catch(() => {});
+
+      // Version 7, Milestone 139: automatic Courier Guy booking
+      // foundation — same "only reached once, ever, per order" guarantee
+      // as the email above (the idempotent early-return already handled
+      // duplicate ITNs), so this needs no extra idempotency layer of its
+      // own beyond what autoBookCourierForPaidOrder()/bookCourierShipment()
+      // already have. Fire-and-forget: a Courier Guy failure must never
+      // affect this ITN's response or this order's paymentStatus, and
+      // autoBookCourierForPaidOrder() itself never throws — it's a
+      // no-op unless COURIER_GUY_AUTO_BOOKING_ENABLED is explicitly
+      // "true" (still "false" in production as of this milestone).
+      void autoBookCourierForPaidOrder(order.orderNumber).catch(() => {});
 
       return { message: "Payment verified and marked as PAID." };
     }
