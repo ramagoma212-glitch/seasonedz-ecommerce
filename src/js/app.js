@@ -2017,10 +2017,74 @@ function showToast(message) {
 // Version 7, Milestone 144: product image lightbox — a single,
 // lazily-created overlay reused across every product page (same
 // "create once on first use, toggle visibility" pattern as
-// showToast() above), opened by clicking the product's main image or
-// any gallery thumbnail — see productDetails.js's own
-// [data-action="view-larger-image"] buttons for the trigger markup.
+// showToast() above), opened by clicking the product's main image —
+// see productDetails.js's own [data-action="view-larger-image"]
+// button for the trigger markup.
+//
+// Version 7, Milestone 144C: the page's gallery and the lightbox now
+// share one index per product ([data-gallery]'s own data-current-
+// index), read/written by setGalleryIndex() below — arrows,
+// thumbnails, lightbox prev/next, lightbox keyboard nav and swipe
+// gestures all move through this one function, so the underlying page
+// and an open lightbox can never show two different images at once.
 let lightboxTriggerEl = null;
+let lightboxGalleryEl = null;
+
+function getGalleryImages(galleryEl) {
+  try {
+    const parsed = JSON.parse(galleryEl.dataset.images || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function getGalleryIndex(galleryEl) {
+  return Number(galleryEl.dataset.currentIndex || 0);
+}
+
+function updateGalleryPageDom(galleryEl, index, images) {
+  const current = images[index];
+  if (!current) return;
+
+  const mainImg = galleryEl.querySelector(".product-details__main-image");
+  if (mainImg) {
+    mainImg.src = current.src;
+    mainImg.alt = current.alt;
+    mainImg.dataset.originalSrc = current.original;
+  }
+
+  galleryEl.querySelectorAll(".product-details__thumb-btn").forEach((btn, i) => {
+    const isActive = i === index;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-current", String(isActive));
+  });
+}
+
+function updateLightboxImageDom(images, index) {
+  const current = images[index];
+  const lightbox = document.getElementById("image-lightbox");
+  if (!current || !lightbox || lightbox.hidden) return;
+  const img = lightbox.querySelector(".image-lightbox__image");
+  img.src = current.lightboxSrc;
+  img.alt = current.alt;
+}
+
+// The one place any navigation (page arrows, thumbnail click, lightbox
+// prev/next, lightbox keyboard, swipe) changes which image is showing.
+// Wraps around at either end rather than stopping, so arrow buttons
+// never need a disabled state.
+function setGalleryIndex(galleryEl, index) {
+  const images = getGalleryImages(galleryEl);
+  if (images.length === 0) return;
+  const normalized = ((index % images.length) + images.length) % images.length;
+  galleryEl.dataset.currentIndex = String(normalized);
+
+  updateGalleryPageDom(galleryEl, normalized, images);
+  if (lightboxGalleryEl === galleryEl) {
+    updateLightboxImageDom(images, normalized);
+  }
+}
 
 function getOrCreateLightbox() {
   let lightbox = document.getElementById("image-lightbox");
@@ -2035,23 +2099,41 @@ function getOrCreateLightbox() {
       <button type="button" class="image-lightbox__close" data-action="close-lightbox" aria-label="Close image">
         <span aria-hidden="true">&times;</span> Close image
       </button>
+      <button type="button" class="image-lightbox__nav image-lightbox__nav--prev" data-action="lightbox-prev" aria-label="Previous product image">
+        <span aria-hidden="true">&lsaquo;</span>
+      </button>
       <img class="image-lightbox__image" src="" alt="" />
+      <button type="button" class="image-lightbox__nav image-lightbox__nav--next" data-action="lightbox-next" aria-label="Next product image">
+        <span aria-hidden="true">&rsaquo;</span>
+      </button>
     </div>
   `;
   document.body.appendChild(lightbox);
   return lightbox;
 }
 
-function openLightbox(src, alt, triggerEl) {
-  if (!src) return;
-  const lightbox = getOrCreateLightbox();
-  const img = lightbox.querySelector(".image-lightbox__image");
-  img.src = src;
-  img.alt = alt || "";
+function openLightboxForGallery(galleryEl, triggerEl) {
+  const images = getGalleryImages(galleryEl);
+  if (images.length === 0) return;
 
-  lightbox.hidden = false;
-  document.body.classList.add("has-lightbox-open");
+  const lightbox = getOrCreateLightbox();
+  lightboxGalleryEl = galleryEl;
   lightboxTriggerEl = triggerEl || null;
+
+  const showNav = images.length > 1;
+  lightbox.querySelectorAll(".image-lightbox__nav").forEach((btn) => {
+    btn.hidden = !showNav;
+  });
+
+  // Must come before updateLightboxImageDom() below — that function
+  // deliberately no-ops while the lightbox is still hidden (so
+  // setGalleryIndex() calls from page-arrow navigation don't bother
+  // touching an invisible lightbox), so opening it has to flip this
+  // first or its very first image never gets set.
+  lightbox.hidden = false;
+  updateLightboxImageDom(images, getGalleryIndex(galleryEl));
+
+  document.body.classList.add("has-lightbox-open");
   lightbox.querySelector(".image-lightbox__close").focus();
 }
 
@@ -2062,11 +2144,63 @@ function closeLightbox() {
   lightbox.hidden = true;
   document.body.classList.remove("has-lightbox-open");
   lightbox.querySelector(".image-lightbox__image").src = "";
+  lightboxGalleryEl = null;
 
   if (lightboxTriggerEl) {
     lightboxTriggerEl.focus();
     lightboxTriggerEl = null;
   }
+}
+
+// Horizontal-swipe support for both the page gallery and an open
+// lightbox, sharing one pair of document-level touch listeners rather
+// than re-binding per render. `{ passive: true }` throughout — this
+// never calls preventDefault, so native vertical scroll/pinch-zoom is
+// completely unaffected; a swipe is only ever read after the fact, on
+// touchend, from how far and in which direction the finger moved.
+const SWIPE_THRESHOLD_PX = 40;
+let swipeStartX = null;
+let swipeStartY = null;
+let swipeGalleryEl = null;
+
+function resolveGalleryForSwipeContainer(container) {
+  if (!container) return null;
+  if (container.classList.contains("image-lightbox__dialog")) return lightboxGalleryEl;
+  return container.closest("[data-gallery]");
+}
+
+function setupGallerySwipe() {
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      const container = event.target.closest(".product-details__main-wrap, .image-lightbox__dialog");
+      swipeGalleryEl = resolveGalleryForSwipeContainer(container);
+      if (!swipeGalleryEl) return;
+      const touch = event.touches[0];
+      swipeStartX = touch.clientX;
+      swipeStartY = touch.clientY;
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchend",
+    (event) => {
+      if (!swipeGalleryEl || swipeStartX === null) return;
+      const touch = event.changedTouches[0];
+      const deltaX = touch.clientX - swipeStartX;
+      const deltaY = touch.clientY - swipeStartY;
+
+      if (Math.abs(deltaX) > SWIPE_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY)) {
+        setGalleryIndex(swipeGalleryEl, getGalleryIndex(swipeGalleryEl) + (deltaX < 0 ? 1 : -1));
+      }
+
+      swipeStartX = null;
+      swipeStartY = null;
+      swipeGalleryEl = null;
+    },
+    { passive: true }
+  );
 }
 
 // Deliberately no focus trap loop here — Escape, the close button and
@@ -2077,7 +2211,39 @@ function setupProductImageLightbox() {
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest('[data-action="view-larger-image"]');
     if (trigger) {
-      openLightbox(trigger.dataset.lightboxSrc, trigger.dataset.lightboxAlt, trigger);
+      const galleryEl = trigger.closest("[data-gallery]");
+      if (galleryEl) openLightboxForGallery(galleryEl, trigger);
+      return;
+    }
+
+    const prevBtn = event.target.closest('[data-action="gallery-prev"]');
+    if (prevBtn) {
+      const galleryEl = prevBtn.closest("[data-gallery]");
+      if (galleryEl) setGalleryIndex(galleryEl, getGalleryIndex(galleryEl) - 1);
+      return;
+    }
+
+    const nextBtn = event.target.closest('[data-action="gallery-next"]');
+    if (nextBtn) {
+      const galleryEl = nextBtn.closest("[data-gallery]");
+      if (galleryEl) setGalleryIndex(galleryEl, getGalleryIndex(galleryEl) + 1);
+      return;
+    }
+
+    const thumbBtn = event.target.closest('[data-action="gallery-select"]');
+    if (thumbBtn) {
+      const galleryEl = thumbBtn.closest("[data-gallery]");
+      if (galleryEl) setGalleryIndex(galleryEl, Number(thumbBtn.dataset.index));
+      return;
+    }
+
+    if (event.target.closest('[data-action="lightbox-prev"]')) {
+      if (lightboxGalleryEl) setGalleryIndex(lightboxGalleryEl, getGalleryIndex(lightboxGalleryEl) - 1);
+      return;
+    }
+
+    if (event.target.closest('[data-action="lightbox-next"]')) {
+      if (lightboxGalleryEl) setGalleryIndex(lightboxGalleryEl, getGalleryIndex(lightboxGalleryEl) + 1);
       return;
     }
 
@@ -2095,10 +2261,19 @@ function setupProductImageLightbox() {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
     const lightbox = document.getElementById("image-lightbox");
-    if (lightbox && !lightbox.hidden) closeLightbox();
+    if (!lightbox || lightbox.hidden) return;
+
+    if (event.key === "Escape") {
+      closeLightbox();
+    } else if (event.key === "ArrowRight" && lightboxGalleryEl) {
+      setGalleryIndex(lightboxGalleryEl, getGalleryIndex(lightboxGalleryEl) + 1);
+    } else if (event.key === "ArrowLeft" && lightboxGalleryEl) {
+      setGalleryIndex(lightboxGalleryEl, getGalleryIndex(lightboxGalleryEl) - 1);
+    }
   });
+
+  setupGallerySwipe();
 }
 
 document.addEventListener("DOMContentLoaded", mountApp);

@@ -657,6 +657,45 @@
   line-height: 1;
 }
 
+/* Version 7, Milestone 144C: prev/next inside the lightbox — hidden
+   (via the [hidden] attribute, toggled in app.js) for single-image
+   products, same as the page gallery's own arrows. */
+.image-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-2xl);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-fast);
+}
+
+.image-lightbox__nav:hover {
+  background-color: var(--color-bg-alt);
+}
+
+.image-lightbox__nav--prev {
+  left: var(--space-sm);
+}
+
+.image-lightbox__nav--next {
+  right: var(--space-sm);
+}
+
+.image-lightbox__nav[hidden] {
+  display: none;
+}
+
 body.has-lightbox-open {
   overflow: hidden;
 }
