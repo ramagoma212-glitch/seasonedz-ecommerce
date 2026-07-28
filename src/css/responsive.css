@@ -27,6 +27,24 @@
   .home-product-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  /* Version 7, Milestone 148: fixes a site-wide horizontal scroll at
+     320px. .logo has flex-shrink:0 and .site-header__actions's own
+     children (two fixed 40px icon links + the 32px hamburger button)
+     give it an implicit min-content floor neither can shrink below —
+     together with .site-header__inner's gap, that needs ~313px, but
+     320px viewports only have ~288px available inside the header's
+     own padding. Only 320px is affected (330px+ already fits); rather
+     than shrink the logo or icon buttons themselves, this tightens
+     the two gap tokens between them, which alone saves enough room to
+     fit with margin to spare and restore the header's right padding. */
+  .site-header__inner {
+    gap: var(--space-sm);
+  }
+
+  .site-header__actions {
+    gap: var(--space-sm);
+  }
 }
 
 /* Version 7, Milestone 93D: caps each homepage row to its first 2
