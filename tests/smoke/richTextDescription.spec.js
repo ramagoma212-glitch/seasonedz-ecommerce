@@ -202,4 +202,60 @@ test.describe("Rich text product description (public rendering)", () => {
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(hasHorizontalScroll).toBe(false);
   });
+
+  // Version 7, Milestone 147: the fixture product above only ever has
+  // 3 gallery images, which was never enough to trigger the real bug
+  // found after 146C — a real catalog product can have 7+ images, and
+  // .product-details__thumbs (a non-wrapping flex row of fixed 64px
+  // buttons) forced the whole mobile layout wider than the viewport.
+  // This mocks a product with 7 images specifically so the smoke suite
+  // actually exercises that failure mode instead of missing it again.
+  test("mobile: product with many gallery images has no horizontal scroll", async ({ page }) => {
+    const product = {
+      id: "prod-many-images",
+      slug: "many-images-test-product",
+      name: "Many Images Test Product",
+      sku: "SKU-MANY-1",
+      price: 100,
+      oldPrice: null,
+      stockStatus: "In Stock",
+      shortDescription: "Short teaser.",
+      description: "A product with many gallery images.",
+      image: "/images/product-1.jpg",
+      gallery: [
+        "/images/product-1.jpg",
+        "/images/product-2.jpg",
+        "/images/product-3.jpg",
+        "/images/product-4.jpg",
+        "/images/product-5.jpg",
+        "/images/product-6.jpg",
+        "/images/product-1.jpg",
+      ],
+      category: "Test Category",
+      categorySlug: "test-category",
+      features: [],
+      ageRange: "",
+      tags: [],
+      isFeatured: false,
+      isBestSeller: false,
+      isNewArrival: false,
+    };
+
+    await page.route("**/api/products", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { products: [product] } }) })
+    );
+    await page.route("**/api/categories", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, message: "OK", data: { categories: [{ id: "test-category", slug: "test-category", name: "Test Category", description: "", productCount: 1 }] } }),
+      })
+    );
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto(`/product/${product.slug}`);
+    await expect(page.locator(".product-details__thumb-btn")).toHaveCount(7);
+    const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalScroll).toBe(false);
+  });
 });
