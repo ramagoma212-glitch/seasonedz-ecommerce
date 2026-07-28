@@ -376,6 +376,67 @@
   margin-bottom: var(--space-sm);
 }
 
+/* Version 7, Milestone 146: renders the sanitised rich text "Full
+   Description" HTML (backend/src/utils/descriptionSanitizer.ts's
+   allowlist: p, br, strong, em, ul, ol, li, h2, h3) — scoped to this
+   one class so these rules never leak into any other part of the
+   site. base.css's global `ul, ol { list-style: none }` reset is
+   overridden here the same way .product-details__features already
+   does for the (separate, static) Features list above. */
+.product-details__description-content p {
+  margin-bottom: var(--space-md);
+  line-height: 1.7;
+}
+
+.product-details__description-content p:last-child {
+  margin-bottom: 0;
+}
+
+.product-details__description-content strong {
+  font-weight: 700;
+}
+
+.product-details__description-content em {
+  font-style: italic;
+}
+
+.product-details__description-content h2 {
+  font-size: var(--font-size-xl);
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__description-content h3 {
+  font-size: var(--font-size-lg);
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__description-content ul,
+.product-details__description-content ol {
+  margin-bottom: var(--space-md);
+  padding-left: var(--space-lg);
+}
+
+.product-details__description-content ul {
+  list-style: disc;
+}
+
+.product-details__description-content ol {
+  list-style: decimal;
+}
+
+.product-details__description-content li {
+  margin-bottom: var(--space-xs);
+  line-height: 1.6;
+}
+
+@media (max-width: 480px) {
+  .product-details__description-content {
+    font-size: var(--font-size-sm);
+  }
+}
+
 .product-details__features {
   list-style: disc;
   padding-left: var(--space-lg);

@@ -20,6 +20,7 @@ import {
 } from "../js/adminGuard.js";
 import { navigateTo } from "../js/navigation.js";
 import { renderAdminNav } from "../components/adminNav.js";
+import { renderDescriptionEditor } from "../components/descriptionEditor.js";
 import { escapeHtml } from "../js/search.js";
 import { withBase } from "../js/paths.js";
 
@@ -113,8 +114,8 @@ function renderProductForm(mode, product, categories) {
       </div>
 
       <div class="form-field">
-        <label class="form-field__label" for="productDescription">Full Description</label>
-        <textarea id="productDescription" class="form-field__input form-field__textarea" rows="4" maxlength="5000">${escapeHtml(product?.description || "")}</textarea>
+        <span class="form-field__label" id="productDescription-label">Full Description</span>
+        ${renderDescriptionEditor("productDescription", product?.description || "")}
       </div>
 
       <div class="admin-product-form__row">

@@ -50,6 +50,7 @@ import {
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 import { escapeHtml } from "./search.js";
+import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -79,6 +80,7 @@ function mountApp() {
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
+  setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
   onRouteChange();
@@ -1535,6 +1537,11 @@ function validateAdminProductForm(values, mode) {
   if (mode === "create") {
     const sku = document.getElementById("productSku")?.value.trim();
     if (!sku) return "SKU is required.";
+  }
+
+  const descriptionCharacterCount = getDescriptionVisibleCharacterCount("productDescription");
+  if (descriptionCharacterCount > MAX_DESCRIPTION_VISIBLE_CHARACTERS) {
+    return `Full Description must be ${MAX_DESCRIPTION_VISIBLE_CHARACTERS} visible characters or fewer (currently ${descriptionCharacterCount}).`;
   }
 
   return null;
