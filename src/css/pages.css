@@ -210,6 +210,18 @@
    wrapped in a <button> (native keyboard focus/activation for the
    lightbox trigger) — these two rules reset the button chrome away so
    the wrapped <img> looks exactly as it did before. */
+/* Version 7, Milestone 147: fixes a mobile horizontal-scroll bug found
+   after 146C — a grid item's automatic minimum size defaults to its
+   content's min-content width (not 0), so `.product-details__layout`'s
+   single mobile column couldn't shrink below this gallery's natural
+   width. Only surfaced on products with enough gallery images for the
+   non-wrapping `.product-details__thumbs` row (see below) to exceed
+   the viewport — the demo/fixture data used in earlier testing never
+   had enough images to trigger it. */
+.product-details__gallery {
+  min-width: 0;
+}
+
 .product-details__main-image-btn,
 .product-details__thumb-btn {
   display: block;
@@ -283,8 +295,14 @@
   right: var(--space-sm);
 }
 
+/* Version 7, Milestone 147: flex-wrap so products with many gallery
+   images (real catalog products can have 7+) wrap to additional rows
+   instead of forcing this row — and its blown-out grid ancestor —
+   wider than the viewport. See .product-details__gallery's own
+   comment above for the full mechanism. */
 .product-details__thumbs {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   margin-top: var(--space-sm);
 }
