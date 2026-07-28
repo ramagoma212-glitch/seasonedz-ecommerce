@@ -11,6 +11,7 @@
 
 import { Prisma, ProductStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { sanitizeDescriptionHtml, countVisibleCharacters } from "../utils/descriptionSanitizer.js";
 
 export class AdminProductError extends Error {
   statusCode: number;
@@ -26,6 +27,12 @@ const MAX_FEATURE_ITEMS = 20;
 const MAX_FEATURE_ITEM_LENGTH = 200;
 const MAX_SHORT_TEXT_LENGTH = 200;
 const MAX_LONG_TEXT_LENGTH = 5000;
+// Version 7, Milestone 146: the Full Description rich text field's own
+// limit, counted in *visible* characters (HTML tags excluded) — see
+// utils/descriptionSanitizer.ts. Kept separate from MAX_LONG_TEXT_LENGTH
+// above (unaffected, still used by nothing else) since the two fields
+// now count length completely differently.
+const MAX_DESCRIPTION_VISIBLE_LENGTH = 5000;
 
 // ---------------------------------------------------------------------------
 // Field-level validation helpers. Every one of these throws
@@ -55,6 +62,29 @@ function optionalTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_
     throw new AdminProductError(`${fieldName} must be ${maxLength} characters or fewer.`);
   }
   return trimmed.length > 0 ? trimmed : null;
+}
+
+// Version 7, Milestone 146: the one place `description` is ever
+// written from admin input — sanitises to the approved rich-text
+// allowlist first (see utils/descriptionSanitizer.ts), then enforces
+// the 5,000-*visible*-character limit against the sanitised result,
+// never the raw input. A legacy plain-text description round-trips
+// through sanitizeHtml() unchanged (nothing to strip or escape beyond
+// the entities it already handles), so this needs no separate
+// "is this old data" branch.
+function optionalDescriptionHtml(raw: unknown): string | null {
+  if (raw === undefined || raw === null) return null;
+  if (typeof raw !== "string") {
+    throw new AdminProductError("description must be a string.");
+  }
+  if (raw.trim().length === 0) return null;
+
+  const sanitized = sanitizeDescriptionHtml(raw);
+  const visibleLength = countVisibleCharacters(sanitized);
+  if (visibleLength > MAX_DESCRIPTION_VISIBLE_LENGTH) {
+    throw new AdminProductError(`description must be ${MAX_DESCRIPTION_VISIBLE_LENGTH} visible characters or fewer (found ${visibleLength}).`);
+  }
+  return sanitized.length > 0 ? sanitized : null;
 }
 
 function requirePositiveNumber(raw: unknown, fieldName: string): number {
@@ -327,6 +357,23 @@ export interface AdminProductDetail {
   updatedAt: Date;
 }
 
+// Version 7, Milestone 146 (second review fix): sanitised again here,
+// on every admin read, for the same reason product.service.ts's public
+// toProductOutput() now does — optionalDescriptionHtml() above only
+// ever sanitises a description at the moment it's saved, so a row
+// written before this milestone existed (or written any other way that
+// bypassed this service) could still hold unsafe raw HTML. Without
+// this, the admin's own browser — not just customers' — would receive
+// that unsafe HTML when opening the edit page, before the rich text
+// editor ever gets a chance to touch it. Idempotent on an
+// already-sanitised or plain-text description (nothing changes), so
+// this is safe to apply unconditionally on every read regardless of
+// which of createProduct/updateProduct/getProductForAdmin called it.
+function sanitizeAdminDescription(description: string | null): string | null {
+  if (!description) return description;
+  return sanitizeDescriptionHtml(description);
+}
+
 function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetail {
   return {
     id: product.id,
@@ -334,7 +381,7 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
     slug: product.slug,
     sku: product.sku,
     shortDescription: product.shortDescription,
-    description: product.description,
+    description: sanitizeAdminDescription(product.description),
     price: product.price.toNumber(),
     oldPrice: product.oldPrice ? product.oldPrice.toNumber() : null,
     stockQuantity: product.stockQuantity,
@@ -405,7 +452,7 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
   const lowStockThreshold = nonNegativeIntegerWithDefault(input.lowStockThreshold, "lowStockThreshold", 5);
   const status = optionalStatus(input.status) ?? ProductStatus.DRAFT;
   const shortDescription = optionalTrimmedString(input.shortDescription, "shortDescription", MAX_SHORT_TEXT_LENGTH);
-  const description = optionalTrimmedString(input.description, "description", MAX_LONG_TEXT_LENGTH);
+  const description = optionalDescriptionHtml(input.description);
   const ageRange = optionalTrimmedString(input.ageRange, "ageRange", MAX_SHORT_TEXT_LENGTH);
   const discountLabel = optionalTrimmedString(input.discountLabel, "discountLabel", MAX_SHORT_TEXT_LENGTH);
   const features = parseFeatures(input.features);
@@ -515,7 +562,7 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
 
   if ("name" in input) data.name = requireTrimmedString(input.name, "name");
   if ("shortDescription" in input) data.shortDescription = optionalTrimmedString(input.shortDescription, "shortDescription", MAX_SHORT_TEXT_LENGTH);
-  if ("description" in input) data.description = optionalTrimmedString(input.description, "description", MAX_LONG_TEXT_LENGTH);
+  if ("description" in input) data.description = optionalDescriptionHtml(input.description);
   if ("price" in input) data.price = requirePositiveNumber(input.price, "price");
   if ("oldPrice" in input) data.oldPrice = optionalPositiveNumber(input.oldPrice, "oldPrice");
   if ("stockQuantity" in input) data.stockQuantity = requiredNonNegativeInteger(input.stockQuantity, "stockQuantity");

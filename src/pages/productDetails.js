@@ -25,6 +25,7 @@ import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
 import { escapeHtml } from "../js/search.js";
+import { resolveDescriptionHtml } from "../js/descriptionFormat.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -294,7 +295,7 @@ export async function renderProductDetails({ slug } = {}) {
 
       <div class="product-details__description">
         <h2>Product Description</h2>
-        <p>${product.description}</p>
+        <div class="product-details__description-content">${resolveDescriptionHtml(product.description)}</div>
 
         <h3>Features</h3>
         <ul class="product-details__features">

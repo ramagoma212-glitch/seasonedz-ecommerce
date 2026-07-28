@@ -1,6 +1,7 @@
 import { Prisma, ProductStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SortOption, StockOption } from "../utils/query.js";
+import { sanitizeDescriptionHtml } from "../utils/descriptionSanitizer.js";
 
 // Every public product query goes through this include so the shape
 // available to toProductOutput() is always the same.
@@ -184,6 +185,26 @@ export interface ProductOutput {
   updatedAt: Date;
 }
 
+// Version 7, Milestone 146 (post-review fix): every product row already
+// goes through sanitizeDescriptionHtml() on the way IN (adminProduct.
+// service.ts's optionalDescriptionHtml()), but rows written before this
+// milestone existed were never sanitised on save — including, in
+// principle, an old description that was pasted straight into the
+// original plain <textarea> and happens to contain real HTML (that
+// textarea never executed it, but the OLD unescaped `<p>${description}</p>`
+// rendering on the product page would have). Sanitising again here, on
+// every public read, closes that gap regardless of how old or new a
+// row is — this is the one function every public product response (list,
+// detail, featured, best-sellers, new arrivals, search, category) passes
+// through, so there is no separate public endpoint this could miss.
+// Plain text with no markup at all passes through completely unchanged
+// (nothing for the allowlist to strip), so legacy descriptions are
+// never altered, only ever protected.
+function sanitizePublicDescription(description: string | null): string | null {
+  if (!description) return description;
+  return sanitizeDescriptionHtml(description);
+}
+
 // Built field-by-field (never a `{ ...product }` spread) so internal-only
 // columns — costPrice above all — can never accidentally leak into the
 // API response just because a new field gets added to the Prisma model.
@@ -205,7 +226,7 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
     image: getPrimaryImageUrl(product.images),
     gallery: product.images.map((image) => image.url),
     shortDescription: product.shortDescription,
-    description: product.description,
+    description: sanitizePublicDescription(product.description),
     features: product.features,
     ageRange: product.ageRange,
     tags: product.tags.map((tag) => tag.name),
