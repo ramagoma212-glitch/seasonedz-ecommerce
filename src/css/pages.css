@@ -224,6 +224,16 @@
   width: 64px;
 }
 
+/* Version 7, Milestone 144C: the currently-selected thumbnail — a
+   visible ring plus a bolder border, deliberately stronger than a
+   plain border-color swap so it stays obvious even against a
+   similarly-coloured product photo. */
+.product-details__thumb-btn.is-active .product-details__thumb {
+  border-color: var(--color-primary);
+  border-width: 3px;
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
 .product-details__main-image {
   width: 100%;
   height: auto;
@@ -231,6 +241,46 @@
   object-fit: cover;
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
+}
+
+/* Version 7, Milestone 144C: positions the prev/next arrows over the
+   main image without affecting its own layout — swipe touch handling
+   for this container lives in app.js's setupGallerySwipe(). */
+.product-details__main-wrap {
+  position: relative;
+}
+
+.product-details__nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background-color: rgba(255, 255, 255, 0.9);
+  color: var(--color-text);
+  font-size: var(--font-size-2xl);
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color var(--transition-fast);
+}
+
+.product-details__nav:hover {
+  background-color: var(--color-white);
+}
+
+.product-details__nav--prev {
+  left: var(--space-sm);
+}
+
+.product-details__nav--next {
+  right: var(--space-sm);
 }
 
 .product-details__thumbs {

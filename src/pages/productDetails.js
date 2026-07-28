@@ -24,6 +24,7 @@ import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
+import { escapeHtml } from "../js/search.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -108,39 +109,64 @@ function renderSupportNote() {
   `;
 }
 
+// Version 7, Milestone 144C: the gallery's full image list (detail,
+// lightbox and thumbnail URLs already resolved) travels with the page
+// as one JSON blob on the gallery root's [data-images] attribute — the
+// single source of truth app.js's slider/lightbox navigation reads
+// from and updates (data-current-index) as the customer moves between
+// images. escapeHtml() (not JSON's own escaping) is what makes this
+// safe to embed inside an HTML attribute — see js/search.js.
 function renderGallery(product) {
   const images = product.gallery?.length ? product.gallery : [product.image];
+  const hasMultiple = images.length > 1;
+
+  const galleryData = images.map((img, index) => ({
+    src: getDetailImageUrl(img),
+    lightboxSrc: getLightboxImageUrl(img),
+    alt: images.length > 1 ? `${product.name} (image ${index + 1} of ${images.length})` : product.name,
+    original: img,
+  }));
 
   return `
-    <div class="product-details__gallery">
-      <!--
-        Version 7, Milestone 92A: this is the page's primary content
-        image (immediately visible, no scrolling needed) — eager, not
-        lazy. width/height=800 match .product-details__main-image's
-        own CSS (aspect-ratio: 1/1, width: 100%) as a same-ratio
-        reference size, not the actual served resolution.
-      -->
-      <button
-        type="button"
-        class="product-details__main-image-btn"
-        data-action="view-larger-image"
-        data-lightbox-src="${getLightboxImageUrl(product.image)}"
-        data-lightbox-alt="${product.name}"
-        aria-label="View larger image of ${product.name}"
-      >
-        <img
-          class="product-details__main-image"
-          src="${getDetailImageUrl(product.image)}"
-          data-original-src="${product.image}"
-          alt="${product.name}"
-          width="800"
-          height="800"
-          loading="eager"
-          decoding="async"
-        />
-      </button>
+    <div class="product-details__gallery" data-gallery data-current-index="0" data-images="${escapeHtml(JSON.stringify(galleryData))}">
+      <div class="product-details__main-wrap">
+        ${
+          hasMultiple
+            ? `<button type="button" class="product-details__nav product-details__nav--prev" data-action="gallery-prev" aria-label="Previous product image">&lsaquo;</button>`
+            : ""
+        }
+        <!--
+          Version 7, Milestone 92A: this is the page's primary content
+          image (immediately visible, no scrolling needed) — eager, not
+          lazy. width/height=800 match .product-details__main-image's
+          own CSS (aspect-ratio: 1/1, width: 100%) as a same-ratio
+          reference size, not the actual served resolution.
+        -->
+        <button
+          type="button"
+          class="product-details__main-image-btn"
+          data-action="view-larger-image"
+          aria-label="View larger image of ${product.name}"
+        >
+          <img
+            class="product-details__main-image"
+            src="${galleryData[0].src}"
+            data-original-src="${images[0]}"
+            alt="${galleryData[0].alt}"
+            width="800"
+            height="800"
+            loading="eager"
+            decoding="async"
+          />
+        </button>
+        ${
+          hasMultiple
+            ? `<button type="button" class="product-details__nav product-details__nav--next" data-action="gallery-next" aria-label="Next product image">&rsaquo;</button>`
+            : ""
+        }
+      </div>
       ${
-        images.length > 1
+        hasMultiple
           ? `
             <div class="product-details__thumbs">
               ${images
@@ -148,13 +174,13 @@ function renderGallery(product) {
                   (img, index) =>
                     `<button
                       type="button"
-                      class="product-details__thumb-btn"
-                      data-action="view-larger-image"
-                      data-lightbox-src="${getLightboxImageUrl(img)}"
-                      data-lightbox-alt="${product.name}"
-                      aria-label="View larger image ${index + 1} of ${product.name}"
+                      class="product-details__thumb-btn${index === 0 ? " is-active" : ""}"
+                      data-action="gallery-select"
+                      data-index="${index}"
+                      aria-label="View image ${index + 1} of ${product.name}"
+                      aria-current="${index === 0}"
                     >
-                      <img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" data-original-src="${img}" alt="${product.name} thumbnail ${index + 1}" width="64" height="64" loading="lazy" decoding="async" />
+                      <img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" alt="${product.name} thumbnail ${index + 1}" width="64" height="64" loading="lazy" decoding="async" />
                     </button>`
                 )
                 .join("")}
