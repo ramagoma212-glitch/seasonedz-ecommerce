@@ -5,7 +5,8 @@
 // and sort controls, the quantity selector on the product details page,
 // cart/wishlist actions, the guest checkout form, the order tracking
 // form, demo enquiry forms (contact/schools/wholesale/distributor),
-// header badge counters, and toast feedback.
+// header badge counters, toast feedback, and the product image
+// lightbox.
 
 import { renderHeader } from "../components/header.js";
 import { renderFooter } from "../components/footer.js";
@@ -65,6 +66,7 @@ function mountApp() {
   setupFilterControls();
   setupCartQuantityInput();
   setupProductActions();
+  setupProductImageLightbox();
   setupCheckoutForm();
   setupTrackOrderForm();
   setupEnquiryForms();
@@ -2010,6 +2012,93 @@ function showToast(message) {
   toastTimer = setTimeout(() => {
     toast.classList.remove("is-visible");
   }, 2500);
+}
+
+// Version 7, Milestone 144: product image lightbox — a single,
+// lazily-created overlay reused across every product page (same
+// "create once on first use, toggle visibility" pattern as
+// showToast() above), opened by clicking the product's main image or
+// any gallery thumbnail — see productDetails.js's own
+// [data-action="view-larger-image"] buttons for the trigger markup.
+let lightboxTriggerEl = null;
+
+function getOrCreateLightbox() {
+  let lightbox = document.getElementById("image-lightbox");
+  if (lightbox) return lightbox;
+
+  lightbox = document.createElement("div");
+  lightbox.id = "image-lightbox";
+  lightbox.className = "image-lightbox";
+  lightbox.hidden = true;
+  lightbox.innerHTML = `
+    <div class="image-lightbox__dialog" role="dialog" aria-modal="true" aria-label="Larger product image">
+      <button type="button" class="image-lightbox__close" data-action="close-lightbox" aria-label="Close image">
+        <span aria-hidden="true">&times;</span> Close image
+      </button>
+      <img class="image-lightbox__image" src="" alt="" />
+    </div>
+  `;
+  document.body.appendChild(lightbox);
+  return lightbox;
+}
+
+function openLightbox(src, alt, triggerEl) {
+  if (!src) return;
+  const lightbox = getOrCreateLightbox();
+  const img = lightbox.querySelector(".image-lightbox__image");
+  img.src = src;
+  img.alt = alt || "";
+
+  lightbox.hidden = false;
+  document.body.classList.add("has-lightbox-open");
+  lightboxTriggerEl = triggerEl || null;
+  lightbox.querySelector(".image-lightbox__close").focus();
+}
+
+function closeLightbox() {
+  const lightbox = document.getElementById("image-lightbox");
+  if (!lightbox || lightbox.hidden) return;
+
+  lightbox.hidden = true;
+  document.body.classList.remove("has-lightbox-open");
+  lightbox.querySelector(".image-lightbox__image").src = "";
+
+  if (lightboxTriggerEl) {
+    lightboxTriggerEl.focus();
+    lightboxTriggerEl = null;
+  }
+}
+
+// Deliberately no focus trap loop here — Escape, the close button and
+// clicking the backdrop are enough to always get back out, and a
+// hand-rolled Tab trap risks stranding keyboard users worse than not
+// having one at all.
+function setupProductImageLightbox() {
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest('[data-action="view-larger-image"]');
+    if (trigger) {
+      openLightbox(trigger.dataset.lightboxSrc, trigger.dataset.lightboxAlt, trigger);
+      return;
+    }
+
+    if (event.target.closest('[data-action="close-lightbox"]')) {
+      closeLightbox();
+      return;
+    }
+
+    // A click landing directly on the lightbox's own full-screen root
+    // (never on `.image-lightbox__dialog` or anything inside it) is a
+    // click outside the enlarged image — close it.
+    if (event.target.id === "image-lightbox") {
+      closeLightbox();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const lightbox = document.getElementById("image-lightbox");
+    if (lightbox && !lightbox.hidden) closeLightbox();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", mountApp);

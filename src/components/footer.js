@@ -2,6 +2,7 @@
 // links, customer service links, real contact details and copyright.
 
 import { businessInfo } from "../data/businessInfo.js";
+import { renderFooterMarketplaceLinks } from "./marketplaceLinks.js";
 
 export function renderFooter() {
   const year = new Date().getFullYear();
@@ -64,6 +65,7 @@ export function renderFooter() {
       </div>
 
       <div class="site-footer__bottom">
+        ${renderFooterMarketplaceLinks()}
         &copy; ${year} Seasonedz Group. All rights reserved.
       </div>
     </footer>

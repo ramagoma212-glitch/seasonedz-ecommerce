@@ -107,6 +107,44 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* Version 7, Milestone 144: small "Shop Seasonedz Group on" line above
+   the copyright — deliberately kept to one thin line, not a full
+   footer column, per the task's own "keep footer clean" instruction. */
+.footer-marketplace {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.footer-marketplace__label {
+  margin-right: var(--space-xs);
+}
+
+.footer-marketplace__link {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--color-white);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  line-height: 0;
+  transition: transform var(--transition-fast);
+}
+
+.footer-marketplace__link:hover {
+  transform: translateY(-1px);
+}
+
+.footer-marketplace__logo {
+  height: 18px;
+  width: auto;
+  max-width: 100px;
+  object-fit: contain;
+  display: block;
+}
+
 /* ---- Generic section/grid shells ------------------------------------------ */
 .section {
   padding-block: var(--space-3xl);

@@ -206,6 +206,24 @@
    product detail page's own main image was already correctly square
    in design intent once this bug is fixed, and 11 of the 12 real
    product photos are already square, so cover crops nothing for them. */
+/* Version 7, Milestone 144: the main image and each thumbnail are now
+   wrapped in a <button> (native keyboard focus/activation for the
+   lightbox trigger) — these two rules reset the button chrome away so
+   the wrapped <img> looks exactly as it did before. */
+.product-details__main-image-btn,
+.product-details__thumb-btn {
+  display: block;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  width: 100%;
+}
+
+.product-details__thumb-btn {
+  width: 64px;
+}
+
 .product-details__main-image {
   width: 100%;
   height: auto;
