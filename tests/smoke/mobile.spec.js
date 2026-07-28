@@ -56,3 +56,47 @@ test.describe("Mobile smoke checks", () => {
     await expect(page.locator('[data-action="add-to-cart"]').first()).toBeVisible();
   });
 });
+
+// Version 7, Milestone 148: fixes a site-wide horizontal scroll at
+// 320px caused by the header (see src/css/responsive.css's own
+// comment on the fix) — a separate, narrower viewport than the rest
+// of this file's 390px default, so these get their own describe block
+// with a scoped test.use() override.
+test.describe("Mobile smoke checks (320px)", () => {
+  test.use({ viewport: { width: 320, height: 812 } });
+
+  test("homepage has no horizontal scroll at 320px", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator(".product-card").first()).toBeVisible();
+    const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("shop page has no horizontal scroll at 320px", async ({ page }) => {
+    await page.goto("/shop");
+    await expect(page.locator(".product-card").first()).toBeVisible();
+    const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("product detail page has no horizontal scroll at 320px", async ({ page }) => {
+    await page.goto("/product/abc-colouring-book-for-kids-with-fun-facts");
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+    const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("header hamburger menu opens and closes at 320px", async ({ page }) => {
+    await page.goto("/");
+    const toggle = page.locator(".site-header__mobile-toggle");
+    const panel = page.locator(".site-header__collapsible");
+
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+    await expect(panel).toHaveClass(/is-open/);
+    await expect(page.locator(".site-header__nav-list")).toBeVisible();
+
+    await toggle.click();
+    await expect(panel).not.toHaveClass(/is-open/);
+  });
+});
