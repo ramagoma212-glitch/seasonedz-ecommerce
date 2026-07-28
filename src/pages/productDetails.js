@@ -19,10 +19,11 @@
 
 import { renderProductCard } from "../components/productCard.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
+import { renderProductMarketplaceBlock } from "../components/marketplaceLinks.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
-import { getDetailImageUrl, getGalleryThumbUrl } from "../js/imageTransforms.js";
+import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -119,24 +120,42 @@ function renderGallery(product) {
         own CSS (aspect-ratio: 1/1, width: 100%) as a same-ratio
         reference size, not the actual served resolution.
       -->
-      <img
-        class="product-details__main-image"
-        src="${getDetailImageUrl(product.image)}"
-        data-original-src="${product.image}"
-        alt="${product.name}"
-        width="800"
-        height="800"
-        loading="eager"
-        decoding="async"
-      />
+      <button
+        type="button"
+        class="product-details__main-image-btn"
+        data-action="view-larger-image"
+        data-lightbox-src="${getLightboxImageUrl(product.image)}"
+        data-lightbox-alt="${product.name}"
+        aria-label="View larger image of ${product.name}"
+      >
+        <img
+          class="product-details__main-image"
+          src="${getDetailImageUrl(product.image)}"
+          data-original-src="${product.image}"
+          alt="${product.name}"
+          width="800"
+          height="800"
+          loading="eager"
+          decoding="async"
+        />
+      </button>
       ${
         images.length > 1
           ? `
             <div class="product-details__thumbs">
               ${images
                 .map(
-                  (img) =>
-                    `<img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" data-original-src="${img}" alt="${product.name} thumbnail" width="64" height="64" loading="lazy" decoding="async" />`
+                  (img, index) =>
+                    `<button
+                      type="button"
+                      class="product-details__thumb-btn"
+                      data-action="view-larger-image"
+                      data-lightbox-src="${getLightboxImageUrl(img)}"
+                      data-lightbox-alt="${product.name}"
+                      aria-label="View larger image ${index + 1} of ${product.name}"
+                    >
+                      <img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" data-original-src="${img}" alt="${product.name} thumbnail ${index + 1}" width="64" height="64" loading="lazy" decoding="async" />
+                    </button>`
                 )
                 .join("")}
             </div>
@@ -234,6 +253,8 @@ export async function renderProductDetails({ slug } = {}) {
               ${wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
             </button>
           </div>
+
+          ${renderProductMarketplaceBlock()}
 
           <div class="product-details__meta">
             ${product.paperSize ? `<p><strong>Size:</strong> ${product.paperSize}</p>` : ""}

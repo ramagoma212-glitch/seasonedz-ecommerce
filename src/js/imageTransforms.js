@@ -59,3 +59,11 @@ export function getDetailImageUrl(url) {
 export function getGalleryThumbUrl(url) {
   return buildDerivativeUrl(url, { width: 200, height: 200, quality: 75 });
 }
+
+// Version 7, Milestone 144: the product image lightbox's enlarged
+// view — noticeably bigger than getDetailImageUrl()'s 800px so
+// "View larger image" is a real upgrade, capped well short of the
+// original file size.
+export function getLightboxImageUrl(url) {
+  return buildDerivativeUrl(url, { width: 1400, height: 1400, quality: 85 });
+}

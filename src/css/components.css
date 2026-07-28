@@ -543,6 +543,124 @@
   transform: translateX(-50%) translateY(0);
 }
 
+/* ---- Marketplace links (Version 7, Milestone 144) ----------------------------
+   Shared by the homepage section, footer line and product-page block —
+   see components/marketplaceLinks.js. Text wordmarks for now (no logo
+   asset exists yet); swapping in a real <img> later needs no CSS
+   changes here. */
+.marketplace-section__cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-lg);
+}
+
+.marketplace-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 200px;
+  min-height: 64px;
+  padding: var(--space-md) var(--space-xl);
+  text-decoration: none;
+}
+
+.marketplace-card__logo {
+  height: 40px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
+}
+
+.product-details__marketplace {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.product-details__marketplace-label {
+  margin-right: var(--space-xs);
+}
+
+.product-details__marketplace a {
+  color: var(--color-secondary-dark);
+  font-weight: 600;
+}
+
+/* ---- Product image lightbox (Version 7, Milestone 144) -----------------------
+   Soft warm-beige overlay (not the usual dark dimmed backdrop) to
+   match the site's warm style — see productDetails.js for the
+   [data-action="view-larger-image"] triggers and app.js for the
+   open/close logic. A plain opacity-only transition, no motion, per
+   the task's own "no heavy animation" instruction. */
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background-color: rgba(253, 238, 224, 0.96);
+}
+
+.image-lightbox[hidden] {
+  display: none;
+}
+
+.image-lightbox__dialog {
+  position: relative;
+  max-width: min(92vw, 900px);
+  max-height: 85vh;
+  display: flex;
+}
+
+.image-lightbox__image {
+  max-width: 100%;
+  max-height: 85vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  background-color: var(--color-surface);
+}
+
+.image-lightbox__close {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 44px;
+  padding: var(--space-xs) var(--space-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background-color var(--transition-fast);
+}
+
+.image-lightbox__close:hover {
+  background-color: var(--color-bg-alt);
+}
+
+.image-lightbox__close span {
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+body.has-lightbox-open {
+  overflow: hidden;
+}
+
 /* ---- Mobile filter toggle (Version 7, Milestone 93B) ------------------------
    Hidden by default (desktop always shows the filter sidebar directly,
    unchanged from before this milestone) — shown only at the same

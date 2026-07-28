@@ -9,6 +9,7 @@
 
 import { renderCategoryCard } from "../components/categoryCard.js";
 import { renderProductCard } from "../components/productCard.js";
+import { renderMarketplaceHomeSection } from "../components/marketplaceLinks.js";
 import { withBase } from "../js/paths.js";
 import { getCatalog } from "../js/api/productsApi.js";
 
@@ -80,6 +81,8 @@ export async function renderHome() {
         </div>
       </div>
     </section>
+
+    ${renderMarketplaceHomeSection()}
 
     <section class="container welcome">
       <p>

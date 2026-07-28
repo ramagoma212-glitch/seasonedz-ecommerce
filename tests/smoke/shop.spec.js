@@ -71,4 +71,54 @@ test.describe("Shopping smoke checks", () => {
     await page.locator('[data-action="wishlist-remove"]').first().click();
     await expect(page.locator(".wishlist-item")).toHaveCount(0);
   });
+
+  // Version 7, Milestone 144: product image lightbox. Covers the main
+  // image trigger plus all three ways of closing it (close button,
+  // Escape, clicking outside the enlarged image) in one test.
+  test("product image lightbox opens and closes", async ({ page }) => {
+    await page.goto(`/product/${PRODUCT_SLUG}`);
+    const lightbox = page.locator("#image-lightbox");
+    const mainImageBtn = page.locator(".product-details__main-image-btn");
+
+    await mainImageBtn.click();
+    await expect(lightbox).toBeVisible();
+    await expect(lightbox.locator(".image-lightbox__image")).toHaveAttribute("alt", /.+/);
+
+    await lightbox.locator(".image-lightbox__close").click();
+    await expect(lightbox).toBeHidden();
+
+    await mainImageBtn.click();
+    await expect(lightbox).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(lightbox).toBeHidden();
+
+    await mainImageBtn.click();
+    await expect(lightbox).toBeVisible();
+    await lightbox.click({ position: { x: 2, y: 2 } });
+    await expect(lightbox).toBeHidden();
+  });
+
+  test("marketplace links exist on homepage", async ({ page }) => {
+    await page.goto("/");
+    const cards = page.locator(".marketplace-card");
+    await expect(cards).toHaveCount(2);
+
+    for (const card of await cards.all()) {
+      await expect(card).toHaveAttribute("target", "_blank");
+      await expect(card).toHaveAttribute("rel", "noopener noreferrer");
+      const href = await card.getAttribute("href");
+      expect(href).toMatch(/^https:\/\//);
+    }
+  });
+
+  test("marketplace links exist in footer", async ({ page }) => {
+    await page.goto("/");
+    const links = page.locator(".footer-marketplace__link");
+    await expect(links).toHaveCount(2);
+
+    for (const link of await links.all()) {
+      await expect(link).toHaveAttribute("target", "_blank");
+      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    }
+  });
 });
