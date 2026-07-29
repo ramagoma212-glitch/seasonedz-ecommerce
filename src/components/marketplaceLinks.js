@@ -12,7 +12,21 @@
 import { marketplaceLinks } from "../data/marketplaceLinks.js";
 import { withBase } from "../js/paths.js";
 
+// Version 7, Milestone 150: a marketplace with no verified url (e.g.
+// Amazon.com, see data/marketplaceLinks.js's own comment) renders as
+// plain, non-clickable content — never a placeholder/guessed href.
 function renderMarketplaceCard(marketplace) {
+  const logo = `<img class="marketplace-card__logo" src="${withBase(marketplace.logo)}" alt="${marketplace.alt}" loading="lazy" decoding="async" />`;
+
+  if (!marketplace.url) {
+    return `
+      <div class="card marketplace-card marketplace-card--unavailable" aria-label="${marketplace.name} (coming soon)">
+        ${logo}
+        <span class="marketplace-card__soon">Coming soon</span>
+      </div>
+    `;
+  }
+
   return `
     <a
       class="card marketplace-card"
@@ -21,7 +35,7 @@ function renderMarketplaceCard(marketplace) {
       rel="noopener noreferrer"
       aria-label="Shop Seasonedz Group on ${marketplace.name} (opens in a new tab)"
     >
-      <img class="marketplace-card__logo" src="${withBase(marketplace.logo)}" alt="${marketplace.alt}" loading="lazy" decoding="async" />
+      ${logo}
     </a>
   `;
 }
@@ -31,7 +45,7 @@ export function renderMarketplaceHomeSection() {
     <section class="section container">
       <div class="marketplace-section">
         <div class="section__header">
-          <h2>Also available on</h2>
+          <h2>Also Available On</h2>
           <p>You can also find selected Seasonedz Group products on trusted marketplaces.</p>
         </div>
         <div class="marketplace-section__cards">
@@ -47,8 +61,9 @@ export function renderFooterMarketplaceLinks() {
     <p class="footer-marketplace">
       <span class="footer-marketplace__label">Shop Seasonedz Group on</span>
       ${marketplaceLinks
-        .map(
-          (marketplace) => `
+        .map((marketplace) =>
+          marketplace.url
+            ? `
             <a
               class="footer-marketplace__link"
               href="${marketplace.url}"
@@ -58,6 +73,11 @@ export function renderFooterMarketplaceLinks() {
             >
               <img class="footer-marketplace__logo" src="${withBase(marketplace.logo)}" alt="${marketplace.alt}" loading="lazy" decoding="async" />
             </a>
+          `
+            : `
+            <span class="footer-marketplace__link footer-marketplace__link--unavailable" aria-label="${marketplace.name} (coming soon)">
+              <img class="footer-marketplace__logo" src="${withBase(marketplace.logo)}" alt="${marketplace.alt}" loading="lazy" decoding="async" />
+            </span>
           `
         )
         .join("")}
@@ -73,7 +93,11 @@ export function renderProductMarketplaceBlock() {
         .map(
           (marketplace, index) => `
             ${index > 0 ? '<span class="footer-marketplace__divider" aria-hidden="true">&middot;</span>' : ""}
-            <a href="${marketplace.url}" target="_blank" rel="noopener noreferrer">${marketplace.name}</a>
+            ${
+              marketplace.url
+                ? `<a href="${marketplace.url}" target="_blank" rel="noopener noreferrer">${marketplace.name}</a>`
+                : `<span aria-label="${marketplace.name} (coming soon)">${marketplace.name}</span>`
+            }
           `
         )
         .join("")}

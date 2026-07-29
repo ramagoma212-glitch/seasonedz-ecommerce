@@ -16,4 +16,10 @@ export const businessInfo = {
   whatsappUrl: "https://wa.me/27695269941",
   mailtoUrl: "mailto:seasonedzgroup@outlook.com",
   telUrl: "tel:+27695269941",
+  // Version 7, Milestone 150: no verified Google Business Profile /
+  // reviews link has ever been supplied. The homepage's Google
+  // Reviews section reads this value and renders nothing at all
+  // (never a fabricated rating, review, or placeholder link) while
+  // it's null — see components/googleReviews.js.
+  googleReviewsUrl: null,
 };

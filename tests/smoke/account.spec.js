@@ -39,11 +39,16 @@ test.describe("Customer account smoke checks", () => {
     await expect(loginForm.locator('[data-error-for="password"]')).not.toHaveText("");
   });
 
-  test("header My Account link exists and goes to /account", async ({ page }) => {
-    await page.goto("/");
-    const link = page.locator('.site-header a[href="/account"]');
-    await expect(link).toBeVisible();
-    await expect(link).toHaveText("My Account");
+  // Version 7, Milestone 150: "My Account" was deliberately removed
+  // from the primary header nav — the new 8-item nav list in the
+  // homepage redesign brief doesn't include it. The route and page
+  // themselves are fully preserved, just reached by direct navigation
+  // (or from within the checkout/order flows) rather than a header
+  // link now.
+  test("the /account route and page still work, even though it's no longer in the primary header nav", async ({ page }) => {
+    await page.goto("/account");
+    await expect(page.locator("h1")).toBeVisible();
+    await expect(page).toHaveURL(/\/account$/);
   });
 
   test("guest checkout still loads without requiring an account", async ({ page }) => {

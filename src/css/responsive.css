@@ -221,18 +221,28 @@
     grid-template-columns: 1fr;
   }
 
-  /* Version 7, Milestone 94: fixes the long-known tablet header
-     overlap. The inline nav (6 links, nowrap) + search bar + wishlist/
-     cart icons need roughly 1080px of unbroken width to render
-     without squeezing — but the old breakpoint only collapsed them
-     behind the hamburger at max-width:768px, leaving every width from
-     769px up to ~1080px (e.g. 900px, 1024px — measured live, cart
-     icon pushed fully off-screen and "Seasonedz" overlapping "Home")
-     with no way to fit. Reuses the exact same collapsible-panel
-     treatment as the max-width:768px block below (same markup, same
-     .is-open toggle in js/app.js — nothing mobile-specific changes),
-     just triggered earlier so tablet widths get the already-working
-     mobile nav instead of a desktop layout that doesn't fit. */
+}
+
+/* Version 7, Milestone 94, widened in Milestone 150: fixes the
+   long-known tablet/desktop header overlap. The inline nav + search
+   bar + wishlist/cart icons need enough unbroken width to render
+   without squeezing — originally ~1080px for a 6-link nav.
+   Milestone 150's homepage redesign brief grew this to 8 links with
+   several longer labels ("Colouring Books", "Creative Supplies",
+   "Digital Downloads", "Schools and Churches"), which needed ~1290px
+   at the old spacing — comfortably more than this site's 1200px
+   container ever provides. Rather than push the breakpoint above
+   1200px (risking a mobile-style nav at very common real laptop and
+   default-test-viewport widths like 1280px), the nav's own gap,
+   search bar's max-width and this breakpoint were all tightened/moved
+   together — empirically measured needing ~1169px minimum now, so
+   1200px (this site's own --container-width, a meaningful round
+   threshold) leaves a comfortable margin. Reuses the exact same
+   collapsible-panel treatment as the max-width:768px block further
+   down (same markup, same .is-open toggle in js/app.js — nothing
+   mobile-specific changes), just triggered at the width where the
+   full nav genuinely fits. */
+@media (max-width: 1199px) {
   .site-header__collapsible {
     display: none;
     position: absolute;
@@ -451,4 +461,46 @@
     text-align: center;
   }
 
+  /* Version 7, Milestone 150: stacked, full-width, 44px-tall action
+     buttons below tablet width — same reasoning as the hero's own
+     .hero__actions rule from Milestone 149. */
+  .best-seller__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .best-seller__actions .btn,
+  .best-seller__wishlist {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .newsletter-form__fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Version 7, Milestone 150: homepage section responsive tiers. */
+@media (max-width: 1023px) {
+  .best-seller {
+    grid-template-columns: 1fr;
+    padding: var(--space-lg);
+  }
+
+  .best-seller__media {
+    max-width: 360px;
+    margin-inline: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .digital-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .digital-grid {
+    grid-template-columns: 1fr;
+  }
 }

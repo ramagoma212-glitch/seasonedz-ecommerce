@@ -29,6 +29,7 @@ import {
   validateCustomerRegisterForm,
   validateForgotPasswordForm,
   validateResetPasswordForm,
+  isValidEmail,
 } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
@@ -70,6 +71,7 @@ function mountApp() {
   setupProductImageLightbox();
   setupCheckoutForm();
   setupTrackOrderForm();
+  setupNewsletterForm();
   setupEnquiryForms();
   setupCustomerAccountForms();
   setupAdminLoginForm();
@@ -102,15 +104,32 @@ function onRouteChange() {
   }
 
   document.querySelector(".site-header__collapsible")?.classList.remove("is-open");
+  document.querySelector(".site-header__mobile-toggle")?.setAttribute("aria-expanded", "false");
 }
 
+// Version 7, Milestone 150: aria-expanded now tracks open state (was
+// previously just a visual class toggle with no accessible state),
+// and Escape closes the menu and returns focus to the toggle button —
+// the standard expected behaviour for any disclosure/menu widget.
 function setupMobileMenu() {
   const toggle = document.querySelector(".site-header__mobile-toggle");
   const panel = document.querySelector(".site-header__collapsible");
   if (!toggle || !panel) return;
 
+  const setOpen = (isOpen) => {
+    panel.classList.toggle("is-open", isOpen);
+    toggle.setAttribute("aria-expanded", String(isOpen));
+  };
+
   toggle.addEventListener("click", () => {
-    panel.classList.toggle("is-open");
+    setOpen(!panel.classList.contains("is-open"));
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (!panel.classList.contains("is-open")) return;
+    setOpen(false);
+    toggle.focus();
   });
 }
 
@@ -273,8 +292,41 @@ function setupProductActions() {
       handleAdminLogout();
     } else if (action === "toggle-mobile-filters") {
       handleToggleMobileFilters(actionEl);
+    } else if (action === "toggle-faq") {
+      handleToggleFaq(actionEl);
+    } else if (action === "scroll-to-newsletter") {
+      handleScrollToNewsletter();
     }
   });
+}
+
+// Version 7, Milestone 150: homepage FAQ accordion (see
+// components/homeFaqAccordion.js) — toggles this one item's own
+// panel/aria-expanded state without touching any other item, so
+// multiple can be open at once (a simple, predictable behaviour that
+// needs no extra "close others" bookkeeping).
+function handleToggleFaq(triggerEl) {
+  const panel = document.getElementById(triggerEl.getAttribute("aria-controls"));
+  if (!panel) return;
+
+  const isOpen = triggerEl.getAttribute("aria-expanded") === "true";
+  triggerEl.setAttribute("aria-expanded", String(!isOpen));
+  panel.hidden = isOpen;
+}
+
+// "Notify Me" on a not-yet-available digital product (see
+// pages/home.js's Digital Colouring Books section) scrolls to the
+// real newsletter form on the same page rather than linking to it —
+// an in-page <a href="#..."> would be intercepted by router.js's own
+// click handling (every internal link goes through navigateTo(), see
+// its own comment on why) and trigger a full route re-render instead
+// of a smooth scroll, so this is a plain DOM scroll + focus instead.
+function handleScrollToNewsletter() {
+  const form = document.querySelector("[data-newsletter-form]");
+  if (!form) return;
+
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  form.querySelector("#newsletter-name")?.focus();
 }
 
 // Add to Cart on the product details page must use the selected
@@ -622,6 +674,56 @@ function setupTrackOrderForm() {
     const errorEl = form.querySelector('[data-error-for="orderNumber"]');
     if (errorEl) errorEl.textContent = "";
     event.target.classList.remove("has-error");
+  });
+}
+
+// Version 7, Milestone 150: homepage newsletter form (see
+// components/newsletterSignup.js). No subscriber endpoint exists in
+// this backend — this validates the fields for real, but always shows
+// an honest "not available yet" message rather than a fake success
+// state, and never silently saves the address to Local Storage. The
+// submit button is disabled while the message is showing so a
+// customer can't fire off repeated submissions into the void.
+function setupNewsletterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-newsletter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const nameInput = form.querySelector("#newsletter-name");
+    const emailInput = form.querySelector("#newsletter-email");
+    const messageEl = form.querySelector("[data-newsletter-message]");
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    const name = (nameInput?.value || "").trim();
+    const email = (emailInput?.value || "").trim();
+
+    if (!name || !email || !isValidEmail(email)) {
+      if (messageEl) {
+        messageEl.textContent = !name ? "Please enter your name." : "Please enter a valid email address.";
+        messageEl.classList.remove("newsletter-form__message--success");
+        messageEl.classList.add("newsletter-form__message--error");
+        messageEl.hidden = false;
+      }
+      (!name ? nameInput : emailInput)?.focus();
+      return;
+    }
+
+    if (messageEl) {
+      messageEl.textContent =
+        "Sign-ups aren't available on the website just yet — please check back soon, or reach us directly via the Contact page in the meantime.";
+      messageEl.classList.remove("newsletter-form__message--success");
+      messageEl.classList.add("newsletter-form__message--error");
+      messageEl.hidden = false;
+    }
+
+    if (submitButton) {
+      submitButton.disabled = true;
+      setTimeout(() => {
+        submitButton.disabled = false;
+      }, 4000);
+    }
   });
 }
 

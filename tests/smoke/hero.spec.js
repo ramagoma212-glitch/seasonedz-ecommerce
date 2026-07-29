@@ -1,8 +1,9 @@
-// Version 7, Milestone 149: homepage hero product banner. Covers the
-// owner-approved image (served as WebP, real HTML text overlaid on
-// its own empty left zone on desktop, stacked above it on mobile),
+// Version 7, Milestone 149/150: homepage hero product banner. Covers
+// the owner-approved image (served as WebP, real HTML text overlaid
+// on its own empty left zone on desktop, stacked above it on mobile),
 // the single h1, both CTAs, and that nothing else on the page (the
-// marketplace section, the footer) broke.
+// marketplace section, the footer) broke. Copy updated in Milestone
+// 150's full homepage redesign.
 import { test, expect } from "@playwright/test";
 
 test.describe("Homepage hero", () => {
@@ -15,7 +16,7 @@ test.describe("Homepage hero", () => {
     await expect(heroImg).toHaveAttribute("fetchpriority", "high");
     await expect(heroImg).toHaveAttribute(
       "alt",
-      "Seasonedz Group educational colouring books, Bible colouring books, mindfulness colouring book, acrylic markers and rotating crayons."
+      "Seasonedz Group educational colouring books, Bible colouring books, mindfulness book, acrylic markers and rotating crayons."
     );
     // Rendered inside a <picture> so a mobile-specific <source> can be
     // added later without any markup restructuring.
@@ -26,17 +27,17 @@ test.describe("Homepage hero", () => {
     await page.goto("/");
     const h1s = page.locator("h1");
     await expect(h1s).toHaveCount(1);
-    await expect(h1s).toHaveText("Educational Colouring Books Made for Growing Minds");
+    await expect(h1s).toHaveText("Colouring Books Made With Purpose");
 
     // Real HTML text, not baked into the image — selectable/copyable
     // and readable by screen readers and search engines alike.
     const subtitleText = await page.locator(".hero__subtitle").textContent();
-    expect(subtitleText).toContain("trusted South African brand");
+    expect(subtitleText).toContain("screen-free moments");
   });
 
   test("hero CTA buttons are visible and navigate to the shop page", async ({ page }) => {
     await page.goto("/");
-    const primary = page.getByRole("link", { name: "Shop Bestsellers" });
+    const primary = page.getByRole("link", { name: "Shop New Releases" });
     const secondary = page.getByRole("link", { name: "Browse All Products" });
     await expect(primary).toBeVisible();
     await expect(secondary).toBeVisible();

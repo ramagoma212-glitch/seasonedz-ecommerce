@@ -38,7 +38,13 @@ export function renderStars(rating) {
 // .card__image in components.css) — a fixed reference size, not the
 // actual served resolution, purely so the browser can reserve layout
 // space before the (currently full-resolution) image downloads.
-export function renderProductCard(product, { eager = false } = {}) {
+// Version 7, Milestone 150: showViewLink adds an explicit "View
+// Product" text link (the homepage's New Releases section wants one
+// visibly, alongside the image/title links this card already has) —
+// opt-in and defaults to false so every existing caller (shop grid,
+// category pages, search results, wishlist) renders exactly as
+// before.
+export function renderProductCard(product, { eager = false, showViewLink = false } = {}) {
   const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
   const wishlisted = isInWishlist(product.id);
 
@@ -90,6 +96,7 @@ export function renderProductCard(product, { eager = false } = {}) {
         <p class="product-card__stock product-card__stock--${stockClass}">${product.stockStatus}</p>
 
         <div class="product-card__actions">
+          ${showViewLink ? `<a class="btn btn--secondary btn--sm" href="/product/${product.slug}">View Product</a>` : ""}
           <button
             type="button"
             class="btn btn--primary btn--sm"
