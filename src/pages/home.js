@@ -51,34 +51,61 @@ export async function renderHome() {
     <section class="container">
       <div class="hero">
         <!--
-          Version 7, Milestone 92A: this is the homepage's LCP
-          candidate (large, full-width, first visual element) — eager
-          loading + fetchpriority="high" (used nowhere else on this
-          image type) to prioritise its download; width/height are the
-          source file's true dimensions (1400x560). .hero__image's own
-          CSS already fully fixes both width (100%) and height (420px)
-          regardless of the image's ratio, so these attributes don't
-          change layout — they're set for correctness, and the
-          fetchpriority/eager loading are the parts that actually help.
+          Version 7, Milestone 149: owner-approved product photo
+          banner. The empty space is on the LEFT third of the image,
+          so .hero__content (DOM-first) is the box positioned there on
+          desktop; .hero__image (DOM-second) is the visual banner.
+          Putting content first in the DOM means the mobile layout
+          (where .hero__content goes back to normal static flow, see
+          responsive.css) stacks text above the image for free, with
+          no flex order property needed.
+
+          Both CTAs go to /shop: there's no dedicated bestsellers route
+          or anchor anywhere in this app (checked router.js and
+          shop.js) to send "Shop Bestsellers" to instead, and building
+          one would mean changing router.js's shared click-handling
+          behaviour — a bigger, more invasive change than this
+          milestone's own scope.
         -->
-        <img
-          class="hero__image"
-          src="${withBase("/images/hero-banner.jpg")}"
-          alt="Seasonedz Group colouring books and school supplies"
-          width="1400"
-          height="560"
-          loading="eager"
-          fetchpriority="high"
-        />
         <div class="hero__content">
-          <h1 class="hero__title">Colour, Learn and Grow with Seasonedz</h1>
+          <p class="hero__eyebrow">Learning, faith and calm through creativity</p>
+          <h1 class="hero__title">Educational Colouring Books Made for Growing Minds</h1>
           <p class="hero__subtitle">
-            Educational colouring books, Bible colouring books, mindfulness
-            activities, markers and crayons for parents, teachers, schools
-            and churches.
+            Discover educational colouring books for children, Bible
+            activity books, mindfulness colouring for adults and
+            creative supplies from a trusted South African brand.
           </p>
-          <a class="btn btn--primary" href="/shop">Shop Now</a>
+          <div class="hero__actions">
+            <a class="btn btn--primary" href="/shop">Shop Bestsellers</a>
+            <a class="btn btn--secondary" href="/shop">Browse All Products</a>
+          </div>
+          <p class="hero__trust">South African brand &nbsp;|&nbsp; Nationwide delivery &nbsp;|&nbsp; Quality creative products</p>
         </div>
+        <!--
+          This is the homepage's LCP candidate (large, first visual
+          element) — eager loading + fetchpriority="high", and
+          preloaded in index.html's own <head>, so nothing here ever
+          lazy-loads or waits on JavaScript to appear. width/height are
+          the source file's true dimensions (2078x757); .hero__image's
+          own CSS keeps width:100% with height:auto (never
+          object-fit:cover), so the full banner — including the
+          product photography on the right — always renders at its
+          real proportions, never stretched or cropped. Wrapped in
+          <picture> (currently one source) so a future mobile-specific
+          crop can be added as a <source media="(max-width: ...)">
+          without any markup restructuring.
+        -->
+        <picture>
+          <img
+            class="hero__image"
+            src="${withBase("/images/home/seasonedz-group-educational-colouring-books-hero.webp")}"
+            alt="Seasonedz Group educational colouring books, Bible colouring books, mindfulness colouring book, acrylic markers and rotating crayons."
+            width="2078"
+            height="757"
+            loading="eager"
+            fetchpriority="high"
+          />
+        </picture>
       </div>
     </section>
 

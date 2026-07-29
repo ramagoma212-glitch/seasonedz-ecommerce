@@ -77,6 +77,113 @@
   .product-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  /* Version 7, Milestone 149: desktop hero overlay. The photo's own
+     empty zone measures ~33.3% of its width (verified by sampling
+     pixel colour against the flat background across the image) — at
+     this site's 1200px container cap, that's ~400px, and it shrinks
+     further at narrower "desktop" widths down to this 1024px
+     breakpoint. A *fixed* pixel content width (e.g. the 500-520px
+     originally requested) would exceed that safe zone at every width
+     up to and including the full 1200px cap, spilling onto the first
+     book cover — so this uses a percentage width instead, which
+     shrinks in lockstep with the image and stays safely inside the
+     empty zone at any width in this range. Below 1024px, the text
+     stacks above the image instead (see the base rules in pages.css)
+     rather than trying to overlay an increasingly narrow column. */
+  .hero {
+    display: flex;
+    align-items: center;
+    min-height: 600px;
+  }
+
+  .hero__content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 30%;
+    justify-content: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-2xl);
+    /* Very subtle, matches the photo's own measured background
+       colour (RGB 252,232,211) almost exactly — reinforces contrast
+       rather than visibly darkening anything, and is fully
+       transparent by the box's own right edge, well inside the empty
+       zone, so it can never visibly reach the products. */
+    background: linear-gradient(90deg, rgba(252, 232, 211, 0.9) 0%, rgba(252, 232, 211, 0.5) 75%, rgba(252, 232, 211, 0) 100%);
+  }
+
+  /* The 30% column is only ~290-320px wide at this tier's narrower
+     end (1024-1150px or so) — the site's global h1 size (2.5rem/40px)
+     wraps this heading across 6 lines at that width, tall enough to
+     overflow the 600px box and clip at the top. Sized down here
+     specifically (rather than lowering min-height or widening the
+     column, which would either reopen the same problem at an even
+     narrower width or risk the safe-zone margin) so it reliably fits. */
+  .hero__title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .hero__subtitle {
+    font-size: var(--font-size-base);
+  }
+
+  /* The two least essential lines — dropped only in this narrowest
+     desktop sub-range (the eyebrow wraps to 3 lines at this column
+     width, disproportionately tall) so the essential content
+     (heading, paragraph, both CTAs) reliably fits the 600px box
+     without clipping. Both reappear at 1200px, where the column is
+     wide enough for everything (see the matching
+     @media (min-width: 1200px) block below). */
+  .hero__eyebrow,
+  .hero__trust {
+    display: none;
+  }
+}
+
+/* This site's container caps at 1200px (--container-width), so the
+   hero column stops getting any *wider* once the viewport reaches
+   this point — from here up, it's comfortably wide enough (measured
+   ~346px) to show the full-size heading, the subtitle at its normal
+   size, and both the eyebrow and trust lines, without wrapping onto
+   an excessive number of lines. Width alone doesn't fully solve the
+   *height* budget, though — all of that content together still needs
+   a little over 600px even in this widest column (measured ~618px),
+   since a wider column only reduces line-wrapping, not the number of
+   distinct pieces of copy. Rather than drop the eyebrow/trust lines
+   here too (this 1200px+ tier is what most real desktop visitors
+   actually see), min-height gets a modest bump instead — still a
+   reasonable reading of the brief's own "approximately 600 pixels".
+   Below this breakpoint, the @media (min-width: 1024px) block above
+   uses smaller text and drops those two lines instead — see its own
+   comments. */
+@media (min-width: 1200px) {
+  .hero {
+    min-height: 640px;
+  }
+
+  .hero__title {
+    font-size: var(--font-size-3xl);
+  }
+
+  .hero__subtitle {
+    font-size: var(--font-size-md);
+  }
+
+  .hero__content {
+    gap: var(--space-sm);
+    padding: var(--space-2xl);
+  }
+
+  .hero__eyebrow,
+  .hero__trust {
+    display: block;
+  }
+
+  .hero__subtitle {
+    max-width: 34ch;
+  }
 }
 
 /* ---- Large desktop tightening --------------------------------------------- */
@@ -171,10 +278,6 @@
   .grid--4,
   .grid--3 {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .hero__image {
-    height: 320px;
   }
 
   .hero__title {
@@ -316,6 +419,14 @@
     font-size: var(--font-size-xl);
   }
 
+  /* Version 7, Milestone 149: stacked, full-width hero CTAs below
+     tablet width — easier to tap than two side-by-side buttons
+     squeezed onto a narrow phone screen. */
+  .hero__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
   .grid--4,
   .grid--3,
   .grid--2 {
@@ -340,12 +451,4 @@
     text-align: center;
   }
 
-  .hero__content {
-    padding: var(--space-lg);
-    background: linear-gradient(180deg, rgba(59, 42, 32, 0.35) 0%, rgba(59, 42, 32, 0.65) 100%);
-  }
-
-  .hero__subtitle {
-    display: none;
-  }
 }

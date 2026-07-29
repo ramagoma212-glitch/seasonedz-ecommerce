@@ -19,6 +19,20 @@
       that support type="image/svg+xml" favicons get the same crisp
       512px art; the .ico fallback covers everything else.
     -->
+    <!--
+      Version 7, Milestone 149: preloads the homepage hero banner —
+      it's the homepage's LCP candidate, and this file is shared by
+      every route (this SPA has no per-route <head>), so this is the
+      one plain, zero-JS way to hint it early regardless of which
+      route a visitor lands on first. At ~300KB this is a deliberately
+      small tradeoff for non-homepage first loads.
+    -->
+    <link
+      rel="preload"
+      as="image"
+      href="/images/home/seasonedz-group-educational-colouring-books-hero.webp"
+      fetchpriority="high"
+    />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
