@@ -67,26 +67,38 @@
 /* Version 7, Milestone 150: tightened from --space-lg — the nav grew
    to 8 links with the homepage redesign's new labels, and every
    saved pixel here reduces how wide the desktop-nav breakpoint
-   (responsive.css) needs to be. */
+   (responsive.css) needs to be. Tightened again in Milestone 151
+   (--space-sm -> --space-xs) alongside nav-link's own padding/font
+   trims — see components.css's .nav-link comment and the breakpoint
+   comment in responsive.css for the full reasoning (this site's
+   .container caps at 1200px at every viewport from there up, so this
+   spacing is what actually determines whether the nav fits, not the
+   viewport width). */
 .site-header__nav-list {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
+  gap: 2px;
 }
 
-/* max-width tightened from 320px (Milestone 150) for the same reason
-   as the nav gap above — search doesn't need to be this wide to stay
-   usable, and every pixel saved here keeps the desktop-nav breakpoint
-   closer to this project's standard 1280px "desktop" viewport. */
+/* max-width tightened from 320px (Milestone 150), then again from
+   220px (Milestone 151, alongside the new Account icon needing room —
+   see components.css/.nav-link) — search doesn't need to be this wide
+   to stay usable, and every pixel saved here keeps the full nav
+   fitting inside this site's capped 1200px container. */
 .site-header__search {
   flex: 1;
-  max-width: 220px;
+  max-width: 110px;
 }
 
+/* Version 7, Milestone 151: gap tightened from --space-md to
+   --space-sm — three icons now share this row (Account added
+   alongside Wishlist/Cart), and this saves a little more of the width
+   that extra icon needed at 1200px+ viewports (see the nav-link and
+   breakpoint comments nearby). */
 .site-header__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .site-header__actions .site-header__mobile-toggle {

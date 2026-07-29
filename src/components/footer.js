@@ -46,6 +46,7 @@ export function renderFooter() {
         <div class="site-footer__col">
           <h4 class="footer-heading">Help</h4>
           <ul class="footer-links">
+            <li><a href="/account">My Account</a></li>
             <li><a href="/contact">Contact</a></li>
             <li><a href="/shipping-policy">Delivery Policy</a></li>
             <li><a href="/returns-policy">Returns Policy</a></li>

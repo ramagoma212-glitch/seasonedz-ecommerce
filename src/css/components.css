@@ -93,12 +93,27 @@
 }
 
 /* ---- Nav links ------------------------------------------------------------ */
+/* Version 7, Milestone 151: horizontal padding trimmed from
+   --space-sm to --space-xs (vertical unchanged, so the click/tap
+   target's height doesn't shrink) — the desktop nav gained a third
+   header action icon (Account) this milestone, and this was the
+   least visually noticeable place to reclaim the ~56px that icon
+   needed to keep fitting inside the 1200px container at 1200px+
+   viewports (see the breakpoint comment in responsive.css). */
 .nav-link {
   font-weight: 600;
+  font-size: var(--font-size-sm);
   color: var(--color-text);
-  padding: var(--space-sm);
+  padding-block: var(--space-sm);
+  /* Deliberately a raw 2px, not a --space-* token — the smallest token
+     (--space-xs, 4px) still wasn't quite enough to fit 8 nav items +
+     search + 3 action icons inside this site's capped 1200px container
+     without text wrapping (measured directly, see responsive.css's
+     breakpoint comment); this is the last small increment needed. */
+  padding-inline: 2px;
   border-radius: var(--radius-sm);
   transition: color var(--transition-fast);
+  white-space: nowrap;
 }
 
 .nav-link:hover {
@@ -149,10 +164,23 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   padding: var(--space-xs) var(--space-md);
+  /* Version 7, Milestone 151: this element is itself a flex item of
+     the desktop header row (it carries .site-header__search too, see
+     layout.css) AND a flex container for its own input/button. Without
+     this, its default flex automatic-minimum-size floor (governed by
+     its child input's own browser-intrinsic width, ~180px+) silently
+     overrode the header's max-width:110px cap — the box measured
+     110px wide, but its content kept its full ~230px width and spilled
+     out of it, overlapping the account/wishlist/cart icons that come
+     right after it. Same root cause (and same fix) as the product
+     gallery/header/nav-breakpoint blowouts fixed in Milestones
+     147/148/150. */
+  min-width: 0;
 }
 
 .search-bar input {
   flex: 1;
+  min-width: 0;
   background: none;
   border: none;
   outline: none;
