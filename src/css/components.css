@@ -1984,6 +1984,22 @@ body.has-lightbox-open {
   text-align: center;
 }
 
+.google-reviews__body {
+  color: var(--color-text-light);
+  margin-bottom: var(--space-md);
+}
+
+.google-reviews__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+
+.google-reviews__actions .btn {
+  min-height: 44px;
+}
+
 /* ---- Homepage FAQ accordion (real buttons, aria-expanded/aria-controls) ------- */
 .home-faq {
   max-width: 720px;

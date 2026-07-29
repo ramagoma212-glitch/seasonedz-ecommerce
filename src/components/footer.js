@@ -80,6 +80,11 @@ export function renderFooter() {
             <li>WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a></li>
             <li>Phone: <a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a></li>
             <li>South Africa</li>
+            ${
+              businessInfo.googleReviewRequestUrl
+                ? `<li><a href="${businessInfo.googleReviewRequestUrl}" target="_blank" rel="noopener noreferrer" aria-label="Leave a Google review for Seasonedz Group (opens in a new tab)">Review us on Google</a></li>`
+                : ""
+            }
           </ul>
         </div>
       </div>

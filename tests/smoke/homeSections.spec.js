@@ -19,6 +19,7 @@ test.describe("Homepage section order", () => {
       ".collection-card",
       ".digital-grid",
       ".marketplace-section",
+      ".google-reviews",
       ".home-faq",
       ".newsletter-form",
     ];
@@ -166,6 +167,55 @@ test.describe("Also Available On section", () => {
     const unavailable = page.locator(".marketplace-card--unavailable");
     await expect(unavailable).toHaveCount(1);
     await expect(unavailable).toContainText("Coming soon");
+  });
+});
+
+test.describe("Google Reviews section", () => {
+  test("appears after Also Available On and before FAQ, with real links and no fabricated review content", async ({ page }) => {
+    await page.goto("/");
+    const section = page.locator(".google-reviews");
+    await expect(section).toBeVisible();
+    await expect(section.locator("h2")).toHaveText("Loved by Our Customers");
+    await expect(section).toContainText("Your support helps our small South African brand grow.");
+    await expect(section).toContainText("Read our latest customer feedback on Google.");
+
+    // No fabricated star rating, review count, reviewer name or quote.
+    const text = await section.textContent();
+    expect(text).not.toMatch(/★|out of 5|reviews?\s*\(\d/i);
+
+    // The links carry a more descriptive aria-label than their visible
+    // text ("clear accessible labels" per the brief), which becomes
+    // the computed accessible name — so these are matched by visible
+    // text instead of by accessible name.
+    const readLink = section.locator("a", { hasText: "Read Our Google Reviews" });
+    const leaveLink = section.locator("a", { hasText: "Leave a Google Review" });
+    await expect(readLink).toHaveAttribute("target", "_blank");
+    await expect(readLink).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(readLink).toHaveAttribute("href", /google\.com\/maps\/place/);
+    await expect(leaveLink).toHaveAttribute("target", "_blank");
+    await expect(leaveLink).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(leaveLink).toHaveAttribute("href", /g\.page\/r\//);
+  });
+
+  test("no AggregateRating or Review structured data exists anywhere on the homepage", async ({ page }) => {
+    await page.goto("/");
+    const jsonLdBlocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+    for (const block of jsonLdBlocks) {
+      expect(block).not.toContain("AggregateRating");
+      expect(block).not.toContain('"@type": "Review"');
+      expect(block).not.toContain('"@type":"Review"');
+    }
+  });
+});
+
+test.describe("Footer Google review link", () => {
+  test("shows a working 'Review us on Google' link since the review request URL is present", async ({ page }) => {
+    await page.goto("/");
+    const link = page.locator(".site-footer a", { hasText: "Review us on Google" });
+    await expect(link).toBeVisible();
+    await expect(link).toHaveAttribute("target", "_blank");
+    await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(link).toHaveAttribute("href", /g\.page\/r\//);
   });
 });
 
