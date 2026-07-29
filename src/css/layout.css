@@ -56,7 +56,7 @@
 .site-header__collapsible {
   display: flex;
   align-items: center;
-  gap: var(--space-lg);
+  gap: var(--space-md);
   flex: 1;
 }
 
@@ -64,15 +64,23 @@
   flex: 1;
 }
 
+/* Version 7, Milestone 150: tightened from --space-lg — the nav grew
+   to 8 links with the homepage redesign's new labels, and every
+   saved pixel here reduces how wide the desktop-nav breakpoint
+   (responsive.css) needs to be. */
 .site-header__nav-list {
   display: flex;
   align-items: center;
-  gap: var(--space-lg);
+  gap: var(--space-sm);
 }
 
+/* max-width tightened from 320px (Milestone 150) for the same reason
+   as the nav gap above — search doesn't need to be this wide to stay
+   usable, and every pixel saved here keeps the desktop-nav breakpoint
+   closer to this project's standard 1280px "desktop" viewport. */
 .site-header__search {
   flex: 1;
-  max-width: 320px;
+  max-width: 220px;
 }
 
 .site-header__actions {

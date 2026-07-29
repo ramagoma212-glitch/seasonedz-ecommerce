@@ -12,8 +12,12 @@ import { getStorageItem, setStorageItem, clearStorageItem } from "./storage.js";
 
 const CART_KEY = "seasonedz_cart";
 
-const STANDARD_DELIVERY_FEE = 80;
-const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
+// Exported (Version 7, Milestone 150) so display-only copy elsewhere
+// (e.g. the homepage FAQ) can quote the real current fee/threshold
+// instead of hard-coding a second copy that could drift out of sync —
+// this is a read of the existing config, not a new delivery rule.
+export const STANDARD_DELIVERY_FEE = 80;
+export const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
 
 // Version 7, Milestone 131: free delivery is a registered-account
 // benefit, not a flat subtotal threshold for every visitor — R80

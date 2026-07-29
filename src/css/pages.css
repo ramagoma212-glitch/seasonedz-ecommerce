@@ -6,6 +6,15 @@
    ========================================================================== */
 
 /* ---- Hero ------------------------------------------------------------- */
+/* Version 7, Milestone 149: owner-approved product photo banner.
+   Base rules here are the mobile-first default: text stacks in
+   normal document flow above the image (DOM order already puts
+   .hero__content first — see home.js), no absolute positioning, no
+   overlay. The desktop overlay treatment (text positioned over the
+   image's own empty left zone) only applies from 1024px up — see
+   responsive.css's matching @media (min-width: 1024px) block, whose
+   own comment explains why .hero__content's width is a percentage,
+   not a fixed pixel value. */
 .hero {
   position: relative;
   background-color: var(--color-bg-alt);
@@ -15,32 +24,54 @@
 }
 
 .hero__image {
+  display: block;
   width: 100%;
-  height: 420px;
-  object-fit: cover;
+  height: auto;
 }
 
 .hero__content {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  gap: var(--space-md);
-  padding: var(--space-2xl);
-  background: linear-gradient(90deg, rgba(59, 42, 32, 0.55) 0%, rgba(59, 42, 32, 0.1) 70%);
+  gap: var(--space-sm);
+  padding: var(--space-lg) var(--container-padding) var(--space-md);
 }
 
+.hero__eyebrow {
+  color: var(--color-secondary);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Deep navy, per the owner's brief for this hero specifically — a
+   deliberate one-off departure from the site's warm terracotta/teal
+   palette (see base.css's own colour comment), scoped only to this
+   element rather than introduced as a new global colour token. */
 .hero__title {
-  color: var(--color-white);
-  max-width: 20ch;
+  color: #16213e;
 }
 
 .hero__subtitle {
-  color: rgba(255, 255, 255, 0.9);
-  max-width: 45ch;
+  color: var(--color-text-light);
   font-size: var(--font-size-md);
+  max-width: 48ch;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.hero__actions .btn {
+  min-height: 44px;
+}
+
+.hero__trust {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 /* ---- Welcome message ------------------------------------------------------- */

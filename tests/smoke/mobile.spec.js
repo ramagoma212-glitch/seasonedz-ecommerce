@@ -20,13 +20,14 @@ test.describe("Mobile smoke checks", () => {
     await expect(page.locator(".site-header__nav-list")).toBeVisible();
   });
 
-  test("homepage category grid and View All links are usable", async ({ page }) => {
-    await page.goto("/");
+  // Version 7, Milestone 150: the homepage's old "Shop by Category"
+  // grid (and its mobile "View All" links) was replaced by the
+  // redesign's own "Shop by Collection" section (see
+  // homeSections.spec.js) — .category-card itself is preserved and
+  // still used on the dedicated /categories page.
+  test("categories page category grid is usable on mobile", async ({ page }) => {
+    await page.goto("/categories");
     await expect(page.locator(".category-card").first()).toBeVisible();
-
-    const viewAllLinks = page.locator(".section__view-all");
-    expect(await viewAllLinks.count()).toBeGreaterThan(0);
-    await expect(viewAllLinks.first()).toBeVisible();
   });
 
   test("shop filter toggle opens/closes, selection and Clear Filters work", async ({ page }) => {

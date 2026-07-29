@@ -222,25 +222,33 @@ test.describe("Shopping smoke checks", () => {
     await expect(lightbox.locator(".image-lightbox__nav:visible")).toHaveCount(0);
   });
 
+  // Version 7, Milestone 150: a third marketplace entry (Amazon.com)
+  // was added with no verified link yet — it renders as a
+  // non-clickable "coming soon" card, not an <a>, so the clickable
+  // count is still 2 even though 3 cards now exist in total.
   test("marketplace links exist on homepage", async ({ page }) => {
     await page.goto("/");
-    const cards = page.locator(".marketplace-card");
-    await expect(cards).toHaveCount(2);
+    await expect(page.locator(".marketplace-card")).toHaveCount(3);
 
-    for (const card of await cards.all()) {
+    const clickable = page.locator(".marketplace-card[href]");
+    await expect(clickable).toHaveCount(2);
+    for (const card of await clickable.all()) {
       await expect(card).toHaveAttribute("target", "_blank");
       await expect(card).toHaveAttribute("rel", "noopener noreferrer");
       const href = await card.getAttribute("href");
       expect(href).toMatch(/^https:\/\//);
     }
+
+    await expect(page.locator(".marketplace-card--unavailable")).toHaveCount(1);
   });
 
   test("marketplace links exist in footer", async ({ page }) => {
     await page.goto("/");
-    const links = page.locator(".footer-marketplace__link");
-    await expect(links).toHaveCount(2);
+    await expect(page.locator(".footer-marketplace__link")).toHaveCount(3);
 
-    for (const link of await links.all()) {
+    const clickable = page.locator("a.footer-marketplace__link");
+    await expect(clickable).toHaveCount(2);
+    for (const link of await clickable.all()) {
       await expect(link).toHaveAttribute("target", "_blank");
       await expect(link).toHaveAttribute("rel", "noopener noreferrer");
     }

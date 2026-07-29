@@ -6,7 +6,7 @@
     <title>Seasonedz Group | Educational Colouring Books &amp; Creative Supplies</title>
     <meta
       name="description"
-      content="Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches."
+      content="Shop educational colouring books for kids, Bible activity books, mindfulness colouring books, acrylic markers and printable creative resources from Seasonedz Group South Africa."
     />
 
     <!--
@@ -19,6 +19,20 @@
       that support type="image/svg+xml" favicons get the same crisp
       512px art; the .ico fallback covers everything else.
     -->
+    <!--
+      Version 7, Milestone 149: preloads the homepage hero banner —
+      it's the homepage's LCP candidate, and this file is shared by
+      every route (this SPA has no per-route <head>), so this is the
+      one plain, zero-JS way to hint it early regardless of which
+      route a visitor lands on first. At ~300KB this is a deliberately
+      small tradeoff for non-homepage first loads.
+    -->
+    <link
+      rel="preload"
+      as="image"
+      href="/images/home/seasonedz-group-educational-colouring-books-hero.webp"
+      fetchpriority="high"
+    />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -43,18 +57,22 @@
     <meta property="og:title" content="Seasonedz Group | Educational Colouring Books &amp; Creative Supplies" />
     <meta
       property="og:description"
-      content="Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches."
+      content="Shop educational colouring books for kids, Bible activity books, mindfulness colouring books, acrylic markers and printable creative resources from Seasonedz Group South Africa."
     />
     <meta property="og:url" content="https://www.seasonedzgroup.co.za/" />
-    <meta property="og:image" content="https://www.seasonedzgroup.co.za/images/hero-banner.jpg" />
+    <!-- Version 7, Milestone 150: updated from the old hero-banner.jpg
+         (no longer used anywhere — see pages/home.js) to the current,
+         owner-approved homepage hero, so social-share previews match
+         what the homepage actually shows. -->
+    <meta property="og:image" content="https://www.seasonedzgroup.co.za/images/home/seasonedz-group-educational-colouring-books-hero.webp" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Seasonedz Group | Educational Colouring Books &amp; Creative Supplies" />
     <meta
       name="twitter:description"
-      content="Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches."
+      content="Shop educational colouring books for kids, Bible activity books, mindfulness colouring books, acrylic markers and printable creative resources from Seasonedz Group South Africa."
     />
-    <meta name="twitter:image" content="https://www.seasonedzgroup.co.za/images/hero-banner.jpg" />
+    <meta name="twitter:image" content="https://www.seasonedzgroup.co.za/images/home/seasonedz-group-educational-colouring-books-hero.webp" />
 
     <!--
       Version 6, Milestone 48: site-wide Organization structured data.
@@ -76,7 +94,7 @@
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "Seasonedz Group",
-        "description": "Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches.",
+        "description": "Shop educational colouring books for kids, Bible activity books, mindfulness colouring books, acrylic markers and printable creative resources from Seasonedz Group South Africa.",
         "logo": "https://www.seasonedzgroup.co.za/icon-512.png"
       }
     </script>
