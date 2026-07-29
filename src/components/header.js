@@ -23,11 +23,12 @@ import { withBase } from "../js/paths.js";
 //    section) — links to /shop.
 //  - "Schools and Churches" links to the existing /schools page,
 //    which doesn't separately mention churches in its own content.
-// "My Account", "Categories" and "FAQ" were on the old nav but aren't
-// in the new brief's 8-item list — dropped from primary nav, but
-// every one of those routes/pages themselves is untouched and still
-// fully reachable (checkout, order flows, footer, etc. still link to
-// them where relevant).
+// "Categories" and "FAQ" were on the old nav but aren't in the new
+// brief's 8-item list — dropped from primary nav, but both routes are
+// untouched and still fully reachable (footer, etc. still link to them
+// where relevant). "My Account" is back (Milestone 151) as its own
+// icon link in .site-header__actions, not this list — see the
+// Logo -> Nav -> Search -> Account -> Wishlist -> Cart order below.
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
@@ -77,7 +78,7 @@ export function renderHeader() {
             <input
               type="search"
               name="q"
-              placeholder="Search colouring books, markers..."
+              placeholder="Search..."
               aria-label="Search"
               autocomplete="off"
             />
@@ -86,6 +87,9 @@ export function renderHeader() {
         </div>
 
         <div class="site-header__actions">
+          <a class="icon-link" href="/account" aria-label="Account">
+            &#128100;
+          </a>
           <a class="icon-link" href="/wishlist" aria-label="Wishlist">
             &hearts;
             <span class="icon-link__badge" data-badge="wishlist">0</span>

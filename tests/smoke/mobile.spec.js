@@ -56,6 +56,34 @@ test.describe("Mobile smoke checks", () => {
     await expect(page.locator(".product-card").first()).toBeVisible();
     await expect(page.locator('[data-action="add-to-cart"]').first()).toBeVisible();
   });
+
+  // Version 7, Milestone 151: the header Account icon lives outside
+  // the collapsible nav panel (same row as Wishlist/Cart), so it's
+  // visible on mobile without opening the hamburger menu at all.
+  test("header Account link is visible on mobile without opening the menu", async ({ page }) => {
+    await page.goto("/");
+    const account = page.locator('.site-header a.icon-link[aria-label="Account"]');
+    await expect(account).toBeVisible();
+    await expect(account).toHaveAttribute("href", "/account");
+  });
+
+  // Version 7, Milestone 151: slimmed the footer's brand column on
+  // mobile (tighter spacing, narrower centered description) — every
+  // link group, the WhatsApp/review-link contact entries, marketplace
+  // links, policy links and the newsletter shortcut must all still be
+  // there, just less visually heavy up top.
+  test("footer stays readable on mobile with all link groups intact", async ({ page }) => {
+    await page.goto("/");
+    const footer = page.locator(".site-footer");
+    await footer.scrollIntoViewIfNeeded();
+    await expect(footer.locator(".footer-heading")).toHaveCount(5);
+    await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
+    await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
+    await expect(footer.locator(".footer-newsletter-shortcut")).toBeVisible();
+    await expect(footer.locator(".footer-marketplace__link")).toHaveCount(3);
+    const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(hasHorizontalScroll).toBe(false);
+  });
 });
 
 // Version 7, Milestone 148: fixes a site-wide horizontal scroll at

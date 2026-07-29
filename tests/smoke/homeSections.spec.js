@@ -152,21 +152,27 @@ test.describe("Digital Colouring Books section", () => {
 });
 
 test.describe("Also Available On section", () => {
-  test("Takealot and Amazon.co.za are clickable; Amazon.com shows as coming soon (no verified link)", async ({ page }) => {
+  // Version 7, Milestone 151: Amazon.com now has a genuinely verified,
+  // distinct storefront link (was "coming soon" through Milestone 150)
+  // — all three marketplace cards are clickable now, none unavailable.
+  test("Takealot, Amazon.co.za and Amazon.com are all clickable", async ({ page }) => {
     await page.goto("/");
     const cards = page.locator(".marketplace-card");
     await expect(cards).toHaveCount(3);
 
     const clickable = page.locator(".marketplace-card[href]");
-    await expect(clickable).toHaveCount(2);
+    await expect(clickable).toHaveCount(3);
     for (const link of await clickable.all()) {
       await expect(link).toHaveAttribute("target", "_blank");
       await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      const href = await link.getAttribute("href");
+      expect(href).toMatch(/^https:\/\//);
     }
 
-    const unavailable = page.locator(".marketplace-card--unavailable");
-    await expect(unavailable).toHaveCount(1);
-    await expect(unavailable).toContainText("Coming soon");
+    await expect(page.locator(".marketplace-card--unavailable")).toHaveCount(0);
+
+    const amazonComLink = page.locator('.marketplace-card[href*="amazon.com"]');
+    await expect(amazonComLink).toHaveAttribute("aria-label", /Shop Seasonedz Group on Amazon\.com/);
   });
 });
 
@@ -296,12 +302,63 @@ test.describe("Homepage header nav and search", () => {
   });
 });
 
-for (const width of [1440, 1280, 1024, 768, 430, 390, 375, 360, 320]) {
+for (const width of [1440, 1366, 1280, 1200, 1024, 768, 430, 390, 375, 360, 320]) {
   test(`no horizontal scroll on homepage at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
     await expect(page.locator(".new-releases-grid")).toBeVisible();
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(hasHorizontalScroll).toBe(false);
+  });
+}
+
+// Version 7, Milestone 151: the desktop header gained a third action
+// icon (Account) alongside Wishlist/Cart, which — before this
+// milestone's spacing/min-width fixes — caused the 8-item nav's
+// longer labels ("Colouring Books", "Schools and Churches", etc.) to
+// wrap onto 2-3 lines at every viewport from 1200px up (this site's
+// .container caps at 1200px there, so a wider viewport alone never
+// gave the nav more room). Checks the actual per-line height, not just
+// document scrollWidth, since wrapped text doesn't trigger a
+// horizontal-scroll failure on its own.
+for (const width of [1440, 1366, 1280, 1200]) {
+  test(`desktop header nav does not wrap onto multiple lines at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const navList = page.locator(".site-header__nav-list");
+    await expect(navList).toBeVisible();
+    const navListHeight = await navList.evaluate((el) => el.getBoundingClientRect().height);
+    // A single line of nav text (with this site's nav-link padding)
+    // is well under 40px tall; a wrapped row is 60px+.
+    expect(navListHeight).toBeLessThan(40);
+
+    const account = page.locator('.site-header a.icon-link[aria-label="Account"]');
+    const wishlist = page.locator('.site-header a.icon-link[aria-label="Wishlist"]');
+    const cart = page.locator('.site-header a.icon-link[aria-label="Cart"]');
+    await expect(account).toBeVisible();
+    await expect(wishlist).toBeVisible();
+    await expect(cart).toBeVisible();
+
+    // Recommended order: Logo -> Nav -> Search -> Account -> Wishlist -> Cart.
+    const accountX = await account.evaluate((el) => el.getBoundingClientRect().x);
+    const wishlistX = await wishlist.evaluate((el) => el.getBoundingClientRect().x);
+    const cartX = await cart.evaluate((el) => el.getBoundingClientRect().x);
+    expect(accountX).toBeLessThan(wishlistX);
+    expect(wishlistX).toBeLessThan(cartX);
+  });
+}
+
+// Version 7, Milestone 151: the header wordmark ("Seasonedz" text next
+// to the logo mark) was crowding small phone headers — hidden at
+// 320-430px while the logo image itself (the actual brand mark) stays
+// fully visible, per this milestone's brief.
+for (const width of [320, 360, 375, 390, 430]) {
+  test(`header wordmark text is hidden but the logo mark stays visible at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    const logoImg = page.locator(".site-header .logo img");
+    const logoText = page.locator(".site-header .logo__text");
+    await expect(logoImg).toBeVisible();
+    await expect(logoText).toBeHidden();
   });
 }

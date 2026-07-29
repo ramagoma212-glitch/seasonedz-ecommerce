@@ -225,8 +225,8 @@
 
 /* Version 7, Milestone 94, widened in Milestone 150: fixes the
    long-known tablet/desktop header overlap. The inline nav + search
-   bar + wishlist/cart icons need enough unbroken width to render
-   without squeezing — originally ~1080px for a 6-link nav.
+   bar + account/wishlist/cart icons need enough unbroken width to
+   render without squeezing — originally ~1080px for a 6-link nav.
    Milestone 150's homepage redesign brief grew this to 8 links with
    several longer labels ("Colouring Books", "Creative Supplies",
    "Digital Downloads", "Schools and Churches"), which needed ~1290px
@@ -237,11 +237,23 @@
    search bar's max-width and this breakpoint were all tightened/moved
    together — empirically measured needing ~1169px minimum now, so
    1200px (this site's own --container-width, a meaningful round
-   threshold) leaves a comfortable margin. Reuses the exact same
-   collapsible-panel treatment as the max-width:768px block further
-   down (same markup, same .is-open toggle in js/app.js — nothing
-   mobile-specific changes), just triggered at the width where the
-   full nav genuinely fits. */
+   threshold) leaves a comfortable margin.
+   Important: this site's .container caps at 1200px at every viewport
+   from here up (1200/1280/1366/1440 all render an identically-wide
+   1200px container) — so "give it a wider viewport" never buys extra
+   room the way it would on an uncapped layout; the only thing that
+   ever fixes an overflow in this range is trimming the content itself,
+   which is why nav-link/actions spacing (components.css) keeps
+   getting tightened here instead of this breakpoint being pushed
+   around. Milestone 151 added a third action icon (Account, restored
+   per the "Logo -> Nav -> Search -> Account -> Wishlist -> Cart"
+   order) — verified with the same breakpoint after trimming
+   nav-link's horizontal padding and the actions gap to make room for
+   it (see components.css). Reuses the exact same collapsible-panel
+   treatment as the max-width:768px block further down (same markup,
+   same .is-open toggle in js/app.js — nothing mobile-specific
+   changes), just triggered at the width where the full nav genuinely
+   fits. */
 @media (max-width: 1199px) {
   .site-header__collapsible {
     display: none;
@@ -419,6 +431,43 @@
   :root {
     --container-padding: 1rem;
     --header-height: 64px;
+  }
+
+  /* Version 7, Milestone 151: the header's "Seasonedz" wordmark next
+     to the 40px logo mark was crowding the header on small phones
+     (320-430px), competing with the account/wishlist/cart icons and
+     hamburger for the same limited width. The logo mark itself (the
+     actual brand recognition element) stays fully visible — only the
+     redundant text label next to it is hidden here, and only in the
+     header (the footer's own logo keeps its text, since the footer
+     stacks vertically and isn't width-constrained the same way). */
+  .site-header .logo__text {
+    display: none;
+  }
+
+  /* Version 7, Milestone 151: slims the footer's brand column on
+     small mobile, where the six stacked footer columns (brand + 4
+     link groups + contact) made the brand block's full-width
+     marketing paragraph read as an oversized wall of text before the
+     actually-useful links. Tighter vertical rhythm + a narrower,
+     centered description column (still fully readable, never
+     truncated) rather than hiding or shortening any real content. */
+  .site-footer__inner {
+    gap: var(--space-lg);
+    padding-block: var(--space-xl) var(--space-md);
+  }
+
+  .site-footer__col--brand .footer-logo {
+    margin-bottom: var(--space-xs);
+  }
+
+  .footer-description {
+    max-width: 32ch;
+    margin-inline: auto;
+  }
+
+  .footer-newsletter-shortcut {
+    margin-top: var(--space-xs);
   }
 
   h1 {
