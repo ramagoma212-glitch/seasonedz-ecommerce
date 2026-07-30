@@ -363,7 +363,7 @@ function renderDigitalAssetUploadForm(productId, hasExisting) {
       </div>
 
       <p class="admin-product-form__hint">
-        Allowed files: PDF or ZIP, up to 100 MB. Files are stored privately and are never publicly
+        Allowed files: PDF or ZIP, up to 50 MB. Files are stored privately and are never publicly
         accessible — customers can only download after payment is confirmed.
       </p>
 

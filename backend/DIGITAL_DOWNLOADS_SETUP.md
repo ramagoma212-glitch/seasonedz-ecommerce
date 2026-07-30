@@ -16,7 +16,11 @@ once, manually, in the Supabase dashboard:
 3. **Leave "Public bucket" turned OFF.** This is the single most
    important step — a public bucket would defeat the entire point of
    this feature (see "Why a separate, private bucket" below).
-4. No special RLS policies are required beyond the default (private)
+4. Set the bucket's own file size limit to **50 MB**, matching this
+   backend's own `MAX_FILE_SIZE_BYTES` (see below) exactly — a file the
+   backend accepts should never be able to fail the storage upload step
+   on size alone.
+5. No special RLS policies are required beyond the default (private)
    behaviour — every read/write to this bucket goes through the
    backend's own service-role client
    (`src/services/digitalAssetStorage.service.ts`), never a
@@ -108,8 +112,10 @@ PDF and ZIP only (`application/pdf`, `application/zip`,
 `application/x-zip-compressed`), validated by MIME type; a filename
 ending in a known-dangerous extension (`.exe`, `.js`, `.html`, `.svg`,
 `.bat`, `.cmd`, etc.) is rejected outright as a second, independent
-check. Maximum file size: 100 MB (`adminDigitalAsset.service.ts`'s
-`MAX_FILE_SIZE_BYTES`) — note this is buffered fully in the Node
-process's memory during upload (multer `memoryStorage()`, matching the
-existing product-image upload pattern); revisit this limit if real
-uploads ever approach it on a small hosting plan.
+check. Maximum file size: 50 MB (`adminDigitalAsset.service.ts`'s
+`MAX_FILE_SIZE_BYTES`) — Milestone 153A: matches the real Supabase
+`digital-products` bucket's own configured 50 MB limit exactly. Note
+this is buffered fully in the Node process's memory during upload
+(multer `memoryStorage()`, matching the existing product-image upload
+pattern); revisit this limit if real uploads ever approach it on a
+small hosting plan.

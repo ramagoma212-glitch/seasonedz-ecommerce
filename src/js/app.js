@@ -2069,7 +2069,7 @@ async function handleAdminImageRemove(button) {
 // Milestone 152). Same "re-render the whole edit page on success"
 // pattern as product images above — one file per product, so upload
 // always means "upload or replace", never a list to manage.
-const MAX_ADMIN_DIGITAL_ASSET_FILE_SIZE_BYTES = 100 * 1024 * 1024; // kept in sync with adminDigitalAsset.service.ts
+const MAX_ADMIN_DIGITAL_ASSET_FILE_SIZE_BYTES = 50 * 1024 * 1024; // kept in sync with adminDigitalAsset.service.ts and the Supabase bucket's own 50 MB limit
 const ALLOWED_ADMIN_DIGITAL_ASSET_MIME_TYPES = ["application/pdf", "application/zip", "application/x-zip-compressed"];
 
 function friendlyAdminDigitalAssetErrorMessage(error) {
@@ -2135,7 +2135,7 @@ async function handleAdminDigitalAssetUploadSubmit(form) {
   } else if (!ALLOWED_ADMIN_DIGITAL_ASSET_MIME_TYPES.includes(file.type)) {
     validationError = "Unsupported file type. Allowed types: PDF, ZIP.";
   } else if (file.size > MAX_ADMIN_DIGITAL_ASSET_FILE_SIZE_BYTES) {
-    validationError = "File is too large. Maximum size is 100 MB.";
+    validationError = "File is too large. Maximum size is 50 MB.";
   } else if (!displayName) {
     validationError = "File display name is required.";
   }

@@ -9,7 +9,7 @@ import * as adminDigitalAssetService from "../services/adminDigitalAsset.service
 import { AdminDigitalAssetError } from "../services/adminDigitalAsset.service.js";
 import { DigitalAssetStorageError } from "../services/digitalAssetStorage.service.js";
 
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // kept in sync with adminDigitalAsset.service.ts
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // kept in sync with adminDigitalAsset.service.ts and the Supabase bucket's own 50 MB limit
 
 // Memory storage only, same discipline as product images — never
 // written to disk. The buffer is handed to Supabase Storage and then
@@ -24,7 +24,7 @@ export const uploadDigitalAssetMiddleware = upload.single("file");
 function handleKnownErrors(res: Response, error: unknown): boolean {
   if (error instanceof multer.MulterError) {
     if (error.code === "LIMIT_FILE_SIZE") {
-      sendError(res, { message: "File is too large. Maximum size is 100 MB.", statusCode: 400 });
+      sendError(res, { message: "File is too large. Maximum size is 50 MB.", statusCode: 400 });
       return true;
     }
     sendError(res, { message: "File upload failed. Please try a different file.", statusCode: 400 });

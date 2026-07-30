@@ -29,13 +29,14 @@ export class AdminDigitalAssetError extends Error {
   }
 }
 
-// 100 MB — the milestone's own suggested ceiling. Kept generous since
-// this is an owner-only, infrequent upload (not a customer-facing
-// path), but see this file's own review note: multer's memoryStorage
-// buffers the whole file in the Node process's memory before this
-// service ever runs, so a very small hosting plan could want this
-// lower — revisit if real uploads ever approach this size.
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
+// 50 MB — Milestone 153A: matches the real Supabase Storage bucket's
+// own file-size limit (digital-products, configured 50 MB) exactly, so
+// a file this backend accepts can never fail the storage upload step
+// on size alone. Multer's memoryStorage buffers the whole file in the
+// Node process's memory before this service ever runs, so a very small
+// hosting plan could still want this lower — revisit if real uploads
+// ever approach this size.
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const MAX_DISPLAY_NAME_LENGTH = 200;
 const MAX_VERSION_LENGTH = 50;
 
@@ -79,7 +80,7 @@ function validateFileSize(size: number): void {
     throw new AdminDigitalAssetError("Uploaded file is empty.");
   }
   if (size > MAX_FILE_SIZE_BYTES) {
-    throw new AdminDigitalAssetError("File is too large. Maximum size is 100 MB.");
+    throw new AdminDigitalAssetError("File is too large. Maximum size is 50 MB.");
   }
 }
 
