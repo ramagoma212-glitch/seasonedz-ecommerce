@@ -904,6 +904,17 @@ async function recordBookingFailure(orderId: string, orderNumber: string, safeMe
   }
 }
 
+// Version 7, Milestone 152B: pure, independently-testable — takes
+// whatever shape of item array a caller already has (a real
+// OrderItem[] from Prisma, or a plain in-memory array in a
+// verification script) and returns whether the order has zero
+// PHYSICAL items. Exported specifically so this exact gating rule can
+// be verified directly against controlled database rows without
+// needing to enable any real Courier Guy config flag.
+export function isDigitalOnlyOrder(items: { productType: ProductType }[]): boolean {
+  return !items.some((item) => item.productType === ProductType.PHYSICAL);
+}
+
 export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<void> {
   // Three independent flags, all required — see env.ts's own comment
   // on why auto-booking is deliberately separate from both the quote
@@ -938,16 +949,21 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
   if (order.paymentStatus !== PaymentStatus.PAID) return;
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) return;
 
-  // Version 7, Milestone 152: a digital-only order (every line item
-  // DIGITAL, none PHYSICAL) has nothing to courier — skipped as a
+  // Version 7, Milestone 152/152B: a digital-only order (every line
+  // item DIGITAL, none PHYSICAL) has nothing to courier — skipped as a
   // normal, expected no-op, never a failure (so nothing is ever
   // recorded via recordBookingFailure for this case). A mixed order
   // (at least one PHYSICAL item alongside digital ones) still proceeds
   // exactly as before: Courier Guy quotes/books for the order as a
   // whole, which is correct since the physical item(s) still need
   // real-world delivery regardless of any digital items also included.
-  const hasPhysicalItem = order.items.some((item) => item.productType === ProductType.PHYSICAL);
-  if (!hasPhysicalItem) {
+  // Extracted to its own exported, pure function (isDigitalOnlyOrder)
+  // so this specific gating rule can be verified directly against
+  // controlled OrderItem rows, independent of the *_ENABLED flag
+  // checks above — those flags are false in production, which would
+  // otherwise make this exact line unreachable from any live
+  // verification that doesn't also flip real courier config.
+  if (isDigitalOnlyOrder(order.items)) {
     console.log(`[courier-guy] Automatic booking skipped for order=${orderNumber}: digital-only order, no physical delivery needed.`);
     return;
   }

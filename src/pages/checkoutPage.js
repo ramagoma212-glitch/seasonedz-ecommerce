@@ -255,7 +255,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

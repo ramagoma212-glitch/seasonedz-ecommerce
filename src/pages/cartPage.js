@@ -57,7 +57,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical })}
       </div>
     </section>
   `;

@@ -28,7 +28,13 @@ export const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
 // session, never trusting anything this function returns. Will be
 // replaced by real courier-calculated rates once courier integration
 // exists — see the milestone roadmap.
-export function calculateDeliveryFee(subtotal, isRegisteredCustomer = false) {
+// Version 7, Milestone 152B: `hasPhysicalItems` defaults to `true` so
+// every existing call site keeps its exact prior behaviour unless it
+// explicitly says otherwise — a digital-only cart has nothing to
+// deliver, so it's never charged a delivery fee, matching the
+// backend's own utils/money.ts calculateDeliveryFee().
+export function calculateDeliveryFee(subtotal, isRegisteredCustomer = false, hasPhysicalItems = true) {
+  if (!hasPhysicalItems) return 0;
   return isRegisteredCustomer && subtotal >= REGISTERED_FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
 }
 
@@ -139,9 +145,10 @@ export function getCartSummary(isRegisteredCustomer = false) {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
-  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
+  const composition = getCartComposition(items);
+  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer, composition.hasPhysical);
   const total = subtotal + deliveryFee;
-  return { items, itemCount, subtotal, deliveryFee, total, composition: getCartComposition(items) };
+  return { items, itemCount, subtotal, deliveryFee, total, composition };
 }
 
 export function isInCart(productId) {

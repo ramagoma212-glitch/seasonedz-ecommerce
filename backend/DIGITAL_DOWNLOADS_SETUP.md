@@ -82,9 +82,16 @@ bucket exists, with no separate on/off switch to remember.
 - Courier Guy automatic booking (`autoBookCourierForPaidOrder()`) skips
   itself entirely for a digital-only order (every line item `DIGITAL`)
   — nothing to courier. A mixed order (at least one `PHYSICAL` item)
-  still books exactly as before.
+  still books exactly as before. The digital-only check itself is a
+  small, pure, independently-exported function
+  (`courierGuy.service.ts`'s `isDigitalOnlyOrder()`), specifically so
+  it can be verified directly against controlled `OrderItem` rows
+  without needing to enable any real Courier Guy config flag.
 - Stock checks/decrements are skipped entirely for `DIGITAL` order
   items — there is no finite inventory to track for a downloadable file.
+- **Version 7, Milestone 152B**: a digital-only order is never charged
+  a delivery fee (R0, regardless of subtotal/registered status) — see
+  `DELIVERY_SETUP.md`. A mixed order is still charged normally.
 
 ## Admin validation
 

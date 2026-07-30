@@ -338,7 +338,7 @@ test.describe("Digital product storefront display", () => {
     await expect(page.locator(".cart-item__digital-badge")).toContainText("Digital Download");
   });
 
-  test("digital-only cart shows the no-physical-delivery message", async ({ page }) => {
+  test("digital-only cart shows the no-physical-delivery message and R0 delivery fee", async ({ page }) => {
     await mockCatalogWithDigitalProduct(page);
 
     await page.goto("/shop");
@@ -346,8 +346,16 @@ test.describe("Digital product storefront display", () => {
     await page.goto("/cart");
     await expect(page.locator(".cart-composition-notice")).toContainText("No physical delivery is required for digital downloads");
 
+    // Version 7, Milestone 152B: a digital-only cart is never charged a
+    // delivery fee, and the note explains why (not a registered-account
+    // discount) — see components/orderSummary.js's getDeliveryNote().
+    const deliveryRow = page.locator(".order-summary__row", { hasText: "Delivery" });
+    await expect(deliveryRow).toContainText("Free");
+    await expect(page.locator(".order-summary__note")).toContainText("No delivery is needed");
+
     await page.goto("/checkout");
     await expect(page.locator(".cart-composition-notice")).toContainText("No physical delivery is required for digital downloads");
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("Free");
   });
 
   test("mixed cart (physical + digital) shows the combined delivery message and correct total", async ({ page }) => {
@@ -388,6 +396,12 @@ test.describe("Digital product storefront display", () => {
     const expectedSubtotal = MOCK_PUBLIC_DIGITAL_PRODUCT.price + MOCK_PHYSICAL_PRODUCT.price;
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText(expectedSubtotal.toFixed(2));
     await expect(page.locator(".order-summary__row--total")).toContainText((expectedSubtotal + 80).toFixed(2));
+
+    // Version 7, Milestone 152B (fix 3): a mixed cart is still charged
+    // the normal delivery fee, precisely because it contains a
+    // physical item — never silently waived just because a digital
+    // item is also present.
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("R80.00");
   });
 });
 

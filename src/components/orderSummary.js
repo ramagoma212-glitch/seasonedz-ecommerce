@@ -16,7 +16,16 @@
 // produces an accurate, harmless message either way: "free" shows
 // correctly whenever deliveryFee is actually 0, and the R80 case falls
 // back to the same safe "sign in" wording used for a guest.
-function getDeliveryNote(deliveryFee, isRegisteredCustomer) {
+// Version 7, Milestone 152B: `hasPhysicalItems` (default `true`, so
+// every existing call site keeps its exact prior wording unless it
+// explicitly says there's nothing physical to deliver) picks an honest
+// "no delivery needed" note instead of implying a registered-account
+// discount applied — a digital-only guest cart's R0 delivery fee has
+// nothing to do with being signed in.
+function getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems) {
+  if (!hasPhysicalItems) {
+    return "No delivery is needed — this order is digital download(s) only.";
+  }
   if (deliveryFee === 0) {
     return "Free delivery applied for your registered Seasonedz Group account.";
   }
@@ -25,7 +34,15 @@ function getDeliveryNote(deliveryFee, isRegisteredCustomer) {
     : "Sign in or create an account to get free delivery on orders of R500 or more.";
 }
 
-export function renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer = false, showCheckoutButton = true, showItems = false, items = [] }) {
+export function renderOrderSummary({
+  subtotal,
+  deliveryFee,
+  isRegisteredCustomer = false,
+  hasPhysicalItems = true,
+  showCheckoutButton = true,
+  showItems = false,
+  items = [],
+}) {
   const total = subtotal + deliveryFee;
 
   return `
@@ -65,7 +82,7 @@ export function renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer
       </div>
 
       <p class="order-summary__note">
-        ${getDeliveryNote(deliveryFee, isRegisteredCustomer)}
+        ${getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems)}
       </p>
 
       ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>` : ""}

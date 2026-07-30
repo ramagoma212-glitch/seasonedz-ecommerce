@@ -15,8 +15,8 @@ import { COURIER_INTEGRATION_ENABLED, COURIER_PROVIDER, REGISTERED_FREE_DELIVERY
 // transaction still calls the Decimal version directly (via
 // utils/money.ts) — this just gives the same rule a simple number-in,
 // number-out API for anything else that needs it.
-export function calculateDeliveryFee(subtotal: number, isRegisteredCustomer: boolean): number {
-  return calculateDeliveryFeeDecimal(new Prisma.Decimal(subtotal), isRegisteredCustomer).toNumber();
+export function calculateDeliveryFee(subtotal: number, isRegisteredCustomer: boolean, hasPhysicalItems = true): number {
+  return calculateDeliveryFeeDecimal(new Prisma.Decimal(subtotal), isRegisteredCustomer, hasPhysicalItems).toNumber();
 }
 
 export interface DeliverySummary {
@@ -32,8 +32,8 @@ export interface DeliverySummary {
 // registered-customer status) means for delivery — e.g. usable by a
 // future endpoint or script that wants to show "R80" / "Free" without
 // reaching into config constants directly.
-export function getDeliverySummary(subtotal: number, isRegisteredCustomer: boolean): DeliverySummary {
-  const fee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
+export function getDeliverySummary(subtotal: number, isRegisteredCustomer: boolean, hasPhysicalItems = true): DeliverySummary {
+  const fee = calculateDeliveryFee(subtotal, isRegisteredCustomer, hasPhysicalItems);
 
   return {
     subtotal,

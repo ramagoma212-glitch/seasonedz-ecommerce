@@ -142,7 +142,14 @@ export async function getPurchasedDigitalItemsForCustomerOrder(orderNumber: stri
     select: { id: true, customerId: true, paymentStatus: true },
   });
 
-  if (!order || order.customerId !== customerId || order.paymentStatus !== PaymentStatus.PAID) {
+  // Version 7, Milestone 152B: `!customerId` is checked explicitly, not
+  // just implied by the comparison below — a guest order's own
+  // `customerId` column is also `null`, so a falsy `customerId` here
+  // (should never happen via the real route, which requires
+  // requireCustomerAuth to already guarantee a real string — but never
+  // assumed) would otherwise incorrectly "match" a guest order via
+  // `null !== null` evaluating to `false`.
+  if (!customerId || !order || order.customerId !== customerId || order.paymentStatus !== PaymentStatus.PAID) {
     return [];
   }
 
@@ -164,7 +171,8 @@ export async function requestSignedDownloadUrlForCustomer(orderItemId: string, c
   // (doesn't exist / wrong customer / not paid / not digital) — never
   // reveals which case it was, same discipline as every other
   // ownership check in this codebase.
-  if (!item || item.order.customerId !== customerId) {
+  // Same `!customerId` defensive check as getPurchasedDigitalItemsForCustomerOrder above.
+  if (!customerId || !item || item.order.customerId !== customerId) {
     throw new DigitalDownloadError("Download not available.", 404);
   }
 

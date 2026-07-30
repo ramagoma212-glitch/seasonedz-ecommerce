@@ -137,6 +137,10 @@ customers are never left without a working file mid-replacement.
   mixed order (e.g. one physical book + one digital download) delivers
   the physical item by courier as usual, and unlocks the digital item
   once paid, without needing a courier booking for the digital part.
+- **Delivery fee**: an order that is 100% digital downloads is never
+  charged a delivery fee — there's nothing to post out. A mixed order
+  (any physical item at all, even alongside digital ones) is still
+  charged the normal R80/free-over-R500 delivery fee as usual.
 
 ### Keeping files private
 

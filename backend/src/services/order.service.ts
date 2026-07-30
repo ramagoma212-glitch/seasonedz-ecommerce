@@ -260,7 +260,13 @@ export async function createOrder(
   const verifiedItems = await verifyItems(input.items);
 
   const subtotal = verifiedItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
-  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
+  // Version 7, Milestone 152B: a digital-only order (every item
+  // DIGITAL, none PHYSICAL) has nothing to deliver, so it's never
+  // charged a delivery fee regardless of subtotal or registered
+  // status. A mixed order (at least one PHYSICAL item) is charged
+  // normally — see utils/money.ts's own comment.
+  const hasPhysicalItems = verifiedItems.some((item) => item.productType === ProductType.PHYSICAL);
+  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer, hasPhysicalItems);
   const discountTotal = new Prisma.Decimal(0);
   const total = subtotal.plus(deliveryFee).minus(discountTotal);
 
