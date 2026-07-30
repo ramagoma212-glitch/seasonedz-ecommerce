@@ -13,6 +13,7 @@ import {
   resetPasswordHandler,
 } from "../controllers/customerAuth.controller.js";
 import { getCustomerOrderHandler, listCustomerOrdersHandler } from "../controllers/customerOrder.controller.js";
+import { getCustomerOrderDownloadsHandler, requestCustomerDownloadHandler } from "../controllers/digitalDownload.controller.js";
 import { requireCustomerAuth } from "../middleware/requireCustomerAuth.middleware.js";
 import {
   customerForgotPasswordRateLimiter,
@@ -37,5 +38,13 @@ router.post("/reset-password", customerResetPasswordRateLimiter, resetPasswordHa
 // logged-out request never reaches customerOrder.controller.ts at all.
 router.get("/orders", requireCustomerAuth, listCustomerOrdersHandler);
 router.get("/orders/:orderNumber", requireCustomerAuth, getCustomerOrderHandler);
+
+// Version 7, Milestone 152: secure digital downloads — both require
+// requireCustomerAuth, same as the order-history routes above.
+// digitalDownload.service.ts independently re-verifies that the order
+// (and, for the second route, this specific order item) really belongs
+// to req.customerUser.id and really is PAID on every single call.
+router.get("/orders/:orderNumber/downloads", requireCustomerAuth, getCustomerOrderDownloadsHandler);
+router.post("/downloads/:orderItemId/request", requireCustomerAuth, requestCustomerDownloadHandler);
 
 export default router;

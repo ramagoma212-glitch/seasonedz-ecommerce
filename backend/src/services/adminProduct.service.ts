@@ -9,7 +9,7 @@
 // service reads or writes already exists on Product/Category exactly
 // as designed in VERSION_7_PRODUCT_MANAGEMENT_PLAN.md.
 
-import { Prisma, ProductStatus } from "@prisma/client";
+import { Prisma, ProductStatus, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { sanitizeDescriptionHtml, countVisibleCharacters } from "../utils/descriptionSanitizer.js";
 
@@ -125,6 +125,47 @@ function optionalStatus(raw: unknown): ProductStatus | undefined {
   return parseStatus(raw);
 }
 
+// Version 7, Milestone 152: secure digital downloads.
+function parseProductType(raw: unknown): ProductType {
+  if (typeof raw !== "string" || !(Object.values(ProductType) as string[]).includes(raw)) {
+    throw new AdminProductError("productType must be PHYSICAL or DIGITAL.");
+  }
+  return raw as ProductType;
+}
+
+function optionalProductType(raw: unknown): ProductType | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  return parseProductType(raw);
+}
+
+// A DIGITAL product must have a real, active file attached before it
+// can ever be ACTIVE (visible/purchasable on the storefront) — a
+// customer paying for a digital download that doesn't exist yet is
+// exactly the failure mode this guards against. Never checked for
+// PHYSICAL products, and never requires a file for DRAFT/ARCHIVED/
+// OUT_OF_STOCK — an owner can prepare a digital product's text/price/
+// images first and upload the file whenever it's ready, in any order.
+async function assertDigitalProductHasFileIfActive(productId: string | null, productType: ProductType, status: ProductStatus): Promise<void> {
+  if (productType !== ProductType.DIGITAL || status !== ProductStatus.ACTIVE) return;
+
+  if (!productId) {
+    // A brand-new product can never already have an uploaded file —
+    // file upload requires an existing product id (see
+    // adminDigitalAsset.service.ts) — so creating straight into ACTIVE
+    // is never possible for a digital product.
+    throw new AdminProductError(
+      "A digital product cannot be created as Active — save it first (Draft), then upload its digital file before activating it."
+    );
+  }
+
+  const asset = await prisma.digitalAsset.findUnique({ where: { productId }, select: { isActive: true } });
+  if (!asset || !asset.isActive) {
+    throw new AdminProductError(
+      "This digital product cannot be Active until a digital file has been uploaded and is active."
+    );
+  }
+}
+
 // features is stored as a loose Json column (per the schema's own
 // comment: "the exact shape may evolve") but every existing use
 // (seed.ts) is a flat array of short bullet-point strings — validated
@@ -214,6 +255,9 @@ const adminProductListSelect = {
   createdAt: true,
   updatedAt: true,
   category: { select: { id: true, name: true, slug: true } },
+  // Version 7, Milestone 152: secure digital downloads.
+  productType: true,
+  digitalAsset: { select: { id: true, isActive: true } },
 } satisfies Prisma.ProductSelect;
 
 type AdminProductListRow = Prisma.ProductGetPayload<{ select: typeof adminProductListSelect }>;
@@ -234,9 +278,17 @@ export interface AdminProductListItem {
   isNewArrival: boolean;
   createdAt: Date;
   updatedAt: Date;
+  productType: ProductType;
+  hasDigitalFile: boolean;
+  // True only for the specific dangerous combination this milestone's
+  // validation is meant to prevent from ever being saved — surfaced
+  // here too so the admin list itself flags it at a glance if it's
+  // somehow ever reached (e.g. a file removed by other means).
+  digitalFileMissingWarning: boolean;
 }
 
 function toAdminProductListItem(product: AdminProductListRow): AdminProductListItem {
+  const hasDigitalFile = Boolean(product.digitalAsset?.isActive);
   return {
     id: product.id,
     name: product.name,
@@ -253,6 +305,9 @@ function toAdminProductListItem(product: AdminProductListRow): AdminProductListI
     isNewArrival: product.isNewArrival,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+    productType: product.productType,
+    hasDigitalFile,
+    digitalFileMissingWarning: product.productType === ProductType.DIGITAL && product.status === ProductStatus.ACTIVE && !hasDigitalFile,
   };
 }
 
@@ -355,6 +410,9 @@ export interface AdminProductDetail {
   images: { url: string; altText: string | null; isPrimary: boolean; sortOrder: number }[];
   createdAt: Date;
   updatedAt: Date;
+  productType: ProductType;
+  digitalTermsNote: string | null;
+  downloadEnabled: boolean;
 }
 
 // Version 7, Milestone 146 (second review fix): sanitised again here,
@@ -398,6 +456,9 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
     images: product.images,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+    productType: product.productType,
+    digitalTermsNote: product.digitalTermsNote,
+    downloadEnabled: product.downloadEnabled,
   };
 }
 
@@ -435,6 +496,9 @@ export interface AdminProductCreateInput {
   isFeatured?: unknown;
   isBestSeller?: unknown;
   isNewArrival?: unknown;
+  productType?: unknown;
+  digitalTermsNote?: unknown;
+  downloadEnabled?: unknown;
 }
 
 export async function createProduct(rawInput: unknown): Promise<AdminProductDetail> {
@@ -459,6 +523,11 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
   const isFeatured = Boolean(input.isFeatured);
   const isBestSeller = Boolean(input.isBestSeller);
   const isNewArrival = Boolean(input.isNewArrival);
+  const productType = optionalProductType(input.productType) ?? ProductType.PHYSICAL;
+  const digitalTermsNote = optionalTrimmedString(input.digitalTermsNote, "digitalTermsNote", MAX_LONG_TEXT_LENGTH);
+  const downloadEnabled = input.downloadEnabled === undefined ? true : Boolean(input.downloadEnabled);
+
+  await assertDigitalProductHasFileIfActive(null, productType, status);
 
   const category = await prisma.category.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!category) {
@@ -505,6 +574,9 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
       isFeatured,
       isBestSeller,
       isNewArrival,
+      productType,
+      digitalTermsNote,
+      downloadEnabled,
     },
     include: adminProductDetailInclude,
   });
@@ -538,10 +610,13 @@ const ALLOWED_UPDATE_FIELDS = [
   "isFeatured",
   "isBestSeller",
   "isNewArrival",
+  "productType",
+  "digitalTermsNote",
+  "downloadEnabled",
 ] as const;
 
 export async function updateProduct(id: string, rawInput: unknown): Promise<AdminProductDetail> {
-  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true, productType: true, status: true } });
   if (!existing) {
     throw new AdminProductError(`Product not found: ${id}`, 404);
   }
@@ -574,6 +649,19 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
   if ("isFeatured" in input) data.isFeatured = Boolean(input.isFeatured);
   if ("isBestSeller" in input) data.isBestSeller = Boolean(input.isBestSeller);
   if ("isNewArrival" in input) data.isNewArrival = Boolean(input.isNewArrival);
+  if ("productType" in input) data.productType = parseProductType(input.productType);
+  if ("digitalTermsNote" in input) data.digitalTermsNote = optionalTrimmedString(input.digitalTermsNote, "digitalTermsNote", MAX_LONG_TEXT_LENGTH);
+  if ("downloadEnabled" in input) data.downloadEnabled = Boolean(input.downloadEnabled);
+
+  // Version 7, Milestone 152: checked against the EFFECTIVE productType/
+  // status this update would result in — either value may come from this
+  // request or, if not included, from the row as it already exists —
+  // never just the values named directly in this one request, so a
+  // request that only sets status: ACTIVE on an already-DIGITAL product
+  // is validated exactly the same as one that sets both fields together.
+  const effectiveProductType = ("productType" in input ? (data.productType as ProductType) : existing.productType);
+  const effectiveStatus = ("status" in input ? (data.status as ProductStatus) : existing.status);
+  await assertDigitalProductHasFileIfActive(id, effectiveProductType, effectiveStatus);
 
   if ("categoryId" in input) {
     const categoryId = requireTrimmedString(input.categoryId, "categoryId");

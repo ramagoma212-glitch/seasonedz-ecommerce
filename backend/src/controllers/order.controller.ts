@@ -27,6 +27,12 @@ function toOrderEmailData(order: OrderOutput): OrderEmailData {
     deliveryProvince: order.deliveryAddress.province,
     deliveryPostalCode: order.deliveryAddress.postalCode,
     deliveryNotes: order.deliveryAddress.deliveryNotes,
+    // Version 7, Milestone 152: known at order-creation time (no
+    // payment confirmation needed to know WHAT was ordered) — safe to
+    // include on both the immediate order-created customer email and
+    // the admin new-order alert. guestDownloadUrl is never set here;
+    // see email.types.ts's own comment.
+    hasDigitalItems: order.items.some((item) => item.productType === "DIGITAL"),
   };
 }
 

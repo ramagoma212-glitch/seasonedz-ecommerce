@@ -40,7 +40,12 @@ export function saveCart(cart) {
   setStorageItem(CART_KEY, cart);
 }
 
-// product: { productId, slug, name, price, image }
+// product: { productId, slug, name, price, image, productType }
+// Version 7, Milestone 152: `productType` defaults to "PHYSICAL" when
+// absent — both for a caller that predates this field (none do today,
+// but defensive) and for any cart item already saved in a customer's
+// browser from before this milestone, which is always safely a
+// physical product (digital products didn't exist yet).
 export function addToCart(product, quantity = 1) {
   const cart = getCart();
   const existing = cart.find((item) => item.productId === product.productId);
@@ -54,12 +59,24 @@ export function addToCart(product, quantity = 1) {
       name: product.name,
       price: product.price,
       image: product.image,
+      productType: product.productType || "PHYSICAL",
       quantity,
     });
   }
 
   saveCart(cart);
   return cart;
+}
+
+// Version 7, Milestone 152: used by cart/checkout to decide which
+// delivery messaging to show. A cart item with no productType at all
+// (saved before this milestone existed) is treated as PHYSICAL — the
+// safe default, since every product in this catalogue was physical
+// until now.
+export function getCartComposition(items) {
+  const hasPhysical = items.some((item) => (item.productType || "PHYSICAL") === "PHYSICAL");
+  const hasDigital = items.some((item) => item.productType === "DIGITAL");
+  return { hasPhysical, hasDigital, isDigitalOnly: hasDigital && !hasPhysical, isMixed: hasDigital && hasPhysical };
 }
 
 export function removeFromCart(productId) {
@@ -124,7 +141,7 @@ export function getCartSummary(isRegisteredCustomer = false) {
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
   const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer);
   const total = subtotal + deliveryFee;
-  return { items, itemCount, subtotal, deliveryFee, total };
+  return { items, itemCount, subtotal, deliveryFee, total, composition: getCartComposition(items) };
 }
 
 export function isInCart(productId) {

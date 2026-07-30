@@ -59,6 +59,18 @@ export interface OrderEmailData {
   deliveryProvince: string;
   deliveryPostalCode: string;
   deliveryNotes: string | null;
+  // Version 7, Milestone 152: secure digital downloads. hasDigitalItems
+  // is safe to compute and include on every order email (it's just
+  // "does this order contain a digital line item", never a download
+  // link itself). guestDownloadUrl is deliberately optional and only
+  // ever set by payfast.service.ts's own COMPLETE handling, after
+  // payment is genuinely confirmed PAID, and only for a guest
+  // (customerId-less) order — see that file's own comment. Never set
+  // on the immediate order-created email (payment isn't confirmed yet)
+  // and never set for a logged-in customer's order (they download via
+  // their account instead of a token link).
+  hasDigitalItems?: boolean;
+  guestDownloadUrl?: string;
 }
 
 export interface EnquiryEmailData {

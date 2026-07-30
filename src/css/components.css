@@ -355,10 +355,23 @@
   position: relative;
 }
 
-.product-card__badge {
+/* Version 7, Milestone 152: wraps the discount-label and Digital
+   Download badges together so a product with both (rare, but possible)
+   stacks them vertically instead of rendering two separately absolute-
+   positioned badges directly on top of each other. */
+.product-card__badges {
   position: absolute;
   top: var(--space-sm);
   left: var(--space-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+
+.product-card__badge--digital {
+  background-color: var(--color-secondary-dark);
+  color: var(--color-white);
 }
 
 .product-card__wishlist {
@@ -918,6 +931,14 @@ body.has-lightbox-open {
 .cart-item__price {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+/* Version 7, Milestone 152: secure digital downloads. */
+.cart-item__digital-badge {
+  display: inline-block;
+  margin-bottom: var(--space-xs);
+  background-color: var(--color-secondary-dark);
+  color: var(--color-white);
 }
 
 .cart-item__quantity {

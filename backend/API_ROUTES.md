@@ -923,6 +923,24 @@ If the id doesn't match any enquiry:
 ```
 HTTP status: `404`.
 
+## Digital Downloads Routes (Version 7, Milestone 152)
+
+See `DIGITAL_DOWNLOADS_SETUP.md` for the full design/security
+rationale. None of these routes ever return a raw storage path or a
+long-lived URL — every download is a fresh, ~5-minute signed URL,
+generated only after re-verifying payment status and ownership on that
+exact request.
+
+| Method | Route | Auth | Description |
+|---|---|---|---|
+| GET | `/api/admin/products/:id/digital-asset` | Admin | Metadata for a product's digital file (or `null`). |
+| POST | `/api/admin/products/:id/digital-asset` | Admin | Upload or replace the product's digital file (`multipart/form-data`, field `file`; PDF/ZIP, max 100 MB). |
+| DELETE | `/api/admin/products/:id/digital-asset` | Admin | Remove the file. Rejected (409) while the product is `ACTIVE`. |
+| GET | `/api/customers/orders/:orderNumber/downloads` | Customer session | List purchased digital items for one of the logged-in customer's own PAID orders. Empty list if not owned/not paid. |
+| POST | `/api/customers/downloads/:orderItemId/request` | Customer session | Generate a fresh signed download URL for one purchased digital item. |
+| GET | `/api/downloads/guest/:token` | None (token is the credential) | List purchased digital items for a guest order via its secure, emailed token. |
+| POST | `/api/downloads/guest/:token/:orderItemId` | None (token is the credential) | Generate a fresh signed download URL via the guest token. |
+
 ## Known Limitations
 
 - **The frontend is connected locally (Milestone 16), but nothing is

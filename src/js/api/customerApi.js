@@ -51,3 +51,16 @@ export function resetPassword(token, password, confirmPassword) {
     body: JSON.stringify({ token, password, confirmPassword }),
   });
 }
+
+// Version 7, Milestone 152: secure digital downloads — both require the
+// caller to already be logged in (backend returns 401 otherwise), same
+// as getCustomerOrder(s) above. requestCustomerDownload() returns a
+// short-lived signed URL, freshly generated on every call — never
+// cached or reused client-side.
+export function getCustomerOrderDownloads(orderNumber) {
+  return customerRequest(`/customers/orders/${encodeURIComponent(orderNumber)}/downloads`, { method: "GET" });
+}
+
+export function requestCustomerDownload(orderItemId) {
+  return customerRequest(`/customers/downloads/${encodeURIComponent(orderItemId)}/request`, { method: "POST" });
+}

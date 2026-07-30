@@ -9,6 +9,7 @@ import { getCartSummary } from "../js/cart.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
+import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { PAYMENT_METHODS } from "../js/orders.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
 import { escapeHtml } from "../js/search.js";
@@ -190,7 +191,7 @@ export async function renderCheckoutPage() {
   // creation — a purely client-side estimate for display, never
   // trusted by the backend itself.
   const isRegisteredCustomer = customer?.type === "REGISTERED";
-  const { subtotal, deliveryFee } = getCartSummary(isRegisteredCustomer);
+  const { subtotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
 
   return `
     <section class="stub-page container checkout-page">
@@ -200,6 +201,7 @@ export async function renderCheckoutPage() {
       </p>
 
       ${renderAccountNote(customer)}
+      ${renderCartCompositionNotice(composition)}
 
       <div class="checkout-layout">
         <form id="checkout-form" class="checkout-form" novalidate>

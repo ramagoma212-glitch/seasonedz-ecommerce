@@ -211,7 +211,29 @@ function renderCollectionSection(products) {
   `;
 }
 
-function renderDigitalSection() {
+// Version 7, Milestone 152: if real, active digital product records
+// now exist (getCatalog() only ever returns ACTIVE/OUT_OF_STOCK
+// products — see backend/product.service.ts's own VISIBLE_STATUSES),
+// show them as real product cards, same as every other homepage
+// section. Until the owner creates one, `digitalProducts` is always
+// empty and this falls back to the exact same honest "Coming Soon" +
+// "Notify Me" placeholders from Milestone 150 — never a fake price or
+// a non-functional Add to Cart button for a title that doesn't exist.
+function renderDigitalSection(digitalProducts = []) {
+  if (digitalProducts.length > 0) {
+    return `
+      <section class="section container">
+        <div class="section__header">
+          <h2>Digital Colouring Books</h2>
+          <p>Download, print and start creating at home, in class or at church.</p>
+        </div>
+        <div class="digital-grid new-releases-grid">
+          ${digitalProducts.map((product) => renderProductCard(product)).join("")}
+        </div>
+      </section>
+    `;
+  }
+
   return `
     <section class="section container">
       <div class="section__header">
@@ -303,7 +325,7 @@ export async function renderHome() {
     ${renderNewReleasesSection(products)}
     ${renderBestSellerSection(products)}
     ${renderCollectionSection(products)}
-    ${renderDigitalSection()}
+    ${renderDigitalSection(products.filter((product) => product.productType === "DIGITAL"))}
     ${renderMarketplaceHomeSection()}
     ${renderGoogleReviewsSection()}
     ${renderHomeFaqSection()}

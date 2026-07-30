@@ -45,6 +45,12 @@ import {
   uploadAdminProductImageHandler,
   uploadProductImageMiddleware,
 } from "../controllers/adminProductImage.controller.js";
+import {
+  deleteAdminDigitalAssetHandler,
+  getAdminDigitalAssetHandler,
+  uploadAdminDigitalAssetHandler,
+  uploadDigitalAssetMiddleware,
+} from "../controllers/adminDigitalAsset.controller.js";
 
 const router = Router();
 
@@ -86,5 +92,12 @@ router.get("/products/:id/images", listAdminProductImagesHandler);
 router.post("/products/:id/images", uploadProductImageMiddleware, uploadAdminProductImageHandler);
 router.patch("/products/:id/images/:imageId", updateAdminProductImageHandler);
 router.delete("/products/:id/images/:imageId", deleteAdminProductImageHandler);
+// Version 7, Milestone 152: digital-asset (file) sub-routes for DIGITAL
+// products — one file per product, so no separate :assetId in the URL
+// (see adminDigitalAsset.service.ts's own comment on the unique
+// productId). Uploading again always replaces the existing file.
+router.get("/products/:id/digital-asset", getAdminDigitalAssetHandler);
+router.post("/products/:id/digital-asset", uploadDigitalAssetMiddleware, uploadAdminDigitalAssetHandler);
+router.delete("/products/:id/digital-asset", deleteAdminDigitalAssetHandler);
 
 export default router;

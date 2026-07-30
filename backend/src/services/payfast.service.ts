@@ -32,7 +32,7 @@
 // initiationEligibleStatuses below and VERSION_5_RETRY_PENDING_RISK_FIX.md.
 
 import type { Request } from "express";
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import { OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { payfastConfig } from "../config/payfast.js";
 import { env } from "../config/env.js";
@@ -42,6 +42,8 @@ import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
 import { sendPaymentConfirmedEmail, sendPaymentFailedEmail } from "./email/email.service.js";
 import type { OrderEmailData } from "./email/email.types.js";
 import { autoBookCourierForPaidOrder } from "./courierGuy.service.js";
+import { createGuestDownloadToken } from "./digitalDownload.service.js";
+import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -262,22 +264,32 @@ export interface PayfastNotifyResult {
 // renders order line items, and this deliberately doesn't add an
 // `include: { items: true }` to the sensitive, already-audited order
 // lookup above just to populate a field nothing here reads.
-function toPaymentOrderEmailData(order: {
-  orderNumber: string;
-  customerFirstName: string;
-  customerLastName: string;
-  customerEmail: string;
-  customerPhone: string;
-  total: Prisma.Decimal;
-  paymentStatus: PaymentStatus;
-  paymentMethod: PaymentMethod;
-  deliveryStreetAddress: string;
-  deliverySuburb: string;
-  deliveryCity: string;
-  deliveryProvince: string;
-  deliveryPostalCode: string;
-  deliveryNotes: string | null;
-}): OrderEmailData {
+//
+// Version 7, Milestone 152: `hasDigitalItems`/`guestDownloadUrl` are
+// passed in separately (computed by the caller, which already knows
+// whether this order has digital items and whether a guest token was
+// generated) rather than derived here — keeps this function's own
+// input shape unchanged for every other caller/case (FAILED/CANCELLED
+// never need either field).
+function toPaymentOrderEmailData(
+  order: {
+    orderNumber: string;
+    customerFirstName: string;
+    customerLastName: string;
+    customerEmail: string;
+    customerPhone: string;
+    total: Prisma.Decimal;
+    paymentStatus: PaymentStatus;
+    paymentMethod: PaymentMethod;
+    deliveryStreetAddress: string;
+    deliverySuburb: string;
+    deliveryCity: string;
+    deliveryProvince: string;
+    deliveryPostalCode: string;
+    deliveryNotes: string | null;
+  },
+  digital?: { hasDigitalItems: boolean; guestDownloadUrl?: string }
+): OrderEmailData {
   return {
     orderNumber: order.orderNumber,
     customerFirstName: order.customerFirstName,
@@ -294,6 +306,8 @@ function toPaymentOrderEmailData(order: {
     deliveryProvince: order.deliveryProvince,
     deliveryPostalCode: order.deliveryPostalCode,
     deliveryNotes: order.deliveryNotes,
+    hasDigitalItems: digital?.hasDigitalItems,
+    guestDownloadUrl: digital?.guestDownloadUrl,
   };
 }
 
@@ -368,9 +382,13 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
   }
 
   // --- Step 3: order lookup + amount verification (task 7) -----------------
+  // Version 7, Milestone 152: `items` (productType only) added so the
+  // COMPLETE branch below can tell whether this order has any digital
+  // line items, without a second query — every other branch (FAILED/
+  // CANCELLED/default) simply never reads it.
   const order = await prisma.order.findUnique({
     where: { orderNumber: mPaymentId },
-    include: { payment: true },
+    include: { payment: true, items: { select: { productType: true } } },
   });
 
   if (!order) {
@@ -489,6 +507,30 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         }),
       ]);
 
+      // Version 7, Milestone 152: same "only reached once, ever, per
+      // order" guarantee as the email/booking calls below — a guest
+      // download token is only ever created here, on a genuinely new
+      // COMPLETE transition, never on a duplicate ITN for an
+      // already-PAID order. A logged-in customer's order never gets a
+      // token at all (order.customerId is set) — they download via
+      // their account instead, which independently re-verifies
+      // ownership + PAID status on every request anyway (see
+      // digitalDownload.service.ts). A token-creation failure must
+      // never affect this ITN's response or the order's paymentStatus,
+      // matching every other fire-and-forget side effect here — it
+      // just means this one email won't have a working download link,
+      // which is safer than failing the whole payment confirmation.
+      const hasDigitalItems = order.items.some((item) => item.productType === ProductType.DIGITAL);
+      let guestDownloadUrl: string | undefined;
+      if (hasDigitalItems && !order.customerId) {
+        try {
+          const token = await createGuestDownloadToken(order.id);
+          guestDownloadUrl = `${preferredFrontendBaseUrl()}/download/${token}`;
+        } catch {
+          // Swallowed deliberately — see comment above.
+        }
+      }
+
       // Version 7, Milestone 117: only reached on a genuinely newly-
       // resolved COMPLETE (the early-return above already handled the
       // idempotent duplicate-notification case) — a repeated ITN for
@@ -496,7 +538,7 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
       // never double-send. Fire-and-forget, same discipline as
       // order.controller.ts; sendPaymentConfirmedEmail never throws.
       void sendPaymentConfirmedEmail({
-        ...toPaymentOrderEmailData(order),
+        ...toPaymentOrderEmailData(order, { hasDigitalItems, guestDownloadUrl }),
         paymentStatus: PaymentStatus.PAID,
       }).catch(() => {});
 

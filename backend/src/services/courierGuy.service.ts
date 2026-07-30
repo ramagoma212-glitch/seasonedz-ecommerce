@@ -39,7 +39,7 @@
 // "verify before relying on it" caveat the quote code already applied
 // to service_level/response fields.
 
-import { FulfilmentStatus, OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
+import { FulfilmentStatus, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductType } from "@prisma/client";
 import { courierGuyConfig } from "../config/courierGuy.js";
 import { isProduction } from "../config/env.js";
 import { prisma } from "../config/prisma.js";
@@ -928,6 +928,8 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
       paymentStatus: true,
       status: true,
       shipping: { select: { trackingNumber: true, courierShipmentId: true, courierBookedAt: true } },
+      // Version 7, Milestone 152: secure digital downloads.
+      items: { select: { productType: true } },
     },
   });
 
@@ -935,6 +937,20 @@ export async function autoBookCourierForPaidOrder(orderNumber: string): Promise<
   if (order.paymentMethod !== PaymentMethod.PAYFAST) return;
   if (order.paymentStatus !== PaymentStatus.PAID) return;
   if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.REFUNDED) return;
+
+  // Version 7, Milestone 152: a digital-only order (every line item
+  // DIGITAL, none PHYSICAL) has nothing to courier — skipped as a
+  // normal, expected no-op, never a failure (so nothing is ever
+  // recorded via recordBookingFailure for this case). A mixed order
+  // (at least one PHYSICAL item alongside digital ones) still proceeds
+  // exactly as before: Courier Guy quotes/books for the order as a
+  // whole, which is correct since the physical item(s) still need
+  // real-world delivery regardless of any digital items also included.
+  const hasPhysicalItem = order.items.some((item) => item.productType === ProductType.PHYSICAL);
+  if (!hasPhysicalItem) {
+    console.log(`[courier-guy] Automatic booking skipped for order=${orderNumber}: digital-only order, no physical delivery needed.`);
+    return;
+  }
 
   // Checked here, before ever calling getCourierQuote() — a duplicate
   // ITN (or any other repeat call) for an already-booked order should

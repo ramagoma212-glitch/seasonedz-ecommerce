@@ -1,4 +1,4 @@
-import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus } from "@prisma/client";
+import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType } from "@prisma/client";
 import type { PaymentMethod } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { calculateDeliveryFee } from "../utils/money.js";
@@ -26,6 +26,11 @@ interface VerifiedItem {
   quantity: number;
   unitPrice: Prisma.Decimal;
   lineTotal: Prisma.Decimal;
+  // Version 7, Milestone 152: secure digital downloads — see this
+  // file's own createOrder() comment on why these are snapshotted onto
+  // OrderItem rather than looked up live at download time.
+  productType: ProductType;
+  digitalAssetId: string | null;
 }
 
 // Looks up and re-prices every requested item from the database —
@@ -47,7 +52,10 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       throw new OrderError(`Total quantity for "${productSlug}" cannot exceed 99.`);
     }
 
-    const product = await prisma.product.findUnique({ where: { slug: productSlug } });
+    const product = await prisma.product.findUnique({
+      where: { slug: productSlug },
+      include: { digitalAsset: { select: { id: true, isActive: true } } },
+    });
 
     if (!product) {
       throw new OrderError(`Product not found: ${productSlug}`);
@@ -57,12 +65,27 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       throw new OrderError(`Product is not currently available: ${product.name}`);
     }
 
-    if (product.stockQuantity <= 0) {
-      throw new OrderError(`Product is out of stock: ${product.name}`);
-    }
+    // Version 7, Milestone 152: a DIGITAL product has no physical
+    // inventory — stock checks/decrements are meaningless for it and
+    // are skipped entirely, same as they've never applied to anything
+    // but stockQuantity in this codebase. A digital product must still
+    // have an active file attached to be purchasable — the same
+    // guarantee adminProduct.service.ts's own validation already
+    // enforces before it can ever become ACTIVE, re-checked here too
+    // since a product's file could in principle be removed after
+    // activation (defensive, not expected in normal admin use).
+    if (product.productType === ProductType.DIGITAL) {
+      if (!product.digitalAsset || !product.digitalAsset.isActive || !product.downloadEnabled) {
+        throw new OrderError(`This digital product is not currently available for download: ${product.name}`);
+      }
+    } else {
+      if (product.stockQuantity <= 0) {
+        throw new OrderError(`Product is out of stock: ${product.name}`);
+      }
 
-    if (quantity > product.stockQuantity) {
-      throw new OrderError(`Only ${product.stockQuantity} of "${product.name}" left in stock (requested ${quantity}).`);
+      if (quantity > product.stockQuantity) {
+        throw new OrderError(`Only ${product.stockQuantity} of "${product.name}" left in stock (requested ${quantity}).`);
+      }
     }
 
     const unitPrice = product.price;
@@ -74,6 +97,8 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       quantity,
       unitPrice,
       lineTotal: unitPrice.times(quantity),
+      productType: product.productType,
+      digitalAssetId: product.productType === ProductType.DIGITAL ? product.digitalAsset!.id : null,
     });
   }
 
@@ -95,6 +120,11 @@ export interface OrderItemOutput {
   quantity: number;
   unitPrice: number;
   lineTotal: number;
+  // Version 7, Milestone 152: secure digital downloads — lets callers
+  // (order.controller.ts's email mapping, the frontend cart/checkout
+  // messaging) know without a second lookup whether this line is a
+  // digital download or a physical item.
+  productType: ProductType;
 }
 
 export interface OrderOutput {
@@ -171,6 +201,7 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       quantity: item.quantity,
       unitPrice: item.unitPrice.toNumber(),
       lineTotal: item.lineTotal.toNumber(),
+      productType: item.productType,
     })),
     subtotal: order.subtotal.toNumber(),
     deliveryFee: order.deliveryFee.toNumber(),
@@ -243,7 +274,11 @@ export async function createOrder(
     // therefore only decrements) if stockQuantity is still enough at
     // the moment of writing, closing the gap between the check in
     // verifyItems() above and this transaction actually committing.
+    // Version 7, Milestone 152: skipped entirely for DIGITAL items —
+    // there is no finite inventory to decrement or race over.
     for (const item of verifiedItems) {
+      if (item.productType === ProductType.DIGITAL) continue;
+
       const result = await tx.product.updateMany({
         where: { id: item.productId, stockQuantity: { gte: item.quantity } },
         data: { stockQuantity: { decrement: item.quantity } },
@@ -286,6 +321,8 @@ export async function createOrder(
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             lineTotal: item.lineTotal,
+            productType: item.productType,
+            digitalAssetId: item.digitalAssetId,
           })),
         },
         payment: {

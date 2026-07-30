@@ -13,6 +13,7 @@ import paymentRoutes from "./payment.routes.js";
 import adminAuthRoutes from "./adminAuth.routes.js";
 import adminDashboardRoutes from "./adminDashboard.routes.js";
 import customerRoutes from "./customer.routes.js";
+import downloadsRoutes from "./downloads.routes.js";
 
 const router = Router();
 
@@ -35,5 +36,8 @@ router.use("/admin", adminDashboardRoutes);
 // from any public frontend page yet. Fully separate from adminAuth
 // above — see customerAuth.service.ts's own header comment.
 router.use("/customers", customerRoutes);
+// Version 7, Milestone 152: guest secure-token digital download access
+// — deliberately public (see downloads.routes.ts's own comment).
+router.use("/downloads", downloadsRoutes);
 
 export default router;
