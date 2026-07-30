@@ -273,6 +273,35 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
   );
 }
 
+// Digital product downloads (Version 7, Milestone 152). Reuses the same
+// supabaseUrl/supabaseServiceRoleKey credentials as product image
+// upload above — same Supabase project, same server-role client — but
+// a completely separate, PRIVATE bucket. Never the product-images
+// bucket: that one is public by design (storefront photos), while this
+// one must never be. See services/digitalAssetStorage.service.ts.
+const digitalProductsBucket = getEnv("DIGITAL_PRODUCTS_BUCKET", "digital-products");
+
+// Not eagerly required at startup — same "safety switch, optional
+// until configured" pattern as product image upload. A backend with no
+// Supabase credentials set keeps starting and serving every other
+// route normally; only the digital-asset upload/download routes
+// respond with a clear "not configured" error until both are set (see
+// isDigitalAssetStorageConfigured() in digitalAssetStorage.service.ts,
+// which reads supabaseUrl/supabaseServiceRoleKey directly — the same
+// two variables checked above for product images).
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[digital-downloads] SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not set — " +
+      "digital product file upload/download is not configured. Every other route is " +
+      "unaffected; only the digital-asset admin upload and customer/guest download " +
+      "routes will respond with a clear configuration error until both are set. " +
+      `The private bucket "${digitalProductsBucket}" must also be created manually in ` +
+      "the Supabase dashboard (Storage) with public access OFF — this backend never " +
+      "creates a bucket itself. See backend/DIGITAL_DOWNLOADS_SETUP.md."
+  );
+}
+
 // Courier Guy (Version 7, Milestone 108 — admin-only RATE QUOTE only).
 // See backend/src/services/courierGuy.service.ts's own header comment:
 // nothing in this codebase ever calls a booking/shipment-creation
@@ -482,6 +511,10 @@ export const env = {
   supabaseUrl,
   supabaseServiceRoleKey,
   productImagesBucket,
+  // Digital downloads — see the block above. Reuses supabaseUrl/
+  // supabaseServiceRoleKey; digitalProductsBucket is its own, separate,
+  // private bucket name.
+  digitalProductsBucket,
   // Courier Guy — see the block above. courierGuyApiKey is undefined
   // unless explicitly set; never logged anywhere.
   courierGuyEnabled,

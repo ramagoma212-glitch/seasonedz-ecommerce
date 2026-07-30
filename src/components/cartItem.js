@@ -32,6 +32,7 @@ export function renderCartItem(item, { eager = false } = {}) {
 
       <div class="cart-item__details">
         <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
+        ${item.productType === "DIGITAL" ? `<span class="badge cart-item__digital-badge">Digital Download</span>` : ""}
         <p class="cart-item__price">R${item.price.toFixed(2)} each</p>
       </div>
 

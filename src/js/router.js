@@ -72,6 +72,7 @@ import { renderAccount } from "../pages/accountPage.js";
 import { renderAccountOrderDetail } from "../pages/accountOrderDetail.js";
 import { renderForgotPassword } from "../pages/forgotPasswordPage.js";
 import { renderResetPassword } from "../pages/resetPasswordPage.js";
+import { renderGuestDownloadPage } from "../pages/guestDownloadPage.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
 import { renderFaq } from "../pages/faq.js";
@@ -163,6 +164,11 @@ const routeDefs = [
   // convention already covers it without any extra pattern segment.
   { pattern: "/account/forgot-password", render: renderForgotPassword, title: "Forgot Password", noindex: true },
   { pattern: "/account/reset-password", render: renderResetPassword, title: "Reset Password", noindex: true },
+  // Version 7, Milestone 152: guest secure-token digital download
+  // access — reached only via a one-time emailed link (see
+  // guestDownloadPage.js's own comment). noindex like every other
+  // account/order-specific page.
+  { pattern: "/download/:token", render: renderGuestDownloadPage, title: "Your Digital Downloads", noindex: true },
   {
     pattern: "/about",
     render: renderAbout,
@@ -186,7 +192,7 @@ const routeDefs = [
     pattern: "/shipping-policy",
     render: renderShippingPolicy,
     title: "Shipping Policy",
-    description: "Delivery available nationwide through The Courier Guy where applicable. R80 delivery, free for registered customers from R500.",
+    description: "Delivery available nationwide through The Courier Guy where applicable. R80 delivery, free for registered customers from R650.",
   },
   { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
   { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },

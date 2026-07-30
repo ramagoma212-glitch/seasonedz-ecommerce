@@ -95,11 +95,31 @@ function renderDeliveryNote() {
     <h3>Delivery</h3>
     <p>
       Delivery is R80. Registered Seasonedz Group customers get free
-      delivery on orders of R500 or more when signed in. We use The
+      delivery on orders of R650 or more when signed in. We use The
       Courier Guy for courier deliveries where applicable, arranged
       manually by our small team. See our
       <a href="/shipping-policy">Shipping Policy</a> for details.
     </p>
+  `;
+}
+
+// Version 7, Milestone 152: replaces the physical delivery note for a
+// DIGITAL product. Only ever shows file format/printable pages if
+// they're actually stored on the product's digital asset (see
+// product.service.ts's own toProductOutput()) — never a guessed or
+// invented value.
+function renderDigitalDownloadNote(product) {
+  const digital = product.digitalDownload;
+  return `
+    <h3>Digital Download</h3>
+    <p>
+      No physical book will be delivered for this product. Your download
+      will be available after successful payment${digital?.fileType ? ` (${digital.fileType} file` : ""}${digital?.pageCount ? `, ${digital.pageCount} printable pages)` : digital?.fileType ? ")" : ""}.
+      Logged-in customers can download from My Account &rarr; Orders; guest
+      customers receive a secure download link by email once payment is
+      confirmed.
+    </p>
+    ${digital?.termsNote ? `<p>${escapeHtml(digital.termsNote)}</p>` : ""}
   `;
 }
 
@@ -233,6 +253,7 @@ export async function renderProductDetails({ slug } = {}) {
         <div class="product-details__info">
           <p class="product-details__category">${product.category}</p>
           <h1 class="product-details__title">${product.name}</h1>
+          ${product.productType === "DIGITAL" ? `<span class="badge product-details__digital-badge">Digital Download</span>` : ""}
 
           <div class="product-details__price-row">
             <span class="product-details__price">R${product.price.toFixed(2)}</span>
@@ -262,6 +283,7 @@ export async function renderProductDetails({ slug } = {}) {
               data-name="${product.name}"
               data-price="${product.price}"
               data-image="${product.image}"
+              data-product-type="${product.productType || "PHYSICAL"}"
             >
               Add to Cart
             </button>
@@ -303,7 +325,7 @@ export async function renderProductDetails({ slug } = {}) {
         </ul>
 
         ${renderGoodFor(product)}
-        ${renderDeliveryNote()}
+        ${product.productType === "DIGITAL" ? renderDigitalDownloadNote(product) : renderDeliveryNote()}
         ${renderSupportNote()}
       </div>
 

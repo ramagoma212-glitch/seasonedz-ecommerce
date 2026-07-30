@@ -1,14 +1,24 @@
-import { Prisma, ProductStatus } from "@prisma/client";
+import { Prisma, ProductStatus, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SortOption, StockOption } from "../utils/query.js";
 import { sanitizeDescriptionHtml } from "../utils/descriptionSanitizer.js";
 
 // Every public product query goes through this include so the shape
 // available to toProductOutput() is always the same.
+//
+// Version 7, Milestone 152: digitalAsset selects only the safe, public-
+// facing metadata a customer needs to decide whether to buy — never
+// storageBucket/storagePath (see digitalAssetStorage.service.ts's own
+// header comment on why those must never reach a frontend response) and
+// never the internal fileName either (displayName is the one the
+// storefront ever shows).
 const productInclude = {
   category: true,
   images: { orderBy: { sortOrder: "asc" } },
   tags: true,
+  digitalAsset: {
+    select: { displayName: true, mimeType: true, fileSizeBytes: true, pageCount: true, version: true, isActive: true },
+  },
 } satisfies Prisma.ProductInclude;
 
 export type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
@@ -183,6 +193,25 @@ export interface ProductOutput {
   discountLabel: string | null;
   createdAt: Date;
   updatedAt: Date;
+  productType: ProductType;
+  digitalDownload: {
+    displayName: string;
+    fileType: string;
+    fileSizeBytes: number;
+    pageCount: number | null;
+    version: string | null;
+    termsNote: string | null;
+  } | null;
+}
+
+// "PDF"/"ZIP" for the two allowed upload types (adminDigitalAsset.
+// service.ts); any other stored mimeType (shouldn't happen — upload
+// validation only ever accepts those two) falls back to a generic,
+// still-safe label rather than guessing.
+function humanizeFileType(mimeType: string): string {
+  if (mimeType === "application/pdf") return "PDF";
+  if (mimeType === "application/zip" || mimeType === "application/x-zip-compressed") return "ZIP";
+  return "File";
 }
 
 // Version 7, Milestone 146 (post-review fix): every product row already
@@ -238,5 +267,17 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
     discountLabel: product.discountLabel,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+    productType: product.productType,
+    digitalDownload:
+      product.productType === ProductType.DIGITAL && product.digitalAsset && product.digitalAsset.isActive
+        ? {
+            displayName: product.digitalAsset.displayName,
+            fileType: humanizeFileType(product.digitalAsset.mimeType),
+            fileSizeBytes: product.digitalAsset.fileSizeBytes,
+            pageCount: product.digitalAsset.pageCount,
+            version: product.digitalAsset.version,
+            termsNote: product.digitalTermsNote,
+          }
+        : null,
   };
 }

@@ -9,6 +9,7 @@ import { getCartSummary } from "../js/cart.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
+import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { PAYMENT_METHODS } from "../js/orders.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
 import { escapeHtml } from "../js/search.js";
@@ -126,7 +127,7 @@ function renderDeliveryNote() {
         <strong>Delivery is arranged after your order is confirmed.</strong>
         <p>
           Delivery is R80. Registered Seasonedz Group customers get
-          free delivery on orders of R500 or more. We use The Courier
+          free delivery on orders of R650 or more. We use The Courier
           Guy for courier deliveries where applicable. Seasonedz Group
           will confirm your order and arrange delivery; tracking
           details are shared once your order has been packed and
@@ -190,7 +191,7 @@ export async function renderCheckoutPage() {
   // creation — a purely client-side estimate for display, never
   // trusted by the backend itself.
   const isRegisteredCustomer = customer?.type === "REGISTERED";
-  const { subtotal, deliveryFee } = getCartSummary(isRegisteredCustomer);
+  const { subtotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
 
   return `
     <section class="stub-page container checkout-page">
@@ -200,6 +201,7 @@ export async function renderCheckoutPage() {
       </p>
 
       ${renderAccountNote(customer)}
+      ${renderCartCompositionNotice(composition)}
 
       <div class="checkout-layout">
         <form id="checkout-form" class="checkout-form" novalidate>
@@ -253,7 +255,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

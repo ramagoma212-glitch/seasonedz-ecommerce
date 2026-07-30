@@ -97,6 +97,16 @@ function enquiryTypeIntro(type: string): string {
   }
 }
 
+// Version 7, Milestone 152: an honest, no-link-yet line for the
+// immediate order-created email — payment isn't confirmed at this
+// point, so no download access exists yet regardless of payment
+// method. Never claims a download is ready; only sets the right
+// expectation for what happens once payment clears.
+function digitalItemsNoticeForOrderCreated(order: OrderEmailData): string {
+  if (!order.hasDigitalItems) return "";
+  return "\n\nThis order includes a digital download item. It will be available to download once your payment is confirmed.";
+}
+
 export function renderOrderCreatedEmail(order: OrderEmailData): RenderedEmail {
   const subject = `Your Seasonedz Group Order ${order.orderNumber} Has Been Received`;
   const body = `Hi ${order.customerFirstName},
@@ -110,7 +120,7 @@ Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}
 
-${paymentInstructions(order.paymentMethod)}
+${paymentInstructions(order.paymentMethod)}${digitalItemsNoticeForOrderCreated(order)}
 
 Delivering To:
 ${formatDeliveryNote(order)}
@@ -150,6 +160,24 @@ Seasonedz Group`;
   return { subject, body };
 }
 
+// Version 7, Milestone 152: the only place a download link is ever
+// included in an email — and only once payment is genuinely confirmed
+// PAID (this template is only ever rendered from that point). Never
+// includes a raw signed URL or storage path (see
+// digitalAssetStorage.service.ts) — guestDownloadUrl is the one-time
+// secure-token link (digitalDownload.service.ts), which itself only
+// ever lists the order's files and generates a short-lived signed URL
+// per click, never embedding one directly in the email.
+function digitalItemsNoticeForPaymentConfirmed(order: OrderEmailData): string {
+  if (!order.hasDigitalItems) return "";
+
+  if (order.guestDownloadUrl) {
+    return `\n\nThis order includes a digital download. You can access it securely here:\n${order.guestDownloadUrl}\n(This link is personal to your order and will expire — please don't share it.)`;
+  }
+
+  return "\n\nThis order includes a digital download. Log in to My Account and open this order to download it.";
+}
+
 export function renderPaymentConfirmedEmail(order: OrderEmailData): RenderedEmail {
   const subject = `Payment Confirmed for Order ${order.orderNumber}`;
   const body = `Hi ${order.customerFirstName},
@@ -159,7 +187,7 @@ Good news: your payment for order ${order.orderNumber} has been confirmed. Thank
 Order Total: ${formatRand(order.total)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}
 
-We're now getting your order ready. You're welcome to check its progress any time using your order number.
+We're now getting your order ready. You're welcome to check its progress any time using your order number.${digitalItemsNoticeForPaymentConfirmed(order)}
 
 ${CONTACT_LINE}
 
@@ -224,6 +252,13 @@ export function renderAdminNewOrderEmail(order: OrderEmailData): RenderedEmail {
     order.paymentMethod === "BANK_TRANSFER"
       ? "\n\nThis is a Bank Transfer order — check the business bank account and confirm payment before packing."
       : "";
+  // Version 7, Milestone 152: admin visibility only — never mentions
+  // Courier Guy or download-access specifics here, matching this
+  // template's existing "says nothing about admin-dashboard-only
+  // actions" discipline.
+  const digitalItemsReminder = order.hasDigitalItems
+    ? "\n\nThis order includes a digital download item."
+    : "";
 
   const body = `A new order has been placed on Seasonedz Group.
 
@@ -237,7 +272,7 @@ ${formatItemsList(order.items)}
 
 Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
-Payment Status: ${humanizeEnum(order.paymentStatus)}${bankTransferReminder}
+Payment Status: ${humanizeEnum(order.paymentStatus)}${bankTransferReminder}${digitalItemsReminder}
 
 Delivering To:
 ${formatDeliveryNote(order)}

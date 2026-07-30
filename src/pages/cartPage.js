@@ -7,6 +7,7 @@ import { getCartSummary } from "../js/cart.js";
 import { renderCartItem } from "../components/cartItem.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
+import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
 
 // Version 7, Milestone 131: best-effort only, same discipline as
@@ -23,7 +24,7 @@ async function isLoggedInRegisteredCustomer() {
 
 export async function renderCartPage() {
   const isRegisteredCustomer = await isLoggedInRegisteredCustomer();
-  const { items, subtotal, deliveryFee } = getCartSummary(isRegisteredCustomer);
+  const { items, subtotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
 
   if (!items.length) {
     return `
@@ -42,6 +43,7 @@ export async function renderCartPage() {
   return `
     <section class="container cart-page">
       <h1 class="stub-page__title">Your Cart</h1>
+      ${renderCartCompositionNotice(composition)}
 
       <div class="cart-layout">
         <div class="cart-items">
@@ -55,7 +57,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer })}
+        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical })}
       </div>
     </section>
   `;

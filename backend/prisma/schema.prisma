@@ -30,6 +30,18 @@ enum ProductStatus {
   OUT_OF_STOCK
 }
 
+// Version 7, Milestone 152: secure digital downloads. Deliberately just
+// two values — the milestone brief allows a MIXED product type "only if
+// needed"; a single product is always either a physical item shipped by
+// courier or a digital file unlocked after payment, never both at once
+// (a bundle of one physical + one digital product is just two separate
+// PHYSICAL/DIGITAL OrderItems on the same order — see OrderItem's own
+// productType snapshot below), so no third value is needed.
+enum ProductType {
+  PHYSICAL
+  DIGITAL
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -164,12 +176,59 @@ model Product {
   isNewArrival  Boolean @default(false)
   discountLabel String?
 
+  // Version 7, Milestone 152: secure digital downloads. `productType`
+  // defaults PHYSICAL so every existing product (and every place that
+  // creates a Product without knowing about this milestone) keeps its
+  // exact current behaviour — stock/Courier Guy/delivery-address rules
+  // all still apply to it unchanged. `digitalAsset` is optional and
+  // one-to-one: a digital product has at most one attached file at a
+  // time (replacing it updates the same row rather than adding a
+  // second) — see DigitalAsset below. `downloadEnabled` is a separate
+  // switch from `status` so an owner can pause access to a paid file
+  // (e.g. while fixing a printing error) without un-publishing the
+  // whole product listing.
+  productType      ProductType   @default(PHYSICAL)
+  digitalTermsNote String?
+  downloadEnabled  Boolean       @default(true)
+  digitalAsset     DigitalAsset?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([categoryId])
   @@index([status])
   @@index([isFeatured])
+  @@index([productType])
+}
+
+// Version 7, Milestone 152: the one digital file attached to a DIGITAL
+// product. A private-bucket object, never a public URL — storageBucket/
+// storagePath are internal identifiers only, resolved into a short-lived
+// signed URL at download time (services/digitalAssetStorage.service.ts)
+// and never returned directly to any frontend response (see
+// services/digitalDownload.service.ts). `productId` unique enforces
+// "at most one file per product" — admin.service.ts's replace flow
+// updates this same row (new storagePath, old object best-effort
+// deleted afterward) rather than creating a second DigitalAsset.
+model DigitalAsset {
+  id        String  @id @default(cuid())
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  fileName      String
+  displayName   String
+  storageBucket String
+  storagePath   String
+  mimeType      String
+  fileSizeBytes Int
+  pageCount     Int?
+  version       String?
+  isActive      Boolean @default(true)
+
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ProductImage {
@@ -228,9 +287,13 @@ model Customer {
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
 
-  orders    Order[]
-  addresses Address[]
-  sessions  CustomerSession[]
+  orders              Order[]
+  addresses           Address[]
+  sessions            CustomerSession[]
+  // Version 7, Milestone 152: best-effort admin-view linkage only — see
+  // DigitalDownloadLog's own comment for why real entitlement checks
+  // never rely on this relation.
+  digitalDownloadLogs DigitalDownloadLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -329,13 +392,18 @@ model Order {
   // Internal/admin notes — not shown to the customer.
   notes String?
 
-  items         OrderItem[]
-  payment       Payment?
-  shipping      Shipping?
+  items               OrderItem[]
+  payment             Payment?
+  shipping            Shipping?
   // Version 7, Milestone 62: audit trail for future admin status
   // updates — see OrderStatusHistory below. Empty for every order that
   // predates this feature; that is expected, not backfilled.
-  statusHistory OrderStatusHistory[]
+  statusHistory       OrderStatusHistory[]
+  // Version 7, Milestone 152: guest secure digital-download tokens —
+  // see GuestDownloadToken below. Empty for every order with no digital
+  // items and for every order placed by a logged-in customer (who
+  // downloads via their account instead, never a token).
+  guestDownloadTokens GuestDownloadToken[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -367,10 +435,74 @@ model OrderItem {
   unitPrice Decimal @db.Decimal(10, 2)
   lineTotal Decimal @db.Decimal(10, 2)
 
+  // Version 7, Milestone 152: snapshotted at order-creation time, same
+  // "never depend on the live Product row" philosophy as
+  // productName/productSlug/unitPrice above — a product's type can't
+  // realistically change after being sold, but this guarantees
+  // Courier Guy gating and download-access checks for an existing order
+  // are never affected even if it did. digitalAssetId is nullable and
+  // SetNull-on-delete: it's only ever set for a DIGITAL line item, and
+  // deleting a DigitalAsset (e.g. an admin removing a retired file) must
+  // never cascade-delete the historical order line that references it.
+  productType    ProductType   @default(PHYSICAL)
+  digitalAssetId String?
+  digitalAsset   DigitalAsset? @relation(fields: [digitalAssetId], references: [id], onDelete: SetNull)
+
+  downloadLog DigitalDownloadLog?
+
   createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([productId])
+  @@index([digitalAssetId])
+}
+
+// Version 7, Milestone 152: tracks download activity for one purchased
+// digital line item — one row per OrderItem (orderItemId unique), not
+// per customer or per asset in general, so "has this specific purchase
+// been downloaded, and how many times" is a single direct lookup.
+// customerId is nullable (SetNull on delete) purely for a friendlier
+// admin view later; every real entitlement check re-verifies ownership
+// against the OrderItem's own Order.customerId or a GuestDownloadToken,
+// never against this row.
+model DigitalDownloadLog {
+  id             String    @id @default(cuid())
+  orderItemId    String    @unique
+  orderItem      OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  digitalAssetId String
+  customerId     String?
+  customer       Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  downloadCount    Int       @default(0)
+  lastDownloadedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([digitalAssetId])
+  @@index([customerId])
+}
+
+// Version 7, Milestone 152: secure guest access to digital downloads —
+// a paid guest order's owner never has an account to log into, so a
+// random, hashed, expiring token (emailed as a download link once
+// payment is confirmed — see courierGuy/payfast.service.ts's own
+// comments and services/digitalDownload.service.ts) is the only way a
+// guest can ever reach GET/POST /api/downloads/guest/:token. Same
+// "never store the raw secret" discipline as CustomerSession.tokenHash/
+// AdminSession.tokenHash: the raw token exists only in the one email
+// link it's sent in, and is hashed (SHA-256) before being written here.
+model GuestDownloadToken {
+  id         String    @id @default(cuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  @@index([orderId])
+  @@index([expiresAt])
 }
 
 // ============================================================================

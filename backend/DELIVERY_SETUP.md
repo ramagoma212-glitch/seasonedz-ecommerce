@@ -10,33 +10,44 @@ entirely manual.
 
 - Standard delivery: **R80** flat rate.
 - Free delivery: only for a **logged-in registered customer**, on a
-  subtotal of **R500 or more**. A guest checkout always pays R80,
+  subtotal of **R650 or more**. A guest checkout always pays R80,
   regardless of subtotal.
 - Version 7, Milestone 131 replaced the old flat "free from R700 for
   everyone" rule with this registered-account benefit — see
   `backend/src/config/delivery.ts`'s own header comment for the full
   rule and rationale.
+- **Version 7, Milestone 152B**: a **digital-only** order (every line
+  item `DIGITAL`, none `PHYSICAL`) is never charged a delivery fee —
+  **R0** regardless of subtotal or registered-customer status, since
+  there is nothing to physically deliver. A **mixed** order (at least
+  one `PHYSICAL` item alongside digital ones) is charged the normal
+  fee above, unaffected by the digital items also being present.
 
 Eligibility is decided **only** from the verified `customer_session`
 cookie (`req.customerUser.type === "REGISTERED"`, read in
 `order.controller.ts` via `optionalCustomerAuth` and passed into
 `order.service.ts`'s `createOrder()`) — never from anything a request
-body claims.
+body claims. Whether an order has any physical item is likewise decided
+only from the verified line items themselves
+(`order.service.ts`'s own `verifiedItems`), never a client claim.
 
 Single source of truth: `backend/src/config/delivery.ts`
 (`STANDARD_DELIVERY_FEE`, `REGISTERED_FREE_DELIVERY_THRESHOLD`).
 `backend/src/utils/money.ts`'s `calculateDeliveryFee(subtotal,
-isRegisteredCustomer)` (Decimal-based, used directly by
-`order.service.ts`'s real order transaction) and
+isRegisteredCustomer, hasPhysicalItems = true)` (Decimal-based, used
+directly by `order.service.ts`'s real order transaction) and
 `backend/src/services/delivery.service.ts`'s plain-number
 `calculateDeliveryFee()`/`getDeliverySummary()` (for anything else that
-needs the rule) both read from this one config module. The frontend's
-own copy (`src/js/cart.js`, used for the cart/checkout display before
-an order is even created) still has its own matching constants — this
-duplication is intentional (client-side display estimate vs.
-server-side authoritative calculation); the backend never trusts a
-client-supplied delivery fee, customerId, or registered status
-regardless.
+needs the rule) both read from this one config module — the third
+`hasPhysicalItems` parameter defaults `true` so every pre-Milestone-152B
+caller keeps its exact prior behaviour unless it explicitly says an
+order has no physical items. The frontend's own copy (`src/js/cart.js`,
+used for the cart/checkout display before an order is even created)
+still has its own matching constants and the same
+`hasPhysicalItems`-parameter shape — this duplication is intentional
+(client-side display estimate vs. server-side authoritative
+calculation); the backend never trusts a client-supplied delivery fee,
+customerId, registered status, or product-type composition regardless.
 
 ## Manual Courier Process
 

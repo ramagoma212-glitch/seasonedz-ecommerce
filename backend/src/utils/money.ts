@@ -16,6 +16,16 @@ const registeredFreeDeliveryThreshold = new Prisma.Decimal(REGISTERED_FREE_DELIV
 // from req.customerUser.type via optionalCustomerAuth) — never from
 // anything a request body claims. Courier API will replace this
 // later with real, address-based rates.
-export function calculateDeliveryFee(subtotal: Prisma.Decimal, isRegisteredCustomer: boolean): Prisma.Decimal {
+//
+// Version 7, Milestone 152B: `hasPhysicalItems` (default `true`, so
+// every existing caller that doesn't pass it keeps its exact prior
+// behaviour) short-circuits straight to a R0 fee, before even checking
+// registered-customer status — a digital-only order has nothing to
+// deliver, so there is no delivery fee to charge regardless of who's
+// buying it or how much it costs. A mixed order (at least one physical
+// item alongside digital ones) still charges the normal fee — the
+// physical item(s) still need real-world delivery.
+export function calculateDeliveryFee(subtotal: Prisma.Decimal, isRegisteredCustomer: boolean, hasPhysicalItems = true): Prisma.Decimal {
+  if (!hasPhysicalItems) return new Prisma.Decimal(0);
   return isRegisteredCustomer && subtotal.gte(registeredFreeDeliveryThreshold) ? new Prisma.Decimal(0) : standardDeliveryFee;
 }

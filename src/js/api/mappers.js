@@ -36,6 +36,15 @@ export function mapApiProductToFrontendShape(apiProduct) {
     isBestSeller: apiProduct.isBestSeller,
     isNewArrival: apiProduct.isNewArrival,
     discountLabel: apiProduct.discountLabel,
+    // Version 7, Milestone 152: secure digital downloads. productType
+    // defaults "PHYSICAL" for the static fallback catalogue (src/data/
+    // products.js), which predates this field entirely — every one of
+    // those sample products is a real physical book/marker set.
+    // digitalDownload is null for every physical product and for a
+    // digital product with no active file (see product.service.ts's own
+    // toProductOutput()) — never a guess at file details.
+    productType: apiProduct.productType || "PHYSICAL",
+    digitalDownload: apiProduct.digitalDownload || null,
   };
 }
 

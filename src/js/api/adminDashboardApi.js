@@ -153,3 +153,28 @@ export function deleteProductImage(productId, imageId) {
     method: "DELETE",
   });
 }
+
+// Version 7, Milestone 152: admin digital-asset (file) management for
+// DIGITAL products. One file per product — POST always uploads OR
+// replaces the existing one (see adminDigitalAsset.service.ts).
+export function getAdminDigitalAsset(productId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/digital-asset`, { method: "GET" });
+}
+
+// `file` is a File/Blob from a <input type="file">.
+export function uploadAdminDigitalAsset(productId, file, { displayName, pageCount, version }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("displayName", displayName);
+  if (pageCount) formData.append("pageCount", pageCount);
+  if (version) formData.append("version", version);
+
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/digital-asset`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function deleteAdminDigitalAsset(productId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/digital-asset`, { method: "DELETE" });
+}

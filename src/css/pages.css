@@ -359,6 +359,14 @@
   margin-bottom: var(--space-sm);
 }
 
+/* Version 7, Milestone 152: secure digital downloads. */
+.product-details__digital-badge {
+  display: inline-block;
+  margin-bottom: var(--space-sm);
+  background-color: var(--color-secondary-dark);
+  color: var(--color-white);
+}
+
 .product-details__price-row {
   display: flex;
   align-items: center;

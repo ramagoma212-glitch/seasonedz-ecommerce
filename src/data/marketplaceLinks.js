@@ -14,7 +14,10 @@ export const marketplaceLinks = [
     id: "takealot",
     name: "Takealot.com",
     url: "https://www.takealot.com/seller/?sellers=29890451",
-    logo: "/images/marketplaces/takealot-logo.png",
+    // Version 7, Milestone 152B: owner replaced the logo file directly
+    // (old takealot-logo.png removed, new takealot-logo-new.jpeg
+    // added) — updated here to match.
+    logo: "/images/marketplaces/takealot-logo-new.jpeg",
     alt: "Takealot.com logo",
   },
   {

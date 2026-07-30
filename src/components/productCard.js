@@ -63,7 +63,16 @@ export function renderProductCard(product, { eager = false, showViewLink = false
             decoding="async"
           />
         </a>
-        ${product.discountLabel ? `<span class="badge product-card__badge">${product.discountLabel}</span>` : ""}
+        ${
+          product.discountLabel || product.productType === "DIGITAL"
+            ? `
+          <div class="product-card__badges">
+            ${product.discountLabel ? `<span class="badge">${product.discountLabel}</span>` : ""}
+            ${product.productType === "DIGITAL" ? `<span class="badge product-card__badge--digital">Digital Download</span>` : ""}
+          </div>
+        `
+            : ""
+        }
         <button
           type="button"
           class="product-card__wishlist ${wishlisted ? "is-active" : ""}"
@@ -106,6 +115,7 @@ export function renderProductCard(product, { eager = false, showViewLink = false
             data-name="${product.name}"
             data-price="${product.price}"
             data-image="${product.image}"
+            data-product-type="${product.productType || "PHYSICAL"}"
           >Add to Cart</button>
         </div>
       </div>

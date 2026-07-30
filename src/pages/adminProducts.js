@@ -59,6 +59,22 @@ function renderFlags(product) {
   return flags.length > 0 ? escapeHtml(flags.join(", ")) : "—";
 }
 
+// Version 7, Milestone 152: secure digital downloads. Physical
+// products show their stock quantity as before; digital products show
+// "—" (stock is meaningless for a file) plus whether a file is
+// attached, with a clear warning if an Active digital product somehow
+// has none (shouldn't happen — adminProduct.service.ts's own
+// validation prevents it — but surfaced here too in case a file was
+// ever removed by other means).
+function renderTypeCell(product) {
+  if (product.productType !== "DIGITAL") return "Physical";
+
+  if (product.digitalFileMissingWarning) {
+    return `Digital &mdash; <span class="admin-badge admin-badge--danger">No file (Active)</span>`;
+  }
+  return `Digital &mdash; ${product.hasDigitalFile ? '<span class="admin-badge admin-badge--success">File attached</span>' : '<span class="admin-badge">No file</span>'}`;
+}
+
 function renderProductsTable(products) {
   if (products.length === 0) {
     return `<p class="admin-empty">No products found.</p>`;
@@ -72,6 +88,7 @@ function renderProductsTable(products) {
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
+            <th>Type</th>
             <th>Price</th>
             <th>Stock</th>
             <th>Threshold</th>
@@ -89,9 +106,10 @@ function renderProductsTable(products) {
               <td>${escapeHtml(product.name)}</td>
               <td>${escapeHtml(product.sku || "—")}</td>
               <td>${escapeHtml(product.category.name)}</td>
+              <td>${renderTypeCell(product)}</td>
               <td>${formatCurrency(product.price)}</td>
-              <td>${product.stockQuantity}</td>
-              <td>${product.lowStockThreshold}</td>
+              <td>${product.productType === "DIGITAL" ? "—" : product.stockQuantity}</td>
+              <td>${product.productType === "DIGITAL" ? "—" : product.lowStockThreshold}</td>
               <td>${renderStatusBadge(product.status)}</td>
               <td>${renderFlags(product)}</td>
               <td>${formatDate(product.updatedAt)}</td>

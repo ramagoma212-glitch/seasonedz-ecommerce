@@ -7,9 +7,10 @@
 // that discipline: the not-found message never implies whether the
 // order number is real for a different account.
 
-import { getCustomerOrder } from "../js/api/customerApi.js";
+import { getCustomerOrder, getCustomerOrderDownloads } from "../js/api/customerApi.js";
 import { ApiError } from "../js/apiClient.js";
 import { escapeHtml } from "../js/search.js";
+import { renderDigitalDownloadsCard } from "../components/digitalDownloadsCard.js";
 
 function humanizeEnum(value) {
   return value
@@ -59,7 +60,7 @@ function renderShippingCard(shipping) {
   `;
 }
 
-function renderOrderDetail(order) {
+function renderOrderDetail(order, digitalItems) {
   return `
     <div class="tracking-result">
       <div class="tracking-result__header">
@@ -95,6 +96,8 @@ function renderOrderDetail(order) {
       </div>
 
       ${renderShippingCard(order.shipping)}
+
+      ${renderDigitalDownloadsCard(digitalItems)}
 
       <div class="order-confirmation__actions">
         <a class="btn btn--secondary" href="/account">Back to My Account</a>
@@ -140,7 +143,19 @@ export async function renderAccountOrderDetail({ orderNumber: rawOrderNumber } =
   let body;
   try {
     const response = await getCustomerOrder(orderNumber);
-    body = renderOrderDetail(response.data.order);
+    // Version 7, Milestone 152: best-effort only — a downloads-lookup
+    // failure must never break the rest of the order-detail page, it
+    // just means no downloads card renders. The backend itself never
+    // errors here (it returns an empty list for "not paid"/"no digital
+    // items" rather than throwing), so this is purely defensive.
+    let digitalItems = [];
+    try {
+      const downloadsResponse = await getCustomerOrderDownloads(orderNumber);
+      digitalItems = downloadsResponse?.data?.items || [];
+    } catch {
+      digitalItems = [];
+    }
+    body = renderOrderDetail(response.data.order, digitalItems);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       body = renderNeedsLogin();

@@ -3,8 +3,9 @@
 // handled by admin staff rather than shown live to customers (the
 // delivery fee logic itself lives in js/cart.js on the frontend and
 // backend/src/config/delivery.ts on the backend — both use the same
-// R80 / registered-customer-free-from-R500 rule, Version 7, Milestone
-// 131). Version 7, Milestone 114 names The Courier Guy explicitly,
+// R80 / registered-customer-free-from-R650 rule (Version 7, Milestone
+// 131; threshold raised from R500 to R650 in Milestone 152B per owner
+// request). Version 7, Milestone 114 names The Courier Guy explicitly,
 // since Seasonedz Group now has a real account with them — still no
 // customer-facing quote, booking, or live tracking.
 
@@ -32,7 +33,7 @@ export function renderShippingPolicy() {
         <p>
           Standard delivery is a flat rate of <strong>R80</strong>.
           Registered Seasonedz Group customers get free delivery on
-          orders of <strong>R500 or more</strong> when signed in at
+          orders of <strong>R650 or more</strong> when signed in at
           checkout. This benefit is not available on guest checkout.
           Any applicable delivery fee is shown at checkout before you
           place your order.

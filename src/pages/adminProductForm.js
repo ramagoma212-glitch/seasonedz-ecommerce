@@ -6,7 +6,7 @@
 // control exists here — image management stays deferred to Milestones
 // 68-69, per VERSION_7_PRODUCT_MANAGEMENT_PLAN.md Section 11.
 
-import { getAdminProduct, getProductImages } from "../js/api/adminDashboardApi.js";
+import { getAdminProduct, getProductImages, getAdminDigitalAsset } from "../js/api/adminDashboardApi.js";
 import { getCurrentAdmin } from "../js/api/adminAuthApi.js";
 import { apiGet } from "../js/apiClient.js";
 import { ApiError } from "../js/apiClient.js";
@@ -149,6 +149,28 @@ function renderProductForm(mode, product, categories) {
       </div>
 
       <div class="form-field">
+        <label class="form-field__label" for="productType">Product Type</label>
+        <select id="productType" class="form-field__input" data-admin-product-type-select>
+          <option value="PHYSICAL"${(product?.productType || "PHYSICAL") === "PHYSICAL" ? " selected" : ""}>Physical product</option>
+          <option value="DIGITAL"${product?.productType === "DIGITAL" ? " selected" : ""}>Digital download</option>
+        </select>
+        <p class="admin-product-form__hint">
+          A digital product cannot be set Active until a digital file has been uploaded below.
+        </p>
+      </div>
+
+      <div class="admin-digital-fields" data-admin-digital-fields ${product?.productType === "DIGITAL" ? "" : "hidden"}>
+        <div class="form-field">
+          <label class="form-field__label" for="productDigitalTermsNote">Digital Terms Note <span class="form-field__optional">(optional)</span></label>
+          <textarea id="productDigitalTermsNote" class="form-field__input form-field__textarea" rows="2" maxlength="5000">${escapeHtml(product?.digitalTermsNote || "")}</textarea>
+          <p class="admin-product-form__hint">Shown to customers, e.g. "For personal and classroom printing only."</p>
+        </div>
+        <div class="admin-product-form__checkboxes">
+          <label><input type="checkbox" id="productDownloadEnabled" ${product?.downloadEnabled !== false ? "checked" : ""} /> Download enabled</label>
+        </div>
+      </div>
+
+      <div class="form-field">
         <label class="form-field__label" for="productAgeRange">Age Range <span class="form-field__optional">(optional)</span></label>
         <input type="text" id="productAgeRange" class="form-field__input" maxlength="100" value="${escapeHtml(product?.ageRange || "")}" />
       </div>
@@ -279,6 +301,89 @@ function renderProductImagesSection(productId, images) {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// Digital Asset section (Version 7, Milestone 152). Edit page only, and
+// only shown for a DIGITAL product — a physical product never needs a
+// file, and a brand-new product must exist (have an id) before it can
+// have one uploaded. One file per product — uploading again always
+// replaces the existing one (see adminDigitalAsset.service.ts).
+// ---------------------------------------------------------------------------
+
+function formatFileSize(bytes) {
+  if (!bytes) return "0 KB";
+  const mb = bytes / (1024 * 1024);
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+function renderDigitalAssetCard(asset) {
+  return `
+    <div class="admin-image-card" data-admin-digital-asset-card>
+      <div class="admin-image-card__meta">
+        <span class="admin-badge admin-badge--success">File attached</span>
+        <p class="admin-image-card__alt"><strong>${escapeHtml(asset.displayName)}</strong></p>
+        <p class="admin-image-card__order">
+          ${escapeHtml(asset.mimeType === "application/pdf" ? "PDF" : "ZIP")} &middot; ${formatFileSize(asset.fileSizeBytes)}
+          ${asset.pageCount ? ` &middot; ${Number(asset.pageCount)} pages` : ""}
+          ${asset.version ? ` &middot; Version: ${escapeHtml(asset.version)}` : ""}
+        </p>
+        <p class="admin-image-card__order">${asset.isActive ? "Active" : "Inactive"}</p>
+      </div>
+      <div class="admin-image-card__actions">
+        <button type="button" class="btn btn--danger" data-admin-digital-asset-remove>Remove File</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderDigitalAssetUploadForm(productId, hasExisting) {
+  return `
+    <form class="admin-digital-asset-upload-form" data-admin-digital-asset-upload-form data-product-id="${escapeHtml(productId)}" novalidate>
+      <h3 class="admin-page__section-subtitle">${hasExisting ? "Replace Digital File" : "Upload Digital File"}</h3>
+
+      <div class="form-field">
+        <label class="form-field__label" for="digitalAssetFile">File <span class="form-field__required">*</span></label>
+        <input type="file" id="digitalAssetFile" accept="application/pdf,.pdf,.zip" />
+        <p class="admin-product-form__hint" data-admin-digital-asset-filename></p>
+      </div>
+
+      <div class="form-field">
+        <label class="form-field__label" for="digitalAssetDisplayName">File Display Name <span class="form-field__required">*</span></label>
+        <input type="text" id="digitalAssetDisplayName" class="form-field__input" maxlength="200" placeholder="e.g. ABC Colouring Book (Printable PDF)" />
+      </div>
+
+      <div class="admin-product-form__row">
+        <div class="form-field">
+          <label class="form-field__label" for="digitalAssetPageCount">Printable Pages <span class="form-field__optional">(optional)</span></label>
+          <input type="number" id="digitalAssetPageCount" class="form-field__input" min="1" step="1" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="digitalAssetVersion">Version <span class="form-field__optional">(optional)</span></label>
+          <input type="text" id="digitalAssetVersion" class="form-field__input" maxlength="50" placeholder="e.g. v1, 2026-01" />
+        </div>
+      </div>
+
+      <p class="admin-product-form__hint">
+        Allowed files: PDF or ZIP, up to 100 MB. Files are stored privately and are never publicly
+        accessible — customers can only download after payment is confirmed.
+      </p>
+
+      <div class="form-banner form-banner--error" data-admin-digital-asset-upload-banner hidden></div>
+
+      <button type="submit" class="btn btn--primary">${hasExisting ? "Replace File" : "Upload File"}</button>
+    </form>
+  `;
+}
+
+function renderDigitalAssetSection(productId, digitalAsset) {
+  return `
+    <section class="admin-product-images" data-admin-digital-asset-section data-product-id="${escapeHtml(productId)}">
+      <h2 class="admin-page__section-title">Digital File</h2>
+      ${digitalAsset ? renderDigitalAssetCard(digitalAsset) : `<p class="admin-product-images__empty">No digital file uploaded yet for this product.</p>`}
+      ${renderDigitalAssetUploadForm(productId, Boolean(digitalAsset))}
+    </section>
+  `;
+}
+
 export async function renderAdminProductCreate() {
   try {
     // GET /categories is public (no auth needed) — unlike the edit
@@ -311,14 +416,16 @@ export async function renderAdminProductEdit({ id } = {}) {
   if (!id) return renderNotFound("");
 
   try {
-    const [productResponse, categoriesResponse, imagesResponse] = await Promise.all([
+    const [productResponse, categoriesResponse, imagesResponse, digitalAssetResponse] = await Promise.all([
       getAdminProduct(id),
       apiGet("/categories"),
       getProductImages(id),
+      getAdminDigitalAsset(id),
     ]);
     const product = productResponse.data;
     const categories = categoriesResponse.data.categories;
     const images = imagesResponse.data.images;
+    const digitalAsset = digitalAssetResponse.data.digitalAsset;
     const successMessage = consumePendingAdminMessage();
 
     return `
@@ -329,6 +436,7 @@ export async function renderAdminProductEdit({ id } = {}) {
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${renderProductForm("edit", product, categories)}
         ${renderProductImagesSection(product.id, images)}
+        ${product.productType === "DIGITAL" ? renderDigitalAssetSection(product.id, digitalAsset) : ""}
       </section>
     `;
   } catch (error) {

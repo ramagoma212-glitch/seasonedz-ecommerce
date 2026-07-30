@@ -219,7 +219,7 @@ version:
 
 - Delivery fee rule (Version 7, Milestone 131): **R80** flat rate,
   **free only for a logged-in registered customer** on a subtotal of
-  **R500 or more** — a guest checkout always pays R80. Single source
+  **R650 or more** — a guest checkout always pays R80. Single source
   of truth is `src/config/delivery.ts` (`STANDARD_DELIVERY_FEE`,
   `REGISTERED_FREE_DELIVERY_THRESHOLD`) — `utils/money.ts` and
   `services/delivery.service.ts` both read from it instead of
@@ -230,6 +230,29 @@ version:
 - Courier fulfilment is entirely manual — no courier API, credentials,
   or integration exist anywhere in this codebase. `COURIER_INTEGRATION_ENABLED`
   is hardcoded `false` in `config/delivery.ts`.
+
+## Digital Downloads Setup (Version 7, Milestone 152)
+
+Full detail in [`DIGITAL_DOWNLOADS_SETUP.md`](./DIGITAL_DOWNLOADS_SETUP.md);
+short version:
+
+- A `Product` can be `PHYSICAL` (unchanged existing behaviour) or
+  `DIGITAL` (a file customers download after payment, no physical
+  delivery, no stock tracking).
+- Digital files live in a **separate, private** Supabase Storage bucket
+  (`DIGITAL_PRODUCTS_BUCKET`, default `digital-products`) — never the
+  public `product-images` bucket. **Manual step required**: create this
+  bucket in the Supabase dashboard with "Public bucket" left OFF; this
+  backend never creates it automatically.
+- Downloads are only ever served via a short-lived (5-minute) signed
+  URL, generated fresh per request after re-verifying payment status +
+  ownership every time — see `services/digitalDownload.service.ts`.
+  Guest (no-account) customers get a random, hashed, 7-day-expiring
+  token emailed after payment confirmation instead of an account login.
+- A digital product cannot be set `ACTIVE` until it has an uploaded
+  file (`services/adminProduct.service.ts`), and Courier Guy automatic
+  booking skips itself entirely for a digital-only order
+  (`services/courierGuy.service.ts`).
 
 ## Available Routes
 
@@ -369,6 +392,7 @@ backend/
   PAYFAST_SETUP.md               PayFast sandbox setup + verification detail (updated through Milestone 31)
   EMAIL_SETUP.md                  Email service + templates plan (Milestone 24 — preparation only)
   DELIVERY_SETUP.md                Delivery rules + manual courier workflow (Milestone 25 — no courier API)
+  DIGITAL_DOWNLOADS_SETUP.md       Secure digital product downloads + private Storage bucket setup (Milestone 152)
   MANUAL_TEST_CHECKLIST.md      Manual regression checklist for all routes
   DEPLOYMENT.md                  Render deployment plan (preparation only — not deployed yet)
   DEPLOYMENT_CHECKLIST.md         Safety checklist for before/after a real deploy

@@ -89,6 +89,79 @@ If you remove the current main photo, the website will automatically choose anot
 
 There is no way to bring back a removed photo. If you are not sure, it is safer to upload the correct photo first and remove the old one only once you can see the new one is showing correctly.
 
+## Digital Downloads (PDF/ZIP products)
+
+Products can now be either a normal Physical product (a real book/item
+you post out) or a Digital download (a file customers download after
+paying — nothing is posted).
+
+### How to create a digital product
+
+1. Go to Products &rarr; Add Product (or open an existing product's Edit page).
+2. Fill in the name, category, description, price, etc. as normal.
+3. Under Product Type, choose **Digital download**.
+4. Save the product as Draft first — a digital product cannot be made
+   Active until you've uploaded its file (see below). This is enforced
+   by the website, not just a suggestion.
+
+### How to upload the file
+
+1. Open the digital product's Edit page. A new **Digital File** section
+   appears (only for digital products).
+2. Choose a PDF (or ZIP) file from your computer, up to 100 MB.
+3. Type a File Display Name — this is what the customer sees, e.g.
+   "ABC Colouring Book (Printable PDF)".
+4. Optionally add the number of printable pages and a version note.
+5. Click Upload File.
+6. Once uploaded, you can set the product's Status to Active — customers
+   can now buy it.
+
+### How to replace a file
+
+Open the product's Edit page and upload a new file the same way —
+uploading always replaces the existing file for that product. The old
+file is safely removed after the new one is confirmed saved, so
+customers are never left without a working file mid-replacement.
+
+### How customers receive their download
+
+- **Logged-in customers**: after PayFast payment is confirmed, they can
+  open the order under My Account &rarr; Orders and click Download.
+- **Guest customers** (no account): after PayFast payment is confirmed,
+  they receive an email with a secure, one-time download link. This
+  link is personal to their order and expires after a few days — it
+  should never be shared or forwarded.
+- Nobody can download before payment is confirmed. A Pending, Failed,
+  Cancelled or Refunded payment never unlocks a download, no matter what.
+- Physical products in the same order are still delivered as normal — a
+  mixed order (e.g. one physical book + one digital download) delivers
+  the physical item by courier as usual, and unlocks the digital item
+  once paid, without needing a courier booking for the digital part.
+- **Delivery fee**: an order that is 100% digital downloads is never
+  charged a delivery fee — there's nothing to post out. A mixed order
+  (any physical item at all, even alongside digital ones) is still
+  charged the normal R80/free-over-R650 delivery fee as usual.
+
+### Keeping files private
+
+Digital files are stored in a **private** area, never a public link.
+The website only ever generates a short-lived, one-time download link
+at the moment a customer clicks Download — it is never possible for
+someone to guess or share a permanent link to the raw file. You never
+need to do anything extra to keep a file private; just don't share a
+customer's personal download link or order number publicly.
+
+### What not to do with digital products
+
+- Do not set a digital product to Active before its file is uploaded —
+  the website will stop you, but don't try to work around it.
+- Do not remove a digital product's file while it is Active — set it to
+  Draft or Archived first if you need to take the file down.
+- Do not share a customer's download link or forward their confirmation
+  email to anyone else.
+- Do not invent a price or publish a digital product before its real
+  file is ready.
+
 ## How to Update Stock
 
 1. Open the product's Edit page.
@@ -133,7 +206,7 @@ There is no live courier tracking system connected yet. Delivery works like this
 3. Update the order status to Processing, then Ready For Delivery, then Out For Delivery, then Delivered, as the order moves along.
 4. If you have a tracking number or waybill number from the courier, share it with the customer directly by email or WhatsApp, using the contact details on their order.
 
-Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R500 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
+Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R650 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
 
 ### About Automatic Courier Booking (not turned on yet)
 

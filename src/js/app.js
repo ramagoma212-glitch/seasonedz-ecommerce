@@ -36,7 +36,8 @@ import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword } from "./api/customerApi.js";
+import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload } from "./api/customerApi.js";
+import { requestGuestDownload } from "./api/guestDownloadApi.js";
 import {
   updateAdminOrderStatus,
   updateAdminShipping,
@@ -47,6 +48,8 @@ import {
   uploadProductImage,
   updateProductImage,
   deleteProductImage,
+  uploadAdminDigitalAsset,
+  deleteAdminDigitalAsset,
 } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
@@ -82,6 +85,7 @@ function mountApp() {
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
+  setupAdminDigitalAsset();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -239,6 +243,7 @@ function readProductFromButton(buttonEl) {
     price: parseFloat(buttonEl.dataset.price),
     image: buttonEl.dataset.image,
     category: buttonEl.dataset.category,
+    productType: buttonEl.dataset.productType || "PHYSICAL",
   };
 }
 
@@ -296,6 +301,8 @@ function setupProductActions() {
       handleToggleFaq(actionEl);
     } else if (action === "scroll-to-newsletter") {
       handleScrollToNewsletter();
+    } else if (action === "request-download") {
+      handleRequestDownload(actionEl);
     }
   });
 }
@@ -341,6 +348,55 @@ function handleAddToCart(buttonEl) {
 
   updateHeaderCounters();
   showToast(`${product.name} added to cart.`);
+}
+
+// Version 7, Milestone 152: secure digital downloads. One handler
+// covers both the logged-in customer path (accountOrderDetail.js) and
+// the guest secure-token path (guestDownloadPage.js) — the button's own
+// data-guest-token attribute (present only on the guest page) decides
+// which API call to make. Every click generates a fresh, short-lived
+// signed URL server-side; nothing here caches or reuses one.
+async function handleRequestDownload(buttonEl) {
+  const orderItemId = buttonEl.dataset.orderItemId;
+  const guestToken = buttonEl.dataset.guestToken;
+  if (!orderItemId) return;
+
+  const card = buttonEl.closest("[data-digital-downloads-banner-host]");
+  const banner = card?.querySelector("[data-digital-download-banner]");
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const originalText = buttonEl.textContent;
+  buttonEl.disabled = true;
+  buttonEl.textContent = "Generating link...";
+
+  try {
+    const response = guestToken ? await requestGuestDownload(guestToken, orderItemId) : await requestCustomerDownload(orderItemId);
+    const url = response?.data?.url;
+    if (url) {
+      // Opens in a new tab, same as every other external/download link
+      // in this app (marketplace links, tracking URLs) — never
+      // navigates the current SPA page away from the order/downloads
+      // view the customer is looking at.
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  } catch (error) {
+    const message =
+      error instanceof ApiError
+        ? error.message
+        : "We could not generate a download link right now. Please try again shortly.";
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    } else {
+      window.alert(message);
+    }
+  } finally {
+    buttonEl.disabled = false;
+    buttonEl.textContent = originalText;
+  }
 }
 
 // Toggling wishlist state only needs to update the button that was
@@ -1579,6 +1635,18 @@ function setupAdminProductForm() {
     event.preventDefault();
     handleAdminProductFormSubmit(form);
   });
+
+  // Version 7, Milestone 152: shows/hides the Digital Terms Note +
+  // Download Enabled fields as the owner switches Product Type —
+  // purely a display convenience; the actual create/update payload
+  // already reads productType directly from the select regardless of
+  // which fields are currently visible.
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-admin-product-type-select]")) return;
+    const form = event.target.closest("[data-admin-product-form]");
+    const digitalFields = form?.querySelector("[data-admin-digital-fields]");
+    if (digitalFields) digitalFields.hidden = event.target.value !== "DIGITAL";
+  });
 }
 
 function parseAdminProductFeatures(rawText) {
@@ -1605,6 +1673,9 @@ function readAdminProductFormValues(form) {
   const isFeatured = form.querySelector("#productIsFeatured")?.checked || false;
   const isBestSeller = form.querySelector("#productIsBestSeller")?.checked || false;
   const isNewArrival = form.querySelector("#productIsNewArrival")?.checked || false;
+  const productType = form.querySelector("#productType")?.value || "PHYSICAL";
+  const digitalTermsNote = form.querySelector("#productDigitalTermsNote")?.value.trim() || "";
+  const downloadEnabled = form.querySelector("#productDownloadEnabled")?.checked ?? true;
 
   return {
     name,
@@ -1622,6 +1693,9 @@ function readAdminProductFormValues(form) {
     isFeatured,
     isBestSeller,
     isNewArrival,
+    productType,
+    digitalTermsNote: digitalTermsNote || null,
+    downloadEnabled,
   };
 }
 
@@ -1639,6 +1713,17 @@ function validateAdminProductForm(values, mode) {
   if (mode === "create") {
     const sku = document.getElementById("productSku")?.value.trim();
     if (!sku) return "SKU is required.";
+  }
+
+  // Version 7, Milestone 152: UX convenience only, mirroring
+  // adminProduct.service.ts's own assertDigitalProductHasFileIfActive()
+  // — the backend remains the final authority regardless of what
+  // passes here.
+  if (values.productType === "DIGITAL" && values.status === "ACTIVE") {
+    const hasFile = Boolean(document.querySelector("[data-admin-digital-asset-card]"));
+    if (mode === "create" || !hasFile) {
+      return "A digital product cannot be Active until a digital file has been uploaded. Save as Draft first, then upload the file.";
+    }
   }
 
   const descriptionCharacterCount = getDescriptionVisibleCharacterCount("productDescription");
@@ -1977,6 +2062,141 @@ async function handleAdminImageRemove(button) {
     // here touches the DOM until the API call actually succeeds.
     button.disabled = false;
     window.alert(friendlyAdminImageErrorMessage(error));
+  }
+}
+
+// Admin digital-asset (file) upload for DIGITAL products (Version 7,
+// Milestone 152). Same "re-render the whole edit page on success"
+// pattern as product images above — one file per product, so upload
+// always means "upload or replace", never a list to manage.
+const MAX_ADMIN_DIGITAL_ASSET_FILE_SIZE_BYTES = 100 * 1024 * 1024; // kept in sync with adminDigitalAsset.service.ts
+const ALLOWED_ADMIN_DIGITAL_ASSET_MIME_TYPES = ["application/pdf", "application/zip", "application/x-zip-compressed"];
+
+function friendlyAdminDigitalAssetErrorMessage(error) {
+  if (error instanceof ApiError && error.status === 503) {
+    return "Digital file upload is not configured yet. Please finish Supabase Storage setup first.";
+  }
+  if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+    return error.message;
+  }
+  if (error instanceof ApiUnavailableError) {
+    return "We could not connect to the admin system right now. Please try again shortly.";
+  }
+  return "Something went wrong. Please try again shortly.";
+}
+
+function setupAdminDigitalAsset() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-digital-asset-upload-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminDigitalAssetUploadSubmit(form);
+  });
+
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("#digitalAssetFile")) return;
+    const form = event.target.closest("[data-admin-digital-asset-upload-form]");
+    const label = form?.querySelector("[data-admin-digital-asset-filename]");
+    if (label) label.textContent = event.target.files?.[0]?.name || "";
+  });
+
+  document.addEventListener("click", (event) => {
+    const removeButton = event.target.closest("[data-admin-digital-asset-remove]");
+    if (removeButton) handleAdminDigitalAssetRemove(removeButton);
+  });
+}
+
+async function handleAdminDigitalAssetUploadSubmit(form) {
+  if (form.dataset.uploading === "true") return;
+
+  const productId = form.dataset.productId;
+  const banner = form.querySelector("[data-admin-digital-asset-upload-banner]");
+  const fileInput = form.querySelector("#digitalAssetFile");
+  const displayNameInput = form.querySelector("#digitalAssetDisplayName");
+  const pageCountInput = form.querySelector("#digitalAssetPageCount");
+  const versionInput = form.querySelector("#digitalAssetVersion");
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const file = fileInput?.files?.[0];
+  const displayName = displayNameInput?.value.trim() || "";
+  const pageCount = pageCountInput?.value ? Number(pageCountInput.value) : undefined;
+  const version = versionInput?.value.trim() || "";
+
+  // Client-side validation is a UX convenience only, mirroring
+  // adminDigitalAsset.service.ts — the backend remains the final
+  // authority regardless of what passes here.
+  let validationError = null;
+  if (!file) {
+    validationError = "A file is required.";
+  } else if (!ALLOWED_ADMIN_DIGITAL_ASSET_MIME_TYPES.includes(file.type)) {
+    validationError = "Unsupported file type. Allowed types: PDF, ZIP.";
+  } else if (file.size > MAX_ADMIN_DIGITAL_ASSET_FILE_SIZE_BYTES) {
+    validationError = "File is too large. Maximum size is 100 MB.";
+  } else if (!displayName) {
+    validationError = "File display name is required.";
+  }
+
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  form.dataset.uploading = "true";
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Uploading file...";
+  }
+
+  try {
+    await uploadAdminDigitalAsset(productId, file, { displayName, pageCount, version });
+    setPendingAdminMessage("Digital file uploaded successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminDigitalAssetErrorMessage(error);
+      banner.hidden = false;
+    }
+    form.dataset.uploading = "false";
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Upload File";
+    }
+  }
+}
+
+async function handleAdminDigitalAssetRemove(button) {
+  const section = button.closest("[data-admin-digital-asset-section]");
+  const productId = section?.dataset.productId;
+  if (!productId) return;
+
+  const confirmed = window.confirm("Remove this digital file from this product?\nThis cannot be undone. The product must not be Active while it has no file.");
+  if (!confirmed) return;
+
+  button.disabled = true;
+
+  try {
+    await deleteAdminDigitalAsset(productId);
+    setPendingAdminMessage("Digital file removed successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    window.alert(friendlyAdminDigitalAssetErrorMessage(error));
   }
 }
 

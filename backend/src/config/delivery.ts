@@ -3,15 +3,18 @@
 //
 // Single source of truth for delivery rules — order.service.ts (via
 // utils/money.ts) and services/delivery.service.ts both read from
-// here instead of hardcoding R80/R500 in more than one place.
+// here instead of hardcoding R80/R650 in more than one place.
 //
 // Version 7, Milestone 131: the old flat "free over R700 for
 // everyone" rule is removed entirely. Free delivery is now a
-// registered-account benefit, not a guest one:
+// registered-account benefit, not a guest one (threshold raised from
+// R500 to R650 in Milestone 152B per owner request):
 //
 //   Guest (not logged in)                          -> delivery fee R80, always
-//   Logged-in registered customer, subtotal < R500  -> delivery fee R80
-//   Logged-in registered customer, subtotal >= R500 -> delivery fee R0 (free)
+//   Logged-in registered customer, subtotal < R650  -> delivery fee R80
+//   Logged-in registered customer, subtotal >= R650 -> delivery fee R0 (free)
+//   Any order with no physical items at all (Milestone 152B)
+//                                                    -> delivery fee R0, always
 //
 // "Logged-in registered customer" is decided server-side only, from
 // the verified customer_session cookie (req.customerUser.type ===
@@ -30,7 +33,9 @@
 // `new Prisma.Decimal(...)` at the point of use, exactly as before —
 // this module only defines the safe, plain values.
 export const STANDARD_DELIVERY_FEE = 80;
-export const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
+// Owner-requested change (2026-07-30, deployed together with Milestone
+// 152B): raised from R500 to R650.
+export const REGISTERED_FREE_DELIVERY_THRESHOLD = 650;
 
 export const DEFAULT_COUNTRY = "South Africa";
 
