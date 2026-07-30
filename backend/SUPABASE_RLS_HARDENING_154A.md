@@ -1,10 +1,14 @@
-# Supabase RLS Security Hardening — Milestone 154A
+# Supabase RLS Security Hardening — Milestone 154A/154B
 
-**Status: audit + plan only. No production RLS/GRANT changes applied.
-No push, no merge, no deploy.** Branch: `version-7-supabase-rls-hardening`,
+**Status: APPLIED to production on 2026-07-31 (Milestone 154B) and
+verified live.** All 20 tables now show `rowsecurity: true`, 0
+`anon`/`authenticated` grant rows remain, and the full site was
+re-tested afterward with no behavior change anywhere. Branch: `version-7-supabase-rls-hardening`,
 created from `version-7-digital-upload-limit-fix` (commit `7693052`,
-"Match digital upload limit to Supabase bucket" — preserved, see
-`RLS_HARDENING_154A_50MB_CHECK.md` section below).
+"Match digital upload limit to Supabase bucket" — confirmed still
+present on this branch: `MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024` in
+both `adminDigitalAsset.service.ts` and `.controller.ts`, `digital-products`
+bucket name unchanged, PDF/ZIP MIME types unchanged).
 
 ## Task 1 — Access-pattern audit
 
@@ -258,3 +262,41 @@ accident. Includes a full commented-out rollback block.
 
 **This SQL has not been run against the live database.** It requires
 explicit owner review and approval, per this milestone's instructions.
+
+## Milestone 154B — Applied and verified (2026-07-31)
+
+The fix above was reviewed once more, then applied via a Prisma
+interactive transaction (all 41 statements — 20 REVOKE, 20 ENABLE ROW
+LEVEL SECURITY, 1 ALTER DEFAULT PRIVILEGES — committed together;
+functionally identical to `psql "$DIRECT_URL" -f rls_hardening_154A.sql`
+since both use the same `postgres`/BYPASSRLS role). `psql` was not
+available in this environment, so the same SQL was executed through the
+project's existing, already-configured Prisma connection instead of a
+separate CLI — no connection string or key was ever printed either way.
+
+**Before → after, confirmed via the read-only verification script:**
+
+| Check | Before | After |
+|---|---|---|
+| Tables with RLS enabled | 0/20 | **20/20** |
+| `anon`/`authenticated` grant rows | 280 | **0** |
+| App's own DB role BYPASSRLS | true | true (unchanged) |
+| `GET /api/products` | 200 | 200 |
+| `GET /api/admin/products` (no auth) | 401 | 401 |
+| `GET /api/health` | 200 | 200 |
+| Supabase REST `/rest/v1/Customer` (no key) | 401 | 401 |
+
+Also re-verified after applying: product detail API (200), PayFast
+initiate against a well-formed nonexistent order (404, no payment
+created), Courier Guy quote endpoint (401, auth required), all key
+frontend routes (homepage/shop/product/cart/checkout/account/
+track-order/FAQ/shipping-policy/admin-login — same status codes as
+before, GitHub Pages' existing SPA-fallback 404s unchanged), the guest
+digital-download route (200, empty items for a fake token — unchanged
+behavior), a real product image (200, Storage bucket untouched — it
+lives in a separate `storage` schema), R650/50MB wording still correct
+in the live bundle, and the new Takealot logo still live. Data counts
+(products, categories, product images, orders, payments, shipping,
+customers, enquiries, admin users, digital assets, guest tokens,
+download logs, real courier shipments) were identical before and after
+— zero drift, nothing created or deleted by this change.

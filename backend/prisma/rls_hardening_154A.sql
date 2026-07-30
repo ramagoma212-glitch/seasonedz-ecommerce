@@ -1,11 +1,17 @@
--- Milestone 154A: Supabase RLS hardening — proposed fix.
+-- Milestone 154A/154B: Supabase RLS hardening.
 --
--- STATUS: NOT APPLIED. Reviewable plan only. Nothing in this repo's
--- CI/Render build or start command runs `prisma migrate deploy` or
--- executes arbitrary .sql files automatically (backend's build script
--- is only `prisma generate && tsc`) — this file sits inert until a
--- human deliberately runs it. It is intentionally NOT a Prisma
--- migration (Prisma's schema DSL has no RLS/GRANT directives).
+-- STATUS: APPLIED to production on 2026-07-31 (Milestone 154B), via a
+-- Prisma interactive transaction (functionally identical to running
+-- this file with `psql "$DIRECT_URL"` — both authenticate as the same
+-- `postgres`/BYPASSRLS role). Verified live: 20/20 tables now show
+-- rowsecurity=true, 0 anon/authenticated grant rows remain, and the
+-- full site (website, admin, PayFast safety, Courier Guy auth gate,
+-- digital downloads, product images) was re-tested and behaves
+-- identically to before. This file is kept as the permanent, exact
+-- record of what was run — do not re-run it (REVOKE/ENABLE RLS on an
+-- already-revoked/already-enabled table is harmless but unnecessary).
+-- It was never a Prisma migration (Prisma's schema DSL has no RLS/GRANT
+-- directives) and nothing in CI/Render ever executes it automatically.
 --
 -- See backend/SUPABASE_RLS_HARDENING_154A.md for the full audit,
 -- evidence, and rationale behind every statement below.
