@@ -108,7 +108,7 @@ paying — nothing is posted).
 
 1. Open the digital product's Edit page. A new **Digital File** section
    appears (only for digital products).
-2. Choose a PDF (or ZIP) file from your computer, up to 100 MB.
+2. Choose a PDF (or ZIP) file from your computer, up to 50 MB.
 3. Type a File Display Name — this is what the customer sees, e.g.
    "ABC Colouring Book (Printable PDF)".
 4. Optionally add the number of printable pages and a version note.

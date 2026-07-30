@@ -934,7 +934,7 @@ exact request.
 | Method | Route | Auth | Description |
 |---|---|---|---|
 | GET | `/api/admin/products/:id/digital-asset` | Admin | Metadata for a product's digital file (or `null`). |
-| POST | `/api/admin/products/:id/digital-asset` | Admin | Upload or replace the product's digital file (`multipart/form-data`, field `file`; PDF/ZIP, max 100 MB). |
+| POST | `/api/admin/products/:id/digital-asset` | Admin | Upload or replace the product's digital file (`multipart/form-data`, field `file`; PDF/ZIP, max 50 MB). |
 | DELETE | `/api/admin/products/:id/digital-asset` | Admin | Remove the file. Rejected (409) while the product is `ACTIVE`. |
 | GET | `/api/customers/orders/:orderNumber/downloads` | Customer session | List purchased digital items for one of the logged-in customer's own PAID orders. Empty list if not owned/not paid. |
 | POST | `/api/customers/downloads/:orderItemId/request` | Customer session | Generate a fresh signed download URL for one purchased digital item. |
