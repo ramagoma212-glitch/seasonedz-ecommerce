@@ -17,12 +17,15 @@ const CART_KEY = "seasonedz_cart";
 // instead of hard-coding a second copy that could drift out of sync —
 // this is a read of the existing config, not a new delivery rule.
 export const STANDARD_DELIVERY_FEE = 80;
-export const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
+// Owner-requested change (2026-07-30, deployed together with Milestone
+// 152B): raised from R500 to R650 — kept in sync with the backend's
+// own source of truth (backend/src/config/delivery.ts).
+export const REGISTERED_FREE_DELIVERY_THRESHOLD = 650;
 
 // Version 7, Milestone 131: free delivery is a registered-account
 // benefit, not a flat subtotal threshold for every visitor — R80
 // standard, free only for a logged-in registered customer on orders of
-// R500 or more. This is a client-side estimate for display purposes
+// R650 or more. This is a client-side estimate for display purposes
 // only (cart/checkout pages) — the backend independently recalculates
 // the real fee at order-creation time from the verified customer
 // session, never trusting anything this function returns. Will be

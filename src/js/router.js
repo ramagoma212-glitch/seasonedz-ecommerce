@@ -192,7 +192,7 @@ const routeDefs = [
     pattern: "/shipping-policy",
     render: renderShippingPolicy,
     title: "Shipping Policy",
-    description: "Delivery available nationwide through The Courier Guy where applicable. R80 delivery, free for registered customers from R500.",
+    description: "Delivery available nationwide through The Courier Guy where applicable. R80 delivery, free for registered customers from R650.",
   },
   { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
   { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },

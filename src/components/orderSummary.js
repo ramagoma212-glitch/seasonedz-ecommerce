@@ -3,7 +3,7 @@
 // confirmation page.
 //
 // Delivery fee is a flat placeholder (see calculateDeliveryFee in
-// cart.js — R80 standard, free for a registered account from R500)
+// cart.js — R80 standard, free for a registered account from R650)
 // until real courier integration calculates actual rates.
 
 // Version 7, Milestone 131: `isRegisteredCustomer` is only ever used
@@ -30,8 +30,8 @@ function getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems) {
     return "Free delivery applied for your registered Seasonedz Group account.";
   }
   return isRegisteredCustomer
-    ? "Registered customers get free delivery on orders of R500 or more."
-    : "Sign in or create an account to get free delivery on orders of R500 or more.";
+    ? "Registered customers get free delivery on orders of R650 or more."
+    : "Sign in or create an account to get free delivery on orders of R650 or more.";
 }
 
 export function renderOrderSummary({

@@ -10,7 +10,7 @@ entirely manual.
 
 - Standard delivery: **R80** flat rate.
 - Free delivery: only for a **logged-in registered customer**, on a
-  subtotal of **R500 or more**. A guest checkout always pays R80,
+  subtotal of **R650 or more**. A guest checkout always pays R80,
   regardless of subtotal.
 - Version 7, Milestone 131 replaced the old flat "free from R700 for
   everyone" rule with this registered-account benefit — see

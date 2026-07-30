@@ -140,7 +140,7 @@ customers are never left without a working file mid-replacement.
 - **Delivery fee**: an order that is 100% digital downloads is never
   charged a delivery fee — there's nothing to post out. A mixed order
   (any physical item at all, even alongside digital ones) is still
-  charged the normal R80/free-over-R500 delivery fee as usual.
+  charged the normal R80/free-over-R650 delivery fee as usual.
 
 ### Keeping files private
 
@@ -206,7 +206,7 @@ There is no live courier tracking system connected yet. Delivery works like this
 3. Update the order status to Processing, then Ready For Delivery, then Out For Delivery, then Delivered, as the order moves along.
 4. If you have a tracking number or waybill number from the courier, share it with the customer directly by email or WhatsApp, using the contact details on their order.
 
-Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R500 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
+Delivery fees are already worked out automatically by the website: R80 standard delivery. Customers who are signed in to a registered account get free delivery automatically on orders of R650 or more — guests always pay the R80 fee, even on a large order. You do not need to calculate this yourself.
 
 ### About Automatic Courier Booking (not turned on yet)
 

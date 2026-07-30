@@ -127,7 +127,7 @@ function renderDeliveryNote() {
         <strong>Delivery is arranged after your order is confirmed.</strong>
         <p>
           Delivery is R80. Registered Seasonedz Group customers get
-          free delivery on orders of R500 or more. We use The Courier
+          free delivery on orders of R650 or more. We use The Courier
           Guy for courier deliveries where applicable. Seasonedz Group
           will confirm your order and arrange delivery; tracking
           details are shared once your order has been packed and

@@ -470,7 +470,7 @@ included — the same convention as the Product API (Milestone 12).
   automatically. A staff member (or, once real payment integration
   exists, a payment webhook) is what should move it to `CONFIRMED`.
 - **Delivery fee rule** (`src/utils/money.ts`): flat R80, free only for
-  a logged-in registered customer at a subtotal of R500 or more
+  a logged-in registered customer at a subtotal of R650 or more
   (Version 7, Milestone 131) — eligibility is read from the verified
   `customer_session` cookie, never the request body. Same rule as the
   frontend's demo cart (`src/js/cart.js`). Comment in the code notes a

@@ -172,7 +172,7 @@ test.describe("Customer account smoke checks", () => {
     );
   }
 
-  test("logged-in checkout shows free delivery when subtotal is R500 or more", async ({ page }) => {
+  test("logged-in checkout shows free delivery when subtotal is R650 or more", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 250, quantity: 3 }); // subtotal R750
 
@@ -186,12 +186,12 @@ test.describe("Customer account smoke checks", () => {
     expect(localStorageKeys.every((key) => !key.toLowerCase().includes("session") && !key.toLowerCase().includes("token"))).toBe(true);
   });
 
-  test("logged-in checkout shows R80 delivery when subtotal is below R500", async ({ page }) => {
+  test("logged-in checkout shows R80 delivery when subtotal is below R650", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200
 
     await page.goto("/checkout");
-    await expect(page.getByText("Registered customers get free delivery on orders of R500 or more.")).toBeVisible();
+    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
   });
 

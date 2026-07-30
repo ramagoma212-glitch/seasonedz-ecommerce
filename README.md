@@ -59,7 +59,7 @@ involve.
 > `backend/PAYFAST_SETUP.md`. Order/payment emails are prepared
 > (templates + a console-only service) but not yet wired to send
 > automatically — see `backend/EMAIL_SETUP.md`. Delivery fee rule (R80
-> standard, free for a logged-in registered customer from R500 —
+> standard, free for a logged-in registered customer from R650 —
 > Version 7, Milestone 131) lives in one backend config module;
 > courier fulfilment is still entirely manual — see
 > `backend/DELIVERY_SETUP.md`.
