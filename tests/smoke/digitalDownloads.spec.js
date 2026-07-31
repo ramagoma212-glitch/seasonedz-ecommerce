@@ -488,6 +488,9 @@ test.describe("Account order detail: digital downloads", () => {
               deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
               shipping: null,
+              hasPhysicalItems: false,
+              hasDigitalItems: true,
+              isDigitalOnly: true,
             },
           },
         }),
@@ -508,5 +511,316 @@ test.describe("Account order detail: digital downloads", () => {
     await page.goto("/account/orders/SG-2026-TEST1");
     await expect(page.locator(".digital-downloads-card")).toContainText("Mock Digital Book");
     await expect(page.locator('[data-action="request-download"]')).toBeVisible();
+    // Version 7, Milestone 157: digital-only paid order shows the
+    // digital-only notice, never a courier tracking card.
+    await expect(page.locator(".track-order-page__body")).toContainText("This is a digital download order. No courier delivery is required.");
+    await expect(page.locator(".track-order-page__body")).not.toContainText("Tracking Number");
+  });
+
+  test("digital-only PENDING order shows pending download guidance, no download button", async ({ page }) => {
+    await page.route("**/api/customers/orders/SG-2026-TEST2", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            order: {
+              orderNumber: "SG-2026-TEST2",
+              status: "PENDING",
+              paymentStatus: "PENDING",
+              paymentMethod: "PAYFAST",
+              subtotal: 49.99,
+              deliveryFee: 0,
+              discountTotal: 0,
+              total: 49.99,
+              createdAt: new Date().toISOString(),
+              customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+              items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
+              shipping: null,
+              hasPhysicalItems: false,
+              hasDigitalItems: true,
+              isDigitalOnly: true,
+            },
+          },
+        }),
+      })
+    );
+    // Unpaid order — backend correctly returns an empty downloads list.
+    await page.route("**/api/customers/orders/SG-2026-TEST2/downloads", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { items: [] } }) })
+    );
+
+    await page.goto("/account/orders/SG-2026-TEST2");
+    await expect(page.locator(".track-order-page__body")).toContainText("This is a digital download order. No courier delivery is required.");
+    await expect(page.locator(".track-order-page__body")).toContainText("Downloads unlock automatically once payment is confirmed");
+    await expect(page.locator('[data-action="request-download"]')).toHaveCount(0);
+  });
+
+  test("mixed order (physical + digital) shows both delivery and digital downloads", async ({ page }) => {
+    await page.route("**/api/customers/orders/SG-2026-TEST3", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            order: {
+              orderNumber: "SG-2026-TEST3",
+              status: "CONFIRMED",
+              paymentStatus: "PAID",
+              paymentMethod: "PAYFAST",
+              subtotal: 99.99,
+              deliveryFee: 80,
+              discountTotal: 0,
+              total: 179.99,
+              createdAt: new Date().toISOString(),
+              customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+              items: [
+                { productName: "Mock Physical Book", productSlug: "mock-physical-book", quantity: 1, unitPrice: 50, lineTotal: 50, imageUrl: null },
+                { productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null },
+              ],
+              shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
+              hasPhysicalItems: true,
+              hasDigitalItems: true,
+              isDigitalOnly: false,
+            },
+          },
+        }),
+      })
+    );
+    await page.route("**/api/customers/orders/SG-2026-TEST3/downloads", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: { items: [{ orderItemId: "item-2", productName: "Mock Digital Book", displayName: "Mock Digital Book (PDF)", fileType: "PDF", fileSizeBytes: 51200, pageCount: 5, version: null, downloadCount: 0, lastDownloadedAt: null }] },
+        }),
+      })
+    );
+
+    await page.goto("/account/orders/SG-2026-TEST3");
+    // Both sections present: physical delivery card AND digital downloads card.
+    await expect(page.locator(".track-order-page__body")).toContainText("Delivery");
+    await expect(page.locator(".digital-downloads-card")).toContainText("Mock Digital Book");
+    await expect(page.locator('[data-action="request-download"]')).toBeVisible();
+    await expect(page.locator(".track-order-page__body")).not.toContainText("This is a digital download order. No courier delivery is required.");
+  });
+
+  test("historical digital-only order with an old Shipping row still hides tracking", async ({ page }) => {
+    // Version 7, Milestone 157: a digital-only order created BEFORE
+    // this milestone may still have an old Shipping row in the
+    // database. isDigitalOnly is derived fresh from order.items on
+    // every request, never from whether a Shipping row happens to
+    // exist — so the UI must still hide/replace tracking even when the
+    // backend mock includes a non-null `shipping` object here.
+    await page.route("**/api/customers/orders/SG-2026-TEST4", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            order: {
+              orderNumber: "SG-2026-TEST4",
+              status: "CONFIRMED",
+              paymentStatus: "PAID",
+              paymentMethod: "PAYFAST",
+              subtotal: 49.99,
+              deliveryFee: 0,
+              discountTotal: 0,
+              total: 49.99,
+              createdAt: new Date().toISOString(),
+              customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+              items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
+              shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
+              hasPhysicalItems: false,
+              hasDigitalItems: true,
+              isDigitalOnly: true,
+            },
+          },
+        }),
+      })
+    );
+    await page.route("**/api/customers/orders/SG-2026-TEST4/downloads", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, message: "OK", data: { items: [{ orderItemId: "item-1", productName: "Mock Digital Book", displayName: "Mock Digital Book (PDF)", fileType: "PDF", fileSizeBytes: 51200, pageCount: 5, version: null, downloadCount: 0, lastDownloadedAt: null }] } }),
+      })
+    );
+
+    await page.goto("/account/orders/SG-2026-TEST4");
+    await expect(page.locator(".track-order-page__body")).toContainText("This is a digital download order. No courier delivery is required.");
+    await expect(page.locator(".track-order-page__body")).not.toContainText("Tracking Number");
+  });
+});
+
+test.describe("Track Order: digital-only vs physical orders", () => {
+  test("digital-only order shows no courier tracking section", async ({ page }) => {
+    await page.route("**/api/orders/SG-2026-DGTL/tracking", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            orderNumber: "SG-2026-DGTL",
+            createdAt: new Date().toISOString(),
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            paymentMethod: "PAYFAST",
+            fulfilmentStatus: "NOT_STARTED",
+            shippingStatus: "NOT_STARTED",
+            deliveryCity: "Pretoria",
+            deliveryProvince: "Gauteng",
+            trackingSteps: [],
+            trackingSource: "backend-demo",
+            hasPhysicalItems: false,
+            hasDigitalItems: true,
+            isDigitalOnly: true,
+          },
+        }),
+      })
+    );
+
+    await page.goto("/track-order?order=SG-2026-DGTL");
+    await expect(page.locator(".track-order-result")).toContainText("Digital download order");
+    await expect(page.locator(".track-order-result")).toContainText("No courier delivery is required");
+    await expect(page.locator(".tracking-progress")).toHaveCount(0);
+  });
+
+  test("physical order still shows the courier/tracking section", async ({ page }) => {
+    await page.route("**/api/orders/SG-2026-PHYS/tracking", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            orderNumber: "SG-2026-PHYS",
+            createdAt: new Date().toISOString(),
+            status: "PROCESSING",
+            paymentStatus: "PAID",
+            paymentMethod: "PAYFAST",
+            fulfilmentStatus: "PACKING",
+            shippingStatus: "PACKING",
+            deliveryCity: "Pretoria",
+            deliveryProvince: "Gauteng",
+            trackingSteps: [
+              { key: "order-placed", label: "Order Placed", isComplete: true, isCurrent: false, isPending: false },
+              { key: "order-confirmed", label: "Order Confirmed", isComplete: true, isCurrent: false, isPending: false },
+              { key: "preparing-order", label: "Preparing Your Order", isComplete: false, isCurrent: true, isPending: false },
+              { key: "ready-for-delivery", label: "Ready for Delivery", isComplete: false, isCurrent: false, isPending: true },
+              { key: "out-for-delivery", label: "Out for Delivery", isComplete: false, isCurrent: false, isPending: true },
+              { key: "delivered", label: "Delivered", isComplete: false, isCurrent: false, isPending: true },
+            ],
+            trackingSource: "backend-demo",
+            hasPhysicalItems: true,
+            hasDigitalItems: false,
+            isDigitalOnly: false,
+          },
+        }),
+      })
+    );
+
+    await page.goto("/track-order?order=SG-2026-PHYS");
+    await expect(page.locator(".tracking-progress")).toBeVisible();
+    await expect(page.locator(".track-order-result")).not.toContainText("Digital download order");
+  });
+});
+
+test.describe("Admin order detail: digital-only vs physical courier actions", () => {
+  test("digital-only order does not show courier booking action", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/orders/SG-2026-TEST7", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            orderNumber: "SG-2026-TEST7",
+            createdAt: new Date().toISOString(),
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            fulfilmentStatus: "NOT_STARTED",
+            paymentMethod: "PAYFAST",
+            customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+            deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+            items: [{ productSlug: "mock-digital-book", productName: "Mock Digital Book", sku: null, quantity: 1, unitPrice: 49.99, lineTotal: 49.99, productType: "DIGITAL" }],
+            subtotal: 49.99,
+            deliveryFee: 0,
+            discountTotal: 0,
+            total: 49.99,
+            payment: { method: "PAYFAST", status: "PAID", amount: 49.99, provider: "payfast", paidAt: new Date().toISOString() },
+            shipping: null,
+            hasPhysicalItems: false,
+            hasDigitalItems: true,
+            isDigitalOnly: true,
+          },
+        }),
+      })
+    );
+    await page.route("**/api/admin/orders/SG-2026-TEST7/status-history", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { statusHistory: [] } }) })
+    );
+
+    await page.goto("/admin/orders/SG-2026-TEST7");
+    await expect(page.locator(".admin-page")).toContainText("Digital-only order, no delivery required");
+    await expect(page.locator(".admin-courier-quote-form")).toHaveCount(0);
+    await expect(page.locator(".admin-shipping-form")).toHaveCount(0);
+  });
+
+  test("physical order still shows courier booking action", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/orders/SG-2026-TEST8", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          success: true,
+          message: "OK",
+          data: {
+            orderNumber: "SG-2026-TEST8",
+            createdAt: new Date().toISOString(),
+            status: "CONFIRMED",
+            paymentStatus: "PAID",
+            fulfilmentStatus: "NOT_STARTED",
+            paymentMethod: "PAYFAST",
+            customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+            deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
+            items: [{ productSlug: "mock-physical-book", productName: "Mock Physical Book", sku: null, quantity: 1, unitPrice: 50, lineTotal: 50, productType: "PHYSICAL" }],
+            subtotal: 50,
+            deliveryFee: 80,
+            discountTotal: 0,
+            total: 130,
+            payment: { method: "PAYFAST", status: "PAID", amount: 130, provider: "payfast", paidAt: new Date().toISOString() },
+            shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
+            hasPhysicalItems: true,
+            hasDigitalItems: false,
+            isDigitalOnly: false,
+          },
+        }),
+      })
+    );
+    await page.route("**/api/admin/orders/SG-2026-TEST8/status-history", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { statusHistory: [] } }) })
+    );
+
+    await page.goto("/admin/orders/SG-2026-TEST8");
+    await expect(page.locator(".admin-page")).not.toContainText("Digital-only order, no delivery required");
+    await expect(page.locator(".admin-courier-quote-form")).toBeVisible();
   });
 });

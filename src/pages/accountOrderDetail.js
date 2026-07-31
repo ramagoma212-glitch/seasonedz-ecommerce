@@ -60,6 +60,36 @@ function renderShippingCard(shipping) {
   `;
 }
 
+// Version 7, Milestone 157: shown instead of the Delivery card for a
+// digital-only order — including a historical one that still has an
+// old Shipping row from before this milestone (order.isDigitalOnly is
+// derived fresh from order.items every time, never from whether a
+// Shipping row happens to exist, so this correctly hides/replaces
+// tracking for those old rows too).
+function renderDigitalOnlyNotice(order) {
+  if (order.paymentStatus === "PAID") {
+    return `
+      <div class="demo-notice">
+        <span class="demo-notice__icon" aria-hidden="true">&#10003;</span>
+        <div>
+          <strong>This is a digital download order. No courier delivery is required.</strong>
+          <p>Your file(s) are available below.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div>
+        <strong>This is a digital download order. No courier delivery is required.</strong>
+        <p>Downloads unlock automatically once payment is confirmed — current payment status: ${escapeHtml(humanizeEnum(order.paymentStatus))}.</p>
+      </div>
+    </div>
+  `;
+}
+
 function renderOrderDetail(order, digitalItems) {
   return `
     <div class="tracking-result">
@@ -95,7 +125,7 @@ function renderOrderDetail(order, digitalItems) {
         ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}
       </div>
 
-      ${renderShippingCard(order.shipping)}
+      ${order.isDigitalOnly ? renderDigitalOnlyNotice(order) : renderShippingCard(order.shipping)}
 
       ${renderDigitalDownloadsCard(digitalItems)}
 

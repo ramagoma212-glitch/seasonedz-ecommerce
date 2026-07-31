@@ -72,7 +72,30 @@ function renderBackendUnavailable(orderNumber) {
 // old blanket "no real payment has been taken" claim would be actively
 // wrong in that case, so this reflects the order's real paymentStatus
 // instead of assuming every order is unpaid.
+//
+// Version 7, Milestone 157: a digital-only order has nothing to
+// courier, so the old blanket "using The Courier Guy where applicable"
+// wording was actively misleading for it — this branches on
+// order.isDigitalOnly (backend-computed, see order.service.ts) instead
+// of assuming every paid order needs delivery.
 function renderPaymentNotice(order) {
+  if (order.paymentStatus === "PAID" && order.isDigitalOnly) {
+    return `
+      <div class="demo-notice">
+        <span class="demo-notice__icon" aria-hidden="true">&#10003;</span>
+        <div>
+          <strong>Payment confirmed.</strong>
+          <p>
+            This is a digital download order — no courier delivery is
+            required. Log in to My Account to download your file(s), or
+            check your email for a secure download link if you checked
+            out as a guest.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
   if (order.paymentStatus === "PAID") {
     return `
       <div class="demo-notice">
