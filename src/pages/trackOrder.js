@@ -116,7 +116,55 @@ function renderDemoNotice() {
   `;
 }
 
+// Version 7, Milestone 157: a digital-only order has no courier
+// delivery at all, so the physical Order Placed -> ... -> Delivered
+// stepper and "Delivering To" city/province don't apply to it — this
+// is shown instead. tracking.isDigitalOnly is backend-computed fresh
+// from order.items on every request (order.service.ts), so this
+// correctly applies to historical orders too, even ones that still
+// have an old Shipping row from before this milestone.
+function renderDigitalOnlyTrackingResult(tracking) {
+  const guidance =
+    tracking.paymentStatus === "PAID"
+      ? `Your download is ready. <a href="/account">Log in to My Account</a> to access it, or check your email for a secure guest download link if you checked out as a guest.`
+      : `Downloads are available after payment confirmation. Current payment status: ${humanizeEnum(tracking.paymentStatus)}.`;
+
+  return `
+    <div class="tracking-result">
+      <div class="tracking-result__header">
+        <div>
+          <p class="tracking-result__label">Order Number</p>
+          <h2>${escapeHtml(tracking.orderNumber)}</h2>
+        </div>
+        <span class="badge">${humanizeEnum(tracking.status)}</span>
+      </div>
+
+      <div class="demo-notice">
+        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+        <div>
+          <strong>Digital download order</strong>
+          <p>No courier delivery is required. ${guidance}</p>
+        </div>
+      </div>
+
+      <div class="order-confirmation__card">
+        <h3>Order Details</h3>
+        <div class="order-confirmation__row"><span>Order Date</span><span>${formatDate(tracking.createdAt)}</span></div>
+        <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(tracking.paymentStatus)}</span></div>
+      </div>
+
+      <div class="order-confirmation__actions">
+        <a class="btn btn--secondary" href="/order-confirmation?order=${encodeURIComponent(tracking.orderNumber)}">View Full Order Details</a>
+      </div>
+    </div>
+  `;
+}
+
 function renderBackendTrackingResult(tracking) {
+  if (tracking.isDigitalOnly) {
+    return renderDigitalOnlyTrackingResult(tracking);
+  }
+
   return `
     <div class="tracking-result">
       <div class="tracking-result__header">

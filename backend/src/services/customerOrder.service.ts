@@ -15,6 +15,7 @@
 // table at all here, so there's no separate "don't expose this Payment
 // field" filtering to get right.
 
+import { ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 
 export interface CustomerOrderSummary {
@@ -29,6 +30,11 @@ export interface CustomerOrderSummary {
   itemCount: number;
   firstItemName: string | null;
   firstItemImageUrl: string | null;
+  // Version 7, Milestone 157: order composition — see order.service.ts's
+  // OrderOutput for the same fields and why they exist.
+  hasPhysicalItems: boolean;
+  hasDigitalItems: boolean;
+  isDigitalOnly: boolean;
 }
 
 export interface CustomerOrderDetail {
@@ -68,6 +74,9 @@ export interface CustomerOrderDetail {
     shippedAt: Date | null;
     deliveredAt: Date | null;
   } | null;
+  hasPhysicalItems: boolean;
+  hasDigitalItems: boolean;
+  isDigitalOnly: boolean;
 }
 
 // Best-effort only — an order line item's own productId is nullable
@@ -81,6 +90,16 @@ const firstItemImageInclude = {
     },
   },
 } satisfies import("@prisma/client").Prisma.OrderItemInclude;
+
+function computeComposition(items: { productType: ProductType }[]): {
+  hasPhysicalItems: boolean;
+  hasDigitalItems: boolean;
+  isDigitalOnly: boolean;
+} {
+  const hasPhysicalItems = items.some((item) => item.productType === ProductType.PHYSICAL);
+  const hasDigitalItems = items.some((item) => item.productType === ProductType.DIGITAL);
+  return { hasPhysicalItems, hasDigitalItems, isDigitalOnly: hasDigitalItems && !hasPhysicalItems };
+}
 
 // Ordered newest-first — the natural, expected order for "my orders".
 export async function getOrdersForCustomer(customerId: string): Promise<CustomerOrderSummary[]> {
@@ -104,6 +123,7 @@ export async function getOrdersForCustomer(customerId: string): Promise<Customer
       itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
       firstItemName: firstItem?.productName ?? null,
       firstItemImageUrl: firstItem?.product?.images?.[0]?.url ?? null,
+      ...computeComposition(order.items),
     };
   });
 }
@@ -167,5 +187,6 @@ export async function getOrderForCustomer(orderNumber: string, customerId: strin
           deliveredAt: order.shipping.deliveredAt,
         }
       : null,
+    ...computeComposition(order.items),
   };
 }

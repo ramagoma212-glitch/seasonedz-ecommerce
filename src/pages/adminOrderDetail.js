@@ -335,7 +335,22 @@ function renderCourierBookingFailedNotice(shipping) {
   `;
 }
 
+// Version 7, Milestone 157: shown instead of the courier quote/booking
+// form for a digital-only order — including a historical order that
+// still has an old Shipping row from before this milestone
+// (order.isDigitalOnly is derived fresh from order.items every time,
+// never from whether a Shipping row happens to exist).
+function renderDigitalOnlyAdminNotice() {
+  return `
+    <div class="form-banner form-banner--success">
+      Digital-only order, no delivery required.
+    </div>
+  `;
+}
+
 function renderCourierSection(order) {
+  if (order.isDigitalOnly) return renderDigitalOnlyAdminNotice();
+
   const shipping = order.shipping;
   const alreadyBooked = Boolean(shipping && (shipping.trackingNumber || shipping.courierShipmentId));
   if (alreadyBooked) return renderCourierBookedSummary(order);
@@ -440,7 +455,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
         </div>
 
         ${
-          order.shipping
+          order.shipping && !order.isDigitalOnly
             ? `
         <div class="order-confirmation__card">
           ${

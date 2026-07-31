@@ -165,6 +165,17 @@ export interface OrderOutput {
     shippedAt: Date | null;
     deliveredAt: Date | null;
   } | null;
+  // Version 7, Milestone 157: order composition, derived from `items`
+  // on every response — lets every caller (order-confirmation,
+  // account order detail, Track Order, admin order detail) branch on
+  // "does this order need a courier at all" without re-deriving the
+  // same `items.some(...)` logic in five different places. Never
+  // exposes anything about the digital asset itself (see
+  // OrderItemOutput above — only productType, never digitalAssetId or
+  // any storage field).
+  hasPhysicalItems: boolean;
+  hasDigitalItems: boolean;
+  isDigitalOnly: boolean;
 }
 
 // Built field-by-field, not via spreading the Prisma row — no internal
@@ -172,6 +183,9 @@ export interface OrderOutput {
 // ever reach this shape, matching the Product API's convention from
 // Milestone 12.
 function toOrderOutput(order: OrderWithRelations): OrderOutput {
+  const hasPhysicalItems = order.items.some((item) => item.productType === ProductType.PHYSICAL);
+  const hasDigitalItems = order.items.some((item) => item.productType === ProductType.DIGITAL);
+
   return {
     orderNumber: order.orderNumber,
     createdAt: order.createdAt,
@@ -227,6 +241,9 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
           deliveredAt: order.shipping.deliveredAt,
         }
       : null,
+    hasPhysicalItems,
+    hasDigitalItems,
+    isDigitalOnly: hasDigitalItems && !hasPhysicalItems,
   };
 }
 
@@ -339,12 +356,12 @@ export async function createOrder(
             provider: null,
           },
         },
-        shipping: {
-          create: {
-            status: FulfilmentStatus.NOT_STARTED,
-            courierName: null,
-          },
-        },
+        // Version 7, Milestone 157: a digital-only order has nothing to
+        // deliver — no Shipping row is created for it at all, matching
+        // the same "nothing to courier" philosophy already applied to
+        // deliveryFee and Courier Guy auto-booking above. A mixed order
+        // (at least one PHYSICAL item) still gets one, same as before.
+        ...(hasPhysicalItems ? { shipping: { create: { status: FulfilmentStatus.NOT_STARTED, courierName: null } } } : {}),
       },
       include: orderInclude,
     });
@@ -395,17 +412,23 @@ export interface OrderTrackingOutput {
   deliveryProvince: string;
   trackingSteps: OrderTrackingStep[];
   trackingSource: "backend-demo";
+  hasPhysicalItems: boolean;
+  hasDigitalItems: boolean;
+  isDigitalOnly: boolean;
 }
 
 export async function getOrderTracking(orderNumber: string): Promise<OrderTrackingOutput | null> {
   const order = await prisma.order.findUnique({
     where: { orderNumber },
-    include: { shipping: true },
+    include: { shipping: true, items: { select: { productType: true } } },
   });
 
   if (!order) {
     return null;
   }
+
+  const hasPhysicalItems = order.items.some((item) => item.productType === ProductType.PHYSICAL);
+  const hasDigitalItems = order.items.some((item) => item.productType === ProductType.DIGITAL);
 
   const currentIndex = TRACKING_STEPS.findIndex((step) => step.status === order.status);
 
@@ -432,5 +455,8 @@ export async function getOrderTracking(orderNumber: string): Promise<OrderTracki
     // derived from Order/Shipping rows set by this backend, never a
     // live courier API. See API_ROUTES.md.
     trackingSource: "backend-demo",
+    hasPhysicalItems,
+    hasDigitalItems,
+    isDigitalOnly: hasDigitalItems && !hasPhysicalItems,
   };
 }
