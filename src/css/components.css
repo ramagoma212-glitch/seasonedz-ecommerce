@@ -2153,7 +2153,40 @@ body.has-lightbox-open {
 .newsletter-form button[type="submit"],
 .digital-card .btn,
 .best-seller__actions .btn,
-.new-releases-grid .product-card__actions .btn {
+.new-releases-grid .product-card__actions .btn,
+.gifting-grid .product-card__actions .btn {
+  min-height: 44px;
+}
+
+/* ---- Thoughtful Gifts homepage section (Version 7, Milestone 158) ------
+   .gift-card itself needs no dimension/grid CSS of its own — it
+   composes .product-grid (see pages/home.js), the exact same base
+   class New Releases and Digital Colouring Books already use, so card
+   size, image area, padding, border, shadow, title/desc areas and gap
+   are identical for free. .gifting-grid is a distinct class (not
+   .new-releases-grid, to avoid two different sections colliding on the
+   same test-facing selector) that repeats just the one extra rule
+   (button min-height) .new-releases-grid also adds, plus the different
+   column-count/centering behaviour Milestone
+   158's own brief asked for (3 centred on desktop, not 4). */
+.gifting-section__disclosure {
+  margin-top: var(--space-xs);
+  font-weight: 700;
+}
+
+.gift-card__notice {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+}
+
+.gifting-section__view-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
+.gifting-section__view-more .btn {
   min-height: 44px;
 }
 

@@ -299,6 +299,8 @@ function setupProductActions() {
       handleToggleMobileFilters(actionEl);
     } else if (action === "toggle-faq") {
       handleToggleFaq(actionEl);
+    } else if (action === "toggle-gift-view-more") {
+      handleToggleGiftViewMore(actionEl);
     } else if (action === "scroll-to-newsletter") {
       handleScrollToNewsletter();
     } else if (action === "request-download") {
@@ -319,6 +321,42 @@ function handleToggleFaq(triggerEl) {
   const isOpen = triggerEl.getAttribute("aria-expanded") === "true";
   triggerEl.setAttribute("aria-expanded", String(!isOpen));
   panel.hidden = isOpen;
+}
+
+// Version 7, Milestone 158: "Thoughtful Gifts" View More/View Less (see
+// pages/home.js's renderGiftingSection()). Only ever toggles the plain
+// `hidden` attribute on cards already marked data-gift-card-extra="true"
+// at render time — never adds/removes cards, never re-fetches, never
+// auto-selects anything. Collapsing returns focus/scroll to the section
+// heading rather than leaving the customer stranded below a grid that
+// just shrank out from under them. No animation is used either way, so
+// there's nothing that needs a separate prefers-reduced-motion branch
+// for the show/hide itself — only the scroll-into-view on collapse
+// checks it, since "smooth" scrolling is real motion.
+function handleToggleGiftViewMore(buttonEl) {
+  const grid = document.getElementById(buttonEl.getAttribute("aria-controls"));
+  if (!grid) return;
+
+  const isExpanded = buttonEl.getAttribute("aria-expanded") === "true";
+  const extraCards = grid.querySelectorAll('[data-gift-card-extra="true"]');
+
+  if (isExpanded) {
+    extraCards.forEach((card) => {
+      card.hidden = true;
+    });
+    buttonEl.setAttribute("aria-expanded", "false");
+    buttonEl.textContent = "View More";
+
+    const heading = document.getElementById("gifting-section-heading");
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    heading?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  } else {
+    extraCards.forEach((card) => {
+      card.hidden = false;
+    });
+    buttonEl.setAttribute("aria-expanded", "true");
+    buttonEl.textContent = "View Less";
+  }
 }
 
 // "Notify Me" on a not-yet-available digital product (see

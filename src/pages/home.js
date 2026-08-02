@@ -1,12 +1,19 @@
 // Homepage. Version 7, Milestone 150 full redesign: hero, "Hi,
 // Friend" editorial intro, New Releases, a larger Best Seller
-// feature, Shop by Collection, Digital Colouring Books, marketplace
-// links, Google Reviews (hidden until a verified link exists), FAQ
-// accordion and newsletter signup. General customer-journey and
-// section-flow inspiration only from the Coco Wyo homepage — no code,
-// CSS, layout measurements, copy, graphics, icons, card design,
-// animation or brand identity copied; every asset, product and word
-// below is Seasonedz Group's own.
+// feature, Digital Colouring Books, marketplace links, Google Reviews
+// (hidden until a verified link exists), FAQ accordion and newsletter
+// signup. General customer-journey and section-flow inspiration only
+// from the Coco Wyo homepage — no code, CSS, layout measurements,
+// copy, graphics, icons, card design, animation or brand identity
+// copied; every asset, product and word below is Seasonedz Group's
+// own.
+//
+// Version 7, Milestone 158: the old "Find Your Creative Journey"
+// category-collection section (category cards linking to /shop?
+// category=...) was replaced with "Thoughtful Gifts Made With
+// Purpose" — see renderGiftingSection() below and data/giftProducts.js.
+// Shop category browsing itself is untouched; only this one homepage
+// section changed.
 //
 // Product/category data loads from the backend API where possible,
 // falling back to the static data files if it's unavailable — see
@@ -18,9 +25,10 @@ import { renderGoogleReviewsSection } from "../components/googleReviews.js";
 import { renderHomeFaqSection } from "../components/homeFaqAccordion.js";
 import { renderNewsletterSection } from "../components/newsletterSignup.js";
 import { isInWishlist } from "../js/wishlist.js";
-import { getCardImageUrl, getDetailImageUrl } from "../js/imageTransforms.js";
+import { getDetailImageUrl } from "../js/imageTransforms.js";
 import { withBase } from "../js/paths.js";
 import { getCatalog } from "../js/api/productsApi.js";
+import { GIFT_PRODUCTS } from "../data/giftProducts.js";
 
 // Exact order requested for the New Releases section.
 const NEW_RELEASE_SLUGS = [
@@ -31,34 +39,9 @@ const NEW_RELEASE_SLUGS = [
 
 const BEST_SELLER_SLUG = "abc-colouring-book-for-kids-with-fun-facts";
 
-// Display heading intentionally differs slightly from the real
-// category name in a couple of cases ("Kids' Learning" vs. the real
-// "Kids Colouring Books", "Mindfulness for Adults" vs. "Mindfulness
-// Colouring") — the brief's own requested wording — but each links to
-// the real, matching, working category route/slug, confirmed against
-// the live category list.
-const COLLECTIONS = [
-  {
-    heading: "Kids’ Learning",
-    categorySlug: "kids-colouring-books",
-    blurb: "Alphabet tracing, fun facts and early learning activities.",
-  },
-  {
-    heading: "Bible Colouring Books",
-    categorySlug: "bible-colouring-books",
-    blurb: "Faith-based colouring and Bible stories for children.",
-  },
-  {
-    heading: "Mindfulness for Adults",
-    categorySlug: "mindfulness-colouring",
-    blurb: "Calming, therapeutic colouring pages for quiet moments.",
-  },
-  {
-    heading: "Markers and Crayons",
-    categorySlug: "markers-and-crayons",
-    blurb: "Vibrant, safe creative supplies for every colouring book.",
-  },
-];
+// Version 7, Milestone 158: how many gift cards show before "View
+// More" — see renderGiftingSection() below.
+const INITIAL_VISIBLE_COUNT = 3;
 
 // Version 7, Milestone 150: none of these four digital editions exist
 // as real product records yet (checked: no Prisma field, column, or
@@ -170,43 +153,95 @@ function renderBestSellerSection(products) {
   `;
 }
 
-function renderCollectionSection(products) {
-  const cards = COLLECTIONS.map((collection) => {
-    const representative = products.find((product) => product.categorySlug === collection.categorySlug);
-    if (!representative) return "";
-
-    return `
-      <a class="card collection-card" href="/shop?category=${collection.categorySlug}">
-        <img
-          class="card__image"
-          src="${getCardImageUrl(representative.image)}"
-          data-original-src="${representative.image}"
-          alt="${representative.name}"
-          width="400"
-          height="400"
-          loading="lazy"
-          decoding="async"
-        />
-        <div class="card__body">
-          <h3 class="card__title">${collection.heading}</h3>
-          <p class="collection-card__desc">${collection.blurb}</p>
-          <span class="collection-card__link">View Collection</span>
+// Version 7, Milestone 158: one gift card. wrappedImage is presentation
+// only — the card's own link always points at the real product route
+// (never a fake gift-only route), and .card__image's existing
+// site-wide `object-fit: contain` (components.css) already guarantees
+// the wrapped photo, ribbon and gift tag are never cropped, same as
+// every other product photo. No "Choose Gift Options" button: inspected
+// productDetails.js and found no optional paid gift-wrapping selector
+// exists there yet (see this milestone's own report) — showing one
+// here would be a non-functional button, which the brief explicitly
+// forbids.
+function renderGiftCard(entry, product, { hiddenCard = false } = {}) {
+  return `
+    <article class="card product-card gift-card"${hiddenCard ? " hidden" : ""} data-gift-card${hiddenCard ? ' data-gift-card-extra="true"' : ""}>
+      <div class="product-card__media">
+        <a href="/product/${product.slug}">
+          <img
+            class="card__image"
+            src="${withBase(entry.wrappedImage)}"
+            alt="${entry.alt}"
+            width="400"
+            height="400"
+            loading="lazy"
+            decoding="async"
+          />
+        </a>
+      </div>
+      <div class="card__body product-card__body">
+        <h3 class="card__title">
+          <a href="/product/${product.slug}">${entry.title}</a>
+        </h3>
+        <p class="product-card__desc">${entry.description}</p>
+        <p class="gift-card__notice">Optional gift wrapping available.</p>
+        <div class="product-card__actions">
+          <a class="btn btn--primary btn--sm" href="/product/${product.slug}">View Product</a>
         </div>
-      </a>
-    `;
-  }).join("");
+      </div>
+    </article>
+  `;
+}
 
-  if (!cards) return "";
+// Version 7, Milestone 158: replaces the old "Find Your Creative
+// Journey" category-collection section. Each GIFT_PRODUCTS entry is
+// only ever shown when its productSlug resolves to a real, ACTIVE
+// product in the live catalogue — never a fake/duplicate product, and
+// never a hard-coded route independent of the real product record.
+// Reusable "View More" pattern: shows the first INITIAL_VISIBLE_COUNT
+// cards, hides the rest (plain `hidden` attribute, no CSS needed), and
+// only renders the toggle button at all once there are genuinely more
+// than INITIAL_VISIBLE_COUNT real gift products to reveal — with
+// exactly 3 configured today, this button doesn't render yet, but the
+// logic already works for a 4th+ future addition with zero code
+// changes (see data/giftProducts.js's own comment).
+function renderGiftingSection(products) {
+  const bySlug = new Map(products.map((product) => [product.slug, product]));
+  const entries = GIFT_PRODUCTS.map((entry) => ({ entry, product: bySlug.get(entry.productSlug) })).filter(({ product }) => Boolean(product));
+
+  if (entries.length === 0) return "";
+
+  const hasMore = entries.length > INITIAL_VISIBLE_COUNT;
+
+  const cards = entries
+    .map(({ entry, product }, index) => renderGiftCard(entry, product, { hiddenCard: index >= INITIAL_VISIBLE_COUNT }))
+    .join("");
 
   return `
-    <section class="section container">
+    <section class="section container gifting-section">
       <div class="section__header">
-        <h2>Find Your Creative Journey</h2>
-        <p>Explore learning, faith, mindfulness and creative supplies for children and adults.</p>
+        <h2 id="gifting-section-heading">Thoughtful Gifts Made With Purpose</h2>
+        <p>Choose a meaningful colouring book for someone special. Optional gift wrapping can be added before completing your purchase.</p>
+        <p class="gifting-section__disclosure">Gift wrapping is optional and charged separately.</p>
       </div>
-      <div class="category-grid">
+      <div class="product-grid gifting-grid" id="gifting-grid">
         ${cards}
       </div>
+      ${
+        hasMore
+          ? `
+        <div class="gifting-section__view-more">
+          <button
+            type="button"
+            class="btn btn--secondary"
+            data-action="toggle-gift-view-more"
+            aria-expanded="false"
+            aria-controls="gifting-grid"
+          >View More</button>
+        </div>
+      `
+          : ""
+      }
     </section>
   `;
 }
@@ -324,7 +359,7 @@ export async function renderHome() {
     ${renderHiFriendSection()}
     ${renderNewReleasesSection(products)}
     ${renderBestSellerSection(products)}
-    ${renderCollectionSection(products)}
+    ${renderGiftingSection(products)}
     ${renderDigitalSection(products.filter((product) => product.productType === "DIGITAL"))}
     ${renderMarketplaceHomeSection()}
     ${renderGoogleReviewsSection()}

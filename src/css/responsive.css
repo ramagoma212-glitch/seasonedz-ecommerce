@@ -73,6 +73,45 @@
   }
 }
 
+/* Version 7, Milestone 158: Thoughtful Gifts section. .gifting-grid
+   composes with .product-grid (see components.css's own comment on
+   the section) — everything except column count/centering (card size,
+   gap, button sizing) is already identical to New Releases/Digital via
+   that shared class. One column on mobile (not .product-grid's default
+   two), so every wrapped gift photo stays fully visible without
+   crowding; a lone trailing odd card is centred at tablet width
+   instead of stretching or sitting left-aligned; three centred columns
+   at desktop (not .product-grid's default four) so exactly three real
+   gift products (today's actual count) fill one complete, centred row
+   rather than leaving an empty fourth slot. */
+.gifting-grid {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .gifting-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gifting-grid > .gift-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    max-width: calc(50% - (var(--space-lg) / 2));
+    margin: 0 auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .gifting-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gifting-grid > .gift-card:last-child:nth-child(odd) {
+    grid-column: auto;
+    max-width: none;
+    margin: 0;
+  }
+}
+
 @media (min-width: 1024px) {
   .product-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));

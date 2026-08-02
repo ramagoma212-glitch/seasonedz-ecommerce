@@ -16,7 +16,7 @@ test.describe("Homepage section order", () => {
       ".hi-friend",
       ".new-releases-grid",
       ".best-seller",
-      ".collection-card",
+      ".gift-card",
       ".digital-grid",
       ".marketplace-section",
       ".google-reviews",
@@ -108,25 +108,67 @@ test.describe("Best Seller section", () => {
   });
 });
 
-test.describe("Shop by Collection section", () => {
-  test("shows four collection cards linking to real, working category routes", async ({ page }) => {
+test.describe("Thoughtful Gifts Made With Purpose section", () => {
+  test("shows the heading, disclosure and exactly three real gift cards, no View More", async ({ page }) => {
     await page.goto("/");
-    const cards = page.locator(".collection-card");
-    await expect(cards).toHaveCount(4);
+    const section = page.locator(".gifting-section");
 
+    await expect(page.locator("#gifting-section-heading")).toHaveText("Thoughtful Gifts Made With Purpose");
+    await expect(section).toContainText("Choose a meaningful colouring book for someone special");
+    await expect(section).toContainText("Gift wrapping is optional and charged separately.");
+
+    const cards = page.locator(".gift-card");
+    await expect(cards).toHaveCount(3);
     for (const card of await cards.all()) {
-      const href = await card.getAttribute("href");
-      expect(href).toMatch(/^\/shop\?category=/);
-      await expect(card.locator("img")).toBeVisible();
-      await expect(card.locator(".collection-card__link")).toHaveText("View Collection");
+      await expect(card.locator(".card__image")).toBeVisible();
+      await expect(card.locator(".gift-card__notice")).toHaveText("Optional gift wrapping available.");
+      const viewProductLink = card.getByRole("link", { name: "View Product" });
+      await expect(viewProductLink).toBeVisible();
+      const href = await viewProductLink.getAttribute("href");
+      expect(href).toMatch(/^\/product\//);
+      // No fake "Choose Gift Options" button — no paid gift-wrapping
+      // selector exists on the product page yet (see this milestone's
+      // own report), so only View Product renders.
+      await expect(card.getByRole("link", { name: "Choose Gift Options" })).toHaveCount(0);
     }
+
+    // Exactly 3 real gift products are configured today, so the
+    // reusable View More control must not render at all.
+    await expect(page.locator('[data-action="toggle-gift-view-more"]')).toHaveCount(0);
   });
 
-  test("collection card link navigates to a working, filtered shop page", async ({ page }) => {
+  test("has the three expected gift titles in order and no unverified gift-wrapping price", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".collection-card").first().click();
-    await expect(page).toHaveURL(/\/shop\?category=/);
-    await expect(page.locator(".product-card").first()).toBeVisible();
+    await expect(page.locator(".gift-card").first()).toBeVisible();
+    const titles = await page.locator(".gift-card .card__title").allTextContents();
+    expect(titles.map((t) => t.trim())).toEqual([
+      "ABC Colouring Book Gift Idea",
+      "New Testament Bible Colouring Book Gift Idea",
+      "Old Testament Bible Colouring Book Gift Idea",
+    ]);
+
+    const bodyText = await page.locator(".gifting-section").textContent();
+    expect(bodyText).not.toMatch(/gift wrapped as standard/i);
+    expect(bodyText).not.toMatch(/ready to gift/i);
+    expect(bodyText).not.toMatch(/free gift wrapping/i);
+    expect(bodyText).not.toMatch(/gift wrapping included/i);
+  });
+
+  test("View Product opens the normal, real product page (no fake gift product/route)", async ({ page }) => {
+    await page.goto("/");
+    const firstCard = page.locator(".gift-card").first();
+    const href = await firstCard.getByRole("link", { name: "View Product" }).getAttribute("href");
+    await firstCard.getByRole("link", { name: "View Product" }).click();
+    await expect(page).toHaveURL(new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    await expect(page.locator(".product-details")).toBeVisible();
+  });
+
+  test("gift card image area does not crop the wrapped photo (object-fit: contain)", async ({ page }) => {
+    await page.goto("/");
+    const image = page.locator(".gift-card .card__image").first();
+    await expect(image).toBeVisible();
+    const objectFit = await image.evaluate((el) => getComputedStyle(el).objectFit);
+    expect(objectFit).toBe("contain");
   });
 });
 
