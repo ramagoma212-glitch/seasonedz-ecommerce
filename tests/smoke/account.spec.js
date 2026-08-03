@@ -159,16 +159,21 @@ test.describe("Customer account smoke checks", () => {
   // Local Storage (same shape/key as js/cart.js) so the subtotal is
   // deterministic, rather than depending on real product prices —
   // never touches a real order or the live backend either way.
-  async function setSyntheticCart(page, { price, quantity }) {
+  // Version 7, Milestone 159A: accepts an optional `giftWrap` flag so
+  // the same helper can build the exact product-subtotal + gift-wrap
+  // combinations needed to verify gift wrapping is excluded from the
+  // R650 free-delivery threshold (giftWrap fee is quantity * R30, same
+  // rule as js/cart.js's GIFT_WRAP_FEE_PER_ITEM).
+  async function setSyntheticCart(page, { price, quantity, giftWrap = false }) {
     await page.goto("/");
     await page.evaluate(
-      ({ price, quantity }) => {
+      ({ price, quantity, giftWrap }) => {
         localStorage.setItem(
           "seasonedz_cart",
-          JSON.stringify([{ productId: "mock-product-id", slug: "mock-product", name: "Mock Product", price, quantity, image: null }])
+          JSON.stringify([{ productId: "mock-product-id", slug: "mock-product", name: "Mock Product", price, quantity, image: null, productType: "PHYSICAL", giftWrap, giftMessage: giftWrap ? "Test message" : null }])
         );
       },
-      { price, quantity }
+      { price, quantity, giftWrap }
     );
   }
 
@@ -193,6 +198,56 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/checkout");
     await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+  });
+
+  // Version 7, Milestone 159A: gift wrapping must NOT count towards the
+  // R650 free-delivery threshold — only the product subtotal decides
+  // eligibility (see js/cart.js's getCartSummary(), which calls
+  // calculateDeliveryFee(subtotal, ...) using the product-only subtotal,
+  // BEFORE giftWrapTotal is added to the displayed order total). These
+  // four cases are the exact scenarios from the milestone brief.
+  test("R620 products + R30 gift wrap: still charged delivery (product subtotal alone decides, R620 < R650)", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 620, quantity: 1, giftWrap: true }); // subtotal R620, gift wrap R30
+
+    await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("620.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
+    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+  });
+
+  test("R650 products + R30 gift wrap: free delivery (product subtotal itself already reaches R650)", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 650, quantity: 1, giftWrap: true }); // subtotal R650, gift wrap R30
+
+    await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("650.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
+    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
+  });
+
+  test("R640 products + R60 gift wrap (2 wrapped items): still charged delivery (R640 < R650)", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 320, quantity: 2, giftWrap: true }); // subtotal R640, gift wrap R60 (2 x R30)
+
+    await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("640.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("60.00");
+    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+  });
+
+  test("R700 products + no gift wrap: free delivery as normal", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 700, quantity: 1, giftWrap: false }); // subtotal R700, no gift wrap
+
+    await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("700.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toHaveCount(0);
+    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
   });
 
   // Version 7, Milestone 130: My Orders — every /customers/orders* call
