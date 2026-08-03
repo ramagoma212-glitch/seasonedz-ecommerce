@@ -411,6 +411,45 @@
   margin-bottom: var(--space-lg);
 }
 
+/* Version 7, Milestone 159: paid gift wrapping — optional section on
+   an eligible (physical) product page, between the quantity selector
+   and Add to Cart/Wishlist. Never rendered at all for a digital
+   product — see productDetails.js's renderGiftWrapOption() call site. */
+.product-details__gift-wrap {
+  max-width: 420px;
+  margin-bottom: var(--space-lg);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-alt);
+}
+
+.gift-wrap-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+
+.gift-wrap-option input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  accent-color: var(--color-primary);
+}
+
+.gift-wrap-message {
+  margin-top: var(--space-md);
+}
+
+.gift-wrap-message__hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+}
+
 .product-details__meta p {
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
@@ -726,6 +765,18 @@
 
 .admin-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Version 7, Milestone 159: a gift message is free-typed customer
+   text (up to 150 chars) — the table's own `white-space: nowrap`
+   is overridden just for this so it wraps instead of forcing the
+   whole table wider. */
+.admin-table__gift-message {
+  white-space: normal;
+  max-width: 240px;
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
 }
 
 .admin-table__message {

@@ -1,8 +1,10 @@
 // Backend Order API calls. Building the request body is intentionally
-// simple: only productSlug/quantity ever go in for items, and no
-// price/subtotal/deliveryFee/total is ever sent — the backend
-// recalculates all of that itself from real database prices, and
-// trusting a client-supplied amount would defeat the point.
+// simple: only productSlug/quantity/giftWrap/giftMessage ever go in for
+// items, and no price/subtotal/deliveryFee/giftWrapTotal/total is ever
+// sent — the backend recalculates all of that itself from real database
+// prices and its own authoritative R30/wrapped-item rule, and trusting
+// a client-supplied amount (gift-wrap fee included — see
+// order.service.ts's verifyItems()) would defeat the point.
 
 import { apiGet, apiPost } from "../apiClient.js";
 import { mapPaymentMethodToBackend } from "./mappers.js";
@@ -25,7 +27,12 @@ export function buildOrderPayload({ customer, deliveryAddress, deliveryNotes, pa
       deliveryNotes: deliveryNotes || undefined,
     },
     paymentMethod: mapPaymentMethodToBackend(paymentMethod),
-    items: items.map((item) => ({ productSlug: item.slug, quantity: item.quantity })),
+    items: items.map((item) => ({
+      productSlug: item.slug,
+      quantity: item.quantity,
+      giftWrap: Boolean(item.giftWrap),
+      giftMessage: item.giftWrap ? item.giftMessage || null : null,
+    })),
   };
 }
 

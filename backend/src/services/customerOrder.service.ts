@@ -24,6 +24,7 @@ export interface CustomerOrderSummary {
   paymentStatus: string;
   paymentMethod: string;
   subtotal: number;
+  giftWrapTotal: number;
   deliveryFee: number;
   total: number;
   createdAt: Date;
@@ -43,6 +44,7 @@ export interface CustomerOrderDetail {
   paymentStatus: string;
   paymentMethod: string;
   subtotal: number;
+  giftWrapTotal: number;
   deliveryFee: number;
   discountTotal: number;
   total: number;
@@ -64,6 +66,9 @@ export interface CustomerOrderDetail {
     unitPrice: number;
     lineTotal: number;
     imageUrl: string | null;
+    isGiftWrapped: boolean;
+    giftMessage: string | null;
+    giftWrapFee: number;
   }>;
   shipping: {
     status: string;
@@ -117,6 +122,7 @@ export async function getOrdersForCustomer(customerId: string): Promise<Customer
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
       subtotal: order.subtotal.toNumber(),
+      giftWrapTotal: order.giftWrapTotal.toNumber(),
       deliveryFee: order.deliveryFee.toNumber(),
       total: order.total.toNumber(),
       createdAt: order.createdAt,
@@ -149,6 +155,7 @@ export async function getOrderForCustomer(orderNumber: string, customerId: strin
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
     subtotal: order.subtotal.toNumber(),
+    giftWrapTotal: order.giftWrapTotal.toNumber(),
     deliveryFee: order.deliveryFee.toNumber(),
     discountTotal: order.discountTotal.toNumber(),
     total: order.total.toNumber(),
@@ -175,6 +182,9 @@ export async function getOrderForCustomer(orderNumber: string, customerId: strin
       unitPrice: item.unitPrice.toNumber(),
       lineTotal: item.lineTotal.toNumber(),
       imageUrl: item.product?.images?.[0]?.url ?? null,
+      isGiftWrapped: item.isGiftWrapped,
+      giftMessage: item.giftMessage,
+      giftWrapFee: item.giftWrapFeePerUnit ? item.giftWrapFeePerUnit.times(item.quantity).toNumber() : 0,
     })),
     shipping: order.shipping
       ? {

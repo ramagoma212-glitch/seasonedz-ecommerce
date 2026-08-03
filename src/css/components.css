@@ -941,6 +941,20 @@ body.has-lightbox-open {
   color: var(--color-white);
 }
 
+/* Version 7, Milestone 159: paid gift wrapping — cart-line display. */
+.cart-item__gift-wrap {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary-dark);
+  margin-top: var(--space-xs);
+}
+
+.cart-item__gift-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-style: italic;
+  overflow-wrap: break-word;
+}
+
 .cart-item__quantity {
   grid-area: quantity;
 }

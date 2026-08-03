@@ -24,7 +24,7 @@ async function isLoggedInRegisteredCustomer() {
 
 export async function renderCartPage() {
   const isRegisteredCustomer = await isLoggedInRegisteredCustomer();
-  const { items, subtotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
+  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
 
   if (!items.length) {
     return `
@@ -57,7 +57,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical })}
       </div>
     </section>
   `;

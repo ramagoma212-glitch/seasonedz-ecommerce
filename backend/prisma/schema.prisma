@@ -385,6 +385,13 @@ model Order {
   paymentMethod    PaymentMethod
 
   subtotal      Decimal @db.Decimal(10, 2)
+  // Version 7, Milestone 159: sum of every wrapped OrderItem's own
+  // giftWrapFeePerUnit * quantity — see OrderItem below. Kept as its
+  // own column (same pattern as deliveryFee/discountTotal) rather than
+  // folded into subtotal, so the order summary/checkout/admin views can
+  // show "Gift wrapping: R30" as its own line without re-deriving it
+  // from every item on every read.
+  giftWrapTotal Decimal @default(0) @db.Decimal(10, 2)
   deliveryFee   Decimal @default(0) @db.Decimal(10, 2)
   discountTotal Decimal @default(0) @db.Decimal(10, 2)
   total         Decimal @db.Decimal(10, 2)
@@ -447,6 +454,23 @@ model OrderItem {
   productType    ProductType   @default(PHYSICAL)
   digitalAssetId String?
   digitalAsset   DigitalAsset? @relation(fields: [digitalAssetId], references: [id], onDelete: SetNull)
+
+  // Version 7, Milestone 159: optional paid gift wrapping, PHYSICAL
+  // items only (enforced server-side in order.service.ts's
+  // verifyItems() — never trusted from the client). A wrapped line
+  // means every unit on it is wrapped (quantity above IS the wrapped
+  // quantity for this line; there is no separate "wrapped count" field
+  // by design — see this milestone's own report for why splitting
+  // wrapped/unwrapped units of the same product means two separate
+  // OrderItem rows instead). giftWrapFeePerUnit is snapshotted at
+  // order-creation time, same "never depend on a live, changeable
+  // value" philosophy as unitPrice/productType above — if the R30 rate
+  // ever changes later, a historical order still shows what was
+  // actually charged. Null (not 0) when isGiftWrapped is false, so
+  // "never wrapped" and "wrapped for free" are never ambiguous.
+  isGiftWrapped      Boolean  @default(false)
+  giftMessage        String?
+  giftWrapFeePerUnit Decimal? @db.Decimal(10, 2)
 
   downloadLog DigitalDownloadLog?
 

@@ -8,6 +8,7 @@
 
 import { PaymentMethod } from "@prisma/client";
 import { env } from "../config/env.js";
+import { GIFT_MESSAGE_MAX_LENGTH } from "../config/giftWrap.js";
 import {
   asRecord,
   isNonEmptyString,
@@ -30,6 +31,14 @@ const PAYMENT_METHOD_VALUES: PaymentMethod[] = [
 export interface ValidatedOrderItem {
   productSlug: string;
   quantity: number;
+  // Version 7, Milestone 159: only ever what the customer *asked for* —
+  // never trusted as "this is eligible" or "this is what to charge".
+  // order.service.ts's verifyItems() re-derives eligibility from the
+  // real product's productType and computes the authoritative fee
+  // itself; this validator's only job is confirming the shape/length
+  // of what was sent, same as it already does for productSlug/quantity.
+  giftWrap: boolean;
+  giftMessage: string | null;
 }
 
 export interface ValidatedOrderInput {
@@ -134,8 +143,45 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
         errors.push({ field: `items[${index}].quantity`, message: "Quantity must be a whole number between 1 and 99." });
       }
 
-      if (hasValidSlug && isValidQuantity) {
-        validatedItems.push({ productSlug: item.productSlug as string, quantity: quantity as number });
+      // Version 7, Milestone 159: giftWrap must be a real boolean —
+      // anything else (missing, a string, a number) is treated as
+      // false rather than erroring the whole order, matching this
+      // file's existing "unknown extra fields are just never read"
+      // discipline. giftMessage is optional even when giftWrap is
+      // true (Task: "must never require a message to purchase gift
+      // wrapping") — only validated for shape/length when present.
+      const giftWrap = item.giftWrap === true;
+      let giftMessage: string | null = null;
+      let giftMessageValid = true;
+      if (item.giftMessage !== undefined && item.giftMessage !== null) {
+        if (typeof item.giftMessage !== "string") {
+          errors.push({ field: `items[${index}].giftMessage`, message: "Gift message must be text." });
+          giftMessageValid = false;
+        } else {
+          const trimmed = item.giftMessage.trim();
+          if (trimmed.length > GIFT_MESSAGE_MAX_LENGTH) {
+            errors.push({ field: `items[${index}].giftMessage`, message: `Gift message must be ${GIFT_MESSAGE_MAX_LENGTH} characters or fewer.` });
+            giftMessageValid = false;
+          } else {
+            // Empty/whitespace-only stored as null, not an empty
+            // string — same "no meaningless content" convention
+            // adminOrderStatus.service.ts's own note field already
+            // uses.
+            giftMessage = trimmed.length > 0 ? trimmed : null;
+          }
+        }
+      }
+
+      if (hasValidSlug && isValidQuantity && giftMessageValid) {
+        validatedItems.push({
+          productSlug: item.productSlug as string,
+          quantity: quantity as number,
+          giftWrap,
+          // A message never survives on an unwrapped line — matches
+          // the brief's own "no gift wrapping unless chosen and paid
+          // for" rule at the data layer too, not just pricing.
+          giftMessage: giftWrap ? giftMessage : null,
+        });
       }
     });
   }

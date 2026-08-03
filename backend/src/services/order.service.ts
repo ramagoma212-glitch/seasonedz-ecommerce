@@ -1,8 +1,9 @@
 import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType } from "@prisma/client";
-import type { PaymentMethod } from "@prisma/client";
+import type { PaymentMethod, Product } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
-import { calculateDeliveryFee } from "../utils/money.js";
+import { calculateDeliveryFee, calculateGiftWrapFee } from "../utils/money.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
+import { GIFT_WRAP_FEE_PER_ITEM } from "../config/giftWrap.js";
 import type { ValidatedOrderInput } from "../validators/order.validator.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
@@ -31,34 +32,75 @@ interface VerifiedItem {
   // OrderItem rather than looked up live at download time.
   productType: ProductType;
   digitalAssetId: string | null;
+  // Version 7, Milestone 159: optional paid gift wrapping. isGiftWrapped
+  // is the RE-DERIVED, authoritative value — never a straight copy of
+  // whatever the client sent (see the eligibility check below).
+  // giftWrapFeePerUnit is null (not 0) when not wrapped, so a line's
+  // wrap state is never ambiguous from its fee alone.
+  isGiftWrapped: boolean;
+  giftMessage: string | null;
+  giftWrapFeePerUnit: Prisma.Decimal | null;
+  giftWrapLineTotal: Prisma.Decimal;
+}
+
+// Version 7, Milestone 159: a distinct order LINE is a product plus its
+// gift-wrap configuration — a wrapped and unwrapped copy of the same
+// product, or two wrapped copies with different messages, must price
+// and store separately, mirroring the frontend cart's own line-identity
+// rule (src/js/cart.js's lineId). Only exact duplicates (same product,
+// same wrap state, same message) merge, same as the old plain-slug
+// behaviour did for everything before this milestone.
+function groupItemsByLine(items: ValidatedOrderInput["items"]): Map<string, { productSlug: string; quantity: number; giftWrap: boolean; giftMessage: string | null }> {
+  const groups = new Map<string, { productSlug: string; quantity: number; giftWrap: boolean; giftMessage: string | null }>();
+  for (const item of items) {
+    const key = `${item.productSlug}::${item.giftWrap ? `wrap::${item.giftMessage ?? ""}` : "plain"}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      groups.set(key, { productSlug: item.productSlug, quantity: item.quantity, giftWrap: item.giftWrap, giftMessage: item.giftMessage });
+    }
+  }
+  return groups;
 }
 
 // Looks up and re-prices every requested item from the database —
-// nothing about price ever comes from the request body. Duplicate
-// productSlug entries in the request are merged (summed quantity)
-// before the stock check, so two lines for the same product can't
-// each individually pass a stock check that their combined quantity
-// would fail.
+// nothing about price ever comes from the request body, including
+// whether gift wrapping is even allowed for it: isGiftWrapped is only
+// ever true here when the request asked for it AND the real product's
+// own productType is PHYSICAL, regardless of what the request claims.
+// Duplicate (productSlug + gift-wrap-configuration) entries are merged
+// (summed quantity) before the stock check; the STOCK check itself
+// still totals every configuration of the same product together (they
+// draw from the same physical inventory), even though they end up as
+// separate order lines below.
 async function verifyItems(items: ValidatedOrderInput["items"]): Promise<VerifiedItem[]> {
-  const quantityBySlug = new Map<string, number>();
+  const totalQuantityBySlug = new Map<string, number>();
   for (const item of items) {
-    quantityBySlug.set(item.productSlug, (quantityBySlug.get(item.productSlug) ?? 0) + item.quantity);
+    totalQuantityBySlug.set(item.productSlug, (totalQuantityBySlug.get(item.productSlug) ?? 0) + item.quantity);
   }
 
+  const lineGroups = groupItemsByLine(items);
+  const productCache = new Map<string, Product & { digitalAsset: { id: string; isActive: boolean } | null }>();
   const verified: VerifiedItem[] = [];
 
-  for (const [productSlug, quantity] of quantityBySlug) {
-    if (quantity > 99) {
-      throw new OrderError(`Total quantity for "${productSlug}" cannot exceed 99.`);
+  for (const [, group] of lineGroups) {
+    const totalQuantityForSlug = totalQuantityBySlug.get(group.productSlug) ?? group.quantity;
+    if (totalQuantityForSlug > 99) {
+      throw new OrderError(`Total quantity for "${group.productSlug}" cannot exceed 99.`);
     }
 
-    const product = await prisma.product.findUnique({
-      where: { slug: productSlug },
-      include: { digitalAsset: { select: { id: true, isActive: true } } },
-    });
-
+    let product = productCache.get(group.productSlug);
     if (!product) {
-      throw new OrderError(`Product not found: ${productSlug}`);
+      const found = await prisma.product.findUnique({
+        where: { slug: group.productSlug },
+        include: { digitalAsset: { select: { id: true, isActive: true } } },
+      });
+      if (!found) {
+        throw new OrderError(`Product not found: ${group.productSlug}`);
+      }
+      product = found;
+      productCache.set(group.productSlug, product);
     }
 
     if (product.status !== ProductStatus.ACTIVE) {
@@ -83,10 +125,20 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
         throw new OrderError(`Product is out of stock: ${product.name}`);
       }
 
-      if (quantity > product.stockQuantity) {
-        throw new OrderError(`Only ${product.stockQuantity} of "${product.name}" left in stock (requested ${quantity}).`);
+      if (totalQuantityForSlug > product.stockQuantity) {
+        throw new OrderError(`Only ${product.stockQuantity} of "${product.name}" left in stock (requested ${totalQuantityForSlug}).`);
       }
     }
+
+    // Version 7, Milestone 159: the authoritative eligibility check —
+    // a request claiming giftWrap:true for a DIGITAL product is simply
+    // ignored, not an error, matching this validator layer's existing
+    // "unknown/invalid extra data is dropped, not fatal" discipline.
+    // giftWrapFeePerUnit is snapshotted from the one config constant
+    // (config/giftWrap.ts) at the moment of purchase.
+    const isGiftWrapped = group.giftWrap && product.productType === ProductType.PHYSICAL;
+    const giftMessage = isGiftWrapped ? group.giftMessage : null;
+    const giftWrapFeePerUnit = isGiftWrapped ? new Prisma.Decimal(GIFT_WRAP_FEE_PER_ITEM) : null;
 
     const unitPrice = product.price;
     verified.push({
@@ -94,11 +146,15 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       productName: product.name,
       productSlug: product.slug,
       sku: product.sku,
-      quantity,
+      quantity: group.quantity,
       unitPrice,
-      lineTotal: unitPrice.times(quantity),
+      lineTotal: unitPrice.times(group.quantity),
       productType: product.productType,
       digitalAssetId: product.productType === ProductType.DIGITAL ? product.digitalAsset!.id : null,
+      isGiftWrapped,
+      giftMessage,
+      giftWrapFeePerUnit,
+      giftWrapLineTotal: calculateGiftWrapFee(group.quantity, isGiftWrapped),
     });
   }
 
@@ -125,6 +181,12 @@ export interface OrderItemOutput {
   // messaging) know without a second lookup whether this line is a
   // digital download or a physical item.
   productType: ProductType;
+  // Version 7, Milestone 159: optional paid gift wrapping. giftWrapFee
+  // is this LINE's total (per-unit fee x quantity), a display
+  // convenience so callers never need to multiply themselves.
+  isGiftWrapped: boolean;
+  giftMessage: string | null;
+  giftWrapFee: number;
 }
 
 export interface OrderOutput {
@@ -146,6 +208,9 @@ export interface OrderOutput {
   paymentMethod: PaymentMethod;
   items: OrderItemOutput[];
   subtotal: number;
+  // Version 7, Milestone 159: sum of every wrapped line's own
+  // giftWrapFee — see OrderItemOutput above.
+  giftWrapTotal: number;
   deliveryFee: number;
   discountTotal: number;
   total: number;
@@ -216,8 +281,12 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       unitPrice: item.unitPrice.toNumber(),
       lineTotal: item.lineTotal.toNumber(),
       productType: item.productType,
+      isGiftWrapped: item.isGiftWrapped,
+      giftMessage: item.giftMessage,
+      giftWrapFee: item.giftWrapFeePerUnit ? item.giftWrapFeePerUnit.times(item.quantity).toNumber() : 0,
     })),
     subtotal: order.subtotal.toNumber(),
+    giftWrapTotal: order.giftWrapTotal.toNumber(),
     deliveryFee: order.deliveryFee.toNumber(),
     discountTotal: order.discountTotal.toNumber(),
     total: order.total.toNumber(),
@@ -277,6 +346,9 @@ export async function createOrder(
   const verifiedItems = await verifyItems(input.items);
 
   const subtotal = verifiedItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
+  // Version 7, Milestone 159: sum of every line's own giftWrapLineTotal
+  // (already 0 for an unwrapped/ineligible line — see verifyItems()).
+  const giftWrapTotal = verifiedItems.reduce((sum, item) => sum.plus(item.giftWrapLineTotal), new Prisma.Decimal(0));
   // Version 7, Milestone 152B: a digital-only order (every item
   // DIGITAL, none PHYSICAL) has nothing to deliver, so it's never
   // charged a delivery fee regardless of subtotal or registered
@@ -285,7 +357,7 @@ export async function createOrder(
   const hasPhysicalItems = verifiedItems.some((item) => item.productType === ProductType.PHYSICAL);
   const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer, hasPhysicalItems);
   const discountTotal = new Prisma.Decimal(0);
-  const total = subtotal.plus(deliveryFee).minus(discountTotal);
+  const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
 
   const orderNumber = await generateOrderNumber();
 
@@ -332,6 +404,7 @@ export async function createOrder(
         fulfilmentStatus: FulfilmentStatus.NOT_STARTED,
         paymentMethod: input.paymentMethod,
         subtotal,
+        giftWrapTotal,
         deliveryFee,
         discountTotal,
         total,
@@ -346,6 +419,9 @@ export async function createOrder(
             lineTotal: item.lineTotal,
             productType: item.productType,
             digitalAssetId: item.digitalAssetId,
+            isGiftWrapped: item.isGiftWrapped,
+            giftMessage: item.giftMessage,
+            giftWrapFeePerUnit: item.giftWrapFeePerUnit,
           })),
         },
         payment: {

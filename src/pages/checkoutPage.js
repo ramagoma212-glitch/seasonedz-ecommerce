@@ -191,7 +191,7 @@ export async function renderCheckoutPage() {
   // creation — a purely client-side estimate for display, never
   // trusted by the backend itself.
   const isRegisteredCustomer = customer?.type === "REGISTERED";
-  const { subtotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
+  const { subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
 
   return `
     <section class="stub-page container checkout-page">
@@ -255,7 +255,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

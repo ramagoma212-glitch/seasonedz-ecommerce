@@ -34,8 +34,14 @@ function getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems) {
     : "Sign in or create an account to get free delivery on orders of R650 or more.";
 }
 
+// Version 7, Milestone 159: `giftWrapTotal` defaults to 0 so every
+// existing call site (none of which pass it yet until each page below
+// is updated) renders exactly as before — the row only appears at all
+// when there's a real charge to show, matching the brief's own example
+// layout ("Subtotal / Gift wrapping / Delivery / Total").
 export function renderOrderSummary({
   subtotal,
+  giftWrapTotal = 0,
   deliveryFee,
   isRegisteredCustomer = false,
   hasPhysicalItems = true,
@@ -43,7 +49,7 @@ export function renderOrderSummary({
   showItems = false,
   items = [],
 }) {
-  const total = subtotal + deliveryFee;
+  const total = subtotal + giftWrapTotal + deliveryFee;
 
   return `
     <aside class="order-summary">
@@ -72,6 +78,16 @@ export function renderOrderSummary({
         <span>Subtotal</span>
         <span>R${subtotal.toFixed(2)}</span>
       </div>
+      ${
+        giftWrapTotal > 0
+          ? `
+        <div class="order-summary__row">
+          <span>Gift wrapping</span>
+          <span>R${giftWrapTotal.toFixed(2)}</span>
+        </div>
+      `
+          : ""
+      }
       <div class="order-summary__row">
         <span>Delivery</span>
         <span>${deliveryFee === 0 ? "Free" : `R${deliveryFee.toFixed(2)}`}</span>

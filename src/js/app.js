@@ -227,7 +227,11 @@ function setupCartQuantityInput() {
     if (!input) return;
 
     const quantity = Math.max(1, parseInt(input.value, 10) || 1);
-    updateCartQuantity(input.dataset.productId, quantity);
+    // Version 7, Milestone 159: keyed by lineId, not productId — see
+    // cart.js's own computeLineId comment. Identical to productId for
+    // an unwrapped line, so this is a no-op change for every existing
+    // (non-gift-wrapped) cart entry.
+    updateCartQuantity(input.dataset.lineId, quantity);
     rerenderCurrentRoute();
     updateHeaderCounters();
   });
@@ -262,18 +266,20 @@ function setupProductActions() {
     } else if (action === "toggle-wishlist") {
       handleToggleWishlist(actionEl);
     } else if (action === "cart-increase") {
-      increaseCartQuantity(actionEl.dataset.productId);
+      increaseCartQuantity(actionEl.dataset.lineId);
       rerenderCurrentRoute();
       updateHeaderCounters();
     } else if (action === "cart-decrease") {
-      decreaseCartQuantity(actionEl.dataset.productId);
+      decreaseCartQuantity(actionEl.dataset.lineId);
       rerenderCurrentRoute();
       updateHeaderCounters();
     } else if (action === "cart-remove") {
-      removeFromCart(actionEl.dataset.productId);
+      removeFromCart(actionEl.dataset.lineId);
       rerenderCurrentRoute();
       updateHeaderCounters();
       showToast("Item removed from cart.");
+    } else if (action === "toggle-gift-wrap") {
+      handleToggleGiftWrap(actionEl);
     } else if (action === "clear-cart") {
       clearCart();
       rerenderCurrentRoute();
@@ -321,6 +327,21 @@ function handleToggleFaq(triggerEl) {
   const isOpen = triggerEl.getAttribute("aria-expanded") === "true";
   triggerEl.setAttribute("aria-expanded", String(!isOpen));
   panel.hidden = isOpen;
+}
+
+// Version 7, Milestone 159: shows/hides the optional gift-message field
+// when the "Make it a gift" checkbox is toggled (see
+// pages/productDetails.js's renderGiftWrapOption()). Never clears
+// whatever the customer already typed when unchecking — the field is
+// just hidden, and handleAddToCart() only reads it at all when the
+// checkbox is checked, so a hidden, previously-typed message can never
+// leak into an unwrapped line.
+function handleToggleGiftWrap(checkboxEl) {
+  const field = document.getElementById(checkboxEl.getAttribute("aria-controls"));
+  if (!field) return;
+
+  checkboxEl.setAttribute("aria-expanded", String(checkboxEl.checked));
+  field.hidden = !checkboxEl.checked;
 }
 
 // Version 7, Milestone 158: "Thoughtful Gifts" View More/View Less (see
@@ -374,6 +395,23 @@ function handleScrollToNewsletter() {
   form.querySelector("#newsletter-name")?.focus();
 }
 
+// Version 7, Milestone 159: reads the optional gift-wrap checkbox/
+// message from the same .product-details container, if present (the
+// section only renders at all for a PHYSICAL product — see
+// pages/productDetails.js's renderGiftWrapOption()). Returns
+// giftWrap:false with no message read at all when the checkbox isn't
+// checked, or doesn't exist (shop-grid/homepage quick-add, wishlist —
+// none of those have this section), so every non-detail-page Add to
+// Cart button keeps adding a plain, unwrapped line exactly as before.
+function readGiftOptionsFromProductDetails(buttonEl) {
+  const container = buttonEl.closest(".product-details");
+  const checkbox = container?.querySelector("#giftWrapCheckbox");
+  if (!checkbox?.checked) return { giftWrap: false, giftMessage: null };
+
+  const messageInput = container.querySelector("#giftMessageInput");
+  return { giftWrap: true, giftMessage: messageInput?.value.trim() || null };
+}
+
 // Add to Cart on the product details page must use the selected
 // quantity; everywhere else (product cards, wishlist page) there's no
 // quantity selector nearby, so it defaults to 1.
@@ -382,10 +420,11 @@ function handleAddToCart(buttonEl) {
   const quantity = quantityInput ? Math.max(1, parseInt(quantityInput.value, 10) || 1) : 1;
 
   const product = readProductFromButton(buttonEl);
-  addToCart(product, quantity);
+  const giftOptions = readGiftOptionsFromProductDetails(buttonEl);
+  addToCart(product, quantity, giftOptions);
 
   updateHeaderCounters();
-  showToast(`${product.name} added to cart.`);
+  showToast(giftOptions.giftWrap ? `${product.name} (gift wrapped) added to cart.` : `${product.name} added to cart.`);
 }
 
 // Version 7, Milestone 152: secure digital downloads. One handler

@@ -171,6 +171,7 @@ function renderBackendOrderConfirmation(order) {
 
         ${renderOrderSummary({
           subtotal: order.subtotal,
+          giftWrapTotal: order.giftWrapTotal,
           deliveryFee: order.deliveryFee,
           showCheckoutButton: false,
           showItems: true,

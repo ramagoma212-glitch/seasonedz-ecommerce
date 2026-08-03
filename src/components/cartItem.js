@@ -4,6 +4,8 @@
 // "cart-update" / "cart-remove").
 
 import { getCardImageUrl } from "../js/imageTransforms.js";
+import { escapeHtml } from "../js/search.js";
+import { GIFT_WRAP_FEE_PER_ITEM } from "../js/cart.js";
 
 // Version 7, Milestone 92A: width/height match .cart-item__image's own
 // fixed 72x72 CSS size exactly (unlike the square card images
@@ -12,8 +14,18 @@ import { getCardImageUrl } from "../js/imageTransforms.js";
 // (lazy) — see productCard.js's comment; callers pass { eager: true }
 // for the first couple of items, which are typically visible without
 // scrolling on a cart page.
+//
+// Version 7, Milestone 159: every quantity/remove control now keys off
+// item.lineId, not item.productId — identical value for an unwrapped
+// line (see cart.js's computeLineId()), so this is a no-op change for
+// every pre-existing cart entry. A gift-wrapped line additionally shows
+// its per-item fee and, if present, the customer's own gift message —
+// escaped via escapeHtml() since a gift message is free-typed customer
+// input, unlike item.name which is always an admin-authored product
+// name already trusted elsewhere in this file.
 export function renderCartItem(item, { eager = false } = {}) {
-  const lineTotal = item.price * item.quantity;
+  const giftWrapFee = item.giftWrap ? GIFT_WRAP_FEE_PER_ITEM * item.quantity : 0;
+  const lineTotal = item.price * item.quantity + giftWrapFee;
 
   return `
     <div class="cart-item">
@@ -34,6 +46,14 @@ export function renderCartItem(item, { eager = false } = {}) {
         <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
         ${item.productType === "DIGITAL" ? `<span class="badge cart-item__digital-badge">Digital Download</span>` : ""}
         <p class="cart-item__price">R${item.price.toFixed(2)} each</p>
+        ${
+          item.giftWrap
+            ? `
+          <p class="cart-item__gift-wrap">Gift wrapping: R${GIFT_WRAP_FEE_PER_ITEM} each</p>
+          ${item.giftMessage ? `<p class="cart-item__gift-message">Gift message: ${escapeHtml(item.giftMessage)}</p>` : ""}
+        `
+            : ""
+        }
       </div>
 
       <div class="cart-item__quantity quantity-selector">
@@ -41,14 +61,14 @@ export function renderCartItem(item, { eager = false } = {}) {
           type="button"
           class="quantity-selector__btn"
           data-action="cart-decrease"
-          data-product-id="${item.productId}"
+          data-line-id="${item.lineId}"
           aria-label="Decrease quantity of ${item.name}"
         >&minus;</button>
         <input
           type="number"
           class="quantity-selector__input"
           data-action="cart-update"
-          data-product-id="${item.productId}"
+          data-line-id="${item.lineId}"
           value="${item.quantity}"
           min="1"
           aria-label="Quantity of ${item.name}"
@@ -57,7 +77,7 @@ export function renderCartItem(item, { eager = false } = {}) {
           type="button"
           class="quantity-selector__btn"
           data-action="cart-increase"
-          data-product-id="${item.productId}"
+          data-line-id="${item.lineId}"
           aria-label="Increase quantity of ${item.name}"
         >&plus;</button>
       </div>
@@ -68,7 +88,7 @@ export function renderCartItem(item, { eager = false } = {}) {
         type="button"
         class="cart-item__remove"
         data-action="cart-remove"
-        data-product-id="${item.productId}"
+        data-line-id="${item.lineId}"
         aria-label="Remove ${item.name} from cart"
       >&times;</button>
     </div>

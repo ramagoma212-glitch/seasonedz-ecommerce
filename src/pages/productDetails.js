@@ -26,6 +26,7 @@ import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
 import { escapeHtml } from "../js/search.js";
 import { resolveDescriptionHtml } from "../js/descriptionFormat.js";
+import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -87,6 +88,44 @@ function renderGoodFor(product) {
   return `
     <h3>Good For</h3>
     <p>This product suits ${product.ageRange}, and works well for ${useCase}.</p>
+  `;
+}
+
+// Version 7, Milestone 159: optional paid gift wrapping — only ever
+// rendered for a PHYSICAL product (see the caller below); digital
+// products never get this section at all, so there is no client-side
+// way to even attempt requesting gift wrap for one. The fee shown here
+// is display-only (imported from cart.js, itself mirroring the
+// backend's authoritative config/giftWrap.ts) — the backend
+// independently recomputes and validates R30/item itself and ignores
+// anything this page or the request body claims. Unchecked by default;
+// the message field only appears once wrapping is selected, and is
+// never required to check the box.
+function renderGiftWrapOption() {
+  return `
+    <div class="product-details__gift-wrap" data-gift-wrap-section>
+      <label class="gift-wrap-option">
+        <input
+          type="checkbox"
+          id="giftWrapCheckbox"
+          data-action="toggle-gift-wrap"
+          aria-controls="giftMessageField"
+          aria-expanded="false"
+        />
+        <span>Make it a gift &mdash; add gift wrapping for R${GIFT_WRAP_FEE_PER_ITEM}</span>
+      </label>
+      <div class="gift-wrap-message" id="giftMessageField" data-gift-message-field hidden>
+        <label class="form-field__label" for="giftMessageInput">Gift message <span class="form-field__optional">(optional)</span></label>
+        <textarea
+          id="giftMessageInput"
+          class="form-field__input form-field__textarea"
+          maxlength="${GIFT_MESSAGE_MAX_LENGTH}"
+          rows="3"
+          placeholder="e.g. Happy Birthday, Naledi!"
+        ></textarea>
+        <p class="gift-wrap-message__hint">Up to ${GIFT_MESSAGE_MAX_LENGTH} characters</p>
+      </div>
+    </div>
   `;
 }
 
@@ -272,6 +311,8 @@ export async function renderProductDetails({ slug } = {}) {
               <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity">&plus;</button>
             </div>
           </div>
+
+          ${product.productType !== "DIGITAL" ? renderGiftWrapOption() : ""}
 
           <div class="product-details__actions">
             <button

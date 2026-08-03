@@ -66,12 +66,17 @@ function renderNotFound(orderNumber) {
   `;
 }
 
+// Version 7, Milestone 159: fulfilment staff need to know, per line,
+// whether it needs gift wrapping and what (if anything) the gift
+// message says — so a "Gift Wrap" column and, where applicable, an
+// extra message row are added here. escapeHtml() on the message since
+// it's free-typed customer input (same reasoning as cartItem.js).
 function renderItemsTable(items) {
   return `
     <div class="admin-table-wrap">
       <table class="admin-table">
         <thead>
-          <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Line Total</th></tr>
+          <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Gift Wrap</th><th>Line Total</th></tr>
         </thead>
         <tbody>
           ${items
@@ -82,6 +87,16 @@ function renderItemsTable(items) {
               <td>${escapeHtml(item.sku || "—")}</td>
               <td>${item.quantity}</td>
               <td>${formatCurrency(item.unitPrice)}</td>
+              <td>
+                ${
+                  item.isGiftWrapped
+                    ? `
+                  <span class="badge">Wrapped &mdash; ${formatCurrency(item.giftWrapFee)}</span>
+                  ${item.giftMessage ? `<p class="admin-table__gift-message">&ldquo;${escapeHtml(item.giftMessage)}&rdquo;</p>` : ""}
+                `
+                    : "—"
+                }
+              </td>
               <td>${formatCurrency(item.lineTotal)}</td>
             </tr>
           `
