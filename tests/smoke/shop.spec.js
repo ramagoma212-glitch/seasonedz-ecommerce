@@ -241,17 +241,20 @@ test.describe("Shopping smoke checks", () => {
     await expect(page.locator(".marketplace-card--unavailable")).toHaveCount(0);
   });
 
-  test("marketplace links exist in footer", async ({ page }) => {
+  // Version 7, Milestone 167: marketplace links now live only in this
+  // homepage section (removed from the footer, which used to show the
+  // exact same 3 links again beside the copyright — see
+  // mobile.spec.js's "no marketplace links beside the footer
+  // copyright" for that removal's own coverage). Each card must also
+  // show a visible, distinct text label — Takealot and Amazon.co.za/
+  // Amazon.com previously shared the exact same logo image with no
+  // visible way to tell the two Amazon cards apart.
+  test("marketplace cards on homepage have distinct visible labels", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator(".footer-marketplace__link")).toHaveCount(3);
+    const cards = page.locator(".marketplace-card");
+    await expect(cards).toHaveCount(3);
 
-    const clickable = page.locator("a.footer-marketplace__link");
-    await expect(clickable).toHaveCount(3);
-    for (const link of await clickable.all()) {
-      await expect(link).toHaveAttribute("target", "_blank");
-      await expect(link).toHaveAttribute("rel", "noopener noreferrer");
-    }
-
-    await expect(page.locator(".footer-marketplace__link--unavailable")).toHaveCount(0);
+    const labels = await cards.locator(".marketplace-card__label").allTextContents();
+    expect(labels).toEqual(["Takealot", "Amazon South Africa", "Amazon.com"]);
   });
 });

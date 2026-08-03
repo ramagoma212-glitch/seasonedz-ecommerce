@@ -23,7 +23,7 @@ export function renderGoogleReviewsSection() {
         <p class="google-reviews__body">Read our latest customer feedback on Google.</p>
         <div class="google-reviews__actions">
           <a
-            class="btn btn--secondary"
+            class="btn btn--primary"
             href="${businessInfo.googleReviewsUrl}"
             target="_blank"
             rel="noopener noreferrer"
@@ -33,7 +33,7 @@ export function renderGoogleReviewsSection() {
             businessInfo.googleReviewRequestUrl
               ? `
           <a
-            class="btn btn--primary"
+            class="btn btn--secondary"
             href="${businessInfo.googleReviewRequestUrl}"
             target="_blank"
             rel="noopener noreferrer"

@@ -44,12 +44,30 @@ export function renderStars(rating) {
 // opt-in and defaults to false so every existing caller (shop grid,
 // category pages, search results, wishlist) renders exactly as
 // before.
-export function renderProductCard(product, { eager = false, showViewLink = false } = {}) {
+// Version 7, Milestone 167: displayTitle lets a caller show a shorter
+// homepage-only heading (e.g. "ABC Colouring Book for Kids" instead of
+// the full SEO product name) without touching product.name anywhere —
+// the real database name, the product page's own <h1>/SEO title, and
+// every other caller of this card (shop grid, category pages, search,
+// wishlist) are completely unaffected since this defaults to
+// product.name when not supplied. alt text and the wishlist button's
+// data-name still use the real product.name — display-only shortening
+// never changes what's actually added to cart/wishlist.
+// Version 7, Milestone 167: hiddenExtra is an opt-in pair with
+// components/expandableGrid.js's renderExpandableGrid() — when true,
+// the card renders with the `hidden` attribute and
+// data-extra-card="true" directly on this card's own root element
+// (never a wrapping div, which would break this card's status as a
+// direct CSS Grid child of .product-grid and any :nth-child alignment
+// rules keyed off that). Defaults to false so every existing caller
+// renders identically to before.
+export function renderProductCard(product, { eager = false, showViewLink = false, displayTitle = null, hiddenExtra = false } = {}) {
   const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
   const wishlisted = isInWishlist(product.id);
+  const title = displayTitle || product.name;
 
   return `
-    <article class="card product-card">
+    <article class="card product-card"${hiddenExtra ? ' hidden data-extra-card="true"' : ""}>
       <div class="product-card__media">
         <a href="/product/${product.slug}">
           <img
@@ -92,7 +110,7 @@ export function renderProductCard(product, { eager = false, showViewLink = false
         <p class="product-card__category">${product.category}</p>
 
         <h3 class="card__title">
-          <a href="/product/${product.slug}">${product.name}</a>
+          <a href="/product/${product.slug}">${title}</a>
         </h3>
 
         <p class="product-card__desc">${product.shortDescription}</p>

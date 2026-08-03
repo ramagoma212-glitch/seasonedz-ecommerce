@@ -127,43 +127,14 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* Version 7, Milestone 144: small "Shop Seasonedz Group on" line above
-   the copyright — deliberately kept to one thin line, not a full
-   footer column, per the task's own "keep footer clean" instruction. */
-.footer-marketplace {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-md);
-}
-
-.footer-marketplace__label {
-  margin-right: var(--space-xs);
-}
-
-.footer-marketplace__link {
-  display: inline-flex;
-  align-items: center;
-  background-color: var(--color-white);
-  padding: var(--space-xs) var(--space-sm);
-  border-radius: var(--radius-sm);
-  line-height: 0;
-  transition: transform var(--transition-fast);
-}
-
-.footer-marketplace__link:hover {
-  transform: translateY(-1px);
-}
-
-.footer-marketplace__logo {
-  height: 18px;
-  width: auto;
-  max-width: 100px;
-  object-fit: contain;
-  display: block;
-}
+/* Version 7, Milestone 144's "Shop Seasonedz Group on" footer line
+   (.footer-marketplace / __label / __link / __logo) was removed in
+   Milestone 167 — marketplace links now live only in the homepage's
+   own "Also Available On" section. .footer-marketplace__divider
+   itself is still used (see components.css, near
+   .product-details__marketplace) by the product page's compact
+   marketplace block, which is unaffected by this removal — moved
+   there since it's no longer a footer/layout concern. */
 
 /* ---- Generic section/grid shells ------------------------------------------ */
 .section {
@@ -208,6 +179,66 @@
      status, discount badge) varies from product to product. */
   grid-auto-rows: 1fr;
   gap: var(--space-sm);
+}
+
+/* Version 7, Milestone 167: shared "up to 3 real cards, centred"
+   layout for homepage sections that never need .product-grid's raw
+   4-column desktop default — New Releases and Digital Colouring Books
+   (Thoughtful Gifts already had an equivalent, working, tested
+   variant of this in .gifting-grid before this milestone, left
+   untouched rather than migrated, to avoid any risk to that shipped
+   section). Without this, exactly 3 real cards in a 4-column desktop
+   grid left an empty-looking gap on the right instead of a centred
+   row — the reported "New Releases isn't centred" bug. A 4th card
+   (Digital's own View More expansion) wraps onto its own centred row
+   rather than switching the whole grid to 4 columns, so every section
+   using this class keeps literally the same column definition at
+   every breakpoint, matching this milestone's "same responsive
+   breakpoints" requirement between the two sections. */
+.home-3col-grid {
+  grid-template-columns: 1fr;
+}
+
+/* `:nth-child(3):nth-last-child(-n+2)` matches the 3rd child only when
+   it's also within the last two children overall — true whether it's
+   genuinely the last card (New Releases/Gifting: exactly 3 total) or
+   the last VISIBLE one with a hidden 4th card after it in the DOM
+   (Digital, collapsed: 3 visible + 1 hidden). `:nth-child`/`:last-child`
+   are computed from DOM position, not the `hidden` attribute, so a
+   plain `:last-child` selector alone would target the wrong (hidden)
+   element in the collapsed-Digital case — this is why the more
+   specific pair is used instead. */
+@media (min-width: 768px) {
+  .home-3col-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-3col-grid > *:nth-child(3):nth-last-child(-n + 2) {
+    grid-column: 1 / -1;
+    max-width: calc(50% - (var(--space-lg) / 2));
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-3col-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  /* 3 columns already centre exactly 3 visible cards by construction —
+     undo the tablet-only lone-card centring above. */
+  .home-3col-grid > *:nth-child(3):nth-last-child(-n + 2) {
+    grid-column: auto;
+    max-width: none;
+    margin-inline: 0;
+  }
+
+  /* Exactly 4 total cards, all visible (Digital, expanded): the 4th
+     centres alone on its own row under the middle column, instead of
+     sitting flush left. */
+  .home-3col-grid > *:last-child:nth-child(4) {
+    grid-column: 2 / 3;
+  }
 }
 
 /* ---- Category listing grid --------------------------------------------------

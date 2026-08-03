@@ -54,16 +54,14 @@ test.describe("New Releases section", () => {
     const cards = page.locator(".new-releases-grid .product-card");
     await expect(cards).toHaveCount(3);
 
-    // Wording differs slightly between the "local" project's static
-    // fixture data ("Little Hands Big Faith...", no comma) and the
-    // real backend ("Little Hands, Big Faith...", with a comma) — this
-    // checks the part both share.
+    // Version 7, Milestone 167: homepage cards show a shorter display
+    // title (productCard.js's displayTitle option, set from
+    // home.js's HOMEPAGE_SHORT_TITLES) — the real, full database name
+    // is unchanged and still used on the product page itself/SEO.
     const titles = await cards.locator(".card__title").allTextContents();
-    expect(titles[0]).toContain("ABC Colouring Book for Kids with Fun Facts");
-    expect(titles[1]).toContain("New Testament");
-    expect(titles[1]).toContain("Little Hands");
-    expect(titles[2]).toContain("Old Testament");
-    expect(titles[2]).toContain("Little Hands");
+    expect(titles[0]).toContain("ABC Colouring Book for Kids");
+    expect(titles[1]).toContain("New Testament Bible Colouring Book");
+    expect(titles[2]).toContain("Old Testament Bible Colouring Book");
 
     // Real image, price, description, View Product and Add to Cart —
     // no invented sale price, review or stock messaging.
@@ -98,7 +96,7 @@ test.describe("Best Seller section", () => {
     await page.goto("/");
     const section = page.locator(".best-seller");
     await expect(section).toContainText("ABC Colouring Book for Kids with Fun Facts");
-    await expect(section).toContainText("Trace, colour and learn from A to Z");
+    await expect(section).toContainText("A4 alphabet tracing and early learning activity book");
     await expect(section.locator(".best-seller__price")).toContainText("R");
     await expect(section.locator("img")).toBeVisible();
 
@@ -172,24 +170,55 @@ test.describe("Thoughtful Gifts Made With Purpose section", () => {
   });
 });
 
+// Version 7, Milestone 167: "Coming Soon" cards now share the exact
+// same .product-card shell as New Releases (real book cover image,
+// same grid/card CSS) — see pages/home.js's renderDigitalComingSoonCard()
+// — with "Digital PDF Edition" + a "Coming Soon" badge + "Notify Me"
+// in place of price/stock/Add to Cart. There are 4 configured titles,
+// so only 3 show initially (INITIAL_VISIBLE_COUNT via
+// components/expandableGrid.js) with a real View More button to
+// reveal the 4th, same reusable mechanism Digital shares with any
+// future homepage section that needs it.
 test.describe("Digital Colouring Books section", () => {
-  test("shows Coming Soon and Notify Me for all four titles (no digital product records exist yet)", async ({ page }) => {
+  test("shows 3 Coming Soon cards initially, with real book covers and Notify Me", async ({ page }) => {
     await page.goto("/");
-    const cards = page.locator(".digital-card");
-    await expect(cards).toHaveCount(4);
+    const grid = page.locator("#digital-grid");
+    const visibleCards = grid.locator(".product-card:not([hidden])");
+    await expect(visibleCards).toHaveCount(3);
 
-    for (const card of await cards.all()) {
+    for (const card of await visibleCards.all()) {
       await expect(card.locator(".digital-card__badge")).toHaveText("Coming Soon");
+      await expect(card.locator(".product-card__category")).toHaveText("Digital PDF Edition");
+      await expect(card.locator("img.card__image")).toBeVisible();
       await expect(card.getByRole("button", { name: "Notify Me" })).toBeVisible();
       // Never a fake/disconnected Add to Cart button.
       await expect(card.locator('[data-action="add-to-cart"]')).toHaveCount(0);
     }
   });
 
-  test("Notify Me scrolls to the newsletter form", async ({ page }) => {
+  test("View More reveals the 4th digital title, View Less hides it again", async ({ page }) => {
     await page.goto("/");
-    await page.locator(".digital-card").first().getByRole("button", { name: "Notify Me" }).click();
-    await expect(page.locator("#newsletter-name")).toBeFocused();
+    const grid = page.locator("#digital-grid");
+    const viewMoreBtn = page.locator('.expandable-grid__view-more [data-action="toggle-view-more"]');
+
+    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(3);
+    await expect(viewMoreBtn).toHaveText("View More");
+    await expect(viewMoreBtn).toHaveAttribute("aria-expanded", "false");
+
+    await viewMoreBtn.click();
+    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(4);
+    await expect(viewMoreBtn).toHaveText("View Less");
+    await expect(viewMoreBtn).toHaveAttribute("aria-expanded", "true");
+
+    await viewMoreBtn.click();
+    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(3);
+    await expect(viewMoreBtn).toHaveText("View More");
+  });
+
+  test("Notify Me scrolls to the newsletter form and focuses the email field", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#digital-grid").locator('[data-action="scroll-to-newsletter"]').first().click();
+    await expect(page.locator("#newsletter-email")).toBeFocused();
   });
 });
 

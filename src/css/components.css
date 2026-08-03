@@ -315,7 +315,8 @@
 }
 
 .footer-links a {
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.6;
   transition: color var(--transition-fast);
 }
 
@@ -323,9 +324,13 @@
   color: var(--color-accent);
 }
 
+/* Version 7, Milestone 167: contrast/readability pass — was
+   rgba(255,255,255,0.75) at --font-size-sm (14px), noticeably lower
+   contrast and smaller than the rest of the footer's own body text. */
 .footer-description {
-  color: rgba(255, 255, 255, 0.75);
-  font-size: var(--font-size-sm);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
 }
 
 /* ---- Placeholder panel (used by stub pages/sections) ----------------------- */
@@ -598,8 +603,10 @@
 
 .marketplace-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: var(--space-xs);
   min-width: 200px;
   min-height: 64px;
   padding: var(--space-md) var(--space-xl);
@@ -613,6 +620,17 @@
   object-fit: contain;
 }
 
+/* Version 7, Milestone 167: visible destination name under the logo —
+   Amazon.co.za and Amazon.com share the exact same logo image, so this
+   is what actually distinguishes the two cards on screen (the alt
+   text/aria-label were already distinct, but neither is visible to a
+   sighted user). */
+.marketplace-card__label {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
 .product-details__marketplace {
   margin-top: var(--space-md);
   padding-top: var(--space-md);
@@ -623,6 +641,15 @@
 
 .product-details__marketplace-label {
   margin-right: var(--space-xs);
+}
+
+/* Version 7, Milestone 167: moved from layout.css's old footer-only
+   marketplace block — this divider dot is now only used here, on the
+   product page's light background, not the (removed) dark footer
+   line. */
+.footer-marketplace__divider {
+  margin-inline: var(--space-xs);
+  color: var(--color-text-muted);
 }
 
 .product-details__marketplace a {
@@ -1995,18 +2022,18 @@ body.has-lightbox-open {
   color: var(--color-primary);
 }
 
-/* ---- Digital Colouring Books ------------------------------------------------ */
-.digital-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-lg);
-}
-
-.digital-card {
-  text-align: center;
-  padding: var(--space-lg);
-}
-
+/* ---- Digital Colouring Books ------------------------------------------------
+   Version 7, Milestone 167: the "Coming Soon" placeholder card is now
+   built from the exact same .product-card/.card__image/.card__body
+   classes as a real product card (see pages/home.js's
+   renderDigitalComingSoonCard()) — sharing New Releases' own card
+   shell rather than this section's own bespoke .digital-card markup,
+   which no longer exists. .digital-card__badge is still reused as the
+   small "Coming Soon" pill inside the shared .product-card__badges
+   overlay position. .digital-grid itself now only needs to compose
+   .product-grid + .home-3col-grid (see layout.css) for identical
+   sizing/centering to New Releases — no column-count rules of its own
+   remain here or in responsive.css. */
 .digital-card__badge {
   display: inline-block;
   background-color: var(--color-bg-alt);
@@ -2017,12 +2044,6 @@ body.has-lightbox-open {
   letter-spacing: 0.04em;
   border-radius: var(--radius-full);
   padding: var(--space-xs) var(--space-md);
-  margin-bottom: var(--space-md);
-}
-
-.digital-card .card__title {
-  font-size: var(--font-size-md);
-  margin-bottom: var(--space-md);
 }
 
 /* ---- Marketplace "coming soon" state (Amazon.com, no verified link) ----------- */
@@ -2165,7 +2186,7 @@ body.has-lightbox-open {
    rather than the shared .btn class, so nothing on any other page
    changes size. */
 .newsletter-form button[type="submit"],
-.digital-card .btn,
+.digital-grid .product-card__actions .btn,
 .best-seller__actions .btn,
 .new-releases-grid .product-card__actions .btn,
 .gifting-grid .product-card__actions .btn {

@@ -35,7 +35,7 @@ const NAV_LINKS = [
   { href: "/shop", label: "Colouring Books" },
   { href: "/shop?category=markers-and-crayons", label: "Creative Supplies" },
   { href: "/shop", label: "Digital Downloads" },
-  { href: "/schools", label: "Schools and Churches" },
+  { href: "/schools", label: "Schools & Churches" },
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
 ];

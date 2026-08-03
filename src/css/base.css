@@ -105,6 +105,24 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Version 7, Milestone 167: found while building the Digital Colouring
+   Books "View More" expansion — any element that both sets its own
+   `display` (e.g. .product-card's `display: flex`) AND carries the
+   `hidden` attribute stays visually visible, because a plain class
+   selector always beats the UA stylesheet's own `[hidden] { display:
+   none }` default, regardless of source order. This was a real,
+   pre-existing latent bug (also true of Thoughtful Gifts' own
+   .gift-card, which happens to compose .product-card too) that never
+   surfaced before this milestone simply because gifting never actually
+   has a 4th, genuinely-hidden card yet. `!important` here is
+   deliberate: it's the standard, narrowly-scoped fix for this exact
+   "hidden attribute vs. component display" conflict, applied once,
+   globally, rather than chasing every current/future component class
+   that happens to set its own `display`. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   font-family: var(--font-body);
   font-size: var(--font-size-base);

@@ -61,6 +61,20 @@
   }
 }
 
+/* Version 7, Milestone 167: .section's base padding-block
+   (--space-3xl, 64px — layout.css) applied uniformly at every
+   viewport, which is more vertical whitespace than mobile needs
+   between homepage sections once there are 10+ of them stacked in a
+   row. Tightened to --space-2xl (48px) below desktop width — still
+   comfortably inside this milestone's own suggested ranges (mobile
+   36-48px, tablet 48-64px) — and left untouched at 1024px+ (64px,
+   already at the bottom of the suggested 64-80px desktop range). */
+@media (max-width: 1023px) {
+  .section {
+    padding-block: var(--space-2xl);
+  }
+}
+
 @media (min-width: 768px) {
   .product-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -581,14 +595,7 @@
   }
 }
 
-@media (max-width: 767px) {
-  .digital-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 480px) {
-  .digital-grid {
-    grid-template-columns: 1fr;
-  }
-}
+/* Version 7, Milestone 167: .digital-grid's own column-count overrides
+   removed — it now composes .home-3col-grid (layout.css) for identical
+   sizing/centering to New Releases, so no separate breakpoint rules
+   are needed here. */

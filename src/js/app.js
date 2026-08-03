@@ -307,6 +307,8 @@ function setupProductActions() {
       handleToggleFaq(actionEl);
     } else if (action === "toggle-gift-view-more") {
       handleToggleGiftViewMore(actionEl);
+    } else if (action === "toggle-view-more") {
+      handleToggleViewMore(actionEl);
     } else if (action === "scroll-to-newsletter") {
       handleScrollToNewsletter();
     } else if (action === "request-download") {
@@ -392,7 +394,44 @@ function handleScrollToNewsletter() {
   if (!form) return;
 
   form.scrollIntoView({ behavior: "smooth", block: "center" });
-  form.querySelector("#newsletter-name")?.focus();
+  form.querySelector("#newsletter-email")?.focus();
+}
+
+// Version 7, Milestone 167: generic "View More"/"View Less" for any
+// homepage grid built with components/expandableGrid.js's
+// renderExpandableGrid() — currently Digital Colouring Books. A
+// separate implementation from Thoughtful Gifts' own
+// handleToggleGiftViewMore (untouched, already shipped) — see that
+// function's own comment for why this isn't a refactor of it. Reads
+// which cards to reveal via the generic data-extra-card="true"
+// attribute (not gift-specific), and an optional data-scroll-target on
+// the button itself for where to scroll on collapse, rather than a
+// hardcoded element id.
+function handleToggleViewMore(buttonEl) {
+  const grid = document.getElementById(buttonEl.getAttribute("aria-controls"));
+  if (!grid) return;
+
+  const isExpanded = buttonEl.getAttribute("aria-expanded") === "true";
+  const extraCards = grid.querySelectorAll('[data-extra-card="true"]');
+
+  if (isExpanded) {
+    extraCards.forEach((card) => {
+      card.hidden = true;
+    });
+    buttonEl.setAttribute("aria-expanded", "false");
+    buttonEl.textContent = "View More";
+
+    const scrollTargetId = buttonEl.dataset.scrollTarget;
+    const target = scrollTargetId ? document.getElementById(scrollTargetId) : null;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  } else {
+    extraCards.forEach((card) => {
+      card.hidden = false;
+    });
+    buttonEl.setAttribute("aria-expanded", "true");
+    buttonEl.textContent = "View Less";
+  }
 }
 
 // Version 7, Milestone 159: reads the optional gift-wrap checkbox/

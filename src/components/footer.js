@@ -1,6 +1,6 @@
 // Site footer component: logo, company description, four link groups
-// (Shop / Help / Seasonedz Group / Legal), real contact details,
-// marketplace links and copyright.
+// (Shop / Help / Seasonedz Group / Legal), real contact details and
+// copyright.
 //
 // Version 7, Milestone 150: reorganised into the brief's four named
 // groups. A few Shop links have no dedicated route/filter yet — noted
@@ -8,10 +8,17 @@
 // fall back to the general /shop page rather than a broken link. No
 // verified social media links (Facebook/Instagram/etc.) exist
 // anywhere in this project to add here.
+//
+// Version 7, Milestone 167: the "Shop Seasonedz Group on" marketplace
+// line that used to sit directly above the copyright text was removed
+// — marketplace links now live only in the homepage's own "Also
+// Available On" section (components/marketplaceLinks.js's
+// renderMarketplaceHomeSection()), per the owner's explicit "keep
+// marketplace links only in one place" decision. Nothing else in the
+// footer changed.
 
 import { withBase } from "../js/paths.js";
 import { businessInfo } from "../data/businessInfo.js";
-import { renderFooterMarketplaceLinks } from "./marketplaceLinks.js";
 
 export function renderFooter() {
   const year = new Date().getFullYear();
@@ -91,7 +98,6 @@ export function renderFooter() {
       </div>
 
       <div class="site-footer__bottom">
-        ${renderFooterMarketplaceLinks()}
         &copy; ${year} Seasonedz Group. All rights reserved.
       </div>
     </footer>

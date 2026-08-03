@@ -69,9 +69,14 @@ test.describe("Mobile smoke checks", () => {
 
   // Version 7, Milestone 151: slimmed the footer's brand column on
   // mobile (tighter spacing, narrower centered description) — every
-  // link group, the WhatsApp/review-link contact entries, marketplace
-  // links, policy links and the newsletter shortcut must all still be
-  // there, just less visually heavy up top.
+  // link group, the WhatsApp/review-link contact entries, policy links
+  // and the newsletter shortcut must all still be there, just less
+  // visually heavy up top.
+  // Version 7, Milestone 167: marketplace links no longer appear in
+  // the footer at all (moved to living only in the homepage's own
+  // "Also Available On" section) — see shop.spec.js's "marketplace
+  // links exist on homepage" test for that coverage, and this file's
+  // own "no marketplace links beside the footer copyright" test below.
   test("footer stays readable on mobile with all link groups intact", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator(".site-footer");
@@ -80,9 +85,16 @@ test.describe("Mobile smoke checks", () => {
     await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
     await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
     await expect(footer.locator(".footer-newsletter-shortcut")).toBeVisible();
-    await expect(footer.locator(".footer-marketplace__link")).toHaveCount(3);
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(hasHorizontalScroll).toBe(false);
+  });
+
+  test("no marketplace links beside the footer copyright", async ({ page }) => {
+    await page.goto("/");
+    const footer = page.locator(".site-footer");
+    await footer.scrollIntoViewIfNeeded();
+    await expect(footer.locator(".footer-marketplace")).toHaveCount(0);
+    await expect(footer.locator(".site-footer__bottom")).toContainText("Seasonedz Group. All rights reserved.");
   });
 });
 
