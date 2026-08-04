@@ -346,16 +346,17 @@ test.describe("Digital product storefront display", () => {
     await page.goto("/cart");
     await expect(page.locator(".cart-composition-notice")).toContainText("No physical delivery is required for digital downloads");
 
-    // Version 7, Milestone 152B: a digital-only cart is never charged a
-    // delivery fee, and the note explains why (not a registered-account
-    // discount) — see components/orderSummary.js's getDeliveryNote().
+    // Version 7, Milestone 168C: a digital-only cart is never charged a
+    // delivery fee regardless of method, and the note explains why (not
+    // a threshold discount) — see components/orderSummary.js's
+    // getDeliveryNote().
     const deliveryRow = page.locator(".order-summary__row", { hasText: "Delivery" });
-    await expect(deliveryRow).toContainText("Free");
+    await expect(deliveryRow).toContainText("FREE");
     await expect(page.locator(".order-summary__note")).toContainText("No delivery is needed");
 
     await page.goto("/checkout");
     await expect(page.locator(".cart-composition-notice")).toContainText("No physical delivery is required for digital downloads");
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("Free");
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("FREE");
   });
 
   test("mixed cart (physical + digital) shows the combined delivery message and correct total", async ({ page }) => {
@@ -390,18 +391,19 @@ test.describe("Digital product storefront display", () => {
     await page.goto("/cart");
     await expect(page.locator(".cart-composition-notice")).toContainText("Physical items will be delivered. Digital items will be available after payment.");
 
-    // Version 7, Milestone 152 (test 12): PayFast/checkout total math is
-    // unchanged by digital items — subtotal (49.99 + 100) + the
-    // existing guest delivery fee (R80) must still add up correctly.
+    // Version 7, Milestone 168C: PayFast/checkout total math is
+    // unchanged by digital items — subtotal (49.99 + 100) + the cart
+    // page's Courier Guy Door to Door estimate (R120, product subtotal
+    // R149.99 is below the R600 threshold) must still add up correctly.
     const expectedSubtotal = MOCK_PUBLIC_DIGITAL_PRODUCT.price + MOCK_PHYSICAL_PRODUCT.price;
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText(expectedSubtotal.toFixed(2));
-    await expect(page.locator(".order-summary__row--total")).toContainText((expectedSubtotal + 80).toFixed(2));
+    await expect(page.locator(".order-summary__row--total")).toContainText((expectedSubtotal + 120).toFixed(2));
 
-    // Version 7, Milestone 152B (fix 3): a mixed cart is still charged
-    // the normal delivery fee, precisely because it contains a
+    // Version 7, Milestone 168C (was 152B fix 3): a mixed cart is still
+    // charged the normal delivery fee, precisely because it contains a
     // physical item — never silently waived just because a digital
     // item is also present.
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("R80.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("R120.00");
   });
 });
 
@@ -485,6 +487,8 @@ test.describe("Account order detail: digital downloads", () => {
               total: 49.99,
               createdAt: new Date().toISOString(),
               customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryMethod: "COURIER_DOOR",
+              collectionCity: null,
               deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
               shipping: null,
@@ -537,6 +541,8 @@ test.describe("Account order detail: digital downloads", () => {
               total: 49.99,
               createdAt: new Date().toISOString(),
               customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryMethod: "COURIER_DOOR",
+              collectionCity: null,
               deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
               shipping: null,
@@ -574,11 +580,13 @@ test.describe("Account order detail: digital downloads", () => {
               paymentStatus: "PAID",
               paymentMethod: "PAYFAST",
               subtotal: 99.99,
-              deliveryFee: 80,
+              deliveryFee: 120,
               discountTotal: 0,
-              total: 179.99,
+              total: 219.99,
               createdAt: new Date().toISOString(),
               customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryMethod: "COURIER_DOOR",
+              collectionCity: null,
               deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [
                 { productName: "Mock Physical Book", productSlug: "mock-physical-book", quantity: 1, unitPrice: 50, lineTotal: 50, imageUrl: null },
@@ -639,6 +647,8 @@ test.describe("Account order detail: digital downloads", () => {
               total: 49.99,
               createdAt: new Date().toISOString(),
               customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+              deliveryMethod: "COURIER_DOOR",
+              collectionCity: null,
               deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [{ productName: "Mock Digital Book", productSlug: "mock-digital-book", quantity: 1, unitPrice: 49.99, lineTotal: 49.99, imageUrl: null }],
               shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
@@ -715,8 +725,10 @@ test.describe("Track Order: digital-only vs physical orders", () => {
             paymentMethod: "PAYFAST",
             fulfilmentStatus: "PACKING",
             shippingStatus: "PACKING",
+            deliveryMethod: "COURIER_DOOR",
             deliveryCity: "Pretoria",
             deliveryProvince: "Gauteng",
+            collectionCity: null,
             trackingSteps: [
               { key: "order-placed", label: "Order Placed", isComplete: true, isCurrent: false, isPending: false },
               { key: "order-confirmed", label: "Order Confirmed", isComplete: true, isCurrent: false, isPending: false },
@@ -758,6 +770,8 @@ test.describe("Admin order detail: digital-only vs physical courier actions", ()
             fulfilmentStatus: "NOT_STARTED",
             paymentMethod: "PAYFAST",
             customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+            deliveryMethod: "COURIER_DOOR",
+            collectionCity: null,
             deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
             items: [{ productSlug: "mock-digital-book", productName: "Mock Digital Book", sku: null, quantity: 1, unitPrice: 49.99, lineTotal: 49.99, productType: "DIGITAL" }],
             subtotal: 49.99,
@@ -800,13 +814,15 @@ test.describe("Admin order detail: digital-only vs physical courier actions", ()
             fulfilmentStatus: "NOT_STARTED",
             paymentMethod: "PAYFAST",
             customer: { firstName: "Test", lastName: "Customer", email: "test@example.invalid", phone: "0821234567" },
+            deliveryMethod: "COURIER_DOOR",
+            collectionCity: null,
             deliveryAddress: { streetAddress: "1 Test St", suburb: "Testville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
             items: [{ productSlug: "mock-physical-book", productName: "Mock Physical Book", sku: null, quantity: 1, unitPrice: 50, lineTotal: 50, productType: "PHYSICAL" }],
             subtotal: 50,
-            deliveryFee: 80,
+            deliveryFee: 120,
             discountTotal: 0,
-            total: 130,
-            payment: { method: "PAYFAST", status: "PAID", amount: 130, provider: "payfast", paidAt: new Date().toISOString() },
+            total: 170,
+            payment: { method: "PAYFAST", status: "PAID", amount: 170, provider: "payfast", paidAt: new Date().toISOString() },
             shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },
             hasPhysicalItems: true,
             hasDigitalItems: false,

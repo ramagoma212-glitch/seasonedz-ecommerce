@@ -28,7 +28,7 @@ export const faqs = [
     category: "Delivery",
     question: "How much does delivery cost, and when is it free?",
     answer:
-      "Standard delivery is a flat R80. Registered Seasonedz Group customers get free delivery on orders of R650 or more when signed in at checkout. See our Shipping Policy for full details.",
+      "Courier Guy Locker to Locker is R100 and Courier Guy Door to Door is R120. Both are free on orders of R600 or more in qualifying products. Customer Collection in Pretoria or Thohoyandou is always free, by arrangement. See our Shipping Policy for full details.",
   },
   {
     category: "Delivery",

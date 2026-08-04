@@ -2,36 +2,27 @@
 // order total. Reused by the cart page, checkout page and order
 // confirmation page.
 //
-// Delivery fee is a flat placeholder (see calculateDeliveryFee in
-// cart.js — R80 standard, free for a registered account from R650)
-// until real courier integration calculates actual rates.
-
-// Version 7, Milestone 131: `isRegisteredCustomer` is only ever used
-// to pick the right *guidance* text when delivery isn't already free —
-// whether delivery is actually free is decided entirely by
-// `deliveryFee` itself (computed by cart.js for cart/checkout display,
-// or already the real backend-charged value for order confirmation).
-// Order confirmation doesn't pass isRegisteredCustomer at all (that
-// page never fetches customer state) — the default `false` still
-// produces an accurate, harmless message either way: "free" shows
-// correctly whenever deliveryFee is actually 0, and the R80 case falls
-// back to the same safe "sign in" wording used for a guest.
-// Version 7, Milestone 152B: `hasPhysicalItems` (default `true`, so
-// every existing call site keeps its exact prior wording unless it
-// explicitly says there's nothing physical to deliver) picks an honest
-// "no delivery needed" note instead of implying a registered-account
-// discount applied — a digital-only guest cart's R0 delivery fee has
-// nothing to do with being signed in.
-function getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems) {
+// Version 7, Milestone 168C: delivery fee now depends on which of the
+// three owner-approved fulfilment methods was chosen (Courier Guy
+// Locker to Locker R100, Courier Guy Door to Door R120, Customer
+// Collection R0), free at a R600 qualifying PHYSICAL product subtotal
+// — see src/js/cart.js/src/config/delivery.js for the shared
+// constants. The registered-customer-only free-delivery gate from
+// Milestone 131 is removed: every customer (guest or registered) gets
+// free delivery at the threshold now.
+//
+// Version 7, Milestone 152B (preserved): `hasPhysicalItems` picks an
+// honest "no delivery needed" note instead of implying a discount
+// applied — a digital-only cart's R0 delivery fee has nothing to do
+// with the threshold at all.
+export function getDeliveryNote(deliveryFee, hasPhysicalItems) {
   if (!hasPhysicalItems) {
     return "No delivery is needed — this order is digital download(s) only.";
   }
   if (deliveryFee === 0) {
-    return "Free delivery applied for your registered Seasonedz Group account.";
+    return "Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
   }
-  return isRegisteredCustomer
-    ? "Registered customers get free delivery on orders of R650 or more."
-    : "Sign in or create an account to get free delivery on orders of R650 or more.";
+  return "Spend R600 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.";
 }
 
 // Version 7, Milestone 159: `giftWrapTotal` defaults to 0 so every
@@ -43,7 +34,7 @@ export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
   deliveryFee,
-  isRegisteredCustomer = false,
+  deliveryMethodLabel = null,
   hasPhysicalItems = true,
   showCheckoutButton = true,
   showItems = false,
@@ -89,16 +80,16 @@ export function renderOrderSummary({
           : ""
       }
       <div class="order-summary__row">
-        <span>Delivery</span>
-        <span>${deliveryFee === 0 ? "Free" : `R${deliveryFee.toFixed(2)}`}</span>
+        <span data-order-summary-delivery-label>${hasPhysicalItems && deliveryMethodLabel ? deliveryMethodLabel : "Delivery"}</span>
+        <span data-order-summary-delivery-value>${deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`}</span>
       </div>
       <div class="order-summary__row order-summary__row--total">
         <span>Order Total</span>
-        <span>R${total.toFixed(2)}</span>
+        <span data-order-summary-total-value>R${total.toFixed(2)}</span>
       </div>
 
-      <p class="order-summary__note">
-        ${getDeliveryNote(deliveryFee, isRegisteredCustomer, hasPhysicalItems)}
+      <p class="order-summary__note" data-order-summary-delivery-note>
+        ${getDeliveryNote(deliveryFee, hasPhysicalItems)}
       </p>
 
       ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>` : ""}

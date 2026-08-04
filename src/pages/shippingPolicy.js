@@ -1,12 +1,14 @@
 // Shipping policy page. General, honest wording only — no specific
 // delivery dates are promised, since courier booking/tracking is still
 // handled by admin staff rather than shown live to customers (the
-// delivery fee logic itself lives in js/cart.js on the frontend and
-// backend/src/config/delivery.ts on the backend — both use the same
-// R80 / registered-customer-free-from-R650 rule (Version 7, Milestone
-// 131; threshold raised from R500 to R650 in Milestone 152B per owner
-// request). Version 7, Milestone 114 names The Courier Guy explicitly,
-// since Seasonedz Group now has a real account with them — still no
+// delivery fee logic itself lives in src/config/delivery.js on the
+// frontend and backend/src/config/delivery.ts on the backend — both
+// use the same three-method rule: Courier Guy Locker to Locker R100,
+// Door to Door R120, both free at a R600 qualifying subtotal;
+// Customer Collection always free — Version 7, Milestone 168C,
+// superseding the old R80/registered-customer-free-from-R650 rule).
+// Version 7, Milestone 114 names The Courier Guy explicitly, since
+// Seasonedz Group now has a real account with them — still no
 // customer-facing quote, booking, or live tracking.
 
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
@@ -29,14 +31,20 @@ export function renderShippingPolicy() {
           every order is packed, booked and tracked by hand.
         </p>
 
-        <h2>Delivery Fees</h2>
+        <h2>Delivery Options and Fees</h2>
         <p>
-          Standard delivery is a flat rate of <strong>R80</strong>.
-          Registered Seasonedz Group customers get free delivery on
-          orders of <strong>R650 or more</strong> when signed in at
-          checkout. This benefit is not available on guest checkout.
-          Any applicable delivery fee is shown at checkout before you
-          place your order.
+          Choose your preferred option at checkout:
+        </p>
+        <ul>
+          <li><strong>Courier Guy Locker to Locker:</strong> R100, free on orders of R600 or more in qualifying products.</li>
+          <li><strong>Courier Guy Door to Door:</strong> R120, free on orders of R600 or more in qualifying products.</li>
+          <li><strong>Customer Collection:</strong> always free, available in Pretoria or Thohoyandou by arrangement.</li>
+        </ul>
+        <p>
+          The R600 free-delivery threshold applies to every customer,
+          guest or signed in. Gift wrapping does not count toward the
+          threshold. Your selected delivery method and fee are shown at
+          checkout before you place your order.
         </p>
 
         <h2>Delivery Times</h2>

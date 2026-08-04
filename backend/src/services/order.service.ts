@@ -1,4 +1,4 @@
-import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType } from "@prisma/client";
+import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType, DeliveryMethod } from "@prisma/client";
 import type { PaymentMethod, Product } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { calculateDeliveryFee, calculateGiftWrapFee } from "../utils/money.js";
@@ -193,6 +193,10 @@ export interface OrderOutput {
   orderNumber: string;
   createdAt: Date;
   customer: { firstName: string; lastName: string; email: string; phone: string };
+  // Version 7, Milestone 168C: which of the three owner-approved
+  // fulfilment methods was chosen, and its resulting fee.
+  deliveryMethod: DeliveryMethod;
+  // Null only for COLLECTION orders — see collectionCity below.
   deliveryAddress: {
     streetAddress: string;
     suburb: string;
@@ -201,7 +205,9 @@ export interface OrderOutput {
     postalCode: string;
     country: string;
     deliveryNotes: string | null;
-  };
+  } | null;
+  // Only set for COLLECTION orders — "Pretoria" or "Thohoyandou".
+  collectionCity: string | null;
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   fulfilmentStatus: FulfilmentStatus;
@@ -260,15 +266,20 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       email: order.customerEmail,
       phone: order.customerPhone,
     },
-    deliveryAddress: {
-      streetAddress: order.deliveryStreetAddress,
-      suburb: order.deliverySuburb,
-      city: order.deliveryCity,
-      province: order.deliveryProvince,
-      postalCode: order.deliveryPostalCode,
-      country: order.deliveryCountry,
-      deliveryNotes: order.deliveryNotes,
-    },
+    deliveryMethod: order.deliveryMethod,
+    deliveryAddress:
+      order.deliveryMethod === DeliveryMethod.COLLECTION
+        ? null
+        : {
+            streetAddress: order.deliveryStreetAddress ?? "",
+            suburb: order.deliverySuburb ?? "",
+            city: order.deliveryCity ?? "",
+            province: order.deliveryProvince ?? "",
+            postalCode: order.deliveryPostalCode ?? "",
+            country: order.deliveryCountry,
+            deliveryNotes: order.deliveryNotes,
+          },
+    collectionCity: order.collectionCity,
     status: order.status,
     paymentStatus: order.paymentStatus,
     fulfilmentStatus: order.fulfilmentStatus,
@@ -333,16 +344,12 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
 // below are unchanged either way; they're always the snapshot the
 // customer actually typed at checkout, not derived from the account.
 //
-// Version 7, Milestone 131: `isRegisteredCustomer` is likewise always
-// sourced from the same verified session (req.customerUser.type ===
-// "REGISTERED" in order.controller.ts) — never from the request body.
-// It only affects calculateDeliveryFee() below; nothing else about
-// order creation changes based on it.
-export async function createOrder(
-  input: ValidatedOrderInput,
-  customerId: string | null = null,
-  isRegisteredCustomer: boolean = false
-): Promise<OrderOutput> {
+// Version 7, Milestone 168C: `isRegisteredCustomer` and its
+// registered-only free-delivery gate were removed — the owner-approved
+// three-method model applies the same R600 threshold to every
+// customer. See config/delivery.ts's own header comment for the full
+// rule and reasoning.
+export async function createOrder(input: ValidatedOrderInput, customerId: string | null = null): Promise<OrderOutput> {
   const verifiedItems = await verifyItems(input.items);
 
   const subtotal = verifiedItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
@@ -351,11 +358,20 @@ export async function createOrder(
   const giftWrapTotal = verifiedItems.reduce((sum, item) => sum.plus(item.giftWrapLineTotal), new Prisma.Decimal(0));
   // Version 7, Milestone 152B: a digital-only order (every item
   // DIGITAL, none PHYSICAL) has nothing to deliver, so it's never
-  // charged a delivery fee regardless of subtotal or registered
-  // status. A mixed order (at least one PHYSICAL item) is charged
-  // normally — see utils/money.ts's own comment.
+  // charged a delivery fee regardless of subtotal or method — see
+  // utils/money.ts's own comment.
   const hasPhysicalItems = verifiedItems.some((item) => item.productType === ProductType.PHYSICAL);
-  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer, hasPhysicalItems);
+  // Version 7, Milestone 168C: the R600 free-delivery threshold must be
+  // judged against PHYSICAL products only — a digital item's price must
+  // never help a physical delivery qualify for free shipping, and gift
+  // wrapping/delivery fees themselves are already excluded by only
+  // ever summing verifiedItems' own lineTotal (never giftWrapLineTotal
+  // or a fee). This deliberately differs from the pre-168C behaviour,
+  // which used the whole-order subtotal (including any digital items).
+  const physicalSubtotal = verifiedItems
+    .filter((item) => item.productType === ProductType.PHYSICAL)
+    .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
+  const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems);
   const discountTotal = new Prisma.Decimal(0);
   const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
 
@@ -392,13 +408,15 @@ export async function createOrder(
         customerPhone: input.customer.phone,
         customerFirstName: input.customer.firstName,
         customerLastName: input.customer.lastName,
-        deliveryStreetAddress: input.deliveryAddress.streetAddress,
-        deliverySuburb: input.deliveryAddress.suburb,
-        deliveryCity: input.deliveryAddress.city,
-        deliveryProvince: input.deliveryAddress.province,
-        deliveryPostalCode: input.deliveryAddress.postalCode,
-        deliveryCountry: input.deliveryAddress.country,
-        deliveryNotes: input.deliveryAddress.deliveryNotes,
+        deliveryStreetAddress: input.deliveryAddress?.streetAddress ?? null,
+        deliverySuburb: input.deliveryAddress?.suburb ?? null,
+        deliveryCity: input.deliveryAddress?.city ?? null,
+        deliveryProvince: input.deliveryAddress?.province ?? null,
+        deliveryPostalCode: input.deliveryAddress?.postalCode ?? null,
+        deliveryCountry: input.deliveryAddress?.country ?? "South Africa",
+        deliveryNotes: input.deliveryAddress?.deliveryNotes ?? null,
+        deliveryMethod: input.deliveryMethod as DeliveryMethod,
+        collectionCity: input.collectionCity,
         status: OrderStatus.PENDING,
         paymentStatus: PaymentStatus.PENDING,
         fulfilmentStatus: FulfilmentStatus.NOT_STARTED,
@@ -484,8 +502,10 @@ export interface OrderTrackingOutput {
   paymentMethod: PaymentMethod;
   fulfilmentStatus: FulfilmentStatus;
   shippingStatus: FulfilmentStatus;
-  deliveryCity: string;
-  deliveryProvince: string;
+  deliveryMethod: DeliveryMethod;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  collectionCity: string | null;
   trackingSteps: OrderTrackingStep[];
   trackingSource: "backend-demo";
   hasPhysicalItems: boolean;
@@ -524,8 +544,10 @@ export async function getOrderTracking(orderNumber: string): Promise<OrderTracki
     paymentMethod: order.paymentMethod,
     fulfilmentStatus: order.fulfilmentStatus,
     shippingStatus: order.shipping?.status ?? order.fulfilmentStatus,
+    deliveryMethod: order.deliveryMethod,
     deliveryCity: order.deliveryCity,
     deliveryProvince: order.deliveryProvince,
+    collectionCity: order.collectionCity,
     trackingSteps,
     // No real courier tracking exists yet — this whole response is
     // derived from Order/Shipping rows set by this backend, never a

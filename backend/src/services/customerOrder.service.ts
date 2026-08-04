@@ -15,7 +15,7 @@
 // table at all here, so there's no separate "don't expose this Payment
 // field" filtering to get right.
 
-import { ProductType } from "@prisma/client";
+import { ProductType, DeliveryMethod } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 
 export interface CustomerOrderSummary {
@@ -50,6 +50,10 @@ export interface CustomerOrderDetail {
   total: number;
   createdAt: Date;
   customer: { firstName: string; lastName: string; email: string; phone: string };
+  // Version 7, Milestone 168C: which of the three owner-approved
+  // fulfilment methods was chosen. deliveryAddress is null only for
+  // COLLECTION orders — collectionCity is set instead.
+  deliveryMethod: DeliveryMethod;
   deliveryAddress: {
     streetAddress: string;
     suburb: string;
@@ -58,7 +62,8 @@ export interface CustomerOrderDetail {
     postalCode: string;
     country: string;
     deliveryNotes: string | null;
-  };
+  } | null;
+  collectionCity: string | null;
   items: Array<{
     productName: string;
     productSlug: string;
@@ -166,15 +171,20 @@ export async function getOrderForCustomer(orderNumber: string, customerId: strin
       email: order.customerEmail,
       phone: order.customerPhone,
     },
-    deliveryAddress: {
-      streetAddress: order.deliveryStreetAddress,
-      suburb: order.deliverySuburb,
-      city: order.deliveryCity,
-      province: order.deliveryProvince,
-      postalCode: order.deliveryPostalCode,
-      country: order.deliveryCountry,
-      deliveryNotes: order.deliveryNotes,
-    },
+    deliveryMethod: order.deliveryMethod,
+    deliveryAddress:
+      order.deliveryMethod === DeliveryMethod.COLLECTION
+        ? null
+        : {
+            streetAddress: order.deliveryStreetAddress ?? "",
+            suburb: order.deliverySuburb ?? "",
+            city: order.deliveryCity ?? "",
+            province: order.deliveryProvince ?? "",
+            postalCode: order.deliveryPostalCode ?? "",
+            country: order.deliveryCountry,
+            deliveryNotes: order.deliveryNotes,
+          },
+    collectionCity: order.collectionCity,
     items: order.items.map((item) => ({
       productName: item.productName,
       productSlug: item.productSlug,

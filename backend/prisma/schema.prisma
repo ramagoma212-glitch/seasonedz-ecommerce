@@ -42,6 +42,18 @@ enum ProductType {
   DIGITAL
 }
 
+// Version 7, Milestone 168C: replaces the old single universal delivery
+// fee with three owner-approved fulfilment methods. COURIER_LOCKER and
+// COURIER_DOOR both use the existing delivery* address fields (real
+// per-locker selection isn't integrated yet, so Locker orders currently
+// reuse the same address collection as Door to Door); COLLECTION uses
+// collectionCity instead and needs no delivery address at all.
+enum DeliveryMethod {
+  COURIER_LOCKER
+  COURIER_DOOR
+  COLLECTION
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
@@ -371,13 +383,28 @@ model Order {
   customerFirstName String
   customerLastName  String
 
-  deliveryStreetAddress String
-  deliverySuburb        String
-  deliveryCity          String
-  deliveryProvince      String
-  deliveryPostalCode    String
+  // Version 7, Milestone 168C: these were required (String) when every
+  // order was courier-delivered. Customer Collection orders carry no
+  // physical delivery address at all (see collectionCity below instead),
+  // so these became optional — validated as required at the application
+  // layer (order.validator.ts) only for COURIER_LOCKER/COURIER_DOOR,
+  // rather than forced at the DB level regardless of delivery method.
+  deliveryStreetAddress String?
+  deliverySuburb        String?
+  deliveryCity          String?
+  deliveryProvince      String?
+  deliveryPostalCode    String?
   deliveryCountry       String  @default("South Africa")
   deliveryNotes         String?
+
+  // Version 7, Milestone 168C: which of the three owner-approved
+  // fulfilment methods the customer chose. Defaults to COURIER_DOOR only
+  // to give existing pre-168C rows a valid backfilled value — every new
+  // order always sets this explicitly from validated request input.
+  deliveryMethod DeliveryMethod @default(COURIER_DOOR)
+  // Only populated when deliveryMethod = COLLECTION ("Pretoria" or
+  // "Thohoyandou"); null for courier-delivered orders.
+  collectionCity String?
 
   status           OrderStatus      @default(PENDING)
   paymentStatus    PaymentStatus    @default(PENDING)

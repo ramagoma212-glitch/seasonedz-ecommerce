@@ -9,6 +9,7 @@
 import { PaymentMethod } from "@prisma/client";
 import { env } from "../config/env.js";
 import { GIFT_MESSAGE_MAX_LENGTH } from "../config/giftWrap.js";
+import { DELIVERY_METHODS, COLLECTION_CITIES, type DeliveryMethodValue, type CollectionCityValue } from "../config/delivery.js";
 import {
   asRecord,
   isNonEmptyString,
@@ -43,6 +44,11 @@ export interface ValidatedOrderItem {
 
 export interface ValidatedOrderInput {
   customer: { firstName: string; lastName: string; email: string; phone: string };
+  deliveryMethod: DeliveryMethodValue;
+  // Version 7, Milestone 168C: only present for COURIER_LOCKER/COURIER_DOOR
+  // — a Customer Collection order has no physical delivery address at
+  // all, so this is null rather than populated with invented/placeholder
+  // data. See collectionCity below for the Collection-only counterpart.
   deliveryAddress: {
     streetAddress: string;
     suburb: string;
@@ -51,7 +57,9 @@ export interface ValidatedOrderInput {
     postalCode: string;
     country: string;
     deliveryNotes: string | null;
-  };
+  } | null;
+  // Only present for COLLECTION — "Pretoria" or "Thohoyandou".
+  collectionCity: CollectionCityValue | null;
   paymentMethod: PaymentMethod;
   items: ValidatedOrderItem[];
 }
@@ -87,26 +95,54 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     errors.push({ field: "customer.phone", message: "Please provide a valid South African phone number, e.g. 082 123 4567." });
   }
 
-  if (!isNonEmptyString(deliveryAddress.streetAddress)) {
-    errors.push({ field: "deliveryAddress.streetAddress", message: "Street address is required." });
-  }
-  if (!isNonEmptyString(deliveryAddress.suburb)) {
-    errors.push({ field: "deliveryAddress.suburb", message: "Suburb is required." });
-  }
-  if (!isNonEmptyString(deliveryAddress.city)) {
-    errors.push({ field: "deliveryAddress.city", message: "City is required." });
-  }
-
-  if (!isNonEmptyString(deliveryAddress.province)) {
-    errors.push({ field: "deliveryAddress.province", message: "Province is required." });
-  } else if (!(SA_PROVINCES as readonly string[]).includes(deliveryAddress.province)) {
-    errors.push({ field: "deliveryAddress.province", message: `Province must be one of: ${SA_PROVINCES.join(", ")}.` });
+  // Version 7, Milestone 168C: which delivery method decides whether an
+  // address or a collection city is required below. Validated first so
+  // the rest of this function can branch on a known-good value.
+  let deliveryMethod: DeliveryMethodValue | null = null;
+  if (!isNonEmptyString(root.deliveryMethod)) {
+    errors.push({ field: "deliveryMethod", message: "Delivery method is required." });
+  } else if (!(DELIVERY_METHODS as readonly string[]).includes(root.deliveryMethod)) {
+    errors.push({ field: "deliveryMethod", message: `Delivery method must be one of: ${DELIVERY_METHODS.join(", ")}.` });
+  } else {
+    deliveryMethod = root.deliveryMethod as DeliveryMethodValue;
   }
 
-  if (!isNonEmptyString(deliveryAddress.postalCode)) {
-    errors.push({ field: "deliveryAddress.postalCode", message: "Postal code is required." });
-  } else if (!isValidPostalCode(deliveryAddress.postalCode)) {
-    errors.push({ field: "deliveryAddress.postalCode", message: "Postal code must be 4 digits." });
+  const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
+  const requiresCollectionCity = deliveryMethod === "COLLECTION";
+
+  if (requiresAddress) {
+    if (!isNonEmptyString(deliveryAddress.streetAddress)) {
+      errors.push({ field: "deliveryAddress.streetAddress", message: "Street address is required." });
+    }
+    if (!isNonEmptyString(deliveryAddress.suburb)) {
+      errors.push({ field: "deliveryAddress.suburb", message: "Suburb is required." });
+    }
+    if (!isNonEmptyString(deliveryAddress.city)) {
+      errors.push({ field: "deliveryAddress.city", message: "City is required." });
+    }
+
+    if (!isNonEmptyString(deliveryAddress.province)) {
+      errors.push({ field: "deliveryAddress.province", message: "Province is required." });
+    } else if (!(SA_PROVINCES as readonly string[]).includes(deliveryAddress.province)) {
+      errors.push({ field: "deliveryAddress.province", message: `Province must be one of: ${SA_PROVINCES.join(", ")}.` });
+    }
+
+    if (!isNonEmptyString(deliveryAddress.postalCode)) {
+      errors.push({ field: "deliveryAddress.postalCode", message: "Postal code is required." });
+    } else if (!isValidPostalCode(deliveryAddress.postalCode)) {
+      errors.push({ field: "deliveryAddress.postalCode", message: "Postal code must be 4 digits." });
+    }
+  }
+
+  let collectionCity: CollectionCityValue | null = null;
+  if (requiresCollectionCity) {
+    if (!isNonEmptyString(root.collectionCity)) {
+      errors.push({ field: "collectionCity", message: "Please choose a collection location." });
+    } else if (!(COLLECTION_CITIES as readonly string[]).includes(root.collectionCity)) {
+      errors.push({ field: "collectionCity", message: `Collection location must be one of: ${COLLECTION_CITIES.join(", ")}.` });
+    } else {
+      collectionCity = root.collectionCity as CollectionCityValue;
+    }
   }
 
   if (!isNonEmptyString(root.paymentMethod)) {
@@ -186,7 +222,7 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     });
   }
 
-  if (errors.length > 0) {
+  if (errors.length > 0 || !deliveryMethod) {
     return { isValid: false, errors, value: null };
   }
 
@@ -200,15 +236,19 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
         email: (customer.email as string).trim(),
         phone: (customer.phone as string).trim(),
       },
-      deliveryAddress: {
-        streetAddress: (deliveryAddress.streetAddress as string).trim(),
-        suburb: (deliveryAddress.suburb as string).trim(),
-        city: (deliveryAddress.city as string).trim(),
-        province: deliveryAddress.province as string,
-        postalCode: (deliveryAddress.postalCode as string).trim(),
-        country: isNonEmptyString(deliveryAddress.country) ? deliveryAddress.country.trim() : "South Africa",
-        deliveryNotes: isNonEmptyString(deliveryAddress.deliveryNotes) ? deliveryAddress.deliveryNotes.trim() : null,
-      },
+      deliveryMethod,
+      deliveryAddress: requiresAddress
+        ? {
+            streetAddress: (deliveryAddress.streetAddress as string).trim(),
+            suburb: (deliveryAddress.suburb as string).trim(),
+            city: (deliveryAddress.city as string).trim(),
+            province: deliveryAddress.province as string,
+            postalCode: (deliveryAddress.postalCode as string).trim(),
+            country: isNonEmptyString(deliveryAddress.country) ? deliveryAddress.country.trim() : "South Africa",
+            deliveryNotes: isNonEmptyString(deliveryAddress.deliveryNotes) ? deliveryAddress.deliveryNotes.trim() : null,
+          }
+        : null,
+      collectionCity,
       paymentMethod: root.paymentMethod as PaymentMethod,
       items: validatedItems,
     },

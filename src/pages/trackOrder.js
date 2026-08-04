@@ -42,6 +42,19 @@ function humanizeEnum(value) {
     .join(" ");
 }
 
+function formatDeliveryMethodLabel(method) {
+  switch (method) {
+    case "COURIER_LOCKER":
+      return "Courier Guy Locker to Locker";
+    case "COURIER_DOOR":
+      return "Courier Guy Door to Door";
+    case "COLLECTION":
+      return "Customer Collection";
+    default:
+      return humanizeEnum(method);
+  }
+}
+
 function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 }
@@ -183,7 +196,12 @@ function renderBackendTrackingResult(tracking) {
         <h3>Order Details</h3>
         <div class="order-confirmation__row"><span>Order Date</span><span>${formatDate(tracking.createdAt)}</span></div>
         <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(tracking.paymentStatus)}</span></div>
-        <div class="order-confirmation__row"><span>Delivering To</span><span>${escapeHtml(tracking.deliveryCity)}, ${escapeHtml(tracking.deliveryProvince)}</span></div>
+        <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(tracking.deliveryMethod))}</span></div>
+        <div class="order-confirmation__row"><span>${tracking.deliveryMethod === "COLLECTION" ? "Collection Location" : "Delivering To"}</span><span>${
+          tracking.deliveryMethod === "COLLECTION"
+            ? escapeHtml(tracking.collectionCity ?? "To be confirmed")
+            : `${escapeHtml(tracking.deliveryCity ?? "")}, ${escapeHtml(tracking.deliveryProvince ?? "")}`
+        }</span></div>
       </div>
 
       <div class="order-confirmation__actions">

@@ -53,11 +53,19 @@ export interface OrderEmailData {
   paymentStatus: string;
   paymentMethod: string;
   items: OrderEmailItem[];
-  deliveryStreetAddress: string;
-  deliverySuburb: string;
-  deliveryCity: string;
-  deliveryProvince: string;
-  deliveryPostalCode: string;
+  // Version 7, Milestone 168C: which of the three owner-approved
+  // fulfilment methods was chosen ("COURIER_LOCKER" | "COURIER_DOOR" |
+  // "COLLECTION"), its fee, and — for COLLECTION only — the chosen
+  // city. Address fields below are null for COLLECTION orders (there
+  // is no physical delivery address to show).
+  deliveryMethod: string;
+  deliveryFee: number;
+  collectionCity: string | null;
+  deliveryStreetAddress: string | null;
+  deliverySuburb: string | null;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  deliveryPostalCode: string | null;
   deliveryNotes: string | null;
   // Version 7, Milestone 152: secure digital downloads. hasDigitalItems
   // is safe to compute and include on every order email (it's just

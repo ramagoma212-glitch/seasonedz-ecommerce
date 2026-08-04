@@ -396,18 +396,39 @@
   margin-bottom: var(--space-lg);
 }
 
+/* Version 7, Milestone 168C: quantity selector + Add to Cart share one
+   row on desktop (quantity left, Add to Cart right — the strongest
+   visual action stays the orange .btn--primary already used
+   site-wide). Wraps onto its own stacked rows on narrow mobile instead
+   of forcing them to compress side by side — see the max-width:480px
+   override below. */
+.product-details__purchase-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
 .product-details__quantity {
   display: flex;
   align-items: center;
   gap: var(--space-md);
-  margin-bottom: var(--space-lg);
 }
 
-.product-details__actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  max-width: 320px;
+.product-details__add-to-cart {
+  flex: 1;
+  min-width: 160px;
+  min-height: 44px;
+}
+
+/* Full-width outlined button below the purchase row (Version 7,
+   Milestone 168C) — reuses the existing .btn--secondary "approved
+   outline" style and .is-active "saved" treatment already used
+   site-wide, just with a heart icon added (see js/app.js's
+   patchWishlistButton()). */
+.product-details__wishlist-btn {
+  min-height: 44px;
   margin-bottom: var(--space-lg);
 }
 
@@ -422,6 +443,62 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background-color: var(--color-bg-alt);
+}
+
+/* ---- Purchase-area payment methods (Version 7, Milestone 168C) ------------
+   Informational artwork only (see productDetails.js's
+   renderPaymentMethodsBlock()) — never dominates the page, stays
+   secondary to Add to Cart above it. */
+.product-details__payment-methods {
+  margin-bottom: var(--space-lg);
+}
+
+.product-details__payment-methods p {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__payment-logos {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Purchase-area delivery/returns accordion (Version 7, Milestone
+   168C) — reuses .home-faq's own item/trigger/panel styling
+   (components.css) for visual consistency, but this block sits inside
+   the narrower purchase column, not the homepage's centred 720px FAQ,
+   so the shared class's own max-width/centring is turned off here. */
+.product-details__delivery-accordion {
+  margin-bottom: var(--space-lg);
+}
+
+.product-details__delivery-accordion .home-faq__item:first-child {
+  border-top: 1px solid var(--color-border);
+}
+
+.delivery-accordion__icon-minus {
+  display: none;
+}
+
+/* Higher specificity than components.css's own
+   .home-faq__trigger[aria-expanded="true"] .home-faq__icon rotation
+   rule (both classes present here vs. one there), so this cancels it
+   regardless of stylesheet load order — a rotated "&minus;" would
+   render as a diagonal line, not a clean minus. */
+.home-faq__trigger[aria-expanded="true"] .delivery-accordion__icon.home-faq__icon {
+  transform: none;
+}
+
+.home-faq__trigger[aria-expanded="true"] .delivery-accordion__icon-plus {
+  display: none;
+}
+
+.home-faq__trigger[aria-expanded="true"] .delivery-accordion__icon-minus {
+  display: inline;
 }
 
 .gift-wrap-option {

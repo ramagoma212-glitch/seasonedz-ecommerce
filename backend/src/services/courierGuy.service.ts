@@ -142,14 +142,21 @@ function toCountryCode(country: string): string {
   return trimmed;
 }
 
+// Version 7, Milestone 168C: the address fields are `string | null` on
+// Order now (Customer Collection orders have no physical address at
+// all — see prisma/schema.prisma) — widened to match. This is a
+// type-only change: validateOrderDeliveryAddress() below already
+// guards every field with `?.trim()` before use, so a null value was
+// already handled safely at runtime (correctly rejected as "missing")
+// even before this type existed to describe it.
 export interface OrderDeliveryFields {
   customerFirstName: string;
   customerLastName: string;
-  deliveryStreetAddress: string;
-  deliverySuburb: string;
-  deliveryCity: string;
-  deliveryProvince: string;
-  deliveryPostalCode: string;
+  deliveryStreetAddress: string | null;
+  deliverySuburb: string | null;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  deliveryPostalCode: string | null;
   deliveryCountry: string;
 }
 
@@ -473,11 +480,11 @@ interface OrderBookingFields {
   customerPhone: string;
   paymentStatus: PaymentStatus;
   fulfilmentStatus: FulfilmentStatus;
-  deliveryStreetAddress: string;
-  deliverySuburb: string;
-  deliveryCity: string;
-  deliveryProvince: string;
-  deliveryPostalCode: string;
+  deliveryStreetAddress: string | null;
+  deliverySuburb: string | null;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  deliveryPostalCode: string | null;
   deliveryCountry: string;
   shipping: {
     trackingNumber: string | null;

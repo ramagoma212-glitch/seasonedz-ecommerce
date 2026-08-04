@@ -177,13 +177,19 @@ test.describe("Customer account smoke checks", () => {
     );
   }
 
-  test("logged-in checkout shows free delivery when subtotal is R650 or more", async ({ page }) => {
+  // Version 7, Milestone 168C: free delivery is no longer a
+  // registered-account benefit — the R600 threshold now applies to
+  // every customer, guest or signed in (see config/delivery.js). The
+  // checkout page defaults to Courier Guy Door to Door (R120 below the
+  // threshold, free at/above it) until the customer picks a different
+  // method — see checkoutPage.js's DEFAULT_DELIVERY_METHOD.
+  test("logged-in checkout shows free delivery when subtotal is R600 or more", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 250, quantity: 3 }); // subtotal R750
 
     await page.goto("/checkout");
-    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
+    await expect(page.getByText("Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
 
     // No auth token ever touches localStorage — only the plain cart
     // array (already asserted elsewhere to contain no session data).
@@ -191,52 +197,38 @@ test.describe("Customer account smoke checks", () => {
     expect(localStorageKeys.every((key) => !key.toLowerCase().includes("session") && !key.toLowerCase().includes("token"))).toBe(true);
   });
 
-  test("logged-in checkout shows R80 delivery when subtotal is below R650", async ({ page }) => {
+  test("logged-in checkout shows R120 Door to Door delivery when subtotal is below R600", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200
 
     await page.goto("/checkout");
-    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+    await expect(page.getByText("Spend R600 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
   });
 
-  // Version 7, Milestone 159A: gift wrapping must NOT count towards the
-  // R650 free-delivery threshold — only the product subtotal decides
-  // eligibility (see js/cart.js's getCartSummary(), which calls
-  // calculateDeliveryFee(subtotal, ...) using the product-only subtotal,
-  // BEFORE giftWrapTotal is added to the displayed order total). These
-  // four cases are the exact scenarios from the milestone brief.
-  test("R620 products + R30 gift wrap: still charged delivery (product subtotal alone decides, R620 < R650)", async ({ page }) => {
+  // Version 7, Milestone 168C: gift wrapping must NOT count towards the
+  // R600 free-delivery threshold — only the qualifying physical product
+  // subtotal decides eligibility (see js/cart.js's
+  // getCartPhysicalSubtotal()). These are the exact R590/R600 scenarios
+  // from the milestone brief's own test matrix (Section O, Part 40).
+  test("R590 products + R30 gift wrap: still charged delivery (qualifying subtotal alone decides, R590 < R600)", async ({ page }) => {
     await mockLoggedInCustomer(page);
-    await setSyntheticCart(page, { price: 620, quantity: 1, giftWrap: true }); // subtotal R620, gift wrap R30
+    await setSyntheticCart(page, { price: 590, quantity: 1, giftWrap: true }); // subtotal R590, gift wrap R30
 
     await page.goto("/checkout");
-    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("620.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("590.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
-    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
   });
 
-  test("R650 products + R30 gift wrap: free delivery (product subtotal itself already reaches R650)", async ({ page }) => {
+  test("R600 products + R30 gift wrap: free delivery (qualifying subtotal itself already reaches R600)", async ({ page }) => {
     await mockLoggedInCustomer(page);
-    await setSyntheticCart(page, { price: 650, quantity: 1, giftWrap: true }); // subtotal R650, gift wrap R30
+    await setSyntheticCart(page, { price: 600, quantity: 1, giftWrap: true }); // subtotal R600, gift wrap R30
 
     await page.goto("/checkout");
-    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("650.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("600.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
-    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
-  });
-
-  test("R640 products + R60 gift wrap (2 wrapped items): still charged delivery (R640 < R650)", async ({ page }) => {
-    await mockLoggedInCustomer(page);
-    await setSyntheticCart(page, { price: 320, quantity: 2, giftWrap: true }); // subtotal R640, gift wrap R60 (2 x R30)
-
-    await page.goto("/checkout");
-    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("640.00");
-    await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("60.00");
-    await expect(page.getByText("Registered customers get free delivery on orders of R650 or more.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("R80.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
   test("R700 products + no gift wrap: free delivery as normal", async ({ page }) => {
@@ -246,8 +238,27 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/checkout");
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("700.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toHaveCount(0);
-    await expect(page.getByText("Free delivery applied for your registered Seasonedz Group account.")).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Free")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
+  });
+
+  // Version 7, Milestone 168C: switching delivery method at checkout
+  // recomputes the fee/label live (see js/app.js's
+  // updateCheckoutDeliveryMethodUI()) without a full page reload.
+  test("switching delivery method at checkout updates the fee and order summary live", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200, below threshold
+
+    await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+    await expect(page.locator('[data-delivery-address-fields]')).toBeVisible();
+
+    await page.locator('input[name="deliveryMethod"][value="COLLECTION"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Customer Collection" }).getByText("FREE")).toBeVisible();
+    await expect(page.locator('[data-delivery-address-fields]')).toBeHidden();
+    await expect(page.locator('[data-collection-fields]')).toBeVisible();
   });
 
   // Version 7, Milestone 130: My Orders — every /customers/orders* call
@@ -320,6 +331,8 @@ test.describe("Customer account smoke checks", () => {
               total: 200,
               createdAt: new Date().toISOString(),
               customer: { firstName: "Mock", lastName: "Smoke", email: "mock-smoke-test@example.com", phone: "0821234567" },
+              deliveryMethod: "COURIER_DOOR",
+              collectionCity: null,
               deliveryAddress: { streetAddress: "1 Mock Street", suburb: "Mockville", city: "Pretoria", province: "Gauteng", postalCode: "0001", country: "South Africa", deliveryNotes: null },
               items: [{ productName: "Mock Colouring Book", productSlug: "mock-colouring-book", quantity: 2, unitPrice: 100, lineTotal: 200, imageUrl: null }],
               shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null, estimatedDelivery: null, shippedAt: null, deliveredAt: null },

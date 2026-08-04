@@ -21,12 +21,15 @@ function toOrderEmailData(order: OrderOutput): OrderEmailData {
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
     items: order.items.map((item) => ({ productName: item.productName, quantity: item.quantity, lineTotal: item.lineTotal })),
-    deliveryStreetAddress: order.deliveryAddress.streetAddress,
-    deliverySuburb: order.deliveryAddress.suburb,
-    deliveryCity: order.deliveryAddress.city,
-    deliveryProvince: order.deliveryAddress.province,
-    deliveryPostalCode: order.deliveryAddress.postalCode,
-    deliveryNotes: order.deliveryAddress.deliveryNotes,
+    deliveryMethod: order.deliveryMethod,
+    deliveryFee: order.deliveryFee,
+    collectionCity: order.collectionCity,
+    deliveryStreetAddress: order.deliveryAddress?.streetAddress ?? null,
+    deliverySuburb: order.deliveryAddress?.suburb ?? null,
+    deliveryCity: order.deliveryAddress?.city ?? null,
+    deliveryProvince: order.deliveryAddress?.province ?? null,
+    deliveryPostalCode: order.deliveryAddress?.postalCode ?? null,
+    deliveryNotes: order.deliveryAddress?.deliveryNotes ?? null,
     // Version 7, Milestone 152: known at order-creation time (no
     // payment confirmation needed to know WHAT was ordered) — safe to
     // include on both the immediate order-created customer email and
@@ -48,15 +51,11 @@ export async function createOrderHandler(req: Request, res: Response, next: Next
     // Version 7, Milestone 129: req.customerUser is only ever set by
     // optionalCustomerAuth (order.routes.ts) — never trusted from the
     // request body. undefined (logged out) becomes null (guest order).
-    // Version 7, Milestone 131: registered-customer free delivery
-    // eligibility is likewise read only from this same verified
-    // session — req.customerUser.type, never anything the request
-    // body claims.
-    const order = await orderService.createOrder(
-      validation.value,
-      req.customerUser?.id ?? null,
-      req.customerUser?.type === "REGISTERED"
-    );
+    // Version 7, Milestone 168C: registered-customer free-delivery
+    // gating was removed — the owner-approved R600 threshold applies to
+    // every customer, so createOrder no longer takes an
+    // isRegisteredCustomer argument at all.
+    const order = await orderService.createOrder(validation.value, req.customerUser?.id ?? null);
 
     // Version 7, Milestone 117: fire-and-forget, deliberately not
     // awaited into the response — sendOrderCreatedEmail/

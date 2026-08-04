@@ -28,6 +28,22 @@ function humanizeEnum(value) {
     .join(" ");
 }
 
+// Version 7, Milestone 168C: matches the labels used across
+// admin/email so customers, staff and transactional emails all
+// describe the same delivery method the same way.
+function formatDeliveryMethodLabel(method) {
+  switch (method) {
+    case "COURIER_LOCKER":
+      return "Courier Guy Locker to Locker";
+    case "COURIER_DOOR":
+      return "Courier Guy Door to Door";
+    case "COLLECTION":
+      return "Customer Collection";
+    default:
+      return humanizeEnum(method);
+  }
+}
+
 function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 }
@@ -154,12 +170,25 @@ function renderBackendOrderConfirmation(order) {
           </div>
 
           <div class="order-confirmation__card">
-            <h3>Delivery Address</h3>
+            <h3>Delivery Method</h3>
+            <div class="order-confirmation__row"><span>Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
+            <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "FREE" : `R${order.deliveryFee.toFixed(2)}`}</span></div>
+          </div>
+
+          <div class="order-confirmation__card">
+            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivery Address"}</h3>
             <p>${escapeHtml(order.customer.firstName)} ${escapeHtml(order.customer.lastName)}</p>
-            <p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
-            <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
-            <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
-            ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}
+            ${
+              order.deliveryMethod === "COLLECTION"
+                ? `<p><strong>Collection location:</strong> ${escapeHtml(order.collectionCity ?? "To be confirmed")}</p>
+                   <p>Collection by arrangement — we'll be in touch to confirm details.</p>`
+                : order.deliveryAddress
+                  ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
+                     <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
+                     <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
+                     ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                  : ""
+            }
             <p>${escapeHtml(order.customer.email)} &bull; ${escapeHtml(order.customer.phone)}</p>
           </div>
 
@@ -173,6 +202,7 @@ function renderBackendOrderConfirmation(order) {
           subtotal: order.subtotal,
           giftWrapTotal: order.giftWrapTotal,
           deliveryFee: order.deliveryFee,
+          deliveryMethodLabel: formatDeliveryMethodLabel(order.deliveryMethod),
           showCheckoutButton: false,
           showItems: true,
           items,

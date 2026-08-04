@@ -20,6 +20,7 @@
 import { renderProductCard } from "../components/productCard.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { renderProductMarketplaceBlock } from "../components/marketplaceLinks.js";
+import { renderProductDeliveryAccordion } from "../components/productDeliveryAccordion.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
@@ -27,6 +28,7 @@ import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../j
 import { escapeHtml } from "../js/search.js";
 import { resolveDescriptionHtml } from "../js/descriptionFormat.js";
 import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
+import { withBase } from "../js/paths.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -129,16 +131,37 @@ function renderGiftWrapOption() {
   `;
 }
 
-function renderDeliveryNote() {
+// Version 7, Milestone 168C: replaces the old single-paragraph
+// delivery note with the fuller Delivery Options / Free Delivery /
+// Free Collection / Returns & Exchanges accordion group — see
+// components/productDeliveryAccordion.js. Physical products only; a
+// DIGITAL product has nothing to deliver (renderDigitalDownloadNote()
+// below covers it instead).
+
+// Version 7, Milestone 168C: owner-supplied, owner-approved artwork
+// (public/images/payment-methods-payfast.png, byte-identical to the
+// supplied "Payment logos.png" — see this milestone's asset-handling
+// notes). Informational only — PayFast itself still presents and
+// processes whichever of these nine methods the customer actually
+// picks; nothing here is a separate payment integration or checkout
+// choice. width/height match the source file's true 1536x1024 pixel
+// size (prevents layout shift while it loads); CSS scales it down
+// responsively (see pages.css).
+function renderPaymentMethodsBlock() {
   return `
-    <h3>Delivery</h3>
-    <p>
-      Delivery is R80. Registered Seasonedz Group customers get free
-      delivery on orders of R650 or more when signed in. We use The
-      Courier Guy for courier deliveries where applicable, arranged
-      manually by our small team. See our
-      <a href="/shipping-policy">Shipping Policy</a> for details.
-    </p>
+    <div class="product-details__payment-methods">
+      <h3>Secure payment options</h3>
+      <p>Pay securely through PayFast using your preferred payment method.</p>
+      <img
+        class="product-details__payment-logos"
+        src="${withBase("/images/payment-methods-payfast.png")}"
+        alt="Secure payment methods available through PayFast including Visa, Mastercard, Apple Pay, Google Pay, Samsung Pay, Instant EFT, SnapScan, Zapper and Payflex."
+        width="1536"
+        height="1024"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
   `;
 }
 
@@ -303,21 +326,24 @@ export async function renderProductDetails({ slug } = {}) {
           <p class="product-details__stock">${product.stockStatus}</p>
           <p class="product-details__short-desc">${product.shortDescription}</p>
 
-          <div class="product-details__quantity">
-            <span>Quantity</span>
-            <div class="quantity-selector">
-              <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity">&minus;</button>
-              <input type="number" class="quantity-selector__input" value="1" min="1" readonly />
-              <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity">&plus;</button>
+          <!--
+            Purchase area (Version 7, Milestone 168C): 1. Quantity + Add
+            to Cart, 2. Add to Wishlist, 3. Gift Wrapping (when
+            eligible), 4. Secure payment options, 5. Delivery/Returns
+            information, in that order.
+          -->
+          <div class="product-details__purchase-row">
+            <div class="product-details__quantity">
+              <span>Quantity</span>
+              <div class="quantity-selector">
+                <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity">&minus;</button>
+                <input type="number" class="quantity-selector__input" value="1" min="1" readonly />
+                <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity">&plus;</button>
+              </div>
             </div>
-          </div>
-
-          ${product.productType !== "DIGITAL" ? renderGiftWrapOption() : ""}
-
-          <div class="product-details__actions">
             <button
               type="button"
-              class="btn btn--primary btn--block"
+              class="btn btn--primary product-details__add-to-cart"
               data-action="add-to-cart"
               data-product-id="${product.id}"
               data-slug="${product.slug}"
@@ -328,21 +354,28 @@ export async function renderProductDetails({ slug } = {}) {
             >
               Add to Cart
             </button>
-            <button
-              type="button"
-              class="btn btn--secondary btn--block ${wishlisted ? "is-active" : ""}"
-              data-action="toggle-wishlist"
-              data-product-id="${product.id}"
-              data-slug="${product.slug}"
-              data-name="${product.name}"
-              data-price="${product.price}"
-              data-image="${product.image}"
-              data-category="${product.category}"
-              aria-pressed="${wishlisted}"
-            >
-              ${wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
-            </button>
           </div>
+
+          <button
+            type="button"
+            class="btn btn--secondary btn--block product-details__wishlist-btn ${wishlisted ? "is-active" : ""}"
+            data-action="toggle-wishlist"
+            data-product-id="${product.id}"
+            data-slug="${product.slug}"
+            data-name="${product.name}"
+            data-price="${product.price}"
+            data-image="${product.image}"
+            data-category="${product.category}"
+            aria-pressed="${wishlisted}"
+          >
+            <span aria-hidden="true">${wishlisted ? "&#9829;" : "&#9825;"}</span> ${wishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+          </button>
+
+          ${product.productType !== "DIGITAL" ? renderGiftWrapOption() : ""}
+
+          ${renderPaymentMethodsBlock()}
+
+          ${product.productType !== "DIGITAL" ? renderProductDeliveryAccordion() : ""}
 
           ${renderProductMarketplaceBlock()}
 
@@ -366,7 +399,7 @@ export async function renderProductDetails({ slug } = {}) {
         </ul>
 
         ${renderGoodFor(product)}
-        ${product.productType === "DIGITAL" ? renderDigitalDownloadNote(product) : renderDeliveryNote()}
+        ${product.productType === "DIGITAL" ? renderDigitalDownloadNote(product) : ""}
         ${renderSupportNote()}
       </div>
 

@@ -120,6 +120,99 @@
   color: var(--color-primary);
 }
 
+.nav-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Version 7, Milestone 168C: header simplification. These 4 links
+   (Colouring Books / Creative Supplies / Schools & Churches / About)
+   stay as ordinary top-level items in the mobile panel (unchanged) but
+   are hidden at the desktop breakpoint, where they appear once more
+   inside the new "More" dropdown instead — see the max-width:1199px
+   override in responsive.css that re-shows them on mobile, and
+   header.js's own comment on why this is one shared NAV_LINKS array
+   rather than two independently-maintained lists. */
+.nav-link--in-more {
+  display: none;
+}
+
+/* ---- Desktop "More" nav dropdown ------------------------------------------
+   Version 7, Milestone 168C: reduces the crowded 8-item desktop nav to
+   Home / Shop / Digital Downloads / Contact / More, tucking the
+   remaining 4 destinations here. Hidden entirely on mobile (see
+   responsive.css) — the mobile panel already shows all 8 links
+   directly, so this trigger would be redundant there. */
+.nav-more {
+  position: relative;
+}
+
+/* Version 7, Milestone 168C: `font-family` only, not the `font`
+   shorthand — a browser's default <button> font-size (16px) differs
+   from .nav-link's own font-size:var(--font-size-sm) (14px), and the
+   `font` shorthand resets font-size too. Since both classes are single
+   -class selectors of equal specificity and this rule is declared
+   after .nav-link in this same file, `font: inherit` would silently
+   win and re-widen this one button's text/row-height past the other
+   nav items' — measured directly (41.6px vs the other links' 25.6px)
+   rather than assumed, the same class of cascade bug as Milestone
+   168A's card-grid fix. */
+.nav-more__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.nav-more__chevron {
+  font-size: 0.7em;
+  transition: transform var(--transition-fast);
+}
+
+.nav-more__trigger[aria-expanded="true"] .nav-more__chevron {
+  transform: rotate(180deg);
+}
+
+.nav-more__panel {
+  position: absolute;
+  top: calc(100% + var(--space-sm));
+  left: 0;
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-xs);
+}
+
+.nav-more__link {
+  display: block;
+  padding: var(--space-sm) var(--space-sm);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.nav-more__link:hover {
+  background-color: var(--color-bg-alt);
+  color: var(--color-primary);
+}
+
+.nav-more__link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 /* ---- Icon links (wishlist / cart) ----------------------------------------- */
 .icon-link {
   position: relative;
@@ -537,9 +630,14 @@
   overflow: hidden;
 }
 
+/* Version 7, Milestone 168C: bumped from 36px to the 44px minimum
+   touch target this milestone's purchase-row redesign calls for —
+   shared by both the product page and the cart page's own quantity
+   control (cartItem.js), so both benefit from the same accessibility
+   fix. */
 .quantity-selector__btn {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background-color: var(--color-bg-alt);
   font-size: var(--font-size-lg);
   font-weight: 700;
@@ -550,9 +648,14 @@
   background-color: var(--color-border);
 }
 
+.quantity-selector__btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
 .quantity-selector__input {
   width: 48px;
-  height: 36px;
+  height: 44px;
   text-align: center;
   border: none;
   border-inline: 1px solid var(--color-border);
@@ -1276,6 +1379,64 @@ body.has-lightbox-open {
 }
 
 .payment-methods.has-error .payment-method {
+  border-color: var(--color-error);
+}
+
+/* ---- Delivery methods (Version 7, Milestone 168C) --------------------------------
+   Mirrors .payment-methods/.payment-method's own layout/interaction
+   exactly, for visual consistency with the payment method fieldset
+   right below it on the checkout page. */
+.delivery-methods {
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.delivery-method {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.delivery-method:has(.delivery-method__radio:checked) {
+  border-color: var(--color-primary);
+  background-color: var(--color-bg-alt);
+}
+
+.delivery-method__radio {
+  margin-top: 3px;
+  accent-color: var(--color-primary);
+}
+
+.delivery-method__content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.delivery-method__label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.delivery-method__fee {
+  font-weight: 700;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.delivery-methods.has-error .delivery-method {
   border-color: var(--color-error);
 }
 

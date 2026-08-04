@@ -29,16 +29,58 @@ import { withBase } from "../js/paths.js";
 // where relevant). "My Account" is back (Milestone 151) as its own
 // icon link in .site-header__actions, not this list — see the
 // Logo -> Nav -> Search -> Account -> Wishlist -> Cart order below.
+//
+// Version 7, Milestone 168C: the same 8 destinations now split across
+// two roles, still sharing this one array (so mobile and desktop can
+// never quietly drift apart into two different route lists). `inMore`
+// items render as an ordinary top-level link in the mobile panel
+// (unchanged — Part 7 requires mobile keep direct access to all 8),
+// but are hidden at the desktop breakpoint in favour of appearing once
+// more inside the new "More" dropdown (see MORE_NAV_LINKS/renderMoreMenu
+// below) — CSS (.nav-link--in-more, responsive.css) is what actually
+// hides them on desktop; this file just marks which ones qualify.
 const NAV_LINKS = [
-  { href: "/", label: "Home" },
-  { href: "/shop", label: "Shop" },
-  { href: "/shop", label: "Colouring Books" },
-  { href: "/shop?category=markers-and-crayons", label: "Creative Supplies" },
-  { href: "/shop", label: "Digital Downloads" },
-  { href: "/schools", label: "Schools & Churches" },
-  { href: "/about", label: "About" },
-  { href: "/contact", label: "Contact" },
+  { href: "/", label: "Home", inMore: false },
+  { href: "/shop", label: "Shop", inMore: false },
+  { href: "/shop", label: "Colouring Books", inMore: true },
+  { href: "/shop?category=markers-and-crayons", label: "Creative Supplies", inMore: true },
+  { href: "/shop", label: "Digital Downloads", inMore: false },
+  { href: "/schools", label: "Schools & Churches", inMore: true },
+  { href: "/about", label: "About", inMore: true },
+  { href: "/contact", label: "Contact", inMore: false },
 ];
+
+// Version 7, Milestone 168C: the desktop-only "More" dropdown reuses
+// the exact same 4 destinations already marked inMore above (derived,
+// not a second hand-maintained list) — real internal <a href> links,
+// never onclick-only navigation, so they work with Ctrl/Cmd-click,
+// "Open in new tab", and screen readers exactly like every other nav
+// link. Duplicated as separate DOM nodes from the mobile-panel copies
+// (a link can only exist in one place in the DOM at a time) rather
+// than moved, so both the mobile panel and this dropdown always show
+// the same 4 links without needing to stay manually in sync.
+const MORE_NAV_LINKS = NAV_LINKS.filter((link) => link.inMore);
+
+function renderMoreMenu() {
+  return `
+    <li class="nav-more">
+      <button
+        type="button"
+        class="nav-link nav-more__trigger"
+        id="nav-more-trigger"
+        data-action="toggle-nav-more"
+        aria-expanded="false"
+        aria-controls="nav-more-panel"
+      >
+        More
+        <span class="nav-more__chevron" aria-hidden="true">&#9662;</span>
+      </button>
+      <div class="nav-more__panel" id="nav-more-panel" role="menu" aria-label="More navigation" hidden>
+        ${MORE_NAV_LINKS.map((link) => `<a class="nav-more__link" role="menuitem" href="${link.href}">${link.label}</a>`).join("")}
+      </div>
+    </li>
+  `;
+}
 
 export function renderHeader() {
   return `
@@ -70,7 +112,8 @@ export function renderHeader() {
         <div class="site-header__collapsible" id="site-header-collapsible">
           <nav class="site-header__nav" aria-label="Main navigation">
             <ul class="site-header__nav-list">
-              ${NAV_LINKS.map((link) => `<li><a class="nav-link" href="${link.href}">${link.label}</a></li>`).join("")}
+              ${NAV_LINKS.map((link) => `<li><a class="nav-link${link.inMore ? " nav-link--in-more" : ""}" href="${link.href}">${link.label}</a></li>`).join("")}
+              ${renderMoreMenu()}
             </ul>
           </nav>
 

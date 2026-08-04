@@ -9,6 +9,7 @@
 // is accepted.
 
 import { getStorageItem, setStorageItem, clearStorageItem } from "./storage.js";
+import { calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
 
 const CART_KEY = "seasonedz_cart";
 
@@ -66,34 +67,15 @@ function normalizeCartItem(item) {
   };
 }
 
-// Exported (Version 7, Milestone 150) so display-only copy elsewhere
-// (e.g. the homepage FAQ) can quote the real current fee/threshold
-// instead of hard-coding a second copy that could drift out of sync —
-// this is a read of the existing config, not a new delivery rule.
-export const STANDARD_DELIVERY_FEE = 80;
-// Owner-requested change (2026-07-30, deployed together with Milestone
-// 152B): raised from R500 to R650 — kept in sync with the backend's
-// own source of truth (backend/src/config/delivery.ts).
-export const REGISTERED_FREE_DELIVERY_THRESHOLD = 650;
-
-// Version 7, Milestone 131: free delivery is a registered-account
-// benefit, not a flat subtotal threshold for every visitor — R80
-// standard, free only for a logged-in registered customer on orders of
-// R650 or more. This is a client-side estimate for display purposes
-// only (cart/checkout pages) — the backend independently recalculates
-// the real fee at order-creation time from the verified customer
-// session, never trusting anything this function returns. Will be
-// replaced by real courier-calculated rates once courier integration
-// exists — see the milestone roadmap.
-// Version 7, Milestone 152B: `hasPhysicalItems` defaults to `true` so
-// every existing call site keeps its exact prior behaviour unless it
-// explicitly says otherwise — a digital-only cart has nothing to
-// deliver, so it's never charged a delivery fee, matching the
-// backend's own utils/money.ts calculateDeliveryFee().
-export function calculateDeliveryFee(subtotal, isRegisteredCustomer = false, hasPhysicalItems = true) {
-  if (!hasPhysicalItems) return 0;
-  return isRegisteredCustomer && subtotal >= REGISTERED_FREE_DELIVERY_THRESHOLD ? 0 : STANDARD_DELIVERY_FEE;
-}
+// Version 7, Milestone 168C: re-exported so existing importers (e.g.
+// the homepage FAQ) keep working unchanged — the real values now live
+// in config/delivery.js (this file's own single-responsibility cart
+// logic no longer owns the delivery constants directly). This is a
+// client-side estimate for display purposes only (cart/checkout
+// pages) — the backend independently recalculates the real fee at
+// order-creation time from verified DB-priced items, never trusting
+// anything this function returns.
+export { calculateDeliveryFeeForMethod as calculateDeliveryFee };
 
 export function getCart() {
   return getStorageItem(CART_KEY, []).map(normalizeCartItem);
@@ -220,21 +202,33 @@ export function getCartGiftWrapTotal(items) {
   return items.reduce((total, item) => total + (item.giftWrap ? GIFT_WRAP_FEE_PER_ITEM * item.quantity : 0), 0);
 }
 
+// Version 7, Milestone 168C: the R600 free-delivery threshold is
+// judged against PHYSICAL products only — a digital item's price must
+// never help a physical delivery qualify for free shipping (mirrors
+// the backend's own physicalSubtotal in order.service.ts's
+// createOrder()). Items with no productType at all (saved before
+// productType existed) are treated as PHYSICAL, matching
+// getCartComposition()'s own safe default.
+export function getCartPhysicalSubtotal(items) {
+  return items.reduce((total, item) => total + ((item.productType || "PHYSICAL") === "PHYSICAL" ? item.price * item.quantity : 0), 0);
+}
+
 // Convenience bundle for pages that need the items, count, subtotal,
 // gift-wrap total, delivery fee and total together (avoids reading/
-// looping over the cart several separate times). `isRegisteredCustomer`
-// defaults to false (guest) — callers that already know the logged-in
-// state (cartPage.js, checkoutPage.js — via GET /api/customers/me) pass
-// it through explicitly.
-export function getCartSummary(isRegisteredCustomer = false) {
+// looping over the cart several separate times). `deliveryMethod`
+// defaults to "COURIER_DOOR" for pages that haven't asked the customer
+// to choose yet (e.g. the cart page's own estimate) — checkoutPage.js
+// passes the customer's actually-selected method once one exists.
+export function getCartSummary(deliveryMethod = "COURIER_DOOR") {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
   const giftWrapTotal = getCartGiftWrapTotal(items);
   const composition = getCartComposition(items);
-  const deliveryFee = calculateDeliveryFee(subtotal, isRegisteredCustomer, composition.hasPhysical);
+  const physicalSubtotal = getCartPhysicalSubtotal(items);
+  const deliveryFee = calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical);
   const total = subtotal + giftWrapTotal + deliveryFee;
-  return { items, itemCount, subtotal, giftWrapTotal, deliveryFee, total, composition };
+  return { items, itemCount, subtotal, giftWrapTotal, physicalSubtotal, deliveryFee, deliveryMethod, total, composition };
 }
 
 export function isInCart(productId) {

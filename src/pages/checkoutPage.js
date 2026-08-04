@@ -13,6 +13,14 @@ import { renderCartCompositionNotice } from "../components/cartCompositionNotice
 import { PAYMENT_METHODS } from "../js/orders.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
 import { escapeHtml } from "../js/search.js";
+import { DELIVERY_METHODS, COLLECTION_CITIES, getDeliveryMethodLabel, calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
+
+// Version 7, Milestone 168C: no method has an obviously "right" default
+// among three genuinely different fulfilment options, so this picks
+// the one closest to the old single-method experience (a courier
+// delivers to the customer's own door) — the customer can freely
+// switch to Locker to Locker or Customer Collection before submitting.
+const DEFAULT_DELIVERY_METHOD = "COURIER_DOOR";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
 // the request failing) is never an error on the checkout page, just
@@ -87,6 +95,58 @@ function renderAccountNote(customer) {
   `;
 }
 
+// Version 7, Milestone 168C: three owner-approved delivery methods
+// (Section F of the milestone brief). `physicalSubtotal`/
+// `hasPhysicalItems` decide each method's displayed fee (Locker/Door
+// show FREE once the qualifying subtotal reaches R600 — see
+// config/delivery.js's calculateDeliveryFee()); Collection is always
+// free. Selecting a method toggles the address vs. collection-city
+// fields below (see js/app.js's updateCheckoutDeliveryMethodUI()) —
+// this is a real accessible radio group, not a custom widget.
+function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems, defaultMethod) {
+  return `
+    <fieldset class="delivery-methods" data-field-group="deliveryMethod">
+      <legend class="checkout-section__label">Delivery Method <span class="form-field__required" aria-hidden="true">*</span></legend>
+      ${DELIVERY_METHODS.map((method) => {
+        const fee = calculateDeliveryFeeForMethod(method.value, physicalSubtotal, hasPhysicalItems);
+        return `
+          <label class="delivery-method">
+            <input
+              type="radio"
+              name="deliveryMethod"
+              value="${method.value}"
+              class="delivery-method__radio"
+              data-action="select-delivery-method"
+              ${method.value === defaultMethod ? "checked" : ""}
+            />
+            <span class="delivery-method__content">
+              <span class="delivery-method__label">${method.label}</span>
+              <span class="delivery-method__fee" data-delivery-method-fee="${method.value}">${fee === 0 ? "FREE" : `R${fee.toFixed(2)}`}</span>
+            </span>
+          </label>
+        `;
+      }).join("")}
+      <span class="form-field__error" data-error-for="deliveryMethod"></span>
+    </fieldset>
+  `;
+}
+
+function renderCollectionCityField(defaultMethod) {
+  return `
+    <div class="form-field form-field--full" data-collection-fields ${defaultMethod === "COLLECTION" ? "" : "hidden"}>
+      <label class="form-field__label" for="collectionCity">
+        Collection Location <span class="form-field__required" aria-hidden="true">*</span>
+      </label>
+      <select id="collectionCity" name="collectionCity" class="form-field__input" ${defaultMethod === "COLLECTION" ? "required" : ""}>
+        <option value="">Select a location</option>
+        ${COLLECTION_CITIES.map((city) => `<option value="${city}">${city}</option>`).join("")}
+      </select>
+      <span class="form-field__error" data-error-for="collectionCity"></span>
+      <p class="form-field__hint">Collection by arrangement — we'll be in touch to confirm details.</p>
+    </div>
+  `;
+}
+
 function renderPaymentMethods() {
   return `
     <fieldset class="payment-methods" data-field-group="paymentMethod">
@@ -126,12 +186,12 @@ function renderDeliveryNote() {
       <div>
         <strong>Delivery is arranged after your order is confirmed.</strong>
         <p>
-          Delivery is R80. Registered Seasonedz Group customers get
-          free delivery on orders of R650 or more. We use The Courier
-          Guy for courier deliveries where applicable. Seasonedz Group
-          will confirm your order and arrange delivery; tracking
-          details are shared once your order has been packed and
-          booked.
+          Choose Courier Guy Locker to Locker (R100), Courier Guy Door
+          to Door (R120), or free Customer Collection in Pretoria or
+          Thohoyandou. Locker and Door to Door are both free on orders
+          of R600 or more. Seasonedz Group will confirm your order and
+          arrange delivery or collection; tracking details are shared
+          once a courier order has been packed and booked.
         </p>
         ${renderContactSupportNote("Need help with delivery?")}
       </div>
@@ -185,13 +245,15 @@ export async function renderCheckoutPage() {
   // slow/failed lookup beyond this one awaited call — a guest sees
   // exactly the same page either way, just without prefilled fields.
   const customer = await getLoggedInCustomerSafely();
-  // Version 7, Milestone 131: re-reads the cart now that the customer's
-  // registered status is known, so the displayed delivery fee/total
-  // already reflects the same rule the backend will apply at order
-  // creation — a purely client-side estimate for display, never
-  // trusted by the backend itself.
-  const isRegisteredCustomer = customer?.type === "REGISTERED";
-  const { subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
+  // Version 7, Milestone 168C: the displayed delivery fee/total now
+  // depends on the selected delivery method, not registered-customer
+  // status (see config/delivery.js) — starts from
+  // DEFAULT_DELIVERY_METHOD and js/app.js's
+  // updateCheckoutDeliveryMethodUI() recomputes it live as the
+  // customer changes their selection. Purely a client-side estimate
+  // for display — the backend independently recalculates the real fee
+  // at order-creation time from verified DB-priced items.
+  const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal, composition } = getCartSummary(DEFAULT_DELIVERY_METHOD);
 
   return `
     <section class="stub-page container checkout-page">
@@ -204,7 +266,15 @@ export async function renderCheckoutPage() {
       ${renderCartCompositionNotice(composition)}
 
       <div class="checkout-layout">
-        <form id="checkout-form" class="checkout-form" novalidate>
+        <form
+          id="checkout-form"
+          class="checkout-form"
+          novalidate
+          data-physical-subtotal="${physicalSubtotal}"
+          data-has-physical-items="${composition.hasPhysical}"
+          data-subtotal="${subtotal}"
+          data-gift-wrap-total="${giftWrapTotal}"
+        >
           <div class="checkout-section">
             <h2 class="checkout-section__label">Delivery Details</h2>
             <div class="form-grid">
@@ -212,22 +282,31 @@ export async function renderCheckoutPage() {
               ${renderField({ id: "lastName", label: "Last Name", placeholder: "Nkosi", value: customer?.lastName || "" })}
               ${renderField({ id: "email", label: "Email Address", type: "email", placeholder: "you@example.com", value: customer?.email || "" })}
               ${renderField({ id: "phone", label: "Phone Number", type: "tel", placeholder: "082 123 4567", value: customer?.phone || "" })}
-              ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane" })}
-              ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside" })}
-              ${renderField({ id: "city", label: "City", placeholder: "Pretoria" })}
+            </div>
+          </div>
+
+          <div class="checkout-section">
+            ${renderDeliveryMethods(physicalSubtotal, composition.hasPhysical, DEFAULT_DELIVERY_METHOD)}
+          </div>
+
+          <div class="checkout-section">
+            <div class="form-grid" data-delivery-address-fields ${DEFAULT_DELIVERY_METHOD === "COLLECTION" ? "hidden" : ""}>
+              ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
+              ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
+              ${renderField({ id: "city", label: "City", placeholder: "Pretoria", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
 
               <div class="form-field">
                 <label class="form-field__label" for="province">
                   Province <span class="form-field__required" aria-hidden="true">*</span>
                 </label>
-                <select id="province" name="province" class="form-field__input" required>
+                <select id="province" name="province" class="form-field__input" ${DEFAULT_DELIVERY_METHOD !== "COLLECTION" ? "required" : ""}>
                   <option value="">Select a province</option>
                   ${PROVINCES.map((province) => `<option value="${province}">${province}</option>`).join("")}
                 </select>
                 <span class="form-field__error" data-error-for="province"></span>
               </div>
 
-              ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001" })}
+              ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
 
               <div class="form-field form-field--full">
                 <label class="form-field__label" for="deliveryNotes">
@@ -242,6 +321,8 @@ export async function renderCheckoutPage() {
                 ></textarea>
               </div>
             </div>
+
+            ${renderCollectionCityField(DEFAULT_DELIVERY_METHOD)}
           </div>
 
           <div class="checkout-section">
@@ -255,7 +336,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block">Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, deliveryMethodLabel: getDeliveryMethodLabel(DEFAULT_DELIVERY_METHOD), hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

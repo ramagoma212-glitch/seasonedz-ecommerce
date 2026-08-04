@@ -281,11 +281,14 @@ function toPaymentOrderEmailData(
     total: Prisma.Decimal;
     paymentStatus: PaymentStatus;
     paymentMethod: PaymentMethod;
-    deliveryStreetAddress: string;
-    deliverySuburb: string;
-    deliveryCity: string;
-    deliveryProvince: string;
-    deliveryPostalCode: string;
+    deliveryMethod: string;
+    deliveryFee: Prisma.Decimal;
+    collectionCity: string | null;
+    deliveryStreetAddress: string | null;
+    deliverySuburb: string | null;
+    deliveryCity: string | null;
+    deliveryProvince: string | null;
+    deliveryPostalCode: string | null;
     deliveryNotes: string | null;
   },
   digital?: { hasDigitalItems: boolean; guestDownloadUrl?: string }
@@ -300,6 +303,9 @@ function toPaymentOrderEmailData(
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
     items: [],
+    deliveryMethod: order.deliveryMethod,
+    deliveryFee: order.deliveryFee.toNumber(),
+    collectionCity: order.collectionCity,
     deliveryStreetAddress: order.deliveryStreetAddress,
     deliverySuburb: order.deliverySuburb,
     deliveryCity: order.deliveryCity,

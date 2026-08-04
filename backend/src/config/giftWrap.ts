@@ -5,7 +5,7 @@
 // read from here instead of hardcoding R30/150 in more than one place.
 // The frontend (src/js/cart.js) mirrors GIFT_WRAP_FEE_PER_ITEM for
 // display purposes only — same "client shows an estimate, backend is
-// authoritative" discipline as STANDARD_DELIVERY_FEE in
+// authoritative" discipline as the delivery fee constants in
 // config/delivery.ts. A request body's own claimed gift-wrap price is
 // never read anywhere in this codebase; every fee is computed here.
 

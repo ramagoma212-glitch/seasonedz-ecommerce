@@ -7,7 +7,7 @@
 
 import { Prisma, type FulfilmentStatus } from "@prisma/client";
 import { calculateDeliveryFee as calculateDeliveryFeeDecimal } from "../utils/money.js";
-import { COURIER_INTEGRATION_ENABLED, COURIER_PROVIDER, REGISTERED_FREE_DELIVERY_THRESHOLD, STANDARD_DELIVERY_FEE } from "../config/delivery.js";
+import { COURIER_INTEGRATION_ENABLED, COURIER_PROVIDER, FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, type DeliveryMethodValue } from "../config/delivery.js";
 
 // Plain-number wrapper around utils/money.ts's Decimal-based
 // calculateDeliveryFee, so callers of this service don't need to
@@ -15,33 +15,35 @@ import { COURIER_INTEGRATION_ENABLED, COURIER_PROVIDER, REGISTERED_FREE_DELIVERY
 // transaction still calls the Decimal version directly (via
 // utils/money.ts) — this just gives the same rule a simple number-in,
 // number-out API for anything else that needs it.
-export function calculateDeliveryFee(subtotal: number, isRegisteredCustomer: boolean, hasPhysicalItems = true): number {
-  return calculateDeliveryFeeDecimal(new Prisma.Decimal(subtotal), isRegisteredCustomer, hasPhysicalItems).toNumber();
+export function calculateDeliveryFee(method: DeliveryMethodValue, physicalSubtotal: number, hasPhysicalItems = true): number {
+  return calculateDeliveryFeeDecimal(method, new Prisma.Decimal(physicalSubtotal), hasPhysicalItems).toNumber();
 }
 
 export interface DeliverySummary {
-  subtotal: number;
+  physicalSubtotal: number;
+  method: DeliveryMethodValue;
   fee: number;
   isFree: boolean;
-  isRegisteredCustomer: boolean;
-  registeredFreeDeliveryThreshold: number;
-  standardDeliveryFee: number;
+  freeDeliveryThreshold: number;
+  courierLockerFee: number;
+  courierDoorFee: number;
 }
 
-// A small, display-ready summary of what a given subtotal (and
-// registered-customer status) means for delivery — e.g. usable by a
-// future endpoint or script that wants to show "R80" / "Free" without
-// reaching into config constants directly.
-export function getDeliverySummary(subtotal: number, isRegisteredCustomer: boolean, hasPhysicalItems = true): DeliverySummary {
-  const fee = calculateDeliveryFee(subtotal, isRegisteredCustomer, hasPhysicalItems);
+// A small, display-ready summary of what a given qualifying subtotal
+// and method means for delivery — e.g. usable by a future endpoint or
+// script that wants to show "R100" / "Free" without reaching into
+// config constants directly.
+export function getDeliverySummary(method: DeliveryMethodValue, physicalSubtotal: number, hasPhysicalItems = true): DeliverySummary {
+  const fee = calculateDeliveryFee(method, physicalSubtotal, hasPhysicalItems);
 
   return {
-    subtotal,
+    physicalSubtotal,
+    method,
     fee,
     isFree: fee === 0,
-    isRegisteredCustomer,
-    registeredFreeDeliveryThreshold: REGISTERED_FREE_DELIVERY_THRESHOLD,
-    standardDeliveryFee: STANDARD_DELIVERY_FEE,
+    freeDeliveryThreshold: FREE_DELIVERY_THRESHOLD,
+    courierLockerFee: COURIER_LOCKER_FEE,
+    courierDoorFee: COURIER_DOOR_FEE,
   };
 }
 

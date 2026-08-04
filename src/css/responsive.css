@@ -280,10 +280,6 @@
     grid-template-columns: 1fr;
   }
 
-  .product-details__actions {
-    max-width: none;
-  }
-
   .checkout-layout,
   .order-confirmation__layout,
   .tracking-result__grid {
@@ -355,6 +351,19 @@
 
   .site-header__actions .site-header__mobile-toggle {
     display: flex;
+  }
+
+  /* Version 7, Milestone 168C: mobile keeps the full flat 8-link panel
+     (Part 7) — the 4 links normally tucked into the desktop-only More
+     dropdown re-appear here as ordinary links, and the More
+     trigger/panel itself (redundant once every link is already
+     directly visible) is hidden. */
+  .nav-link--in-more {
+    display: inline;
+  }
+
+  .nav-more {
+    display: none;
   }
 }
 

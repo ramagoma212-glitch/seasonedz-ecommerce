@@ -53,6 +53,8 @@ import {
 } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
+import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
+import { getDeliveryNote } from "../components/orderSummary.js";
 import { escapeHtml } from "./search.js";
 import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
 
@@ -66,6 +68,7 @@ function mountApp() {
 
   initRouter();
   setupMobileMenu();
+  setupNavMoreMenu();
   setupImageFallback();
   setupHeaderSearch();
   setupFilterControls();
@@ -109,6 +112,44 @@ function onRouteChange() {
 
   document.querySelector(".site-header__collapsible")?.classList.remove("is-open");
   document.querySelector(".site-header__mobile-toggle")?.setAttribute("aria-expanded", "false");
+  closeNavMoreMenu();
+}
+
+// Version 7, Milestone 168C: the desktop "More" nav dropdown (see
+// components/header.js's renderMoreMenu()). Closing on navigation
+// mirrors the mobile panel's own onRouteChange() behaviour above — a
+// selected destination should never leave a stale open dropdown behind.
+function closeNavMoreMenu() {
+  const trigger = document.getElementById("nav-more-trigger");
+  const panel = document.getElementById("nav-more-panel");
+  if (!trigger || !panel || panel.hidden) return;
+  panel.hidden = true;
+  trigger.setAttribute("aria-expanded", "false");
+}
+
+// Click-outside-to-close and Escape-to-close (with focus return to the
+// trigger, matching setupMobileMenu()'s own Escape behaviour) — the
+// open/close-on-click-of-the-trigger-itself behaviour instead reuses
+// the existing generic aria-expanded/hidden toggle idiom via
+// data-action="toggle-nav-more" (see handleToggleNavMore, wired
+// through setupProductActions()'s delegated click handler below).
+function setupNavMoreMenu() {
+  document.addEventListener("click", (event) => {
+    const trigger = document.getElementById("nav-more-trigger");
+    const panel = document.getElementById("nav-more-panel");
+    if (!trigger || !panel || panel.hidden) return;
+    if (trigger.contains(event.target) || panel.contains(event.target)) return;
+    closeNavMoreMenu();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const trigger = document.getElementById("nav-more-trigger");
+    const panel = document.getElementById("nav-more-panel");
+    if (!trigger || !panel || panel.hidden) return;
+    closeNavMoreMenu();
+    trigger.focus();
+  });
 }
 
 // Version 7, Milestone 150: aria-expanded now tracks open state (was
@@ -305,6 +346,8 @@ function setupProductActions() {
       handleToggleMobileFilters(actionEl);
     } else if (action === "toggle-faq") {
       handleToggleFaq(actionEl);
+    } else if (action === "toggle-nav-more") {
+      handleToggleNavMore(actionEl);
     } else if (action === "toggle-gift-view-more") {
       handleToggleGiftViewMore(actionEl);
     } else if (action === "toggle-view-more") {
@@ -323,6 +366,20 @@ function setupProductActions() {
 // multiple can be open at once (a simple, predictable behaviour that
 // needs no extra "close others" bookkeeping).
 function handleToggleFaq(triggerEl) {
+  const panel = document.getElementById(triggerEl.getAttribute("aria-controls"));
+  if (!panel) return;
+
+  const isOpen = triggerEl.getAttribute("aria-expanded") === "true";
+  triggerEl.setAttribute("aria-expanded", String(!isOpen));
+  panel.hidden = isOpen;
+}
+
+// Version 7, Milestone 168C: desktop header "More" nav dropdown — same
+// generic aria-expanded/hidden toggle idiom as handleToggleFaq above,
+// kept as its own small function (rather than reused directly) so its
+// name stays clear about what it's for; see setupNavMoreMenu() for the
+// outside-click/Escape-close behaviour this alone doesn't cover.
+function handleToggleNavMore(triggerEl) {
   const panel = document.getElementById(triggerEl.getAttribute("aria-controls"));
   if (!panel) return;
 
@@ -530,7 +587,8 @@ function handleToggleWishlist(buttonEl) {
 
 // Updates a wishlist button's visual state in place. Product cards use
 // an icon-only circular button (product-card__wishlist); the product
-// details page uses a full-width text button instead.
+// details page uses a full-width heart-icon-plus-label button instead
+// (product-details__wishlist-btn, Version 7, Milestone 168C).
 function patchWishlistButton(buttonEl, isActive) {
   const name = buttonEl.dataset.name || "product";
 
@@ -540,6 +598,10 @@ function patchWishlistButton(buttonEl, isActive) {
   if (buttonEl.classList.contains("product-card__wishlist")) {
     buttonEl.innerHTML = isActive ? "&#9829;" : "&#9825;";
     buttonEl.setAttribute("aria-label", isActive ? `Remove ${name} from wishlist` : `Add ${name} to wishlist`);
+  } else if (buttonEl.classList.contains("product-details__wishlist-btn")) {
+    const icon = isActive ? "&#9829;" : "&#9825;";
+    const label = isActive ? "Remove from Wishlist" : "Add to Wishlist";
+    buttonEl.innerHTML = `<span aria-hidden="true">${icon}</span> ${label}`;
   } else {
     buttonEl.textContent = isActive ? "Remove from Wishlist" : "Add to Wishlist";
   }
@@ -577,6 +639,81 @@ function setupCheckoutForm() {
     if (!form || event.target.name !== "paymentMethod") return;
     clearFieldError(form, "paymentMethod");
   });
+
+  document.addEventListener("change", (event) => {
+    const form = event.target.closest("#checkout-form");
+    if (!form || event.target.name !== "deliveryMethod") return;
+    clearFieldError(form, "deliveryMethod");
+    updateCheckoutDeliveryMethodUI(form, event.target.value);
+  });
+}
+
+// Version 7, Milestone 168C: switching delivery method toggles the
+// address vs. collection-city fields (and their `required` attributes,
+// so browser-native validation and validateCheckoutForm() agree with
+// what's actually visible) and recomputes the displayed delivery fee/
+// total/note in place — without a full page re-render, since only
+// this one section of the page actually needs to change. Mirrors the
+// exact same fee rule config/delivery.js's calculateDeliveryFee() uses
+// (kept as a small local copy so this file doesn't need a new import
+// for one calculation used in exactly one place).
+function updateCheckoutDeliveryMethodUI(form, method) {
+  const addressFields = form.querySelector("[data-delivery-address-fields]");
+  const collectionFields = form.querySelector("[data-collection-fields]");
+  const requiresAddress = method === "COURIER_LOCKER" || method === "COURIER_DOOR";
+
+  if (addressFields) {
+    addressFields.hidden = !requiresAddress;
+    ["street", "suburb", "city", "province", "postalCode"].forEach((name) => {
+      const field = addressFields.querySelector(`[name="${name}"]`);
+      if (field) field.required = requiresAddress;
+      // A field that just became irrelevant shouldn't keep showing a
+      // stale error from before the customer switched methods.
+      if (!requiresAddress) clearFieldError(form, name);
+    });
+  }
+
+  if (collectionFields) {
+    collectionFields.hidden = method !== "COLLECTION";
+    const cityField = collectionFields.querySelector("[name=collectionCity]");
+    if (cityField) cityField.required = method === "COLLECTION";
+    if (method !== "COLLECTION") clearFieldError(form, "collectionCity");
+  }
+
+  const physicalSubtotal = parseFloat(form.dataset.physicalSubtotal || "0");
+  const hasPhysicalItems = form.dataset.hasPhysicalItems === "true";
+  const subtotal = parseFloat(form.dataset.subtotal || "0");
+  const giftWrapTotal = parseFloat(form.dataset.giftWrapTotal || "0");
+
+  const feeForMethod = (candidateMethod) => {
+    if (!hasPhysicalItems) return 0;
+    if (candidateMethod !== "COURIER_LOCKER" && candidateMethod !== "COURIER_DOOR") return 0;
+    const qualifiesForFree = physicalSubtotal >= FREE_DELIVERY_THRESHOLD;
+    if (qualifiesForFree) return 0;
+    return candidateMethod === "COURIER_LOCKER" ? COURIER_LOCKER_FEE : COURIER_DOOR_FEE;
+  };
+
+  const deliveryFee = feeForMethod(method);
+
+  form.querySelectorAll("[data-delivery-method-fee]").forEach((el) => {
+    const fee = feeForMethod(el.dataset.deliveryMethodFee);
+    el.textContent = fee === 0 ? "FREE" : `R${fee.toFixed(2)}`;
+  });
+
+  const summary = document.querySelector(".order-summary");
+  if (!summary) return;
+
+  const labelEl = summary.querySelector("[data-order-summary-delivery-label]");
+  if (labelEl) labelEl.textContent = hasPhysicalItems ? getDeliveryMethodLabel(method) : "Delivery";
+
+  const valueEl = summary.querySelector("[data-order-summary-delivery-value]");
+  if (valueEl) valueEl.textContent = deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`;
+
+  const totalEl = summary.querySelector("[data-order-summary-total-value]");
+  if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee).toFixed(2)}`;
+
+  const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
+  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems).trim();
 }
 
 function clearFieldError(form, fieldName) {
@@ -623,10 +760,10 @@ function showCheckoutErrors(form, errors) {
 }
 
 function focusFirstCheckoutError(form) {
-  const firstErrorEl = form.querySelector(".form-field__input.has-error, .payment-methods.has-error");
+  const firstErrorEl = form.querySelector(".form-field__input.has-error, .payment-methods.has-error, .delivery-methods.has-error");
   if (!firstErrorEl) return;
 
-  const focusTarget = firstErrorEl.matches(".payment-methods")
+  const focusTarget = firstErrorEl.matches(".payment-methods, .delivery-methods")
     ? firstErrorEl.querySelector("input[type=radio]")
     : firstErrorEl;
 
@@ -660,6 +797,8 @@ const BACKEND_TO_CHECKOUT_FIELD = {
   "customer.lastName": "lastName",
   "customer.email": "email",
   "customer.phone": "phone",
+  deliveryMethod: "deliveryMethod",
+  collectionCity: "collectionCity",
   "deliveryAddress.streetAddress": "street",
   "deliveryAddress.suburb": "suburb",
   "deliveryAddress.city": "city",
@@ -709,6 +848,7 @@ async function handleCheckoutSubmit(form) {
   }
 
   const items = getCart();
+  const requiresAddress = data.deliveryMethod === "COURIER_LOCKER" || data.deliveryMethod === "COURIER_DOOR";
   const payload = buildOrderPayload({
     customer: {
       firstName: data.firstName.trim(),
@@ -716,13 +856,17 @@ async function handleCheckoutSubmit(form) {
       email: data.email.trim(),
       phone: data.phone.trim(),
     },
-    deliveryAddress: {
-      street: data.street.trim(),
-      suburb: data.suburb.trim(),
-      city: data.city.trim(),
-      province: data.province,
-      postalCode: data.postalCode.trim(),
-    },
+    deliveryMethod: data.deliveryMethod,
+    deliveryAddress: requiresAddress
+      ? {
+          street: data.street.trim(),
+          suburb: data.suburb.trim(),
+          city: data.city.trim(),
+          province: data.province,
+          postalCode: data.postalCode.trim(),
+        }
+      : undefined,
+    collectionCity: data.deliveryMethod === "COLLECTION" ? data.collectionCity : undefined,
     deliveryNotes: (data.deliveryNotes || "").trim(),
     paymentMethod: data.paymentMethod,
     items,

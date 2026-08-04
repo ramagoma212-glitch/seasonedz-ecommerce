@@ -44,15 +44,32 @@ export function validateCheckoutForm(data) {
     errors.phone = "Please enter a valid South African phone number, e.g. 082 123 4567.";
   }
 
-  if (!isRequired(data.street)) errors.street = "Street address is required.";
-  if (!isRequired(data.suburb)) errors.suburb = "Suburb is required.";
-  if (!isRequired(data.city)) errors.city = "City is required.";
-  if (!isRequired(data.province)) errors.province = "Please select a province.";
+  // Version 7, Milestone 168C: which of the three owner-approved
+  // delivery methods was chosen decides whether an address or a
+  // collection city is required below — mirrors the backend's own
+  // branching in order.validator.ts.
+  if (!isRequired(data.deliveryMethod)) {
+    errors.deliveryMethod = "Please select a delivery method.";
+  }
 
-  if (!isRequired(data.postalCode)) {
-    errors.postalCode = "Postal code is required.";
-  } else if (!isValidPostalCode(data.postalCode)) {
-    errors.postalCode = "Postal code must be 4 digits.";
+  const requiresAddress = data.deliveryMethod === "COURIER_LOCKER" || data.deliveryMethod === "COURIER_DOOR";
+  const requiresCollectionCity = data.deliveryMethod === "COLLECTION";
+
+  if (requiresAddress) {
+    if (!isRequired(data.street)) errors.street = "Street address is required.";
+    if (!isRequired(data.suburb)) errors.suburb = "Suburb is required.";
+    if (!isRequired(data.city)) errors.city = "City is required.";
+    if (!isRequired(data.province)) errors.province = "Please select a province.";
+
+    if (!isRequired(data.postalCode)) {
+      errors.postalCode = "Postal code is required.";
+    } else if (!isValidPostalCode(data.postalCode)) {
+      errors.postalCode = "Postal code must be 4 digits.";
+    }
+  }
+
+  if (requiresCollectionCity && !isRequired(data.collectionCity)) {
+    errors.collectionCity = "Please choose a collection location.";
   }
 
   if (!isRequired(data.paymentMethod)) errors.paymentMethod = "Please select a payment method.";

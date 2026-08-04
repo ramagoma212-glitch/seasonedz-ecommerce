@@ -25,6 +25,23 @@ import { renderAdminNav } from "../components/adminNav.js";
 import { formatCurrency, formatDate, formatDateTime, humanizeEnum, renderStatusBadge } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
 
+// Version 7, Milestone 168C: matches the labels used in customer-facing
+// order confirmation/tracking and the backend's own email templates
+// (emailTemplates.ts's formatDeliveryMethodLabel), so admin staff see
+// the same wording customers do.
+function formatDeliveryMethodLabel(method) {
+  switch (method) {
+    case "COURIER_LOCKER":
+      return "Courier Guy Locker to Locker";
+    case "COURIER_DOOR":
+      return "Courier Guy Door to Door";
+    case "COLLECTION":
+      return "Customer Collection";
+    default:
+      return humanizeEnum(method);
+  }
+}
+
 const ALLOWED_NEXT_STATUSES = {
   PENDING: ["CONFIRMED", "CANCELLED"],
   CONFIRMED: ["PROCESSING", "CANCELLED"],
@@ -434,6 +451,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
             <div class="order-confirmation__row"><span>Payment Status</span>${renderStatusBadge(order.paymentStatus)}</div>
             <div class="order-confirmation__row"><span>Payment Method</span><span>${escapeHtml(humanizeEnum(order.paymentMethod))}</span></div>
             <div class="order-confirmation__row"><span>Fulfilment Status</span>${renderStatusBadge(order.fulfilmentStatus)}</div>
+            <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
           </div>
 
           <div class="order-confirmation__card">
@@ -444,12 +462,19 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           </div>
 
           <div class="order-confirmation__card">
-            <h3>Delivery Address</h3>
-            <p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
-            <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
-            <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
-            <p>${escapeHtml(order.deliveryAddress.country)}</p>
-            ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}
+            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivery Address"}</h3>
+            ${
+              order.deliveryMethod === "COLLECTION"
+                ? `<p><strong>Collection location:</strong> ${escapeHtml(order.collectionCity ?? "To be confirmed")}</p>
+                   <p>Collection by arrangement.</p>`
+                : order.deliveryAddress
+                  ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
+                     <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
+                     <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
+                     <p>${escapeHtml(order.deliveryAddress.country)}</p>
+                     ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                  : `<p>No delivery address on file.</p>`
+            }
           </div>
 
           ${

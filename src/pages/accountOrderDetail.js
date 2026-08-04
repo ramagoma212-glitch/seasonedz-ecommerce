@@ -20,6 +20,19 @@ function humanizeEnum(value) {
     .join(" ");
 }
 
+function formatDeliveryMethodLabel(method) {
+  switch (method) {
+    case "COURIER_LOCKER":
+      return "Courier Guy Locker to Locker";
+    case "COURIER_DOOR":
+      return "Courier Guy Door to Door";
+    case "COLLECTION":
+      return "Customer Collection";
+    default:
+      return humanizeEnum(method);
+  }
+}
+
 function formatDate(isoString) {
   return new Date(isoString).toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" });
 }
@@ -107,7 +120,8 @@ function renderOrderDetail(order, digitalItems) {
         <div class="order-confirmation__row"><span>Payment Method</span><span>${humanizeEnum(order.paymentMethod)}</span></div>
         <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(order.paymentStatus)}</span></div>
         <div class="order-confirmation__row"><span>Subtotal</span><span>${formatRand(order.subtotal)}</span></div>
-        <div class="order-confirmation__row"><span>Delivery Fee</span><span>${formatRand(order.deliveryFee)}</span></div>
+        <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
+        <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)}</span></div>
         <div class="order-confirmation__row"><span>Total</span><span>${formatRand(order.total)}</span></div>
       </div>
 
@@ -119,10 +133,17 @@ function renderOrderDetail(order, digitalItems) {
       </div>
 
       <div class="order-confirmation__card">
-        <h3>Delivering To</h3>
-        <div class="order-confirmation__row"><span>Address</span><span>${escapeHtml(order.deliveryAddress.streetAddress)}, ${escapeHtml(order.deliveryAddress.suburb)}</span></div>
-        <div class="order-confirmation__row"><span>City</span><span>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)} ${escapeHtml(order.deliveryAddress.postalCode)}</span></div>
-        ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}
+        <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivering To"}</h3>
+        ${
+          order.deliveryMethod === "COLLECTION"
+            ? `<div class="order-confirmation__row"><span>Collection Location</span><span>${escapeHtml(order.collectionCity ?? "To be confirmed")}</span></div>
+               <div class="order-confirmation__row"><span>Collection</span><span>By arrangement</span></div>`
+            : order.deliveryAddress
+              ? `<div class="order-confirmation__row"><span>Address</span><span>${escapeHtml(order.deliveryAddress.streetAddress)}, ${escapeHtml(order.deliveryAddress.suburb)}</span></div>
+                 <div class="order-confirmation__row"><span>City</span><span>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)} ${escapeHtml(order.deliveryAddress.postalCode)}</span></div>
+                 ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}`
+              : ""
+        }
       </div>
 
       ${order.isDigitalOnly ? renderDigitalOnlyNotice(order) : renderShippingCard(order.shipping)}

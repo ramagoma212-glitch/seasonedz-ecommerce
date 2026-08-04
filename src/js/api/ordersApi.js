@@ -9,7 +9,15 @@
 import { apiGet, apiPost } from "../apiClient.js";
 import { mapPaymentMethodToBackend } from "./mappers.js";
 
-export function buildOrderPayload({ customer, deliveryAddress, deliveryNotes, paymentMethod, items }) {
+// Version 7, Milestone 168C: `deliveryMethod` is required; `deliveryAddress`
+// is only sent for COURIER_LOCKER/COURIER_DOOR (omitted — not sent as
+// empty strings — for COLLECTION, which has no physical address at
+// all); `collectionCity` is only sent for COLLECTION. Still no price/
+// fee/total field is ever sent — the backend independently recomputes
+// and validates every fee itself, exactly as before.
+export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, collectionCity, deliveryNotes, paymentMethod, items }) {
+  const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
+
   return {
     customer: {
       firstName: customer.firstName,
@@ -17,15 +25,21 @@ export function buildOrderPayload({ customer, deliveryAddress, deliveryNotes, pa
       email: customer.email,
       phone: customer.phone,
     },
-    deliveryAddress: {
-      streetAddress: deliveryAddress.street,
-      suburb: deliveryAddress.suburb,
-      city: deliveryAddress.city,
-      province: deliveryAddress.province,
-      postalCode: deliveryAddress.postalCode,
-      country: "South Africa",
-      deliveryNotes: deliveryNotes || undefined,
-    },
+    deliveryMethod,
+    ...(requiresAddress
+      ? {
+          deliveryAddress: {
+            streetAddress: deliveryAddress.street,
+            suburb: deliveryAddress.suburb,
+            city: deliveryAddress.city,
+            province: deliveryAddress.province,
+            postalCode: deliveryAddress.postalCode,
+            country: "South Africa",
+            deliveryNotes: deliveryNotes || undefined,
+          },
+        }
+      : {}),
+    ...(deliveryMethod === "COLLECTION" ? { collectionCity } : {}),
     paymentMethod: mapPaymentMethodToBackend(paymentMethod),
     items: items.map((item) => ({
       productSlug: item.slug,

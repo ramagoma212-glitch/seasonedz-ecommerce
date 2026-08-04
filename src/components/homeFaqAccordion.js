@@ -6,7 +6,7 @@
 // is wired up via delegated click handling in js/app.js
 // (data-action="toggle-faq"), the same delegation pattern every other
 // interactive homepage control already uses.
-import { STANDARD_DELIVERY_FEE, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../js/cart.js";
+import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 import { businessInfo } from "../data/businessInfo.js";
 
 function buildHomeFaqs() {
@@ -20,7 +20,7 @@ function buildHomeFaqs() {
     {
       id: "delivery",
       question: "Do you deliver across South Africa?",
-      answer: `Yes, we deliver nationwide across South Africa. Standard delivery is R${STANDARD_DELIVERY_FEE}, and registered customers receive free delivery on orders of R${REGISTERED_FREE_DELIVERY_THRESHOLD} or more.`,
+      answer: `Yes, we deliver nationwide across South Africa. Courier Guy Locker to Locker is R${COURIER_LOCKER_FEE} and Door to Door is R${COURIER_DOOR_FEE}, both free on orders of R${FREE_DELIVERY_THRESHOLD} or more. Free Customer Collection is also available in Pretoria or Thohoyandou by arrangement.`,
     },
     {
       id: "ages",

@@ -49,14 +49,50 @@ function formatItemsList(items: OrderEmailItem[]): string {
   return items.map((item) => `- ${item.productName} x${item.quantity} — ${formatRand(item.lineTotal)}`).join("\n");
 }
 
+// Version 7, Milestone 168C: labels for the three owner-approved
+// fulfilment methods stored on Order.deliveryMethod.
+function formatDeliveryMethodLabel(method: string): string {
+  switch (method) {
+    case "COURIER_LOCKER":
+      return "Courier Guy Locker to Locker";
+    case "COURIER_DOOR":
+      return "Courier Guy Door to Door";
+    case "COLLECTION":
+      return "Customer Collection";
+    default:
+      return humanizeEnum(method);
+  }
+}
+
+// Version 7, Milestone 168C: Customer Collection has no physical
+// delivery address at all — showing the courier address block for it
+// would be both wrong (the fields are null) and misleading (it isn't
+// being couriered). Branches on deliveryMethod instead of just
+// checking for missing fields, so the wording is always intentional.
 function formatDeliveryNote(order: OrderEmailData): string {
+  if (order.deliveryMethod === "COLLECTION") {
+    return `Collection location: ${order.collectionCity ?? "to be confirmed"}\nCollection is by arrangement — we'll be in touch to confirm details.`;
+  }
+
   const lines = [
     order.deliveryStreetAddress,
     order.deliverySuburb,
-    `${order.deliveryCity}, ${order.deliveryProvince} ${order.deliveryPostalCode}`.trim(),
+    order.deliveryCity || order.deliveryProvince || order.deliveryPostalCode
+      ? `${order.deliveryCity ?? ""}, ${order.deliveryProvince ?? ""} ${order.deliveryPostalCode ?? ""}`.trim()
+      : null,
   ];
   if (order.deliveryNotes) lines.push(`Notes: ${order.deliveryNotes}`);
   return lines.filter(Boolean).join("\n");
+}
+
+// Version 7, Milestone 168C: replaces the old one-size-fits-all
+// "Delivery is arranged manually..." courier line — Customer
+// Collection orders must never see courier/tracking wording (Part 32).
+function deliveryFulfilmentNote(order: OrderEmailData): string {
+  if (order.deliveryMethod === "COLLECTION") {
+    return "Collection is by arrangement — we'll be in touch to confirm collection details once your order is confirmed.";
+  }
+  return "Delivery is arranged manually by our small team once your order is confirmed — we'll be in touch with tracking details once it's packed and booked.";
 }
 
 // Version 7, Milestone 117: the BANK_TRANSFER line no longer implies
@@ -122,10 +158,10 @@ Payment Status: ${humanizeEnum(order.paymentStatus)}
 
 ${paymentInstructions(order.paymentMethod)}${digitalItemsNoticeForOrderCreated(order)}
 
-Delivering To:
+Delivery Method: ${formatDeliveryMethodLabel(order.deliveryMethod)} (${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)})
 ${formatDeliveryNote(order)}
 
-Delivery is arranged manually by our small team once your order is confirmed — we'll be in touch with tracking details once it's packed and booked.
+${deliveryFulfilmentNote(order)}
 
 Any questions? Reach us directly:
 ${ORDER_CONTACT_BLOCK}
@@ -274,7 +310,7 @@ Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}${bankTransferReminder}${digitalItemsReminder}
 
-Delivering To:
+Delivery Method: ${formatDeliveryMethodLabel(order.deliveryMethod)} (${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)})
 ${formatDeliveryNote(order)}
 
 Please review this order in the admin dashboard and prepare it for processing.`;

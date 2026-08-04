@@ -8,23 +8,19 @@ import { renderCartItem } from "../components/cartItem.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
-import { getCurrentCustomer } from "../js/api/customerApi.js";
 
-// Version 7, Milestone 131: best-effort only, same discipline as
-// checkoutPage.js's own helper — being logged out (or the request
-// failing) is never an error on the cart page, just the guest state.
-async function isLoggedInRegisteredCustomer() {
-  try {
-    const response = await getCurrentCustomer();
-    return response?.data?.customer?.type === "REGISTERED";
-  } catch {
-    return false;
-  }
-}
+// Version 7, Milestone 168C: the cart page shows a representative
+// delivery-fee estimate before the customer has chosen a method (that
+// choice now happens at checkout, see checkoutPage.js) — Courier Guy
+// Door to Door, the closest equivalent to the old single-method
+// experience. Registered-customer status no longer affects this at
+// all (the R600 threshold now applies to every customer — see
+// config/delivery.js), so this page no longer needs to look up the
+// logged-in customer just to price delivery.
+const CART_ESTIMATE_DELIVERY_METHOD = "COURIER_DOOR";
 
 export async function renderCartPage() {
-  const isRegisteredCustomer = await isLoggedInRegisteredCustomer();
-  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(isRegisteredCustomer);
+  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(CART_ESTIMATE_DELIVERY_METHOD);
 
   if (!items.length) {
     return `
@@ -57,7 +53,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, isRegisteredCustomer, hasPhysicalItems: composition.hasPhysical })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical })}
       </div>
     </section>
   `;

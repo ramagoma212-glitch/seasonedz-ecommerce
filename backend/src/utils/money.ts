@@ -3,33 +3,47 @@
 // same type Product.price etc. are already stored and read as.
 
 import { Prisma } from "@prisma/client";
-import { STANDARD_DELIVERY_FEE, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
+import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD, type DeliveryMethodValue } from "../config/delivery.js";
 import { GIFT_WRAP_FEE_PER_ITEM } from "../config/giftWrap.js";
 
-const standardDeliveryFee = new Prisma.Decimal(STANDARD_DELIVERY_FEE);
-const registeredFreeDeliveryThreshold = new Prisma.Decimal(REGISTERED_FREE_DELIVERY_THRESHOLD);
+const courierLockerFee = new Prisma.Decimal(COURIER_LOCKER_FEE);
+const courierDoorFee = new Prisma.Decimal(COURIER_DOOR_FEE);
+const freeDeliveryThreshold = new Prisma.Decimal(FREE_DELIVERY_THRESHOLD);
 const giftWrapFeePerItem = new Prisma.Decimal(GIFT_WRAP_FEE_PER_ITEM);
 
-// Version 7, Milestone 131: free delivery is now a registered-account
-// benefit, not a flat subtotal threshold for everyone — see
-// config/delivery.ts's own header comment for the full rule.
-// `isRegisteredCustomer` must always come from the caller's own
-// verified session lookup (order.service.ts's createOrder(), sourced
-// from req.customerUser.type via optionalCustomerAuth) — never from
-// anything a request body claims. Courier API will replace this
-// later with real, address-based rates.
+// Version 7, Milestone 168C: replaces the old registered-customer-only
+// R650 threshold with three owner-approved fulfilment methods and a
+// universal R600 threshold (guest or registered — see config/delivery.ts's
+// header comment for the full rule and the reasoning for dropping the
+// registered-customer gate).
 //
-// Version 7, Milestone 152B: `hasPhysicalItems` (default `true`, so
-// every existing caller that doesn't pass it keeps its exact prior
-// behaviour) short-circuits straight to a R0 fee, before even checking
-// registered-customer status — a digital-only order has nothing to
-// deliver, so there is no delivery fee to charge regardless of who's
-// buying it or how much it costs. A mixed order (at least one physical
-// item alongside digital ones) still charges the normal fee — the
-// physical item(s) still need real-world delivery.
-export function calculateDeliveryFee(subtotal: Prisma.Decimal, isRegisteredCustomer: boolean, hasPhysicalItems = true): Prisma.Decimal {
+// `physicalSubtotal` must be the QUALIFYING subtotal only — physical
+// products' line totals, excluding gift wrapping and excluding any
+// delivery fee itself (see order.service.ts's createOrder(), which
+// derives this from verified DB-priced items, never from client input).
+//
+// Version 7, Milestone 152B (preserved): `hasPhysicalItems` short-
+// circuits straight to a R0 fee — a digital-only order has nothing to
+// deliver, regardless of method or subtotal.
+export function calculateDeliveryFee(method: DeliveryMethodValue, physicalSubtotal: Prisma.Decimal, hasPhysicalItems = true): Prisma.Decimal {
   if (!hasPhysicalItems) return new Prisma.Decimal(0);
-  return isRegisteredCustomer && subtotal.gte(registeredFreeDeliveryThreshold) ? new Prisma.Decimal(0) : standardDeliveryFee;
+  const qualifiesForFree = physicalSubtotal.gte(freeDeliveryThreshold);
+
+  switch (method) {
+    case "COLLECTION":
+      return new Prisma.Decimal(0);
+    case "COURIER_LOCKER":
+      return qualifiesForFree ? new Prisma.Decimal(0) : courierLockerFee;
+    case "COURIER_DOOR":
+      return qualifiesForFree ? new Prisma.Decimal(0) : courierDoorFee;
+    default: {
+      // Unreachable when the caller validates deliveryMethod first
+      // (order.validator.ts) — defensive fallback only, never trust
+      // an unvalidated method this deep in the pricing path.
+      const exhaustiveCheck: never = method;
+      throw new Error(`Unsupported delivery method: ${exhaustiveCheck}`);
+    }
+  }
 }
 
 // Version 7, Milestone 159: R30 per wrapped unit, never per order — a
