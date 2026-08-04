@@ -140,13 +140,22 @@ function renderGiftWrapOption() {
 
 // Version 7, Milestone 168C: owner-supplied, owner-approved artwork
 // (public/images/payment-methods-payfast.png, byte-identical to the
-// supplied "Payment logos.png" — see this milestone's asset-handling
-// notes). Informational only — PayFast itself still presents and
+// supplied "Payment logos.png" — kept as the approved master, never
+// altered). Informational only — PayFast itself still presents and
 // processes whichever of these nine methods the customer actually
 // picks; nothing here is a separate payment integration or checkout
-// choice. width/height match the source file's true 1536x1024 pixel
-// size (prevents layout shift while it loads); CSS scales it down
-// responsively (see pages.css).
+// choice.
+//
+// Version 7, Milestone 168C.1: the page actually serves the WebP
+// derivative (public/images/payment-methods-payfast.webp, 720x480,
+// ~20KB vs. the 1536x1024 ~1.1MB PNG master — generated locally via
+// Playwright's already-installed Chromium canvas, no new dependency,
+// no internet download, same logos/colours/proportions, just resized
+// and re-encoded) — same convention as the homepage hero image
+// (pages/home.js), which already serves .webp directly with no PNG
+// fallback markup, since this project's target browsers all support
+// it. width/height match the WebP's real pixel size (prevents layout
+// shift); CSS scales it down further, responsively (see pages.css).
 function renderPaymentMethodsBlock() {
   return `
     <div class="product-details__payment-methods">
@@ -154,10 +163,10 @@ function renderPaymentMethodsBlock() {
       <p>Pay securely through PayFast using your preferred payment method.</p>
       <img
         class="product-details__payment-logos"
-        src="${withBase("/images/payment-methods-payfast.png")}"
+        src="${withBase("/images/payment-methods-payfast.webp")}"
         alt="Secure payment methods available through PayFast including Visa, Mastercard, Apple Pay, Google Pay, Samsung Pay, Instant EFT, SnapScan, Zapper and Payflex."
-        width="1536"
-        height="1024"
+        width="720"
+        height="480"
         loading="lazy"
         decoding="async"
       />

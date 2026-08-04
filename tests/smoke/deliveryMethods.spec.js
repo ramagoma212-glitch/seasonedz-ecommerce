@@ -240,17 +240,27 @@ test.describe("Checkout: three delivery methods", () => {
     await expect(citySelect).toHaveValue("Pretoria");
   });
 
-  test("Locker to Locker and Door to Door both require the delivery address fields", async ({ page }) => {
+  // Version 7, Milestone 168C.1: no real Courier Guy locker-picker
+  // exists yet, so Locker to Locker only asks for city/province (never
+  // a full street address, which would misleadingly imply it's the
+  // real delivery destination) — only Door to Door needs the full
+  // address, since it genuinely delivers to one.
+  test("Door to Door requires the full address fields; Locker to Locker only needs city/province", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
-
-    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
-    await expect(page.locator("[data-delivery-address-fields]")).toBeVisible();
-    await expect(page.locator("[data-collection-fields]")).toBeHidden();
-    await expect(page.locator("#street")).toHaveAttribute("required", "");
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.locator("[data-delivery-address-fields]")).toBeVisible();
+    await expect(page.locator("[data-collection-fields]")).toBeHidden();
+    await expect(page.locator("#street")).toBeVisible();
     await expect(page.locator("#street")).toHaveAttribute("required", "");
+    await expect(page.locator("#city")).toHaveAttribute("required", "");
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
+    await expect(page.locator("[data-delivery-address-fields]")).toBeVisible();
+    await expect(page.locator("#street")).toBeHidden();
+    await expect(page.locator("#city")).toBeVisible();
+    await expect(page.locator("#city")).toHaveAttribute("required", "");
+    await expect(page.locator("[data-locker-area-note]")).toBeVisible();
   });
 
   test("submitting checkout with Collection selected but no city chosen shows a client-side validation error, never creates an order", async ({ page }) => {
@@ -268,5 +278,45 @@ test.describe("Checkout: three delivery methods", () => {
     await expect(page.locator('[data-error-for="collectionCity"]')).not.toHaveText("");
     // Still on checkout — no order was created.
     await expect(page).toHaveURL(/\/checkout/);
+  });
+
+  test("Locker to Locker passes client-side validation with only city/province filled, and sends no street/suburb/postal code to the backend", async ({ page }) => {
+    await addPhysicalItemAndGoToCheckout(page);
+
+    // Intercepts the real order-creation call so this test can prove
+    // what the client WOULD send without ever creating a real order —
+    // same "never submit checkout for real" discipline as
+    // giftWrap.spec.js. Responds with a syntactically valid (but
+    // fake) success so the page doesn't error out.
+    let capturedPayload = null;
+    await page.route("**/api/orders", (route) => {
+      capturedPayload = route.request().postDataJSON();
+      route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, message: "OK", data: { orderNumber: "SG-2026-TESTONLY" } }),
+      });
+    });
+
+    await page.locator("#firstName").fill("Thandiwe");
+    await page.locator("#lastName").fill("Nkosi");
+    await page.locator("#email").fill("thandiwe@example.com");
+    await page.locator("#phone").fill("0821234567");
+    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
+    await page.locator("#city").fill("Pretoria");
+    await page.locator("#province").selectOption("Gauteng");
+    // Deliberately never fill #street/#suburb/#postalCode — they're
+    // hidden and not required for Locker.
+    await page.locator('input[name="paymentMethod"][value="bank-transfer"]').check();
+
+    await page.locator('#checkout-form button[type="submit"]').click();
+    await expect(page).toHaveURL(/order-confirmation/);
+
+    expect(capturedPayload.deliveryMethod).toBe("COURIER_LOCKER");
+    expect(capturedPayload.deliveryAddress.city).toBe("Pretoria");
+    expect(capturedPayload.deliveryAddress.province).toBe("Gauteng");
+    expect(capturedPayload.deliveryAddress.streetAddress).toBeFalsy();
+    expect(capturedPayload.deliveryAddress.suburb).toBeFalsy();
+    expect(capturedPayload.deliveryAddress.postalCode).toBeFalsy();
   });
 });

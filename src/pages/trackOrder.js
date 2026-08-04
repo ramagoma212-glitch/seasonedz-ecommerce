@@ -51,7 +51,7 @@ function formatDeliveryMethodLabel(method) {
     case "COLLECTION":
       return "Customer Collection";
     default:
-      return humanizeEnum(method);
+      return method ? humanizeEnum(method) : "Delivery";
   }
 }
 

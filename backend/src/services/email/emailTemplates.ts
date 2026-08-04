@@ -60,7 +60,7 @@ function formatDeliveryMethodLabel(method: string): string {
     case "COLLECTION":
       return "Customer Collection";
     default:
-      return humanizeEnum(method);
+      return method ? humanizeEnum(method) : "Delivery";
   }
 }
 
@@ -69,9 +69,20 @@ function formatDeliveryMethodLabel(method: string): string {
 // would be both wrong (the fields are null) and misleading (it isn't
 // being couriered). Branches on deliveryMethod instead of just
 // checking for missing fields, so the wording is always intentional.
+// Version 7, Milestone 168C.1: Courier Guy Locker to Locker has no
+// real locker-picker yet either — only city/province are ever
+// collected for it (streetAddress/suburb/postalCode are always null),
+// so this adds its own clarifying line rather than silently rendering
+// a shorter, unexplained address block.
 function formatDeliveryNote(order: OrderEmailData): string {
   if (order.deliveryMethod === "COLLECTION") {
     return `Collection location: ${order.collectionCity ?? "to be confirmed"}\nCollection is by arrangement — we'll be in touch to confirm details.`;
+  }
+
+  if (order.deliveryMethod === "COURIER_LOCKER") {
+    const lines = [`Area: ${order.deliveryCity ?? ""}, ${order.deliveryProvince ?? ""}`.trim(), "Nearest Courier Guy locker to be arranged and confirmed before dispatch."];
+    if (order.deliveryNotes) lines.push(`Notes: ${order.deliveryNotes}`);
+    return lines.filter(Boolean).join("\n");
   }
 
   const lines = [

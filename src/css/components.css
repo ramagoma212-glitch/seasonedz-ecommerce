@@ -1190,6 +1190,19 @@ body.has-lightbox-open {
   grid-column: 1 / -1;
 }
 
+/* Version 7, Milestone 168C.1: groups the Door-to-Door-only fields
+   (street/suburb/postal code) so JS can show/hide them together with
+   one `hidden` attribute, without breaking .form-grid's own column
+   layout — `display: contents` makes this wrapper invisible to grid
+   layout, so its children (.form-field) remain direct grid items
+   exactly as if the wrapper weren't there. base.css's global
+   `[hidden] { display: none !important; }` rule (Milestone 167) still
+   correctly hides it when the hidden attribute is set, since
+   `!important` beats this rule's own plain `display: contents`. */
+[data-address-full-only] {
+  display: contents;
+}
+
 .form-field__label {
   display: block;
   font-size: var(--font-size-sm);

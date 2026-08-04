@@ -29,6 +29,12 @@ import { escapeHtml } from "../js/search.js";
 // order confirmation/tracking and the backend's own email templates
 // (emailTemplates.ts's formatDeliveryMethodLabel), so admin staff see
 // the same wording customers do.
+// Version 7, Milestone 168C.1: falls back to a plain "Delivery" label
+// for a historical order with no recognisable method rather than
+// guessing/mislabelling it as Locker/Door/Collection — the backfill
+// migration always sets a real COURIER_DOOR default (see
+// prisma/migrations/20260804130000_add_delivery_methods), so this only
+// matters as defence-in-depth, never expected in real data.
 function formatDeliveryMethodLabel(method) {
   switch (method) {
     case "COURIER_LOCKER":
@@ -38,7 +44,7 @@ function formatDeliveryMethodLabel(method) {
     case "COLLECTION":
       return "Customer Collection";
     default:
-      return humanizeEnum(method);
+      return method ? humanizeEnum(method) : "Delivery";
   }
 }
 
@@ -462,18 +468,24 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           </div>
 
           <div class="order-confirmation__card">
-            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivery Address"}</h3>
+            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : order.deliveryMethod === "COURIER_LOCKER" ? "Locker Area" : "Delivery Address"}</h3>
             ${
               order.deliveryMethod === "COLLECTION"
                 ? `<p><strong>Collection location:</strong> ${escapeHtml(order.collectionCity ?? "To be confirmed")}</p>
                    <p>Collection by arrangement.</p>`
-                : order.deliveryAddress
-                  ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
-                     <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
-                     <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
-                     <p>${escapeHtml(order.deliveryAddress.country)}</p>
-                     ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
-                  : `<p>No delivery address on file.</p>`
+                : order.deliveryMethod === "COURIER_LOCKER"
+                  ? order.deliveryAddress
+                    ? `<p>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)}</p>
+                       <p>No real locker picker yet — arrange and confirm the nearest Courier Guy locker to this area with the customer before dispatch.</p>
+                       ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                    : `<p>No locker area on file.</p>`
+                  : order.deliveryAddress
+                    ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
+                       <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
+                       <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
+                       <p>${escapeHtml(order.deliveryAddress.country)}</p>
+                       ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                    : `<p>No delivery address on file.</p>`
             }
           </div>
 

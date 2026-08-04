@@ -291,8 +291,15 @@ export async function renderCheckoutPage() {
 
           <div class="checkout-section">
             <div class="form-grid" data-delivery-address-fields ${DEFAULT_DELIVERY_METHOD === "COLLECTION" ? "hidden" : ""}>
-              ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
-              ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
+              <p class="form-field--full form-field__hint" data-locker-area-note ${DEFAULT_DELIVERY_METHOD === "COURIER_LOCKER" ? "" : "hidden"}>
+                We don't yet have live locker selection online — tell us your city and province and we'll arrange the nearest Courier Guy locker to you, then confirm it with you before dispatch.
+              </p>
+
+              <div data-address-full-only ${DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" ? "" : "hidden"}>
+                ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
+                ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
+              </div>
+
               ${renderField({ id: "city", label: "City", placeholder: "Pretoria", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
 
               <div class="form-field">
@@ -306,7 +313,9 @@ export async function renderCheckoutPage() {
                 <span class="form-field__error" data-error-for="province"></span>
               </div>
 
-              ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
+              <div data-address-full-only ${DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" ? "" : "hidden"}>
+                ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
+              </div>
 
               <div class="form-field form-field--full">
                 <label class="form-field__label" for="deliveryNotes">

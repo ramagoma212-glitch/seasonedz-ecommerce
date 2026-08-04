@@ -29,7 +29,7 @@ function formatDeliveryMethodLabel(method) {
     case "COLLECTION":
       return "Customer Collection";
     default:
-      return humanizeEnum(method);
+      return method ? humanizeEnum(method) : "Delivery";
   }
 }
 
@@ -133,16 +133,22 @@ function renderOrderDetail(order, digitalItems) {
       </div>
 
       <div class="order-confirmation__card">
-        <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivering To"}</h3>
+        <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : order.deliveryMethod === "COURIER_LOCKER" ? "Locker Area" : "Delivering To"}</h3>
         ${
           order.deliveryMethod === "COLLECTION"
             ? `<div class="order-confirmation__row"><span>Collection Location</span><span>${escapeHtml(order.collectionCity ?? "To be confirmed")}</span></div>
                <div class="order-confirmation__row"><span>Collection</span><span>By arrangement</span></div>`
-            : order.deliveryAddress
-              ? `<div class="order-confirmation__row"><span>Address</span><span>${escapeHtml(order.deliveryAddress.streetAddress)}, ${escapeHtml(order.deliveryAddress.suburb)}</span></div>
-                 <div class="order-confirmation__row"><span>City</span><span>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)} ${escapeHtml(order.deliveryAddress.postalCode)}</span></div>
-                 ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}`
-              : ""
+            : order.deliveryMethod === "COURIER_LOCKER"
+              ? order.deliveryAddress
+                ? `<div class="order-confirmation__row"><span>Area</span><span>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)}</span></div>
+                   <div class="order-confirmation__row"><span>Locker</span><span>Nearest Courier Guy locker arranged and confirmed before dispatch</span></div>
+                   ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}`
+                : ""
+              : order.deliveryAddress
+                ? `<div class="order-confirmation__row"><span>Address</span><span>${escapeHtml(order.deliveryAddress.streetAddress)}, ${escapeHtml(order.deliveryAddress.suburb)}</span></div>
+                   <div class="order-confirmation__row"><span>City</span><span>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)} ${escapeHtml(order.deliveryAddress.postalCode)}</span></div>
+                   ${order.deliveryAddress.deliveryNotes ? `<div class="order-confirmation__row"><span>Notes</span><span>${escapeHtml(order.deliveryAddress.deliveryNotes)}</span></div>` : ""}`
+                : ""
         }
       </div>
 

@@ -660,17 +660,34 @@ function setupCheckoutForm() {
 function updateCheckoutDeliveryMethodUI(form, method) {
   const addressFields = form.querySelector("[data-delivery-address-fields]");
   const collectionFields = form.querySelector("[data-collection-fields]");
-  const requiresAddress = method === "COURIER_LOCKER" || method === "COURIER_DOOR";
+  // Version 7, Milestone 168C.1: COURIER_DOOR needs the full address;
+  // COURIER_LOCKER (no real locker-picker yet) needs only city/
+  // province — see checkoutPage.js's own comment on why a full street
+  // address would be misleading for a method that doesn't actually
+  // deliver to one.
+  const requiresFullAddress = method === "COURIER_DOOR";
+  const requiresAreaOnly = method === "COURIER_LOCKER";
+  const requiresAddressFields = requiresFullAddress || requiresAreaOnly;
 
   if (addressFields) {
-    addressFields.hidden = !requiresAddress;
-    ["street", "suburb", "city", "province", "postalCode"].forEach((name) => {
+    addressFields.hidden = !requiresAddressFields;
+
+    ["city", "province"].forEach((name) => {
       const field = addressFields.querySelector(`[name="${name}"]`);
-      if (field) field.required = requiresAddress;
-      // A field that just became irrelevant shouldn't keep showing a
-      // stale error from before the customer switched methods.
-      if (!requiresAddress) clearFieldError(form, name);
+      if (field) field.required = requiresAddressFields;
+      if (!requiresAddressFields) clearFieldError(form, name);
     });
+
+    const fullOnlyWrapper = addressFields.querySelector("[data-address-full-only]");
+    if (fullOnlyWrapper) fullOnlyWrapper.hidden = !requiresFullAddress;
+    ["street", "suburb", "postalCode"].forEach((name) => {
+      const field = addressFields.querySelector(`[name="${name}"]`);
+      if (field) field.required = requiresFullAddress;
+      if (!requiresFullAddress) clearFieldError(form, name);
+    });
+
+    const lockerNote = addressFields.querySelector("[data-locker-area-note]");
+    if (lockerNote) lockerNote.hidden = !requiresAreaOnly;
   }
 
   if (collectionFields) {
@@ -848,7 +865,12 @@ async function handleCheckoutSubmit(form) {
   }
 
   const items = getCart();
-  const requiresAddress = data.deliveryMethod === "COURIER_LOCKER" || data.deliveryMethod === "COURIER_DOOR";
+  // Version 7, Milestone 168C.1: COURIER_DOOR sends the full address;
+  // COURIER_LOCKER sends only city/province (no real locker-picker
+  // exists yet — see checkoutPage.js's own comment); COLLECTION sends
+  // neither.
+  const requiresFullAddress = data.deliveryMethod === "COURIER_DOOR";
+  const requiresAreaOnly = data.deliveryMethod === "COURIER_LOCKER";
   const payload = buildOrderPayload({
     customer: {
       firstName: data.firstName.trim(),
@@ -857,7 +879,7 @@ async function handleCheckoutSubmit(form) {
       phone: data.phone.trim(),
     },
     deliveryMethod: data.deliveryMethod,
-    deliveryAddress: requiresAddress
+    deliveryAddress: requiresFullAddress
       ? {
           street: data.street.trim(),
           suburb: data.suburb.trim(),
@@ -865,7 +887,12 @@ async function handleCheckoutSubmit(form) {
           province: data.province,
           postalCode: data.postalCode.trim(),
         }
-      : undefined,
+      : requiresAreaOnly
+        ? {
+            city: data.city.trim(),
+            province: data.province,
+          }
+        : undefined,
     collectionCity: data.deliveryMethod === "COLLECTION" ? data.collectionCity : undefined,
     deliveryNotes: (data.deliveryNotes || "").trim(),
     paymentMethod: data.paymentMethod,

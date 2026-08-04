@@ -54,11 +54,44 @@ test("COURIER_DOOR with a valid address is accepted, deliveryAddress present in 
   assert.equal(result.value?.collectionCity, null);
 });
 
-test("COURIER_LOCKER with a valid address is accepted", () => {
-  const result = validateOrderRequest(baseBody({ deliveryMethod: "COURIER_LOCKER" }));
-  assert.equal(result.isValid, true);
+// Version 7, Milestone 168C.1: no real Courier Guy locker-picker
+// exists yet, so COURIER_LOCKER only ever needs city/province — never
+// a full street address, which would misleadingly imply it's the
+// actual delivery destination. See order.validator.ts's own comment.
+test("COURIER_LOCKER accepts city/province alone, with no street/suburb/postal code sent at all", () => {
+  const result = validateOrderRequest(
+    baseBody({ deliveryMethod: "COURIER_LOCKER", deliveryAddress: { city: "Pretoria", province: "Gauteng" } })
+  );
+  assert.equal(result.isValid, true, JSON.stringify(result.errors));
   assert.equal(result.value?.deliveryMethod, "COURIER_LOCKER");
-  assert.ok(result.value?.deliveryAddress);
+  assert.equal(result.value?.deliveryAddress?.city, "Pretoria");
+  assert.equal(result.value?.deliveryAddress?.province, "Gauteng");
+});
+
+test("COURIER_LOCKER never stores a street address, suburb or postal code even if the client sends one anyway", () => {
+  const result = validateOrderRequest(baseBody({ deliveryMethod: "COURIER_LOCKER" })); // baseBody sends the full VALID_ADDRESS
+  assert.equal(result.isValid, true);
+  assert.equal(result.value?.deliveryAddress?.streetAddress, null, "a full street address must never be persisted for a method with no real locker-picker");
+  assert.equal(result.value?.deliveryAddress?.suburb, null);
+  assert.equal(result.value?.deliveryAddress?.postalCode, null);
+});
+
+test("COURIER_LOCKER without city/province is rejected — city/province are the only genuinely required fields", () => {
+  const result = validateOrderRequest(baseBody({ deliveryMethod: "COURIER_LOCKER", deliveryAddress: {} }));
+  assert.equal(result.isValid, false);
+  assert.ok(result.errors.some((e) => e.field === "deliveryAddress.city"));
+  assert.ok(result.errors.some((e) => e.field === "deliveryAddress.province"));
+  assert.ok(!result.errors.some((e) => e.field === "deliveryAddress.streetAddress"), "street address must never be required for Locker");
+});
+
+test("COURIER_DOOR still requires the full address (street, suburb, postal code) unlike Locker", () => {
+  const result = validateOrderRequest(
+    baseBody({ deliveryMethod: "COURIER_DOOR", deliveryAddress: { city: "Pretoria", province: "Gauteng" } })
+  );
+  assert.equal(result.isValid, false);
+  assert.ok(result.errors.some((e) => e.field === "deliveryAddress.streetAddress"));
+  assert.ok(result.errors.some((e) => e.field === "deliveryAddress.suburb"));
+  assert.ok(result.errors.some((e) => e.field === "deliveryAddress.postalCode"));
 });
 
 test("COLLECTION requires a valid collectionCity, not an address", () => {

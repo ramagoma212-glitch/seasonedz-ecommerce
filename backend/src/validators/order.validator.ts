@@ -45,16 +45,19 @@ export interface ValidatedOrderItem {
 export interface ValidatedOrderInput {
   customer: { firstName: string; lastName: string; email: string; phone: string };
   deliveryMethod: DeliveryMethodValue;
-  // Version 7, Milestone 168C: only present for COURIER_LOCKER/COURIER_DOOR
-  // — a Customer Collection order has no physical delivery address at
-  // all, so this is null rather than populated with invented/placeholder
-  // data. See collectionCity below for the Collection-only counterpart.
+  // Version 7, Milestone 168C.1: no real Courier Guy locker-picker
+  // exists yet, so COURIER_LOCKER never collects (or implies) a
+  // precise delivery address — only city/province, enough for staff to
+  // arrange the nearest locker manually. streetAddress/suburb/
+  // postalCode are only ever populated for COURIER_DOOR, which is the
+  // only method that genuinely delivers to a written address. Null
+  // entirely for COLLECTION (see collectionCity below instead).
   deliveryAddress: {
-    streetAddress: string;
-    suburb: string;
+    streetAddress: string | null;
+    suburb: string | null;
     city: string;
     province: string;
-    postalCode: string;
+    postalCode: string | null;
     country: string;
     deliveryNotes: string | null;
   } | null;
@@ -107,16 +110,19 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     deliveryMethod = root.deliveryMethod as DeliveryMethodValue;
   }
 
-  const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
+  // Version 7, Milestone 168C.1: COURIER_DOOR delivers to a written
+  // address, so it needs the full set. COURIER_LOCKER has no real
+  // per-locker picker yet — it only needs city/province, enough for
+  // staff to manually arrange the nearest locker — collecting a full
+  // street address would misleadingly imply it's the delivery
+  // destination when it isn't. COLLECTION needs neither (see
+  // collectionCity below instead).
+  const requiresFullAddress = deliveryMethod === "COURIER_DOOR";
+  const requiresAreaOnly = deliveryMethod === "COURIER_LOCKER";
+  const requiresAddressFields = requiresFullAddress || requiresAreaOnly;
   const requiresCollectionCity = deliveryMethod === "COLLECTION";
 
-  if (requiresAddress) {
-    if (!isNonEmptyString(deliveryAddress.streetAddress)) {
-      errors.push({ field: "deliveryAddress.streetAddress", message: "Street address is required." });
-    }
-    if (!isNonEmptyString(deliveryAddress.suburb)) {
-      errors.push({ field: "deliveryAddress.suburb", message: "Suburb is required." });
-    }
+  if (requiresAddressFields) {
     if (!isNonEmptyString(deliveryAddress.city)) {
       errors.push({ field: "deliveryAddress.city", message: "City is required." });
     }
@@ -126,7 +132,15 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     } else if (!(SA_PROVINCES as readonly string[]).includes(deliveryAddress.province)) {
       errors.push({ field: "deliveryAddress.province", message: `Province must be one of: ${SA_PROVINCES.join(", ")}.` });
     }
+  }
 
+  if (requiresFullAddress) {
+    if (!isNonEmptyString(deliveryAddress.streetAddress)) {
+      errors.push({ field: "deliveryAddress.streetAddress", message: "Street address is required." });
+    }
+    if (!isNonEmptyString(deliveryAddress.suburb)) {
+      errors.push({ field: "deliveryAddress.suburb", message: "Suburb is required." });
+    }
     if (!isNonEmptyString(deliveryAddress.postalCode)) {
       errors.push({ field: "deliveryAddress.postalCode", message: "Postal code is required." });
     } else if (!isValidPostalCode(deliveryAddress.postalCode)) {
@@ -237,13 +251,13 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
         phone: (customer.phone as string).trim(),
       },
       deliveryMethod,
-      deliveryAddress: requiresAddress
+      deliveryAddress: requiresAddressFields
         ? {
-            streetAddress: (deliveryAddress.streetAddress as string).trim(),
-            suburb: (deliveryAddress.suburb as string).trim(),
+            streetAddress: requiresFullAddress ? (deliveryAddress.streetAddress as string).trim() : null,
+            suburb: requiresFullAddress ? (deliveryAddress.suburb as string).trim() : null,
             city: (deliveryAddress.city as string).trim(),
             province: deliveryAddress.province as string,
-            postalCode: (deliveryAddress.postalCode as string).trim(),
+            postalCode: requiresFullAddress ? (deliveryAddress.postalCode as string).trim() : null,
             country: isNonEmptyString(deliveryAddress.country) ? deliveryAddress.country.trim() : "South Africa",
             deliveryNotes: isNonEmptyString(deliveryAddress.deliveryNotes) ? deliveryAddress.deliveryNotes.trim() : null,
           }

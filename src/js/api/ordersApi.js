@@ -9,12 +9,17 @@
 import { apiGet, apiPost } from "../apiClient.js";
 import { mapPaymentMethodToBackend } from "./mappers.js";
 
-// Version 7, Milestone 168C: `deliveryMethod` is required; `deliveryAddress`
-// is only sent for COURIER_LOCKER/COURIER_DOOR (omitted — not sent as
-// empty strings — for COLLECTION, which has no physical address at
-// all); `collectionCity` is only sent for COLLECTION. Still no price/
-// fee/total field is ever sent — the backend independently recomputes
-// and validates every fee itself, exactly as before.
+// Version 7, Milestone 168C.1: `deliveryMethod` is required.
+// `deliveryAddress` is sent for COURIER_DOOR (full: street/suburb/
+// city/province/postalCode) and COURIER_LOCKER (partial: city/province
+// only — caller passes an object with just those two keys; the other
+// fields are simply absent here and JSON.stringify drops them, rather
+// than sending empty strings that would misleadingly imply a real
+// street address was collected). Omitted entirely for COLLECTION,
+// which has no physical address at all. `collectionCity` is only sent
+// for COLLECTION. Still no price/fee/total field is ever sent — the
+// backend independently recomputes and validates every fee itself,
+// exactly as before.
 export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, collectionCity, deliveryNotes, paymentMethod, items }) {
   const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
 

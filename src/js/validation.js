@@ -44,22 +44,30 @@ export function validateCheckoutForm(data) {
     errors.phone = "Please enter a valid South African phone number, e.g. 082 123 4567.";
   }
 
-  // Version 7, Milestone 168C: which of the three owner-approved
-  // delivery methods was chosen decides whether an address or a
-  // collection city is required below — mirrors the backend's own
-  // branching in order.validator.ts.
+  // Version 7, Milestone 168C.1: which of the three owner-approved
+  // delivery methods was chosen decides which fields are required
+  // below — mirrors the backend's own branching in order.validator.ts.
+  // COURIER_DOOR delivers to a written address (needs the full set).
+  // COURIER_LOCKER has no real per-locker picker yet, so it only needs
+  // city/province — enough for staff to arrange the nearest locker
+  // manually — never a full street address that would misleadingly
+  // imply it's the delivery destination.
   if (!isRequired(data.deliveryMethod)) {
     errors.deliveryMethod = "Please select a delivery method.";
   }
 
-  const requiresAddress = data.deliveryMethod === "COURIER_LOCKER" || data.deliveryMethod === "COURIER_DOOR";
+  const requiresFullAddress = data.deliveryMethod === "COURIER_DOOR";
+  const requiresAreaOnly = data.deliveryMethod === "COURIER_LOCKER";
   const requiresCollectionCity = data.deliveryMethod === "COLLECTION";
 
-  if (requiresAddress) {
-    if (!isRequired(data.street)) errors.street = "Street address is required.";
-    if (!isRequired(data.suburb)) errors.suburb = "Suburb is required.";
+  if (requiresFullAddress || requiresAreaOnly) {
     if (!isRequired(data.city)) errors.city = "City is required.";
     if (!isRequired(data.province)) errors.province = "Please select a province.";
+  }
+
+  if (requiresFullAddress) {
+    if (!isRequired(data.street)) errors.street = "Street address is required.";
+    if (!isRequired(data.suburb)) errors.suburb = "Suburb is required.";
 
     if (!isRequired(data.postalCode)) {
       errors.postalCode = "Postal code is required.";

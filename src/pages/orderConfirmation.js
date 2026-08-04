@@ -40,7 +40,7 @@ function formatDeliveryMethodLabel(method) {
     case "COLLECTION":
       return "Customer Collection";
     default:
-      return humanizeEnum(method);
+      return method ? humanizeEnum(method) : "Delivery";
   }
 }
 
@@ -176,18 +176,24 @@ function renderBackendOrderConfirmation(order) {
           </div>
 
           <div class="order-confirmation__card">
-            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : "Delivery Address"}</h3>
+            <h3>${order.deliveryMethod === "COLLECTION" ? "Collection Details" : order.deliveryMethod === "COURIER_LOCKER" ? "Locker Area" : "Delivery Address"}</h3>
             <p>${escapeHtml(order.customer.firstName)} ${escapeHtml(order.customer.lastName)}</p>
             ${
               order.deliveryMethod === "COLLECTION"
                 ? `<p><strong>Collection location:</strong> ${escapeHtml(order.collectionCity ?? "To be confirmed")}</p>
                    <p>Collection by arrangement — we'll be in touch to confirm details.</p>`
-                : order.deliveryAddress
-                  ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
-                     <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
-                     <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
-                     ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
-                  : ""
+                : order.deliveryMethod === "COURIER_LOCKER"
+                  ? order.deliveryAddress
+                    ? `<p>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)}</p>
+                       <p>We'll arrange the nearest Courier Guy locker to this area and confirm it with you before dispatch.</p>
+                       ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                    : ""
+                  : order.deliveryAddress
+                    ? `<p>${escapeHtml(order.deliveryAddress.streetAddress)}</p>
+                       <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
+                       <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
+                       ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
+                    : ""
             }
             <p>${escapeHtml(order.customer.email)} &bull; ${escapeHtml(order.customer.phone)}</p>
           </div>
