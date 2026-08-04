@@ -102,8 +102,23 @@
   grid-template-columns: 1fr;
 }
 
+/* Version 7, Milestone 168A: found via direct measurement that this
+   1024px+ rule was silently losing to .product-grid's own 1024px+
+   rule (repeat(4, ...), declared later in this same file — see the
+   line order) despite equal specificity — the real effect was 3 real
+   gift cards rendering inside a 4-column track, leaving an invisible
+   empty 4th column and left-aligning the visible card row short of
+   Best Seller's own right edge, exactly the same root cause as
+   .home-3col-grid's own fix in layout.css (see that file's comment
+   for the full explanation). Compounded with .product-grid on every
+   rule below so this class wins regardless of file/declaration order. */
+.product-grid.gifting-grid {
+  grid-template-columns: 1fr;
+}
+
 @media (min-width: 768px) {
-  .gifting-grid {
+  .gifting-grid,
+  .product-grid.gifting-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -115,7 +130,8 @@
 }
 
 @media (min-width: 1024px) {
-  .gifting-grid {
+  .gifting-grid,
+  .product-grid.gifting-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

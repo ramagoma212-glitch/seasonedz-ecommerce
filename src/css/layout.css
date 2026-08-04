@@ -199,6 +199,27 @@
   grid-template-columns: 1fr;
 }
 
+/* Version 7, Milestone 168A: found via direct measurement (not
+   assumed) that this class's own grid-template-columns rules were
+   silently losing to .product-grid's own conflicting rules at the
+   same breakpoints (responsive.css) — both are single-class selectors
+   of equal specificity (0,1,0), and index.html loads responsive.css
+   AFTER layout.css, so .product-grid's later-declared rule always won
+   regardless of which class was semantically meant to take priority.
+   The real effect: New Releases/Digital/Thoughtful Gifts each rendered
+   4 grid columns (.product-grid's own 1024px+ default) for only 3
+   real cards, leaving an invisible same-background-colour empty 4th
+   column and silently left-aligning the actual visible card row well
+   short of Best Seller's own right edge — this is what the owner was
+   actually seeing, even though the outer wrapping .container was
+   always correctly identical across every section. Compounded with
+   .product-grid below to guarantee this class wins regardless of
+   source order (specificity 0,2,0 vs 0,1,0), rather than depending on
+   fragile file-import order. */
+.product-grid.home-3col-grid {
+  grid-template-columns: 1fr;
+}
+
 /* `:nth-child(3):nth-last-child(-n+2)` matches the 3rd child only when
    it's also within the last two children overall — true whether it's
    genuinely the last card (New Releases/Gifting: exactly 3 total) or
@@ -209,7 +230,8 @@
    element in the collapsed-Digital case — this is why the more
    specific pair is used instead. */
 @media (min-width: 768px) {
-  .home-3col-grid {
+  .home-3col-grid,
+  .product-grid.home-3col-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -221,7 +243,8 @@
 }
 
 @media (min-width: 1024px) {
-  .home-3col-grid {
+  .home-3col-grid,
+  .product-grid.home-3col-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

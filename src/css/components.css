@@ -2225,6 +2225,24 @@ body.has-lightbox-open {
   min-height: 44px;
 }
 
+/* Version 7, Milestone 168A: the generic expandable-grid View More
+   wrapper (components/expandableGrid.js) — currently Digital Colouring
+   Books — never actually had its own CSS since Milestone 167 created
+   the class name. Without this, the button (an inline-flex .btn with
+   no positioning of its own) sat flush left under the first card
+   instead of centred under the whole grid — found via direct
+   measurement (button centre ~89px vs. grid centre ~512px at 1024px),
+   not assumed. Mirrors .gifting-section__view-more's own rule above. */
+.expandable-grid__view-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-lg);
+}
+
+.expandable-grid__view-more .btn {
+  min-height: 44px;
+}
+
 /* ---- Footer brand column (logo + newsletter shortcut) ------------------------ */
 .site-footer__col--brand .footer-logo {
   margin-bottom: var(--space-sm);
