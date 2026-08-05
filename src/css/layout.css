@@ -127,6 +127,39 @@
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* ---- Footer payment trust (Version 7, Milestone 168E) ---------------------
+   Compact, centred, sits above .site-footer__bottom's own border/copyright
+   line — deliberately much smaller than the checkout trust panel (one
+   heading, one sentence, one image; see components/footer.js). */
+.footer-payment-trust {
+  max-width: 480px;
+  margin-inline: auto;
+  padding-bottom: var(--space-lg);
+  text-align: center;
+}
+
+.footer-payment-trust__heading {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-white);
+  margin-bottom: 2px;
+}
+
+.footer-payment-trust__desc {
+  font-size: var(--font-size-xs);
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: var(--space-sm);
+}
+
+.footer-payment-trust__logos {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  margin-inline: auto;
+}
+
 /* Version 7, Milestone 144's "Shop Seasonedz Group on" footer line
    (.footer-marketplace / __label / __link / __logo) was removed in
    Milestone 167 — marketplace links now live only in the homepage's

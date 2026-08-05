@@ -16,6 +16,11 @@
 // renderMarketplaceHomeSection()), per the owner's explicit "keep
 // marketplace links only in one place" decision. Nothing else in the
 // footer changed.
+//
+// Version 7, Milestone 168E: a compact "Secure Payments" trust section
+// sits above the copyright line — same owner-approved WebP artwork
+// used on the product page and checkout (informational only; PayFast
+// remains the only real payment integration).
 
 import { withBase } from "../js/paths.js";
 import { businessInfo } from "../data/businessInfo.js";
@@ -95,6 +100,20 @@ export function renderFooter() {
             }
           </ul>
         </div>
+      </div>
+
+      <div class="footer-payment-trust">
+        <p class="footer-payment-trust__heading">Secure Payments</p>
+        <p class="footer-payment-trust__desc">Safe and convenient payment options powered by PayFast.</p>
+        <img
+          class="footer-payment-trust__logos"
+          src="${withBase("/images/payment-methods-payfast.webp")}"
+          alt="Secure payment methods available through PayFast including Visa, Mastercard, Apple Pay, Google Pay, Samsung Pay, Instant EFT, SnapScan, Zapper and Payflex."
+          width="720"
+          height="480"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
 
       <div class="site-footer__bottom">

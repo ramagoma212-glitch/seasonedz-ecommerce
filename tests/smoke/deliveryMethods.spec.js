@@ -320,3 +320,105 @@ test.describe("Checkout: three delivery methods", () => {
     expect(capturedPayload.deliveryAddress.postalCode).toBeFalsy();
   });
 });
+
+// Version 7, Milestone 168E: informational payment-trust artwork in
+// checkout (immediately under the PayFast option) and the footer —
+// same owner-approved WebP already used on the product page. Purely
+// informational: PayFast remains the only real payment integration,
+// so these tests confirm the artwork is non-interactive plain content
+// and that the existing PayFast radio option is unaffected.
+test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
+  async function addPhysicalItemAndGoToCheckout(page) {
+    await page.goto(`/product/${PHYSICAL_SLUG}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+    await page.goto("/checkout");
+  }
+
+  test("checkout shows the PayFast trust panel immediately under the PayFast option, with heading, copy and artwork", async ({ page }) => {
+    await addPhysicalItemAndGoToCheckout(page);
+
+    const payfastLabel = page.locator(".payment-method", { hasText: "PayFast" });
+    const panel = page.locator(".payment-trust-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel.locator(".payment-trust-panel__heading")).toHaveText("Secure payments powered by PayFast");
+    await expect(panel.locator(".payment-trust-panel__desc")).toContainText("Visa, Mastercard, Instant EFT, Apple Pay, Google Pay, Samsung Pay, SnapScan, Zapper or Payflex");
+
+    // DOM order: the panel immediately follows the PayFast label, before Cash/Card on Delivery.
+    const followingLabel = payfastLabel.locator("xpath=following-sibling::*[1]");
+    await expect(followingLabel).toHaveClass(/payment-trust-panel/);
+
+    const img = panel.locator(".payment-trust-panel__logos");
+    await expect(img).toBeVisible();
+    await expect(img).toHaveAttribute("src", /payment-methods-payfast\.webp/);
+    await expect(img).toHaveAttribute("alt", /Visa.*Mastercard.*Apple Pay.*Google Pay.*Samsung Pay.*Instant EFT.*SnapScan.*Zapper.*Payflex/s);
+  });
+
+  test("payment trust artwork is purely informational: no button, link or input wraps or sits inside it", async ({ page }) => {
+    await addPhysicalItemAndGoToCheckout(page);
+
+    const panel = page.locator(".payment-trust-panel");
+    await expect(panel.locator("button")).toHaveCount(0);
+    await expect(panel.locator("a")).toHaveCount(0);
+    await expect(panel.locator("input")).toHaveCount(0);
+  });
+
+  test("PayFast remains the only real payment integration: exactly 3 payment-method radios, PayFast still selectable/disabled per its own config", async ({ page }) => {
+    await addPhysicalItemAndGoToCheckout(page);
+
+    const radios = page.locator('fieldset.payment-methods input[type="radio"][name="paymentMethod"]');
+    await expect(radios).toHaveCount(3);
+    await expect(radios.nth(0)).toHaveValue("bank-transfer");
+    await expect(radios.nth(1)).toHaveValue("payfast");
+    await expect(radios.nth(2)).toHaveValue("cash-on-delivery");
+
+    // No individual payment-method logo introduces a new selectable choice.
+    await expect(page.locator('input[value*="visa" i], input[value*="mastercard" i], input[value*="applepay" i], input[value*="googlepay" i], input[value*="samsungpay" i], input[value*="snapscan" i], input[value*="zapper" i], input[value*="payflex" i]')).toHaveCount(0);
+  });
+
+  test("footer shows the compact Secure Payments trust section above the copyright line", async ({ page }) => {
+    await page.goto("/");
+    const footer = page.locator("footer.site-footer");
+    const trust = footer.locator(".footer-payment-trust");
+    await expect(trust).toBeVisible();
+    await expect(trust.locator(".footer-payment-trust__heading")).toHaveText("Secure Payments");
+    await expect(trust.locator(".footer-payment-trust__desc")).toHaveText("Safe and convenient payment options powered by PayFast.");
+
+    const img = trust.locator(".footer-payment-trust__logos");
+    await expect(img).toBeVisible();
+    await expect(img).toHaveAttribute("src", /payment-methods-payfast\.webp/);
+    await expect(img).toHaveAttribute("alt", /Visa.*Mastercard.*Apple Pay.*Google Pay.*Samsung Pay.*Instant EFT.*SnapScan.*Zapper.*Payflex/s);
+
+    // Trust section sits before the final bottom/copyright bar, not after it.
+    const bottom = footer.locator(".site-footer__bottom");
+    const trustBox = await trust.boundingBox();
+    const bottomBox = await bottom.boundingBox();
+    expect(trustBox.y).toBeLessThan(bottomBox.y);
+  });
+
+  test("footer trust artwork is informational only, not a clickable element", async ({ page }) => {
+    await page.goto("/");
+    const trust = page.locator(".footer-payment-trust");
+    await expect(trust.locator("button")).toHaveCount(0);
+    await expect(trust.locator("a")).toHaveCount(0);
+  });
+
+  for (const width of [430, 390, 375, 360, 320]) {
+    test(`no horizontal scroll on checkout at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await addPhysicalItemAndGoToCheckout(page);
+      await expect(page.locator(".payment-trust-panel")).toBeVisible();
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    });
+
+    test(`no horizontal scroll on footer trust section at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await page.locator(".footer-payment-trust").scrollIntoViewIfNeeded();
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    });
+  }
+});

@@ -14,6 +14,7 @@ import { PAYMENT_METHODS } from "../js/orders.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
 import { escapeHtml } from "../js/search.js";
 import { DELIVERY_METHODS, COLLECTION_CITIES, getDeliveryMethodLabel, calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
+import { withBase } from "../js/paths.js";
 
 // Version 7, Milestone 168C: no method has an obviously "right" default
 // among three genuinely different fulfilment options, so this picks
@@ -147,6 +148,31 @@ function renderCollectionCityField(defaultMethod) {
   `;
 }
 
+// Version 7, Milestone 168E: informational trust artwork placed
+// immediately under the PayFast option — the same owner-approved WebP
+// already used on the product page (productDetails.js's
+// renderPaymentMethodsBlock()). PayFast itself still presents and
+// processes whichever of these nine methods the customer picks; this
+// is plain informational content, not an input/button/radio, so it
+// can't be selected and doesn't add a checkout choice.
+function renderPaymentTrustPanel() {
+  return `
+    <div class="payment-trust-panel">
+      <p class="payment-trust-panel__heading">Secure payments powered by PayFast</p>
+      <p class="payment-trust-panel__desc">Pay securely using Visa, Mastercard, Instant EFT, Apple Pay, Google Pay, Samsung Pay, SnapScan, Zapper or Payflex.</p>
+      <img
+        class="payment-trust-panel__logos"
+        src="${withBase("/images/payment-methods-payfast.webp")}"
+        alt="Secure payment methods available through PayFast including Visa, Mastercard, Apple Pay, Google Pay, Samsung Pay, Instant EFT, SnapScan, Zapper and Payflex."
+        width="720"
+        height="480"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+  `;
+}
+
 function renderPaymentMethods() {
   return `
     <fieldset class="payment-methods" data-field-group="paymentMethod">
@@ -166,6 +192,7 @@ function renderPaymentMethods() {
               <span class="payment-method__desc">${method.description}</span>
             </span>
           </label>
+          ${method.value === "payfast" ? renderPaymentTrustPanel() : ""}
         `
       ).join("")}
       <span class="form-field__error" data-error-for="paymentMethod"></span>
