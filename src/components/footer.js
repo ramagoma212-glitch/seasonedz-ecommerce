@@ -1,13 +1,20 @@
-// Site footer component: logo, company description, four link groups
-// (Shop / Help / Seasonedz Group / Legal), real contact details and
+// Site footer component: logo, company description, three link groups
+// (Help / Seasonedz Group / Legal), real contact details and
 // copyright.
 //
 // Version 7, Milestone 150: reorganised into the brief's four named
-// groups. A few Shop links have no dedicated route/filter yet — noted
-// individually below and in this milestone's own report — and safely
-// fall back to the general /shop page rather than a broken link. No
-// verified social media links (Facebook/Instagram/etc.) exist
-// anywhere in this project to add here.
+// groups (Shop / Help / Seasonedz Group / Legal). No verified social
+// media links (Facebook/Instagram/etc.) exist anywhere in this
+// project to add here.
+//
+// Version 7, Milestone 168F: the footer's own "Shop" group (Physical
+// Books/Digital Downloads/Creative Supplies/Best Sellers/New Releases)
+// was removed — Shop is already reachable from the header nav (both
+// desktop and mobile) and every one of these links pointed at /shop
+// anyway (a few with no dedicated route/filter yet even before this
+// change), so the group was pure duplication rather than distinct
+// navigation. /shop itself, the header's Shop link, and every route
+// these links used are untouched.
 //
 // Version 7, Milestone 167: the "Shop Seasonedz Group on" marketplace
 // line that used to sit directly above the copyright text was removed
@@ -42,17 +49,6 @@ export function renderFooter() {
             parents, teachers, schools and churches.
           </p>
           <a class="footer-newsletter-shortcut" href="/">Get Free Pages &amp; Updates</a>
-        </div>
-
-        <div class="site-footer__col">
-          <h4 class="footer-heading">Shop</h4>
-          <ul class="footer-links">
-            <li><a href="/shop">Physical Books</a></li>
-            <li><a href="/shop">Digital Downloads</a></li>
-            <li><a href="/shop?category=markers-and-crayons">Creative Supplies</a></li>
-            <li><a href="/shop">Best Sellers</a></li>
-            <li><a href="/shop?sort=newest">New Releases</a></li>
-          </ul>
         </div>
 
         <div class="site-footer__col">

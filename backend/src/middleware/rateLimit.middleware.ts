@@ -123,3 +123,14 @@ export const customerResetPasswordRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Newsletter subscription (Version 7, Milestone 168F) — own counter,
+// same shape of risk as enquiryCreationRateLimiter (unauthenticated,
+// write-only, no login required), not shared with any limiter above.
+export const newsletterSubscribeRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

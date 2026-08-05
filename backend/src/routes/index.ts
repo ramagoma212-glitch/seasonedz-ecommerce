@@ -14,6 +14,7 @@ import adminAuthRoutes from "./adminAuth.routes.js";
 import adminDashboardRoutes from "./adminDashboard.routes.js";
 import customerRoutes from "./customer.routes.js";
 import downloadsRoutes from "./downloads.routes.js";
+import newsletterRoutes from "./newsletter.routes.js";
 
 const router = Router();
 
@@ -39,5 +40,8 @@ router.use("/customers", customerRoutes);
 // Version 7, Milestone 152: guest secure-token digital download access
 // — deliberately public (see downloads.routes.ts's own comment).
 router.use("/downloads", downloadsRoutes);
+// Version 7, Milestone 168F: homepage newsletter signup — public,
+// unauthenticated, write-only, same shape as /enquiries above.
+router.use("/newsletter", newsletterRoutes);
 
 export default router;

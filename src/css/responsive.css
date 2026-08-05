@@ -91,15 +91,18 @@
    composes with .product-grid (see components.css's own comment on
    the section) — everything except column count/centering (card size,
    gap, button sizing) is already identical to New Releases/Digital via
-   that shared class. One column on mobile (not .product-grid's default
-   two), so every wrapped gift photo stays fully visible without
-   crowding; a lone trailing odd card is centred at tablet width
-   instead of stretching or sitting left-aligned; three centred columns
-   at desktop (not .product-grid's default four) so exactly three real
-   gift products (today's actual count) fill one complete, centred row
-   rather than leaving an empty fourth slot. */
+   that shared class. Three centred columns at desktop (not
+   .product-grid's default four) so exactly three real gift products
+   (today's actual count) fill one complete, centred row rather than
+   leaving an empty fourth slot.
+
+   Version 7, Milestone 168F: base (mobile) column count changed from
+   1 to 2, matching New Releases/Digital's own .home-3col-grid change
+   (layout.css) — every wrapped gift photo uses object-fit: contain
+   (see components.css), so shrinking the card to half-width scales
+   the photo down cleanly with no cropping at any width. */
 .gifting-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 /* Version 7, Milestone 168A: found via direct measurement that this
@@ -111,25 +114,34 @@
    Best Seller's own right edge, exactly the same root cause as
    .home-3col-grid's own fix in layout.css (see that file's comment
    for the full explanation). Compounded with .product-grid on every
-   rule below so this class wins regardless of file/declaration order. */
+   rule below so this class wins regardless of file/declaration order.
+   This same double-class selector also keeps this 2-column mobile
+   default from losing to responsive.css's own `@media (max-width:
+   359px) .product-grid { 1fr }` rule below 360px — see
+   .home-3col-grid's own comment in layout.css for the full
+   specificity reasoning. */
 .product-grid.gifting-grid {
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* A lone 3rd card (always true here — Thoughtful Gifts is always
+   exactly 3 real cards, Milestone 158) is centred at the mobile
+   2-column default so it doesn't sit alone in column 1 leaving an
+   awkward half-empty row; --space-sm matches .product-grid's own gap
+   at this width (layout.css). Undone at 768px+ below, where 3 columns
+   already centre exactly 3 cards by construction and --space-lg
+   becomes .product-grid's gap instead (this file). */
+.gifting-grid > .gift-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  max-width: calc(50% - (var(--space-sm) / 2));
+  margin: 0 auto;
+}
+
+/* Version 7, Milestone 168F: jumps straight from the 2-column mobile
+   default to 3 columns at 768px+ (no separate 2-column tablet stage)
+   — matches this milestone's explicit "768px and above: 3 columns"
+   requirement, same as .home-3col-grid in layout.css. */
 @media (min-width: 768px) {
-  .gifting-grid,
-  .product-grid.gifting-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .gifting-grid > .gift-card:last-child:nth-child(odd) {
-    grid-column: 1 / -1;
-    max-width: calc(50% - (var(--space-lg) / 2));
-    margin: 0 auto;
-  }
-}
-
-@media (min-width: 1024px) {
   .gifting-grid,
   .product-grid.gifting-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

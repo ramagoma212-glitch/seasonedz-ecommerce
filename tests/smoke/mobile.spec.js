@@ -77,11 +77,15 @@ test.describe("Mobile smoke checks", () => {
   // "Also Available On" section) — see shop.spec.js's "marketplace
   // links exist on homepage" test for that coverage, and this file's
   // own "no marketplace links beside the footer copyright" test below.
+  // Version 7, Milestone 168F: the footer's own "Shop" group was
+  // removed (pure duplication of the header's Shop link — see
+  // footer.js's own comment and tests/smoke/footerCleanup.spec.js for
+  // dedicated coverage of that removal). 5 groups -> 4.
   test("footer stays readable on mobile with all link groups intact", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator(".site-footer");
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.locator(".footer-heading")).toHaveCount(5);
+    await expect(footer.locator(".footer-heading")).toHaveCount(4);
     await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
     await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
     await expect(footer.locator(".footer-newsletter-shortcut")).toBeVisible();

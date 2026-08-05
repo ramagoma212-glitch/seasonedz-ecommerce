@@ -2373,6 +2373,21 @@ body.has-lightbox-open {
   margin-top: var(--space-sm);
 }
 
+/* Version 7, Milestone 168F: honeypot spam field (see
+   newsletterSignup.js and newsletter.validator.ts). Hidden off-screen
+   rather than display:none/visibility:hidden — some bots skip fields
+   a browser would never paint, so this stays technically visible to
+   naive DOM scanning while being genuinely invisible and unreachable
+   (tabindex="-1") for a real person using the form normally. */
+.newsletter-form__honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .newsletter-form__message {
   margin-top: var(--space-sm);
   font-size: var(--font-size-sm);

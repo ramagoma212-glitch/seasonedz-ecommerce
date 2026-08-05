@@ -34,6 +34,7 @@ import {
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
+import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
 import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload } from "./api/customerApi.js";
@@ -1021,53 +1022,82 @@ function setupTrackOrderForm() {
 }
 
 // Version 7, Milestone 150: homepage newsletter form (see
-// components/newsletterSignup.js). No subscriber endpoint exists in
-// this backend — this validates the fields for real, but always shows
-// an honest "not available yet" message rather than a fake success
-// state, and never silently saves the address to Local Storage. The
-// submit button is disabled while the message is showing so a
-// customer can't fire off repeated submissions into the void.
+// components/newsletterSignup.js).
+// Version 7, Milestone 168F: connected to a real subscriber endpoint
+// (js/api/newsletterApi.js) — client-side validation still runs first
+// (same rules as before), then the real backend call decides success.
+// The submit button is disabled for the whole round trip so a
+// customer can't fire off repeated submissions while one is already
+// in flight, and stays disabled after a genuine success so the same
+// successful submission can't be repeated; on any error it's
+// re-enabled so they can correct something and try again.
 function setupNewsletterForm() {
   document.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-newsletter-form]");
     if (!form) return;
 
     event.preventDefault();
-
-    const nameInput = form.querySelector("#newsletter-name");
-    const emailInput = form.querySelector("#newsletter-email");
-    const messageEl = form.querySelector("[data-newsletter-message]");
-    const submitButton = form.querySelector('button[type="submit"]');
-
-    const name = (nameInput?.value || "").trim();
-    const email = (emailInput?.value || "").trim();
-
-    if (!name || !email || !isValidEmail(email)) {
-      if (messageEl) {
-        messageEl.textContent = !name ? "Please enter your name." : "Please enter a valid email address.";
-        messageEl.classList.remove("newsletter-form__message--success");
-        messageEl.classList.add("newsletter-form__message--error");
-        messageEl.hidden = false;
-      }
-      (!name ? nameInput : emailInput)?.focus();
-      return;
-    }
-
-    if (messageEl) {
-      messageEl.textContent =
-        "Sign-ups aren't available on the website just yet — please check back soon, or reach us directly via the Contact page in the meantime.";
-      messageEl.classList.remove("newsletter-form__message--success");
-      messageEl.classList.add("newsletter-form__message--error");
-      messageEl.hidden = false;
-    }
-
-    if (submitButton) {
-      submitButton.disabled = true;
-      setTimeout(() => {
-        submitButton.disabled = false;
-      }, 4000);
-    }
+    handleNewsletterSubmit(form);
   });
+}
+
+async function handleNewsletterSubmit(form) {
+  const nameInput = form.querySelector("#newsletter-name");
+  const emailInput = form.querySelector("#newsletter-email");
+  const websiteInput = form.querySelector("#newsletter-website");
+  const messageEl = form.querySelector("[data-newsletter-message]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const name = (nameInput?.value || "").trim();
+  const email = (emailInput?.value || "").trim();
+  const website = (websiteInput?.value || "").trim();
+
+  function showMessage(text, variant) {
+    if (!messageEl) return;
+    messageEl.textContent = text;
+    messageEl.classList.toggle("newsletter-form__message--success", variant === "success");
+    messageEl.classList.toggle("newsletter-form__message--error", variant === "error");
+    messageEl.hidden = false;
+  }
+
+  if (!name || !email || !isValidEmail(email)) {
+    showMessage(!name ? "Please enter your name." : "Please enter a valid email address.", "error");
+    (!name ? nameInput : emailInput)?.focus();
+    return;
+  }
+
+  const originalButtonText = submitButton?.textContent;
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Sending...";
+  }
+
+  try {
+    const response = await subscribeToNewsletter({ name, email, website });
+    showMessage(
+      response?.message ||
+        "Thank you. You're now signed up for Seasonedz Group updates and free printable colouring pages.",
+      "success"
+    );
+    form.reset();
+    // Left disabled deliberately — a successful subscription shouldn't
+    // be resubmittable from the same form state.
+  } catch (error) {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = originalButtonText;
+    }
+
+    if (error instanceof ApiUnavailableError) {
+      showMessage("We could not sign you up right now. Please try again shortly.", "error");
+    } else if (error instanceof ApiError && error.errors?.length) {
+      showMessage(error.errors[0].message, "error");
+    } else if (error instanceof ApiError) {
+      showMessage(error.message, "error");
+    } else {
+      showMessage("We could not sign you up right now. Please try again shortly.", "error");
+    }
+  }
 }
 
 // Admin login form (Version 7, Milestone 58 — foundation only). Same

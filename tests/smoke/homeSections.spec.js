@@ -323,16 +323,20 @@ test.describe("Homepage FAQ accordion", () => {
 });
 
 test.describe("Newsletter section", () => {
-  test("validates fields and shows an honest unavailable message, never a fake success", async ({ page }) => {
+  // Version 7, Milestone 168F: the newsletter form now connects to a
+  // real backend endpoint instead of always showing a permanent
+  // "not available yet" message — see tests/smoke/newsletter.spec.js
+  // for the full connected-form test coverage (validation, success,
+  // network/backend error handling, honeypot). This test just confirms
+  // the old permanent unavailable message is gone for good.
+  test("valid fields no longer show the old permanent unavailable message", async ({ page }) => {
     await page.goto("/");
     await page.locator("#newsletter-name").fill("Test Person");
     await page.locator("#newsletter-email").fill("test@example.com");
     await page.locator(".newsletter-form button[type=submit]").click();
 
     const message = page.locator("[data-newsletter-message]");
-    await expect(message).toBeVisible();
-    await expect(message).not.toContainText(/success|subscribed|thank you/i);
-    await expect(message).toContainText(/available/i);
+    await expect(message).not.toContainText(/available/i);
   });
 
   test("rejects an invalid email without submitting", async ({ page }) => {

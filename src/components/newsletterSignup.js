@@ -1,11 +1,8 @@
-// Version 7, Milestone 150: homepage newsletter signup. No subscriber
-// endpoint exists anywhere in this backend (checked: no Subscriber
-// Prisma model, no /api/newsletter or /api/subscribe route) — per the
-// brief's own explicit instruction, this never pretends to work: no
-// silent localStorage save, no fake success message, no backend added
-// in this homepage-only milestone. The full accessible UI is built
-// and submission is intercepted in js/app.js to show an honest
-// "not available yet" message instead of silently doing nothing.
+// Version 7, Milestone 150: homepage newsletter signup.
+// Version 7, Milestone 168F: connected to a real subscriber endpoint
+// (POST /api/newsletter/subscribe, see js/api/newsletterApi.js and the
+// submit handler in js/app.js) — replaces the old permanent "not
+// available yet" message with a genuine subscription workflow.
 export function renderNewsletterSection() {
   return `
     <section class="section container">
@@ -25,6 +22,15 @@ export function renderNewsletterSection() {
               <label class="form-field__label" for="newsletter-email">Your email address</label>
               <input type="email" id="newsletter-email" name="email" class="form-field__input" autocomplete="email" required />
             </div>
+          </div>
+
+          <!-- Honeypot: real visitors never see or fill this in (see
+               its CSS in components.css). A filled value marks the
+               submission as spam server-side — see
+               newsletter.validator.ts's own comment. -->
+          <div class="newsletter-form__honeypot" aria-hidden="true">
+            <label for="newsletter-website">Website</label>
+            <input type="text" id="newsletter-website" name="website" tabindex="-1" autocomplete="off" />
           </div>
 
           <button type="submit" class="btn btn--primary">Send Me Updates</button>

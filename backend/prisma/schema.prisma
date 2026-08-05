@@ -103,6 +103,16 @@ enum EnquiryStatus {
   CLOSED
 }
 
+// Version 7, Milestone 168F: newsletter subscription only ever moves
+// between these two states — a subscriber unsubscribes and can
+// voluntarily re-subscribe later, but there's no "pending"/"bounced"
+// state yet since no real email-sending system exists in this project
+// (see NewsletterSubscriber's own comment).
+enum NewsletterSubscriberStatus {
+  ACTIVE
+  UNSUBSCRIBED
+}
+
 enum CustomerType {
   GUEST
   REGISTERED
@@ -760,5 +770,37 @@ model OrderStatusHistory {
   @@index([orderNumberSnapshot])
   @@index([changedByAdminUserId])
   @@index([source])
+  @@index([createdAt])
+}
+
+// Version 7, Milestone 168F: real storage for the homepage "Free Pages
+// and Fresh Updates" newsletter form (components/newsletterSignup.js)
+// — replaces that form's previous permanent "not available yet"
+// message. Deliberately minimal: no marketing-automation fields, no
+// campaign/send history, nothing beyond what's needed to record a
+// genuine, voluntary opt-in and let someone unsubscribe/re-subscribe
+// later. `email` is unique (case-insensitively normalised by the
+// service layer before every write/lookup) so the same person can
+// never end up with two rows. `consentAt` + `source` exist specifically
+// as POPIA proof-of-consent — recorded fresh on every voluntary
+// (re-)subscription, never backfilled or inferred from a purchase.
+model NewsletterSubscriber {
+  id     String                      @id @default(cuid())
+  name   String
+  email  String                      @unique
+  status NewsletterSubscriberStatus  @default(ACTIVE)
+
+  // Always "WEBSITE" today (the only real entry point) — kept as a
+  // field rather than a hardcoded assumption so a future genuinely
+  // different entry point (e.g. an in-store signup sheet) doesn't need
+  // a schema change, only a new value.
+  source        String    @default("WEBSITE")
+  consentAt     DateTime
+  unsubscribedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
   @@index([createdAt])
 }
