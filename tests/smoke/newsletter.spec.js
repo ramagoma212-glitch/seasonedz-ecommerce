@@ -89,7 +89,15 @@ test.describe("Newsletter signup", () => {
     const messageEl = page.locator("[data-newsletter-message]");
     await expect(messageEl).toHaveText(REAL_SUCCESS_MESSAGE);
     await expect(messageEl).toHaveClass(/newsletter-form__message--success/);
-    await expect(form.locator('button[type="submit"]')).toBeDisabled();
+
+    const submitButton = form.locator('button[type="submit"]');
+    await expect(submitButton).toBeDisabled();
+    // Regression guard: the button previously stayed stuck reading
+    // "Sending..." forever after a successful submission, even though
+    // the request had already completed — see js/app.js's
+    // handleNewsletterSubmit.
+    await expect(submitButton).not.toHaveText("Sending...");
+    await expect(submitButton).toHaveText("Subscribed");
   });
 
   test("button is disabled while the request is in flight", async ({ page }) => {

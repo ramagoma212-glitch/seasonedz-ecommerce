@@ -1081,7 +1081,12 @@ async function handleNewsletterSubmit(form) {
     );
     form.reset();
     // Left disabled deliberately — a successful subscription shouldn't
-    // be resubmittable from the same form state.
+    // be resubmittable from the same form state. The button text must
+    // still be updated off "Sending..." though, or it looks stuck
+    // processing forever even though the request already finished.
+    if (submitButton) {
+      submitButton.textContent = "Subscribed";
+    }
   } catch (error) {
     if (submitButton) {
       submitButton.disabled = false;

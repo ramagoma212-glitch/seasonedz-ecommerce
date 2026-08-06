@@ -154,6 +154,50 @@
   }
 }
 
+/* Mobile card compactness for the three homepage product-card
+   sections (New Releases / Thoughtful Gifts / Digital Colouring
+   Books) only — reported live issue: cards felt too tall/stretched on
+   phones even though .card__image is already a 1:1 square (see that
+   class's own comment in components.css); the card BODY beneath it
+   (category/title/price/stock/actions — all real, required content,
+   see productCard.js) is what pushed total card height well past
+   square. Scoped to these 3 grid classes specifically, NOT the shared
+   .product-grid base rules Shop/Search/"You May Also Like" also use,
+   so tablet/desktop and every other page stay exactly as they were.
+   aspect-ratio 4/3 (vs. the shared 1/1) is the main lever — object-fit:
+   contain never crops regardless of the box's ratio, so this only
+   ever adds letterboxing, never cuts off part of a photo. */
+@media (max-width: 767px) {
+  .new-releases-grid .card__image,
+  .gifting-grid .card__image,
+  .digital-grid .card__image {
+    aspect-ratio: 4 / 3;
+  }
+
+  .new-releases-grid .product-card__body,
+  .gifting-grid .product-card__body,
+  .digital-grid .product-card__body {
+    padding: var(--space-xs);
+  }
+
+  /* Reserves noticeably less than the shared 2.5em (still enough for
+     a genuine 2-line title to sit comfortably) — shorter titles no
+     longer pay for space they don't use. grid-auto-rows: 1fr
+     (layout.css's .product-grid) still keeps every card in the grid
+     the same height regardless, so this can't cause a ragged row. */
+  .new-releases-grid .card__title,
+  .gifting-grid .card__title,
+  .digital-grid .card__title {
+    min-height: 2.1em;
+  }
+
+  .new-releases-grid .product-card__actions,
+  .gifting-grid .product-card__actions,
+  .digital-grid .product-card__actions {
+    padding-top: var(--space-xs);
+  }
+}
+
 @media (min-width: 1024px) {
   .product-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
