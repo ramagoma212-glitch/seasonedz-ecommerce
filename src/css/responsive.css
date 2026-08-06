@@ -196,6 +196,27 @@
   .digital-grid .product-card__actions {
     padding-top: var(--space-xs);
   }
+
+  /* New Releases cards carry more real content rows than the other two
+     sections (category label + title + price + stock + two buttons,
+     vs. gift cards' title + notice + one button, and digital's
+     category + title + one button, no price/stock at all) — so even
+     with the same image/padding treatment above, New Releases cards
+     were still visibly taller and less square than Gifts/Digital.
+     These extra rules close that gap without touching the other two
+     sections (already at the right height) or removing any required
+     content (price/stock stay visible, both buttons stay present). */
+  .new-releases-grid .card__image {
+    aspect-ratio: 3 / 2;
+  }
+
+  .new-releases-grid .product-card__body {
+    gap: 2px;
+  }
+
+  .new-releases-grid .product-card__price-row {
+    margin-top: 0;
+  }
 }
 
 @media (min-width: 1024px) {
