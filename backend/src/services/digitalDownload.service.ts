@@ -14,7 +14,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { PaymentStatus, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
-import { createSignedDownloadUrl } from "./digitalAssetStorage.service.js";
+import { digitalAssetStorage } from "./digitalAssetStorage.service.js";
 
 export class DigitalDownloadError extends Error {
   statusCode: number;
@@ -181,7 +181,7 @@ export async function requestSignedDownloadUrlForCustomer(orderItemId: string, c
     throw new DigitalDownloadError("Download not available.", 404);
   }
 
-  const url = await createSignedDownloadUrl(downloadable.storagePath, SIGNED_URL_EXPIRY_SECONDS);
+  const url = await digitalAssetStorage.createSignedDownloadUrl(downloadable.storagePath, SIGNED_URL_EXPIRY_SECONDS);
   await recordDownload(orderItemId, downloadable.digitalAssetId, customerId);
 
   return { url, expiresInSeconds: SIGNED_URL_EXPIRY_SECONDS };
@@ -246,7 +246,7 @@ export async function requestSignedDownloadUrlForGuestToken(rawToken: string, or
     throw new DigitalDownloadError("Download not available.", 404);
   }
 
-  const url = await createSignedDownloadUrl(downloadable.storagePath, SIGNED_URL_EXPIRY_SECONDS);
+  const url = await digitalAssetStorage.createSignedDownloadUrl(downloadable.storagePath, SIGNED_URL_EXPIRY_SECONDS);
   await recordDownload(orderItemId, downloadable.digitalAssetId, null);
   await prisma.guestDownloadToken.update({ where: { id: resolved.tokenId }, data: { lastUsedAt: new Date() } });
 

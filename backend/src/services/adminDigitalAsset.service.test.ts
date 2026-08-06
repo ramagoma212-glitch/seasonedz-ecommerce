@@ -14,15 +14,21 @@
 // and a *passing* validation (valid PDF/ZIP, valid fields) is provable
 // by asserting the thrown error is specifically the "storage not
 // configured" error, not a validation error — proving acceptance
-// without needing a real upload to succeed. The one thing that
-// specific technique cannot prove is the actual round-trip (a new
-// storage path really differing from the old one, the old object
-// really being removed) — see the final report for that remaining gap.
+// without needing a real upload to succeed.
+//
+// Version 7, Milestone 171A.1: the replacement round-trip tests near
+// the end of this file (new storage path, old-object best-effort
+// delete, upload-before-delete ordering) became possible after
+// digitalAssetStorage.service.ts gained a small `digitalAssetStorage`
+// seam object — see digitalDownload.service.test.ts's own header
+// comment for the full reasoning (an ES module named import is
+// read-only from the importing side; a plain object's properties are
+// not).
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { prisma } from "../config/prisma.js";
 import { deleteDigitalAsset, uploadOrReplaceDigitalAsset, AdminDigitalAssetError } from "./adminDigitalAsset.service.js";
-import { DigitalAssetStorageError } from "./digitalAssetStorage.service.js";
+import { digitalAssetStorage, DigitalAssetStorageError } from "./digitalAssetStorage.service.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...args: any[]) => any) {
@@ -227,4 +233,114 @@ test("deleting for a product that does not exist is rejected", async () => {
     }
   );
   productFind.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 171A.1 — replacement round-trip tests, made
+// possible by the digitalAssetStorage seam (see this file's own header
+// comment). Storage is mocked "configured" and successful throughout.
+// ---------------------------------------------------------------------------
+
+const OLD_STORAGE_PATH = "digital-assets/product-1/1000000000000-old-book.pdf";
+
+test("Part 6: replacing an existing file uploads to a new path, updates the DB row, then best-effort deletes the old object — in that order", async () => {
+  const callOrder: string[] = [];
+
+  const configuredStub = stub(digitalAssetStorage, "isDigitalAssetStorageConfigured", () => true);
+  const productFind = stub(prisma.product, "findUnique", async () => ({ id: "product-1", productType: "DIGITAL" }));
+  const assetFind = stub(prisma.digitalAsset, "findUnique", async () => ({ id: "asset-1", storagePath: OLD_STORAGE_PATH }));
+
+  let capturedUploadPath: string | undefined;
+  const uploadStub = stub(digitalAssetStorage, "uploadDigitalAsset", async ({ path }: { path: string }) => {
+    callOrder.push("upload");
+    capturedUploadPath = path;
+    return { path };
+  });
+
+  const updateStub = stub(prisma.digitalAsset, "update", async () => {
+    callOrder.push("update");
+    // Mirrors the real call's `select: digitalAssetSelect` projection
+    // exactly (see adminDigitalAsset.service.ts) — deliberately does
+    // NOT include storagePath/storageBucket, same as the real Prisma
+    // response never would with that select clause.
+    return { id: "asset-1", productId: "product-1", fileName: "new-book.pdf", displayName: "New Book", mimeType: "application/pdf", fileSizeBytes: 2048, pageCount: null, version: null, isActive: true, createdAt: new Date(), updatedAt: new Date() };
+  });
+  const createStub = stub(prisma.digitalAsset, "create", async () => {
+    throw new Error("must never be called — an existing asset must be updated, not created a second time");
+  });
+
+  let capturedDeletePath: string | undefined;
+  const deleteStub = stub(digitalAssetStorage, "removeDigitalAssetObjectBestEffort", async (path: string) => {
+    callOrder.push("delete-old");
+    capturedDeletePath = path;
+  });
+
+  try {
+    const result = await uploadOrReplaceDigitalAsset({ ...VALID_UPLOAD_INPUT, originalName: "new-book.pdf" });
+
+    assert.ok(capturedUploadPath, "a new storage path must have been generated and uploaded to");
+    assert.notEqual(capturedUploadPath, OLD_STORAGE_PATH, "replace must use a brand-new path, never overwrite the old object in place");
+    assert.match(capturedUploadPath!, /^digital-assets\/product-1\/\d+-new-book\.pdf$/);
+
+    assert.equal(createStub.fn.mock.callCount(), 0);
+    assert.equal(updateStub.fn.mock.callCount(), 1);
+
+    assert.equal(capturedDeletePath, OLD_STORAGE_PATH, "the OLD object (and only the old one) must be the one removed");
+
+    assert.deepEqual(callOrder, ["upload", "update", "delete-old"], "must upload the new file, commit the DB update, and only then best-effort delete the old object");
+    // The admin-facing row never carrying storagePath/storageBucket is
+    // guaranteed at compile time — AdminDigitalAssetRow's own type has
+    // no such fields at all (matching digitalAssetSelect); `result` is
+    // typed as exactly that interface, so there is nothing to assert
+    // at runtime beyond what TypeScript already enforces here.
+    assert.ok(result.fileName, "sanity check: a real row was returned");
+  } finally {
+    configuredStub.restore();
+    productFind.restore();
+    assetFind.restore();
+    uploadStub.restore();
+    updateStub.restore();
+    createStub.restore();
+    deleteStub.restore();
+  }
+});
+
+// Part 7: the old object's deletion failing must not lose the new
+// asset — removeDigitalAssetObjectBestEffort's own real contract is
+// "never throws" (internal try/catch — see digitalAssetStorage.service.ts),
+// so this test simulates that exact contract (resolves normally even
+// though the underlying deletion did not really succeed) rather than
+// inventing a new "what if it throws" scenario that could never
+// happen in the real implementation.
+test("Part 7: old-object deletion failing (per its own never-throws contract) does not lose the newly-replaced asset", async () => {
+  const configuredStub = stub(digitalAssetStorage, "isDigitalAssetStorageConfigured", () => true);
+  const productFind = stub(prisma.product, "findUnique", async () => ({ id: "product-1", productType: "DIGITAL" }));
+  const assetFind = stub(prisma.digitalAsset, "findUnique", async () => ({ id: "asset-1", storagePath: OLD_STORAGE_PATH }));
+  const uploadStub = stub(digitalAssetStorage, "uploadDigitalAsset", async ({ path }: { path: string }) => ({ path }));
+  const updateStub = stub(prisma.digitalAsset, "update", async () => ({
+    id: "asset-1", productId: "product-1", fileName: "new-book.pdf", displayName: "New Book", mimeType: "application/pdf",
+    fileSizeBytes: 2048, pageCount: null, version: null, isActive: true, createdAt: new Date(), updatedAt: new Date(),
+  }));
+
+  let deleteWasAttempted = false;
+  const deleteStub = stub(digitalAssetStorage, "removeDigitalAssetObjectBestEffort", async () => {
+    deleteWasAttempted = true;
+    // Real contract: the underlying Supabase call may fail internally,
+    // but this function itself never throws — it resolves regardless.
+  });
+
+  try {
+    const result = await uploadOrReplaceDigitalAsset({ ...VALID_UPLOAD_INPUT, originalName: "new-book.pdf" });
+
+    assert.ok(deleteWasAttempted, "old-object deletion must still have been attempted");
+    assert.equal(updateStub.fn.mock.callCount(), 1, "the new asset's DB row must already be committed by the time cleanup runs");
+    assert.equal(result.fileName, "new-book.pdf", "the newly-replaced asset must be returned successfully, never lost because old cleanup didn't really succeed");
+  } finally {
+    configuredStub.restore();
+    productFind.restore();
+    assetFind.restore();
+    uploadStub.restore();
+    updateStub.restore();
+    deleteStub.restore();
+  }
 });

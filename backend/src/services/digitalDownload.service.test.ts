@@ -2,13 +2,22 @@
 // tests for digitalDownload.service.ts — the one place in the backend
 // that ever decides "is this specific download allowed right now"
 // (see that file's own header comment). No production code was
-// changed to write these tests — see the "mocking approach" note
-// below and this milestone's own final report for the one class of
-// assertion (the actual Supabase-touching happy path: a real signed
-// URL value, its expiry, and DigitalDownloadLog incrementing on a
-// fully successful download) that remains untestable without either
-// an experimental Node flag or a production refactor, neither of
-// which this milestone was authorised to add unilaterally.
+// changed to add the entitlement-denial tests in this file's first
+// half — see the "mocking approach" note below.
+//
+// Version 7, Milestone 171A.1: the happy-path tests in the second half
+// (signed URL success, download-log increment, signed-URL failure,
+// privacy) became possible after a small, behaviour-preserving seam
+// was added to digitalAssetStorage.service.ts — a plain `digitalAssetStorage`
+// object grouping its 4 real functions, which digitalDownload.service.ts
+// now calls through instead of importing them directly by name. A
+// direct named ES module import is a read-only binding from the
+// importing side (confirmed empirically: reassigning it throws
+// "Cannot assign to read only property"); a plain object's own
+// properties are not. The object's default properties are always the
+// same real implementations — only a test that temporarily reassigns
+// one property (and restores it afterward, as done below) ever sees
+// different behaviour.
 //
 // Mocking approach: Prisma Client's model delegates (prisma.order,
 // prisma.orderItem, etc.) are Proxy objects. node:test's built-in
@@ -25,6 +34,7 @@ import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { prisma } from "../config/prisma.js";
+import { digitalAssetStorage } from "./digitalAssetStorage.service.js";
 import {
   createGuestDownloadToken,
   getPurchasedDigitalItemsForCustomerOrder,
@@ -33,6 +43,7 @@ import {
   requestSignedDownloadUrlForGuestToken,
   DigitalDownloadError,
 } from "./digitalDownload.service.js";
+import { DigitalAssetStorageError } from "./digitalAssetStorage.service.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...args: any[]) => any) {
@@ -344,4 +355,160 @@ test("requestSignedDownloadUrlForGuestToken: a valid token cannot be used to rea
   tokenFind.restore();
   itemFind.restore();
   logUpsert.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 171A.1 — happy-path tests, made possible by the
+// digitalAssetStorage seam (see this file's own header comment).
+// ---------------------------------------------------------------------------
+
+const DOWNLOADABLE_ITEM_SHAPE = {
+  productType: "DIGITAL",
+  order: { paymentStatus: "PAID" },
+  digitalAsset: { id: "asset-1", storagePath: "digital-assets/product-1/123-book.pdf", isActive: true, product: { downloadEnabled: true } },
+};
+
+// Part 4: signed URL success (customer path) — proves the real
+// SIGNED_URL_EXPIRY_SECONDS constant (300 = 5 minutes) is what's
+// actually supplied to storage, without changing that value.
+test("requestSignedDownloadUrlForCustomer: PAID+owned+active+enabled returns the real signed URL and the exact existing 300s (5 minute) expiry", async () => {
+  const itemFind = stub(prisma.orderItem, "findUnique", async (args: { select?: unknown }) => {
+    if (args?.select) return { order: { customerId: "cust-1" } };
+    return DOWNLOADABLE_ITEM_SHAPE;
+  });
+  const logUpsert = stub(prisma.digitalDownloadLog, "upsert", async () => ({}));
+
+  const originalCreateSignedUrl = digitalAssetStorage.createSignedDownloadUrl;
+  let capturedPath: string | undefined;
+  let capturedExpiry: number | undefined;
+  digitalAssetStorage.createSignedDownloadUrl = (async (path: string, expiresIn: number) => {
+    capturedPath = path;
+    capturedExpiry = expiresIn;
+    return "https://storage.example.com/signed/abc123";
+  }) as typeof digitalAssetStorage.createSignedDownloadUrl;
+
+  try {
+    const result = await requestSignedDownloadUrlForCustomer("item-1", "cust-1");
+
+    assert.equal(result.url, "https://storage.example.com/signed/abc123");
+    assert.equal(result.expiresInSeconds, 300, "expiry returned to the caller must match the real production constant");
+    assert.equal(capturedExpiry, 300, "expiry actually supplied to storage must be exactly 300 seconds (5 minutes) — the existing value, unchanged");
+    assert.equal(capturedPath, "digital-assets/product-1/123-book.pdf");
+  } finally {
+    digitalAssetStorage.createSignedDownloadUrl = originalCreateSignedUrl;
+    itemFind.restore();
+    logUpsert.restore();
+  }
+});
+
+// Part 4 (guest path) + Part 9: privacy assertion — the returned
+// object exposes only {url, expiresInSeconds}, never storageBucket/
+// storagePath or any other internal-location metadata.
+test("requestSignedDownloadUrlForGuestToken: PAID token returns a real signed URL exposing only {url, expiresInSeconds}", async () => {
+  const tokenFind = stub(prisma.guestDownloadToken, "findUnique", async () => ({
+    id: "token-1",
+    orderId: "order-1",
+    expiresAt: new Date(Date.now() + 60_000),
+    order: { paymentStatus: "PAID" },
+  }));
+  const itemFind = stub(prisma.orderItem, "findUnique", async (args: { select?: unknown }) => {
+    if (args?.select) return { orderId: "order-1" };
+    return DOWNLOADABLE_ITEM_SHAPE;
+  });
+  const logUpsert = stub(prisma.digitalDownloadLog, "upsert", async () => ({}));
+  const tokenUpdate = stub(prisma.guestDownloadToken, "update", async () => ({}));
+
+  const originalCreateSignedUrl = digitalAssetStorage.createSignedDownloadUrl;
+  digitalAssetStorage.createSignedDownloadUrl = (async () => "https://storage.example.com/signed/guest-xyz") as typeof digitalAssetStorage.createSignedDownloadUrl;
+
+  try {
+    const result = await requestSignedDownloadUrlForGuestToken("valid-raw-token", "item-1");
+
+    assert.equal(result.url, "https://storage.example.com/signed/guest-xyz");
+    assert.equal(result.expiresInSeconds, 300);
+    assert.deepEqual(
+      Object.keys(result).sort(),
+      ["expiresInSeconds", "url"],
+      "the response must expose only url + expiresInSeconds — never storageBucket/storagePath or any other internal metadata"
+    );
+    // @ts-expect-error deliberately checking for absence of internal fields not on the type
+    assert.equal(result.storagePath, undefined);
+    // @ts-expect-error deliberately checking for absence of internal fields not on the type
+    assert.equal(result.storageBucket, undefined);
+  } finally {
+    digitalAssetStorage.createSignedDownloadUrl = originalCreateSignedUrl;
+    tokenFind.restore();
+    itemFind.restore();
+    logUpsert.restore();
+    tokenUpdate.restore();
+  }
+});
+
+// Part 5: DigitalDownloadLog success — a genuinely successful signed-URL
+// issuance calls upsert() with the shape that increments an existing
+// row or creates a fresh one at count 1, tied to the correct orderItemId.
+test("a successful signed-URL issuance creates/updates DigitalDownloadLog correctly, tied to the right orderItemId", async () => {
+  const itemFind = stub(prisma.orderItem, "findUnique", async (args: { select?: unknown }) => {
+    if (args?.select) return { order: { customerId: "cust-1" } };
+    return DOWNLOADABLE_ITEM_SHAPE;
+  });
+
+  let capturedUpsertArgs: { where: { orderItemId: string }; create: { orderItemId: string; digitalAssetId: string; customerId: string | null; downloadCount: number }; update: { downloadCount: { increment: number } } } | undefined;
+  const logUpsert = stub(prisma.digitalDownloadLog, "upsert", async (args: typeof capturedUpsertArgs) => {
+    capturedUpsertArgs = args;
+    return {};
+  });
+
+  const originalCreateSignedUrl = digitalAssetStorage.createSignedDownloadUrl;
+  digitalAssetStorage.createSignedDownloadUrl = (async () => "https://storage.example.com/signed/log-test") as typeof digitalAssetStorage.createSignedDownloadUrl;
+
+  try {
+    await requestSignedDownloadUrlForCustomer("item-1", "cust-1");
+
+    assert.equal(logUpsert.fn.mock.callCount(), 1);
+    assert.ok(capturedUpsertArgs);
+    assert.equal(capturedUpsertArgs!.where.orderItemId, "item-1");
+    assert.equal(capturedUpsertArgs!.create.orderItemId, "item-1");
+    assert.equal(capturedUpsertArgs!.create.digitalAssetId, "asset-1");
+    assert.equal(capturedUpsertArgs!.create.customerId, "cust-1");
+    assert.equal(capturedUpsertArgs!.create.downloadCount, 1, "a fresh log row starts at download count 1");
+    assert.equal(capturedUpsertArgs!.update.downloadCount.increment, 1, "an existing log row increments by 1 on every further download");
+  } finally {
+    digitalAssetStorage.createSignedDownloadUrl = originalCreateSignedUrl;
+    itemFind.restore();
+    logUpsert.restore();
+  }
+});
+
+// Part 8: signed-URL generation failure — a real Storage-layer failure
+// must surface as the existing safe DigitalAssetStorageError (never a
+// raw Supabase error/internal path), and must never log a download.
+test("a Storage-layer signed-URL failure surfaces the existing safe error and never logs a download", async () => {
+  const itemFind = stub(prisma.orderItem, "findUnique", async (args: { select?: unknown }) => {
+    if (args?.select) return { order: { customerId: "cust-1" } };
+    return DOWNLOADABLE_ITEM_SHAPE;
+  });
+  const logUpsert = stub(prisma.digitalDownloadLog, "upsert", async () => ({}));
+
+  const originalCreateSignedUrl = digitalAssetStorage.createSignedDownloadUrl;
+  digitalAssetStorage.createSignedDownloadUrl = (async () => {
+    throw new DigitalAssetStorageError("Could not generate a download link right now. Please try again shortly.", 502);
+  }) as typeof digitalAssetStorage.createSignedDownloadUrl;
+
+  try {
+    await assert.rejects(
+      () => requestSignedDownloadUrlForCustomer("item-1", "cust-1"),
+      (err: unknown) => {
+        assert.ok(err instanceof DigitalAssetStorageError);
+        // Never a raw Supabase message/path — the existing generic-safe message.
+        assert.equal((err as Error).message, "Could not generate a download link right now. Please try again shortly.");
+        return true;
+      }
+    );
+    assert.equal(logUpsert.fn.mock.callCount(), 0, "a failed signed-URL attempt must never write a download log");
+  } finally {
+    digitalAssetStorage.createSignedDownloadUrl = originalCreateSignedUrl;
+    itemFind.restore();
+    logUpsert.restore();
+  }
 });

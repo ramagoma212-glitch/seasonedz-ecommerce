@@ -124,3 +124,26 @@ export async function removeDigitalAssetObjectBestEffort(path: string): Promise<
     // Swallowed deliberately — see comment above.
   }
 }
+
+// Version 7, Milestone 171A.1: a plain object grouping this module's
+// four functions above — the smallest seam that lets a test mock real
+// storage behaviour. Consumers (digitalDownload.service.ts,
+// adminDigitalAsset.service.ts) import this object and call e.g.
+// digitalAssetStorage.createSignedDownloadUrl(...) instead of a direct
+// named import. This is necessary specifically because a genuine ES
+// module named-import binding is read-only from the importing side —
+// confirmed empirically (`Cannot assign to read only property` when a
+// test tried it directly) — while a plain object's own properties
+// stay fully mutable regardless of which module holds the reference.
+// Production code always gets these exact real implementations
+// (nothing here changes runtime behaviour); only a test file that
+// temporarily reassigns one property on this object, then restores it
+// afterward, ever sees anything different. The individual named
+// exports above are unchanged and still the canonical implementations
+// — this object is purely a consumption seam, not a second copy.
+export const digitalAssetStorage = {
+  isDigitalAssetStorageConfigured,
+  uploadDigitalAsset,
+  createSignedDownloadUrl,
+  removeDigitalAssetObjectBestEffort,
+};

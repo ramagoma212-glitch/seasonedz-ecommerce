@@ -11,12 +11,7 @@
 
 import { prisma } from "../config/prisma.js";
 import { ProductType } from "@prisma/client";
-import {
-  isDigitalAssetStorageConfigured,
-  uploadDigitalAsset,
-  removeDigitalAssetObjectBestEffort,
-  DigitalAssetStorageError,
-} from "./digitalAssetStorage.service.js";
+import { digitalAssetStorage, DigitalAssetStorageError } from "./digitalAssetStorage.service.js";
 import { env } from "../config/env.js";
 
 export class AdminDigitalAssetError extends Error {
@@ -210,14 +205,14 @@ export async function uploadOrReplaceDigitalAsset(input: UploadDigitalAssetForPr
   const pageCount = optionalPositiveInteger(input.pageCount, "pageCount");
   const version = optionalTrimmedString(input.version, "version", MAX_VERSION_LENGTH);
 
-  if (!isDigitalAssetStorageConfigured()) {
+  if (!digitalAssetStorage.isDigitalAssetStorageConfigured()) {
     throw new DigitalAssetStorageError("Digital product file storage is not configured.");
   }
 
   const existing = await prisma.digitalAsset.findUnique({ where: { productId }, select: { id: true, storagePath: true } });
 
   const path = buildStoragePath(productId, ext, originalName);
-  await uploadDigitalAsset({ path, buffer, contentType: mimetype });
+  await digitalAssetStorage.uploadDigitalAsset({ path, buffer, contentType: mimetype });
 
   const fileName = originalName?.trim() || `file.${ext}`;
 
@@ -258,7 +253,7 @@ export async function uploadOrReplaceDigitalAsset(input: UploadDigitalAssetForPr
     // removing the previous object now (if this was a replace) can
     // never leave a moment where the database points at nothing.
     if (existing?.storagePath) {
-      await removeDigitalAssetObjectBestEffort(existing.storagePath);
+      await digitalAssetStorage.removeDigitalAssetObjectBestEffort(existing.storagePath);
     }
 
     return saved;
@@ -268,7 +263,7 @@ export async function uploadOrReplaceDigitalAsset(input: UploadDigitalAssetForPr
     // best-effort remove the now-orphaned new object. Never touches the
     // *old* object in this failure path — it's still the one the
     // database row (if any) actually points at.
-    await removeDigitalAssetObjectBestEffort(path);
+    await digitalAssetStorage.removeDigitalAssetObjectBestEffort(path);
     throw dbError;
   }
 }
@@ -303,5 +298,5 @@ export async function deleteDigitalAsset(productId: string): Promise<void> {
   }
 
   await prisma.digitalAsset.delete({ where: { productId } });
-  await removeDigitalAssetObjectBestEffort(existing.storagePath);
+  await digitalAssetStorage.removeDigitalAssetObjectBestEffort(existing.storagePath);
 }
