@@ -1,14 +1,20 @@
-// Version 7, Milestone 167: one generic "show first 3, View More
+// Version 7, Milestone 167: one generic "show first N, View More
 // reveals the rest" grid, reusable by any homepage section with more
-// than INITIAL_VISIBLE_COUNT real records — currently used by Digital
-// Colouring Books (pages/home.js). Deliberately a separate
-// implementation from Thoughtful Gifts' own existing View More (see
-// js/app.js's handleToggleGiftViewMore) rather than a refactor of it —
-// that one is already shipped, tested and explicitly not to be
-// touched; this is the shared mechanism for anything built after it.
-// Toggle behaviour lives in js/app.js (data-action="toggle-view-more"),
-// the same delegated-click pattern every other homepage control uses.
-export const INITIAL_VISIBLE_COUNT = 3;
+// than initialVisibleCount real records — used by New Releases and
+// Digital Colouring Books (pages/home.js), which both pass their own
+// explicit initialVisibleCount and don't rely on this default.
+// Deliberately a separate implementation from Thoughtful Gifts' own
+// existing View More (see js/app.js's handleToggleGiftViewMore) rather
+// than a refactor of it — that one is already shipped and tested; this
+// is the shared mechanism for other sections. Toggle behaviour lives
+// in js/app.js (data-action="toggle-view-more"), the same delegated-
+// click pattern every other homepage control uses.
+//
+// Version 7, Milestone 171B.0: default lowered from 3 to 2 to match
+// pages/home.js's own MOBILE_INITIAL_VISIBLE_COUNT — every current
+// caller passes that explicitly, so this only matters as a safe
+// fallback for a future caller that doesn't.
+export const INITIAL_VISIBLE_COUNT = 2;
 
 // `renderItem(item, index)` must return one grid-item's markup, whose
 // root element carries the data-extra-card="true" attribute + `hidden`

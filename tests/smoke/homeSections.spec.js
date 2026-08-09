@@ -49,10 +49,20 @@ test.describe("Hi, Friend section", () => {
 });
 
 test.describe("New Releases section", () => {
-  test("shows the three required products in order with real data", async ({ page }) => {
+  test("shows the three required products in order with real data, all visible on desktop", async ({ page }) => {
     await page.goto("/");
     const cards = page.locator(".new-releases-grid .product-card");
     await expect(cards).toHaveCount(3);
+
+    // Version 7, Milestone 171B.0: one of these 3 now carries the
+    // `hidden` attribute in the DOM for mobile's benefit (see
+    // pages/home.js's MOBILE_INITIAL_VISIBLE_COUNT) — CSS forces it
+    // visible again at 768px+ (layout.css's `.home-3col-grid >
+    // [hidden]` rule), so real computed visibility is asserted here,
+    // not DOM attribute presence.
+    for (const card of await cards.all()) {
+      await expect(card).toBeVisible();
+    }
 
     // Version 7, Milestone 167: homepage cards show a shorter display
     // title (productCard.js's displayTitle option, set from
@@ -72,6 +82,17 @@ test.describe("New Releases section", () => {
     await expect(first.getByRole("link", { name: "View Product" })).toBeVisible();
     await expect(first.locator('[data-action="add-to-cart"]')).toBeVisible();
     await expect(first.locator('[data-action="toggle-wishlist"]')).toBeVisible();
+  });
+
+  // Version 7, Milestone 171B.0: the reusable View More control now
+  // exists in the DOM for New Releases too (3 real cards is above the
+  // 2-card mobile threshold), but must stay hidden on desktop, where
+  // every card already shows without it. Mobile's own behaviour is
+  // covered by tests/smoke/mobileGrids.spec.js.
+  test("View More control stays hidden on desktop — every card already shows without it", async ({ page }) => {
+    await page.goto("/");
+    const viewMoreBtn = page.locator('[aria-controls="new-releases-grid"]');
+    await expect(viewMoreBtn).not.toBeVisible();
   });
 
   test("Add to Cart works from the homepage", async ({ page }) => {
@@ -107,7 +128,7 @@ test.describe("Best Seller section", () => {
 });
 
 test.describe("Thoughtful Gifts Made With Purpose section", () => {
-  test("shows the heading, disclosure and exactly three real gift cards, no View More", async ({ page }) => {
+  test("shows the heading, disclosure and all three real gift cards visible on desktop", async ({ page }) => {
     await page.goto("/");
     const section = page.locator(".gifting-section");
 
@@ -118,6 +139,14 @@ test.describe("Thoughtful Gifts Made With Purpose section", () => {
     const cards = page.locator(".gift-card");
     await expect(cards).toHaveCount(3);
     for (const card of await cards.all()) {
+      // Version 7, Milestone 171B.0: on desktop (this test's default
+      // viewport) every card must be genuinely visible even though one
+      // now carries the `hidden` attribute in the DOM for mobile's
+      // benefit — CSS forces it visible again at 768px+ (see
+      // responsive.css's `.gifting-grid > [hidden]` rule), so
+      // toBeVisible() (real computed visibility) is the correct check
+      // here, not DOM attribute presence.
+      await expect(card).toBeVisible();
       await expect(card.locator(".card__image")).toBeVisible();
       await expect(card.locator(".gift-card__notice")).toHaveText("Optional gift wrapping available.");
       const viewProductLink = card.getByRole("link", { name: "View Product" });
@@ -130,9 +159,13 @@ test.describe("Thoughtful Gifts Made With Purpose section", () => {
       await expect(card.getByRole("link", { name: "Choose Gift Options" })).toHaveCount(0);
     }
 
-    // Exactly 3 real gift products are configured today, so the
-    // reusable View More control must not render at all.
-    await expect(page.locator('[data-action="toggle-gift-view-more"]')).toHaveCount(0);
+    // Version 7, Milestone 171B.0: the reusable View More control now
+    // DOES exist in the DOM for Thoughtful Gifts too (3 real cards is
+    // now above the 2-card mobile threshold — see pages/home.js's
+    // MOBILE_INITIAL_VISIBLE_COUNT), but must stay hidden on desktop,
+    // where every card already shows without it. Mobile's own
+    // behaviour is covered by tests/smoke/mobileGrids.spec.js.
+    await expect(page.locator('[data-action="toggle-gift-view-more"]')).not.toBeVisible();
   });
 
   test("has the three expected gift titles in order and no unverified gift-wrapping price", async ({ page }) => {
@@ -174,19 +207,31 @@ test.describe("Thoughtful Gifts Made With Purpose section", () => {
 // same .product-card shell as New Releases (real book cover image,
 // same grid/card CSS) — see pages/home.js's renderDigitalComingSoonCard()
 // — with "Digital PDF Edition" + a "Coming Soon" badge + "Notify Me"
-// in place of price/stock/Add to Cart. There are 4 configured titles,
-// so only 3 show initially (INITIAL_VISIBLE_COUNT via
-// components/expandableGrid.js) with a real View More button to
-// reveal the 4th, same reusable mechanism Digital shares with any
-// future homepage section that needs it.
+// in place of price/stock/Add to Cart. There are 4 configured titles.
+//
+// Version 7, Milestone 171B.0: on desktop (this file's default
+// viewport) every card shows immediately with no button at all — the
+// mobile-only 2-visible-then-View-More behaviour is covered by
+// tests/smoke/mobileGrids.spec.js instead.
 test.describe("Digital Colouring Books section", () => {
-  test("shows 3 Coming Soon cards initially, with real book covers and Notify Me", async ({ page }) => {
+  test("shows all Coming Soon cards visible on desktop, with real book covers and Notify Me", async ({ page }) => {
     await page.goto("/");
     const grid = page.locator("#digital-grid");
-    const visibleCards = grid.locator(".product-card:not([hidden])");
-    await expect(visibleCards).toHaveCount(3);
+    const allCards = grid.locator(".product-card");
+    // locator.count() (unlike an `expect(...)` assertion) never
+    // auto-waits — the SPA fetches product data asynchronously (and
+    // deliberately fails over to static data in this "local" project,
+    // see playwright.config.js's own comment), so calling count()
+    // immediately after goto() can race the render. Wait for the
+    // first real card to actually appear before counting.
+    await expect(allCards.first()).toBeVisible();
+    const total = await allCards.count();
+    expect(total).toBeGreaterThanOrEqual(3);
 
-    for (const card of await visibleCards.all()) {
+    for (const card of await allCards.all()) {
+      // Real computed visibility, not DOM attribute presence — see
+      // this file's own Thoughtful Gifts test for why.
+      await expect(card).toBeVisible();
       await expect(card.locator(".digital-card__badge")).toHaveText("Coming Soon");
       await expect(card.locator(".product-card__category")).toHaveText("Digital PDF Edition");
       await expect(card.locator("img.card__image")).toBeVisible();
@@ -196,23 +241,10 @@ test.describe("Digital Colouring Books section", () => {
     }
   });
 
-  test("View More reveals the 4th digital title, View Less hides it again", async ({ page }) => {
+  test("View More control stays hidden on desktop — every card already shows without it", async ({ page }) => {
     await page.goto("/");
-    const grid = page.locator("#digital-grid");
-    const viewMoreBtn = page.locator('.expandable-grid__view-more [data-action="toggle-view-more"]');
-
-    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(3);
-    await expect(viewMoreBtn).toHaveText("View More");
-    await expect(viewMoreBtn).toHaveAttribute("aria-expanded", "false");
-
-    await viewMoreBtn.click();
-    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(4);
-    await expect(viewMoreBtn).toHaveText("View Less");
-    await expect(viewMoreBtn).toHaveAttribute("aria-expanded", "true");
-
-    await viewMoreBtn.click();
-    await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(3);
-    await expect(viewMoreBtn).toHaveText("View More");
+    const viewMoreBtn = page.locator('.expandable-grid__view-more [data-action="toggle-view-more"][aria-controls="digital-grid"]');
+    await expect(viewMoreBtn).not.toBeVisible();
   });
 
   test("Notify Me scrolls to the newsletter form and focuses the email field", async ({ page }) => {

@@ -55,7 +55,15 @@ const BEST_SELLER_SLUG = "abc-colouring-book-for-kids-with-fun-facts";
 
 // Version 7, Milestone 158: how many gift cards show before "View
 // More" — see renderGiftingSection() below.
-const INITIAL_VISIBLE_COUNT = 3;
+// Version 7, Milestone 171B.0: lowered from 3 to 2 — the real-world
+// requirement changed from "hide overflow beyond 3" to "phones only
+// ever show 2 up front, everything reveals via View More." Desktop/
+// tablet are unaffected (CSS forces every card visible there
+// regardless of this count — see layout.css/responsive.css's own
+// `[hidden]` override comments), so this only changes mobile. Now
+// shared by all three expandable homepage grids (New Releases,
+// Thoughtful Gifts, Digital Colouring Books), not just Gifts.
+const MOBILE_INITIAL_VISIBLE_COUNT = 2;
 
 // Version 7, Milestone 150/167: none of these four digital editions
 // exist as real product records yet (re-checked for Milestone 167: no
@@ -91,6 +99,14 @@ function renderHiFriendSection() {
   `;
 }
 
+// Version 7, Milestone 171B.0: now uses the same renderExpandableGrid
+// mechanism as Digital Colouring Books (components/expandableGrid.js)
+// instead of always rendering all 3 cards directly — mobile phones
+// only ever needed 2 up front, revealed the rest on tap. Desktop/
+// tablet force every card visible regardless via CSS (see
+// layout.css's own comment on `.home-3col-grid > [hidden]`), so this
+// change is mobile-only in its visible effect despite touching the
+// shared render path.
 function renderNewReleasesSection(products) {
   const byslug = new Map(products.map((product) => [product.slug, product]));
   const items = NEW_RELEASE_SLUGS.map((slug) => byslug.get(slug)).filter(Boolean);
@@ -99,12 +115,18 @@ function renderNewReleasesSection(products) {
   return `
     <section class="section container">
       <div class="section__header">
-        <h2>New Releases</h2>
+        <h2 id="new-releases-heading">New Releases</h2>
         <p>Fresh books created for learning, faith and meaningful creative time.</p>
       </div>
-      <div class="product-grid new-releases-grid home-3col-grid">
-        ${items.map((product, index) => renderProductCard(product, { eager: index === 0, showViewLink: true, displayTitle: HOMEPAGE_SHORT_TITLES[product.slug] })).join("")}
-      </div>
+      ${renderExpandableGrid({
+        items,
+        renderItem: (product, index, { hiddenExtra }) =>
+          renderProductCard(product, { eager: index === 0, showViewLink: true, displayTitle: HOMEPAGE_SHORT_TITLES[product.slug], hiddenExtra }),
+        gridId: "new-releases-grid",
+        gridClass: "product-grid new-releases-grid home-3col-grid",
+        scrollTargetId: "new-releases-heading",
+        initialVisibleCount: MOBILE_INITIAL_VISIBLE_COUNT,
+      })}
     </section>
   `;
 }
@@ -221,23 +243,24 @@ function renderGiftCard(entry, product, { hiddenCard = false } = {}) {
 // only ever shown when its productSlug resolves to a real, ACTIVE
 // product in the live catalogue — never a fake/duplicate product, and
 // never a hard-coded route independent of the real product record.
-// Reusable "View More" pattern: shows the first INITIAL_VISIBLE_COUNT
-// cards, hides the rest (plain `hidden` attribute, no CSS needed), and
-// only renders the toggle button at all once there are genuinely more
-// than INITIAL_VISIBLE_COUNT real gift products to reveal — with
-// exactly 3 configured today, this button doesn't render yet, but the
-// logic already works for a 4th+ future addition with zero code
-// changes (see data/giftProducts.js's own comment).
+// Reusable "View More" pattern: shows the first MOBILE_INITIAL_VISIBLE_COUNT
+// cards, hides the rest (plain `hidden` attribute; CSS forces every
+// card visible again at 768px+ regardless — see responsive.css's own
+// comment), and only renders the toggle button at all once there are
+// genuinely more than MOBILE_INITIAL_VISIBLE_COUNT real gift products
+// to reveal. Version 7, Milestone 171B.0: with the threshold now 2
+// (was 3), today's real 3 gift products DO trigger the button — see
+// that constant's own comment for why.
 function renderGiftingSection(products) {
   const bySlug = new Map(products.map((product) => [product.slug, product]));
   const entries = GIFT_PRODUCTS.map((entry) => ({ entry, product: bySlug.get(entry.productSlug) })).filter(({ product }) => Boolean(product));
 
   if (entries.length === 0) return "";
 
-  const hasMore = entries.length > INITIAL_VISIBLE_COUNT;
+  const hasMore = entries.length > MOBILE_INITIAL_VISIBLE_COUNT;
 
   const cards = entries
-    .map(({ entry, product }, index) => renderGiftCard(entry, product, { hiddenCard: index >= INITIAL_VISIBLE_COUNT }))
+    .map(({ entry, product }, index) => renderGiftCard(entry, product, { hiddenCard: index >= MOBILE_INITIAL_VISIBLE_COUNT }))
     .join("");
 
   return `
@@ -327,6 +350,7 @@ function renderDigitalSection(digitalProducts = [], allProducts = []) {
           gridId: "digital-grid",
           gridClass: "product-grid digital-grid home-3col-grid",
           scrollTargetId: "digital-section-heading",
+          initialVisibleCount: MOBILE_INITIAL_VISIBLE_COUNT,
         })}
       </section>
     `;
@@ -346,6 +370,7 @@ function renderDigitalSection(digitalProducts = [], allProducts = []) {
         gridId: "digital-grid",
         gridClass: "product-grid digital-grid home-3col-grid",
         scrollTargetId: "digital-section-heading",
+        initialVisibleCount: MOBILE_INITIAL_VISIBLE_COUNT,
       })}
     </section>
   `;

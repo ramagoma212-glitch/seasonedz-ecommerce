@@ -152,6 +152,23 @@
     max-width: none;
     margin: 0;
   }
+
+  /* Version 7, Milestone 171B.0: Thoughtful Gifts now collapses to 2
+     visible cards on mobile (see MOBILE_INITIAL_VISIBLE_COUNT in
+     pages/home.js) via the same `hidden`-attribute mechanism as New
+     Releases/Digital — tablet/desktop must keep showing all 3 real
+     gift cards immediately, exactly as before this milestone.
+     `!important` required — see layout.css's matching
+     `.home-3col-grid > [hidden]` rule for why (base.css's own
+     `[hidden] { display: none !important }` otherwise wins regardless
+     of specificity). */
+  .gifting-grid > [hidden] {
+    display: flex !important;
+  }
+
+  .gifting-section__view-more {
+    display: none;
+  }
 }
 
 /* Mobile card compactness for the three homepage product-card
