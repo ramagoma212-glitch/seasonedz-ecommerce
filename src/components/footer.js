@@ -88,6 +88,11 @@ export function renderFooter() {
             <li><a href="/about">About Us</a></li>
             <li><a href="/schools">Schools &amp; Churches</a></li>
             <li><a href="/faq">FAQ</a></li>
+            ${
+              businessInfo.googleReviewRequestUrl
+                ? `<li><a href="${businessInfo.googleReviewRequestUrl}" target="_blank" rel="noopener noreferrer" aria-label="Leave a Google review for Seasonedz Group (opens in a new tab)">Review us on Google</a></li>`
+                : ""
+            }
           </ul>
         </div>
 
