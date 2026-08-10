@@ -31,10 +31,15 @@ test.describe("Homepage section order", () => {
     }
   });
 
-  test("no blog section or empty blog placeholder on the homepage", async ({ page }) => {
+  // Version 7, Milestone 171B.0.3: scoped to the homepage's own main
+  // content (#main-content), not the whole page — the global footer
+  // (present on every page, not a "homepage section") now legitimately
+  // links to the real /blog route (see components/footer.js's General
+  // column), which would otherwise make this a false positive.
+  test("no blog section or empty blog placeholder among the homepage's own content sections", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator(".new-releases-grid")).toBeVisible();
-    const blogMentions = await page.locator('a[href="/blog"], a[href^="/blog/"]').count();
+    const blogMentions = await page.locator('#main-content a[href="/blog"], #main-content a[href^="/blog/"]').count();
     expect(blogMentions).toBe(0);
   });
 });

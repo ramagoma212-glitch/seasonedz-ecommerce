@@ -417,11 +417,6 @@
   color: var(--color-accent-dark);
 }
 
-.footer-description {
-  color: var(--color-text-light);
-  font-size: var(--font-size-base);
-  line-height: 1.6;
-}
 
 /* ---- Placeholder panel (used by stub pages/sections) ----------------------- */
 .placeholder-panel {
@@ -2464,14 +2459,3 @@ body.has-lightbox-open {
   min-height: 44px;
 }
 
-/* ---- Footer brand column (logo + newsletter shortcut) ------------------------ */
-.site-footer__col--brand .footer-logo {
-  margin-bottom: var(--space-sm);
-}
-
-.footer-newsletter-shortcut {
-  display: inline-block;
-  margin-top: var(--space-sm);
-  font-weight: 700;
-  color: var(--color-primary);
-}

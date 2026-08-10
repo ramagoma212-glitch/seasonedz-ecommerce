@@ -84,14 +84,19 @@ test.describe("Mobile smoke checks", () => {
   // Version 7, Milestone 171B.0.2: footer rebuilt around a support
   // strip + General / Orders & Support / Account columns (see
   // footerCleanup.spec.js for dedicated coverage). 4 headings -> 3.
+  // Version 7, Milestone 171B.0.3: payment logos moved out of their
+  // own full-width strip into a fourth "Payment Methods" column
+  // (3 headings -> 4); the old brand column's newsletter shortcut link
+  // was removed along with that column (Part 6 of the brief) — see
+  // footerCleanup.spec.js for dedicated coverage of the new structure.
   test("footer stays readable on mobile with all link groups intact", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator(".site-footer");
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.locator(".footer-heading")).toHaveCount(3);
+    await expect(footer.locator(".footer-heading")).toHaveCount(4);
     await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
     await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
-    await expect(footer.locator(".footer-newsletter-shortcut")).toBeVisible();
+    await expect(footer.locator(".footer-payment-grid img").first()).toBeVisible();
     const hasHorizontalScroll = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
     expect(hasHorizontalScroll).toBe(false);
   });

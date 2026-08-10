@@ -377,18 +377,21 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
 
   // Version 7, Milestone 171B.0.2: the footer's old single combined-
   // image "Secure Payments" trust section (.footer-payment-trust) was
-  // replaced with an individual payment-logo grid (.footer-payment /
-  // .footer-payment-grid — see components/footer.js and
-  // tests/smoke/footerCleanup.spec.js for dedicated coverage). The
-  // checkout page's own .payment-trust-panel above is unaffected and
-  // still uses the combined artwork, per this milestone's explicit
-  // footer-only scope.
+  // replaced with an individual payment-logo grid — see
+  // components/footer.js and tests/smoke/footerCleanup.spec.js for
+  // dedicated coverage. The checkout page's own .payment-trust-panel
+  // above is unaffected and still uses the combined artwork, per this
+  // milestone's explicit footer-only scope.
+  // Version 7, Milestone 171B.0.3: the payment logo grid moved from
+  // its own full-width ".footer-payment" section (with a "We Accept"
+  // heading) into a "Payment Methods" column alongside General/Orders
+  // & Support/Account — see .site-footer__col--payment.
   test("footer shows the individual payment logo grid above the copyright line", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator("footer.site-footer");
-    const paymentSection = footer.locator(".footer-payment");
+    const paymentSection = footer.locator(".site-footer__col--payment");
     await expect(paymentSection).toBeVisible();
-    await expect(paymentSection.locator(".footer-payment__heading")).toHaveText("We Accept");
+    await expect(paymentSection.locator(".footer-heading")).toHaveText("Payment Methods");
 
     const grid = paymentSection.locator(".footer-payment-grid");
     await expect(grid.locator("img")).toHaveCount(9);
@@ -420,7 +423,7 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
     test(`no horizontal scroll on footer payment section at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
-      await page.locator(".footer-payment").scrollIntoViewIfNeeded();
+      await page.locator(".site-footer__col--payment").scrollIntoViewIfNeeded();
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
       const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);

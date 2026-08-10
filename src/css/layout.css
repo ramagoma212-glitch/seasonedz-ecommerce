@@ -108,7 +108,12 @@
 /* ---- Site footer ----------------------------------------------------------
    Version 7, Milestone 171B.0.2: light/white footer (was a dark green
    panel) matching an owner-supplied reference layout. Brand colors are
-   used only for accents/hover, never as the footer's own background. */
+   used only for accents/hover, never as the footer's own background.
+   Version 7, Milestone 171B.0.3: compacted per owner direction — the
+   old separate brand/logo column is gone and payment logos moved from
+   their own full-width strip into a fourth column alongside General /
+   Orders & Support / Account, so the whole footer now reads as one
+   clean row instead of a row-plus-strip. */
 .site-footer {
   background-color: var(--color-surface);
   color: var(--color-text);
@@ -120,7 +125,10 @@
    only real, existing Seasonedz contact info (FAQ / WhatsApp / Email /
    Phone) — see components/footer.js. Tinted a shade off the footer's
    own white so it reads as a distinct top strip, same pattern as the
-   reference layout. */
+   reference layout. Kept deliberately thin/subtle (Part 10 of the
+   171B.0.3 brief): smaller icon size and tighter padding than a
+   default support band, so it never reads visually stronger than the
+   site header above it. */
 .footer-support-strip {
   background-color: var(--color-bg-alt);
   border-bottom: 1px solid var(--color-border);
@@ -131,7 +139,7 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: var(--space-lg);
-  padding-block: var(--space-sm);
+  padding-block: var(--space-xs);
 }
 
 .footer-support-strip__item {
@@ -147,43 +155,41 @@
 }
 
 .footer-support-strip__icon {
-  font-size: var(--font-size-base);
+  font-size: var(--font-size-sm);
 }
 
-/* Brand + General + Orders & Support + Account = exactly 4 columns,
-   filling one row at desktop width with no dead trailing gap. */
+/* General + Orders & Support + Account + Payment Methods = exactly 4
+   sections. The three link columns only need enough width for their
+   longest link text, so they stay equal and compact; the payment
+   column gets extra width so its two logo rows have room to breathe
+   without shrinking any individual logo unreadably small. */
 .site-footer__inner {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr) minmax(220px, 1.4fr);
   gap: var(--space-xl);
-  padding-block: var(--space-2xl) var(--space-xl);
-}
-
-.footer-payment {
-  padding-bottom: var(--space-lg);
-  text-align: center;
-}
-
-.footer-payment__heading {
-  font-weight: 600;
-  font-size: var(--font-size-sm);
-  color: var(--color-text);
-  margin-bottom: var(--space-md);
+  padding-block: var(--space-xl);
+  align-items: start;
 }
 
 .footer-payment-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: var(--space-md) var(--space-lg);
-  max-width: 640px;
-  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.footer-payment-grid__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .footer-payment-grid__item {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 32px;
+  flex: 0 0 auto;
 }
 
 .footer-payment-grid__item img {

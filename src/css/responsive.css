@@ -354,25 +354,10 @@
   :root {
     --container-padding: 1.5rem;
   }
-
-  .site-footer__inner {
-    grid-template-columns: repeat(3, 1fr);
-  }
 }
 
 /* ---- Tablet / small desktop ------------------------------------------------ */
 @media (max-width: 1024px) {
-  .site-footer__inner {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  /* One fewer column than the desktop default so 9 logos wrap cleanly
-     (5+4 -> would leave an awkward single trailing item at some tablet
-     widths) without any individual logo being squeezed unreadable. */
-  .footer-payment-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .grid--4 {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -603,6 +588,18 @@
   .contact-layout .contact-form {
     max-width: none;
   }
+
+  /* Version 7, Milestone 171B.0.3, Part 14: below 1024px the three
+     equal nav columns plus the wider payment column no longer fit one
+     comfortable row — 2 columns x 2 rows (General+Orders & Support,
+     Account+Payment Methods) tested as the cleaner of the brief's two
+     suggested tablet options, keeping every column readable instead of
+     squeezing four narrow tracks into a shrinking container. Desktop
+     (1024px+, see Part 9) keeps the full 4-across row since the
+     site's own capped 1200px container still has enough room there. */
+  .site-footer__inner {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* ---- Mobile -------------------------------------------------------------- */
@@ -624,29 +621,13 @@
     display: none;
   }
 
-  /* Version 7, Milestone 151: slims the footer's brand column on
-     small mobile, where the six stacked footer columns (brand + 4
-     link groups + contact) made the brand block's full-width
-     marketing paragraph read as an oversized wall of text before the
-     actually-useful links. Tighter vertical rhythm + a narrower,
-     centered description column (still fully readable, never
-     truncated) rather than hiding or shortening any real content. */
+  /* Version 7, Milestone 171B.0.3: tighter vertical rhythm for the
+     four stacked footer sections (General/Orders & Support/Account/
+     Payment Methods) on small mobile — comfortable without excessive
+     vertical spacing (Part 15 of the brief). */
   .site-footer__inner {
     gap: var(--space-lg);
     padding-block: var(--space-xl) var(--space-md);
-  }
-
-  .site-footer__col--brand .footer-logo {
-    margin-bottom: var(--space-xs);
-  }
-
-  .footer-description {
-    max-width: 32ch;
-    margin-inline: auto;
-  }
-
-  .footer-newsletter-shortcut {
-    margin-top: var(--space-xs);
   }
 
   h1 {
@@ -695,9 +676,26 @@
     padding-block: var(--space-sm);
   }
 
+  /* Version 7, Milestone 171B.0.3, Part 15: mobile drops the desktop
+     5-then-4 two-row layout for a compact 3-column grid instead — the
+     two ".footer-payment-grid__row" wrappers become `display: contents`
+     (removed from the box model, not the DOM) so all 9 logo items
+     become direct grid children and wrap 3-per-row regardless of which
+     desktop row they started in. */
   .footer-payment-grid {
+    display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    max-width: 340px;
+    gap: var(--space-sm) var(--space-md);
+    max-width: 320px;
+    margin-inline: auto;
+  }
+
+  .footer-payment-grid__row {
+    display: contents;
+  }
+
+  .footer-payment-grid__item {
+    height: 36px;
   }
 
   /* Version 7, Milestone 150: stacked, full-width, 44px-tall action
