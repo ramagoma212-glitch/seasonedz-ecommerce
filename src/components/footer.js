@@ -1,42 +1,73 @@
-// Site footer component: logo, company description, three link groups
-// (Help / Seasonedz Group / Legal), real contact details and
-// copyright.
+// Site footer component: a light support strip (FAQ/WhatsApp/Email/
+// Phone), logo + description column, three link groups (General /
+// Orders & Support / Account), a grid of individually-presented
+// payment method logos, a divider and the copyright line.
 //
-// Version 7, Milestone 150: reorganised into the brief's four named
-// groups (Shop / Help / Seasonedz Group / Legal). No verified social
-// media links (Facebook/Instagram/etc.) exist anywhere in this
-// project to add here.
-//
-// Version 7, Milestone 168F: the footer's own "Shop" group (Physical
-// Books/Digital Downloads/Creative Supplies/Best Sellers/New Releases)
-// was removed — Shop is already reachable from the header nav (both
-// desktop and mobile) and every one of these links pointed at /shop
-// anyway (a few with no dedicated route/filter yet even before this
-// change), so the group was pure duplication rather than distinct
-// navigation. /shop itself, the header's Shop link, and every route
-// these links used are untouched.
-//
-// Version 7, Milestone 167: the "Shop Seasonedz Group on" marketplace
-// line that used to sit directly above the copyright text was removed
-// — marketplace links now live only in the homepage's own "Also
-// Available On" section (components/marketplaceLinks.js's
-// renderMarketplaceHomeSection()), per the owner's explicit "keep
-// marketplace links only in one place" decision. Nothing else in the
-// footer changed.
-//
-// Version 7, Milestone 168E: a compact "Secure Payments" trust section
-// sits above the copyright line — same owner-approved WebP artwork
-// used on the product page and checkout (informational only; PayFast
-// remains the only real payment integration).
-
+// Version 7, Milestone 171B.0.2: rebuilt to match an owner-supplied
+// reference layout (structure/spacing/proportions only — no wording,
+// branding or copy from that reference was copied; every link, contact
+// detail and the copyright line below are Seasonedz Group's own real,
+// pre-existing information). Replaces the previous four-group layout
+// (Help / Seasonedz Group / Legal / Contact Us) and the single combined
+// payment-logos image with individually cropped logo assets
+// (public/images/payment/) laid out in their own grid. The combined
+// image (images/payment-methods-payfast.webp) is untouched and still
+// used as-is by the checkout trust panel and product page (Part 18 of
+// the brief: this milestone is footer-only).
 import { withBase } from "../js/paths.js";
 import { businessInfo } from "../data/businessInfo.js";
+
+const PAYMENT_LOGOS = [
+  { name: "visa", label: "Visa" },
+  { name: "mastercard", label: "Mastercard" },
+  { name: "apple-pay", label: "Apple Pay" },
+  { name: "google-pay", label: "Google Pay" },
+  { name: "samsung-pay", label: "Samsung Pay" },
+  { name: "instant-eft", label: "Instant EFT by PayFast" },
+  { name: "snapscan", label: "SnapScan" },
+  { name: "zapper", label: "Zapper" },
+  { name: "payflex", label: "Payflex" },
+];
+
+function renderPaymentLogo({ name, label }) {
+  return `
+    <span class="footer-payment-grid__item">
+      <img
+        src="${withBase(`/images/payment/payment-${name}.webp`)}"
+        alt="${label}"
+        loading="lazy"
+        decoding="async"
+      />
+    </span>
+  `;
+}
 
 export function renderFooter() {
   const year = new Date().getFullYear();
 
   return `
     <footer class="site-footer">
+      <div class="footer-support-strip">
+        <div class="container footer-support-strip__inner">
+          <a class="footer-support-strip__item" href="/faq">
+            <span class="footer-support-strip__icon" aria-hidden="true">&#10067;</span>
+            FAQ
+          </a>
+          <a class="footer-support-strip__item" href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">
+            <span class="footer-support-strip__icon" aria-hidden="true">&#128172;</span>
+            WhatsApp Us
+          </a>
+          <a class="footer-support-strip__item" href="${businessInfo.mailtoUrl}">
+            <span class="footer-support-strip__icon" aria-hidden="true">&#9993;</span>
+            ${businessInfo.email}
+          </a>
+          <a class="footer-support-strip__item" href="${businessInfo.telUrl}">
+            <span class="footer-support-strip__icon" aria-hidden="true">&#128222;</span>
+            ${businessInfo.phoneDisplay}
+          </a>
+        </div>
+      </div>
+
       <div class="container site-footer__inner">
         <div class="site-footer__col site-footer__col--brand">
           <a href="/" class="logo footer-logo">
@@ -52,64 +83,43 @@ export function renderFooter() {
         </div>
 
         <div class="site-footer__col">
-          <h4 class="footer-heading">Help</h4>
+          <h4 class="footer-heading">General</h4>
+          <ul class="footer-links">
+            <li><a href="/about">About Us</a></li>
+            <li><a href="/schools">Schools &amp; Churches</a></li>
+            <li><a href="/faq">FAQ</a></li>
+          </ul>
+        </div>
+
+        <div class="site-footer__col">
+          <h4 class="footer-heading">Orders &amp; Support</h4>
+          <ul class="footer-links">
+            <li><a href="/shipping-policy">Delivery Information</a></li>
+            <li><a href="/returns-policy">Returns Policy</a></li>
+            <li><a href="/terms">Terms &amp; Conditions</a></li>
+            <li><a href="/privacy-policy">Privacy Policy</a></li>
+            <li><a href="/track-order">Track Order</a></li>
+          </ul>
+        </div>
+
+        <div class="site-footer__col">
+          <h4 class="footer-heading">Account</h4>
           <ul class="footer-links">
             <li><a href="/account">My Account</a></li>
-            <li><a href="/contact">Contact</a></li>
-            <li><a href="/shipping-policy">Delivery Policy</a></li>
-            <li><a href="/returns-policy">Returns Policy</a></li>
-            <li><a href="/faq">FAQs</a></li>
-            <li><a href="/track-order">Order Tracking</a></li>
-          </ul>
-        </div>
-
-        <div class="site-footer__col">
-          <h4 class="footer-heading">Seasonedz Group</h4>
-          <ul class="footer-links">
-            <li><a href="/about">About</a></li>
-            <li><a href="/schools">Schools and Churches</a></li>
-            <li><a href="/wholesale">Wholesale</a></li>
-            <li><a href="/testimonials">Testimonials</a></li>
-          </ul>
-        </div>
-
-        <div class="site-footer__col">
-          <h4 class="footer-heading">Legal</h4>
-          <ul class="footer-links">
-            <li><a href="/privacy-policy">Privacy Policy</a></li>
-            <li><a href="/terms">Terms &amp; Conditions</a></li>
-            <li><a href="/cookies-policy">Cookie Policy</a></li>
-          </ul>
-        </div>
-
-        <div class="site-footer__col">
-          <h4 class="footer-heading">Contact Us</h4>
-          <ul class="footer-links">
-            <li>Email: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a></li>
-            <li>WhatsApp: <a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a></li>
-            <li>Phone: <a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a></li>
-            <li>South Africa</li>
-            ${
-              businessInfo.googleReviewRequestUrl
-                ? `<li><a href="${businessInfo.googleReviewRequestUrl}" target="_blank" rel="noopener noreferrer" aria-label="Leave a Google review for Seasonedz Group (opens in a new tab)">Review us on Google</a></li>`
-                : ""
-            }
+            <li><a href="/wishlist">Wishlist</a></li>
           </ul>
         </div>
       </div>
 
-      <div class="footer-payment-trust">
-        <p class="footer-payment-trust__heading">Secure Payments</p>
-        <p class="footer-payment-trust__desc">Safe and convenient payment options powered by PayFast.</p>
-        <img
-          class="footer-payment-trust__logos"
-          src="${withBase("/images/payment-methods-payfast.webp")}"
-          alt="Secure payment methods available through PayFast including Visa, Mastercard, Apple Pay, Google Pay, Samsung Pay, Instant EFT, SnapScan, Zapper and Payflex."
-          width="720"
-          height="480"
-          loading="lazy"
-          decoding="async"
-        />
+      <div class="container footer-payment">
+        <p class="footer-payment__heading">We Accept</p>
+        <div class="footer-payment-grid">
+          ${PAYMENT_LOGOS.map(renderPaymentLogo).join("")}
+        </div>
+      </div>
+
+      <div class="container">
+        <div class="footer-divider"></div>
       </div>
 
       <div class="site-footer__bottom">

@@ -395,7 +395,7 @@
 
 /* ---- Footer link lists ----------------------------------------------------- */
 .footer-heading {
-  color: var(--color-white);
+  color: var(--color-secondary-dark);
   font-family: var(--font-heading);
   font-size: var(--font-size-base);
   margin-bottom: var(--space-md);
@@ -408,20 +408,17 @@
 }
 
 .footer-links a {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-light);
   line-height: 1.6;
   transition: color var(--transition-fast);
 }
 
 .footer-links a:hover {
-  color: var(--color-accent);
+  color: var(--color-accent-dark);
 }
 
-/* Version 7, Milestone 167: contrast/readability pass — was
-   rgba(255,255,255,0.75) at --font-size-sm (14px), noticeably lower
-   contrast and smaller than the rest of the footer's own body text. */
 .footer-description {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-text-light);
   font-size: var(--font-size-base);
   line-height: 1.6;
 }

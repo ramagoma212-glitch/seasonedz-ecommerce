@@ -81,11 +81,14 @@ test.describe("Mobile smoke checks", () => {
   // removed (pure duplication of the header's Shop link — see
   // footer.js's own comment and tests/smoke/footerCleanup.spec.js for
   // dedicated coverage of that removal). 5 groups -> 4.
+  // Version 7, Milestone 171B.0.2: footer rebuilt around a support
+  // strip + General / Orders & Support / Account columns (see
+  // footerCleanup.spec.js for dedicated coverage). 4 headings -> 3.
   test("footer stays readable on mobile with all link groups intact", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator(".site-footer");
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.locator(".footer-heading")).toHaveCount(4);
+    await expect(footer.locator(".footer-heading")).toHaveCount(3);
     await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
     await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
     await expect(footer.locator(".footer-newsletter-shortcut")).toBeVisible();

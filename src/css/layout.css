@@ -105,67 +105,104 @@
   display: none;
 }
 
-/* ---- Site footer ---------------------------------------------------------- */
+/* ---- Site footer ----------------------------------------------------------
+   Version 7, Milestone 171B.0.2: light/white footer (was a dark green
+   panel) matching an owner-supplied reference layout. Brand colors are
+   used only for accents/hover, never as the footer's own background. */
 .site-footer {
-  background-color: var(--color-secondary-dark);
-  color: var(--color-white);
+  background-color: var(--color-surface);
+  color: var(--color-text);
   margin-top: var(--space-3xl);
+  border-top: 1px solid var(--color-border);
 }
 
-/* Version 7, Milestone 168F: 5 columns -> 4 after the footer's own
-   "Shop" group was removed (footer.js) — the remaining 5 columns
-   (Brand, Help, Seasonedz Group, Legal, Contact Us) now fill exactly
-   one 4-column row plus Contact Us wrapping alone onto its own row
-   under Brand, the same natural-wrap pattern this grid already
-   produced before (Contact Us was always the grid's last/6th item, so
-   it already wrapped onto its own row under column 1 at 5 columns) —
-   no dead gap where Shop used to sit. */
+/* Support strip: a slim band above the main footer columns carrying
+   only real, existing Seasonedz contact info (FAQ / WhatsApp / Email /
+   Phone) — see components/footer.js. Tinted a shade off the footer's
+   own white so it reads as a distinct top strip, same pattern as the
+   reference layout. */
+.footer-support-strip {
+  background-color: var(--color-bg-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.footer-support-strip__inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding-block: var(--space-sm);
+}
+
+.footer-support-strip__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.footer-support-strip__item:hover {
+  color: var(--color-primary);
+}
+
+.footer-support-strip__icon {
+  font-size: var(--font-size-base);
+}
+
+/* Brand + General + Orders & Support + Account = exactly 4 columns,
+   filling one row at desktop width with no dead trailing gap. */
 .site-footer__inner {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: var(--space-xl);
-  padding-block: var(--space-3xl) var(--space-xl);
+  padding-block: var(--space-2xl) var(--space-xl);
 }
 
-.site-footer__bottom {
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  padding-block: var(--space-md);
-  text-align: center;
-  font-size: var(--font-size-sm);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* ---- Footer payment trust (Version 7, Milestone 168E) ---------------------
-   Compact, centred, sits above .site-footer__bottom's own border/copyright
-   line — deliberately much smaller than the checkout trust panel (one
-   heading, one sentence, one image; see components/footer.js). */
-.footer-payment-trust {
-  max-width: 480px;
-  margin-inline: auto;
+.footer-payment {
   padding-bottom: var(--space-lg);
   text-align: center;
 }
 
-.footer-payment-trust__heading {
+.footer-payment__heading {
   font-weight: 600;
   font-size: var(--font-size-sm);
-  color: var(--color-white);
-  margin-bottom: 2px;
+  color: var(--color-text);
+  margin-bottom: var(--space-md);
 }
 
-.footer-payment-trust__desc {
-  font-size: var(--font-size-xs);
-  color: rgba(255, 255, 255, 0.7);
-  margin-bottom: var(--space-sm);
+.footer-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-md) var(--space-lg);
+  max-width: 640px;
+  margin-inline: auto;
 }
 
-.footer-payment-trust__logos {
-  display: block;
-  width: 100%;
+.footer-payment-grid__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+}
+
+.footer-payment-grid__item img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
   height: auto;
   object-fit: contain;
-  border-radius: var(--radius-sm);
-  margin-inline: auto;
+}
+
+.footer-divider {
+  border-top: 1px solid var(--color-border);
+}
+
+.site-footer__bottom {
+  padding-block: var(--space-md);
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 
 /* Version 7, Milestone 144's "Shop Seasonedz Group on" footer line
