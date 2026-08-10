@@ -366,6 +366,13 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
+  /* One fewer column than the desktop default so 9 logos wrap cleanly
+     (5+4 -> would leave an awkward single trailing item at some tablet
+     widths) without any individual logo being squeezed unreadable. */
+  .footer-payment-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .grid--4 {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -680,6 +687,17 @@
   .site-footer__inner {
     grid-template-columns: 1fr;
     text-align: center;
+  }
+
+  .footer-support-strip__inner {
+    justify-content: center;
+    gap: var(--space-md);
+    padding-block: var(--space-sm);
+  }
+
+  .footer-payment-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-width: 340px;
   }
 
   /* Version 7, Milestone 150: stacked, full-width, 44px-tall action

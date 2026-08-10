@@ -375,31 +375,36 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
     await expect(page.locator('input[value*="visa" i], input[value*="mastercard" i], input[value*="applepay" i], input[value*="googlepay" i], input[value*="samsungpay" i], input[value*="snapscan" i], input[value*="zapper" i], input[value*="payflex" i]')).toHaveCount(0);
   });
 
-  test("footer shows the compact Secure Payments trust section above the copyright line", async ({ page }) => {
+  // Version 7, Milestone 171B.0.2: the footer's old single combined-
+  // image "Secure Payments" trust section (.footer-payment-trust) was
+  // replaced with an individual payment-logo grid (.footer-payment /
+  // .footer-payment-grid — see components/footer.js and
+  // tests/smoke/footerCleanup.spec.js for dedicated coverage). The
+  // checkout page's own .payment-trust-panel above is unaffected and
+  // still uses the combined artwork, per this milestone's explicit
+  // footer-only scope.
+  test("footer shows the individual payment logo grid above the copyright line", async ({ page }) => {
     await page.goto("/");
     const footer = page.locator("footer.site-footer");
-    const trust = footer.locator(".footer-payment-trust");
-    await expect(trust).toBeVisible();
-    await expect(trust.locator(".footer-payment-trust__heading")).toHaveText("Secure Payments");
-    await expect(trust.locator(".footer-payment-trust__desc")).toHaveText("Safe and convenient payment options powered by PayFast.");
+    const paymentSection = footer.locator(".footer-payment");
+    await expect(paymentSection).toBeVisible();
+    await expect(paymentSection.locator(".footer-payment__heading")).toHaveText("We Accept");
 
-    const img = trust.locator(".footer-payment-trust__logos");
-    await expect(img).toBeVisible();
-    await expect(img).toHaveAttribute("src", /payment-methods-payfast\.webp/);
-    await expect(img).toHaveAttribute("alt", /Visa.*Mastercard.*Apple Pay.*Google Pay.*Samsung Pay.*Instant EFT.*SnapScan.*Zapper.*Payflex/s);
+    const grid = paymentSection.locator(".footer-payment-grid");
+    await expect(grid.locator("img")).toHaveCount(9);
 
-    // Trust section sits before the final bottom/copyright bar, not after it.
+    // Payment section sits before the final bottom/copyright bar, not after it.
     const bottom = footer.locator(".site-footer__bottom");
-    const trustBox = await trust.boundingBox();
+    const paymentBox = await paymentSection.boundingBox();
     const bottomBox = await bottom.boundingBox();
-    expect(trustBox.y).toBeLessThan(bottomBox.y);
+    expect(paymentBox.y).toBeLessThan(bottomBox.y);
   });
 
-  test("footer trust artwork is informational only, not a clickable element", async ({ page }) => {
+  test("footer payment logos are informational only, not clickable elements", async ({ page }) => {
     await page.goto("/");
-    const trust = page.locator(".footer-payment-trust");
-    await expect(trust.locator("button")).toHaveCount(0);
-    await expect(trust.locator("a")).toHaveCount(0);
+    const grid = page.locator(".footer-payment-grid");
+    await expect(grid.locator("button")).toHaveCount(0);
+    await expect(grid.locator("a")).toHaveCount(0);
   });
 
   for (const width of [430, 390, 375, 360, 320]) {
@@ -412,10 +417,10 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
     });
 
-    test(`no horizontal scroll on footer trust section at ${width}px`, async ({ page }) => {
+    test(`no horizontal scroll on footer payment section at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto("/");
-      await page.locator(".footer-payment-trust").scrollIntoViewIfNeeded();
+      await page.locator(".footer-payment").scrollIntoViewIfNeeded();
       const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
       const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
       expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
