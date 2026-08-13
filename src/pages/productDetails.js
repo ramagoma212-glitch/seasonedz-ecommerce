@@ -9,20 +9,29 @@
 // Version 6, Milestone 48: once the product is known, this overrides
 // the router's generic "Product | Seasonedz Group" title/description
 // with the real product name and its own short description, and adds
-// Product structured data (JSON-LD) — see js/seo.js. Deliberately
-// never includes aggregateRating/review fields in that structured
-// data: rating/reviewCount are sample data, not real reviews, and
-// claiming them as real review markup to search engines would be
-// misleading — see VERSION_6_PRODUCT_PAGES_AND_SEO_PLAN.md. Version 7,
+// Product structured data (JSON-LD) — see js/seo.js. Version 7,
 // Milestone 95: removed the visible rating/reviewCount display on this
-// page too, for the same reason.
+// page (at the time, product.rating/reviewCount were sample data
+// hardcoded in src/data/products.js, not real reviews — see that
+// file's own Milestone 95 comment).
+// Version 7, Milestone 171C: a genuine, verified-purchase review
+// system now exists (components/productReviews.js) — the visible
+// review section and buildProductStructuredData()'s AggregateRating
+// below both read the same real product.rating/reviewCount fields
+// (backend column names ratingAverage/reviewCount — see
+// js/api/mappers.js), which stay at their honest 0/0 default until
+// real approved reviews exist (see backend/prisma/schema.prisma's own
+// comment on those two columns) — AggregateRating is only ever added
+// to the JSON-LD when reviewCount > 0, never a fabricated "0 reviews"
+// claim.
 
 import { renderProductCard } from "../components/productCard.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { renderProductMarketplaceBlock } from "../components/marketplaceLinks.js";
 import { renderProductDeliveryAccordion } from "../components/productDeliveryAccordion.js";
+import { renderProductReviewsSection } from "../components/productReviews.js";
 import { isInWishlist } from "../js/wishlist.js";
-import { getCatalog } from "../js/api/productsApi.js";
+import { getCatalog, getProductReviews } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
 import { escapeHtml } from "../js/search.js";
@@ -68,6 +77,23 @@ function buildProductStructuredData(product) {
       availability: schemaAvailability(product.stockStatus),
       url: window.location.href,
     },
+    // Version 7, Milestone 171C: only ever added once at least one
+    // genuine, admin-approved review exists for this product — omitted
+    // entirely otherwise (Part L of the milestone brief: "never
+    // manufacture SEO review signals"). product.rating/reviewCount are
+    // real, server-computed values (backend's ratingAverage/reviewCount,
+    // see js/api/mappers.js — adminProductReview.service.ts's
+    // recalculateProductRatingAggregate() is what writes them), never
+    // sample/hardcoded data.
+    ...(product.reviewCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: product.rating.toFixed(2),
+            reviewCount: product.reviewCount,
+          },
+        }
+      : {}),
   };
 }
 
@@ -312,6 +338,8 @@ export async function renderProductDetails({ slug } = {}) {
   setPageMeta({ title: product.name, description: product.shortDescription });
   setPageStructuredData(buildProductStructuredData(product));
 
+  const reviewData = await getProductReviews(product.slug);
+
   const wishlisted = isInWishlist(product.id);
 
   return `
@@ -411,6 +439,8 @@ export async function renderProductDetails({ slug } = {}) {
         ${product.productType === "DIGITAL" ? renderDigitalDownloadNote(product) : ""}
         ${renderSupportNote()}
       </div>
+
+      ${renderProductReviewsSection(product, reviewData)}
 
       ${renderRelatedProducts(product, products)}
     </section>

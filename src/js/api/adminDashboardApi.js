@@ -178,3 +178,21 @@ export function uploadAdminDigitalAsset(productId, file, { displayName, pageCoun
 export function deleteAdminDigitalAsset(productId) {
   return adminRequest(`/admin/products/${encodeURIComponent(productId)}/digital-asset`, { method: "DELETE" });
 }
+
+// Version 7, Milestone 171C: genuine product review moderation —
+// approve/reject only. There is deliberately no "create review"
+// function anywhere in this file, matching the backend's own
+// moderation-only design (see backend/src/services/
+// adminProductReview.service.ts's header comment).
+export function getAdminReviews(status) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  return adminRequest(`/admin/reviews${query}`, { method: "GET" });
+}
+
+export function approveAdminReview(reviewId) {
+  return adminRequest(`/admin/reviews/${encodeURIComponent(reviewId)}/approve`, { method: "PATCH" });
+}
+
+export function rejectAdminReview(reviewId) {
+  return adminRequest(`/admin/reviews/${encodeURIComponent(reviewId)}/reject`, { method: "PATCH" });
+}

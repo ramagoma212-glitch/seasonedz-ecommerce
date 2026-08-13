@@ -64,3 +64,23 @@ export function getCustomerOrderDownloads(orderNumber) {
 export function requestCustomerDownload(orderItemId) {
   return customerRequest(`/customers/downloads/${encodeURIComponent(orderItemId)}/request`, { method: "POST" });
 }
+
+// Version 7, Milestone 171C: genuine, verified-purchase product
+// reviews. All three require the caller to already be logged in, same
+// as the order-history/download endpoints above — the backend
+// independently re-verifies every purchase claim, never trusting
+// anything sent from here.
+export function getEligibleReviewCandidates() {
+  return customerRequest("/customers/reviews/eligible", { method: "GET" });
+}
+
+export function getMyReviews() {
+  return customerRequest("/customers/reviews", { method: "GET" });
+}
+
+export function submitProductReview({ orderItemId, rating, reviewText }) {
+  return customerRequest("/customers/reviews", {
+    method: "POST",
+    body: JSON.stringify({ orderItemId, rating, reviewText }),
+  });
+}

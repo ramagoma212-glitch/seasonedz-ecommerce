@@ -19,6 +19,10 @@ const NAV_LINKS = [
   { key: "orders", href: "/admin/orders", label: "Orders" },
   { key: "enquiries", href: "/admin/enquiries", label: "Enquiries" },
   { key: "products", href: "/admin/products", label: "Products" },
+  // Version 7, Milestone 171C: genuine review moderation only —
+  // approve/reject an existing customer-submitted review, never create
+  // one (see pages/adminReviews.js's own header comment).
+  { key: "reviews", href: "/admin/reviews", label: "Reviews" },
 ];
 
 export function renderAdminNav(activeKey) {

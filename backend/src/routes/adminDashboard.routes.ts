@@ -51,6 +51,7 @@ import {
   uploadAdminDigitalAssetHandler,
   uploadDigitalAssetMiddleware,
 } from "../controllers/adminDigitalAsset.controller.js";
+import { approveReviewHandler, listAdminReviewsHandler, rejectReviewHandler } from "../controllers/adminProductReview.controller.js";
 
 const router = Router();
 
@@ -99,5 +100,11 @@ router.delete("/products/:id/images/:imageId", deleteAdminProductImageHandler);
 router.get("/products/:id/digital-asset", getAdminDigitalAssetHandler);
 router.post("/products/:id/digital-asset", uploadDigitalAssetMiddleware, uploadAdminDigitalAssetHandler);
 router.delete("/products/:id/digital-asset", deleteAdminDigitalAssetHandler);
+// Version 7, Milestone 171C: review moderation only (approve/reject an
+// existing PENDING review) — no route anywhere lets an admin create a
+// review. See adminProductReview.service.ts's own header comment.
+router.get("/reviews", listAdminReviewsHandler);
+router.patch("/reviews/:id/approve", approveReviewHandler);
+router.patch("/reviews/:id/reject", rejectReviewHandler);
 
 export default router;

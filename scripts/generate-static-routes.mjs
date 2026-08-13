@@ -53,7 +53,6 @@ const PUBLIC_STATIC_ROUTES = [
   "/privacy-policy",
   "/terms",
   "/cookies-policy",
-  "/testimonials",
   "/schools",
   "/wholesale",
   "/distributor",
@@ -61,7 +60,12 @@ const PUBLIC_STATIC_ROUTES = [
 ];
 
 const SITE_URL = "https://www.seasonedzgroup.co.za";
-const PRODUCTS_API_URL = "https://seasonedz-ecommerce.onrender.com/api/products?limit=100";
+// Version 7, Milestone 171D: updated from the old seasonedz-ecommerce.
+// onrender.com host (still valid — Render never retires its default
+// subdomain — but stale since Milestone 133 moved the live API to its
+// own same-site custom domain) to the current canonical API host, for
+// consistency with every other reference to the API in this repo.
+const PRODUCTS_API_URL = "https://api.seasonedzgroup.co.za/api/products?limit=100";
 const PRODUCTS_FALLBACK_FILE = join(ROOT, "src/data/products.js");
 const BLOG_POSTS_FILE = join(ROOT, "src/data/blogPosts.js");
 

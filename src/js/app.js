@@ -37,7 +37,7 @@ import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload } from "./api/customerApi.js";
+import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload, submitProductReview } from "./api/customerApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
 import {
   updateAdminOrderStatus,
@@ -51,6 +51,8 @@ import {
   deleteProductImage,
   uploadAdminDigitalAsset,
   deleteAdminDigitalAsset,
+  approveAdminReview,
+  rejectAdminReview,
 } from "./api/adminDashboardApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
@@ -90,6 +92,7 @@ function mountApp() {
   setupAdminProductForm();
   setupAdminProductImages();
   setupAdminDigitalAsset();
+  setupAdminReviewModeration();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -1245,6 +1248,21 @@ function setupCustomerAccountForms() {
 
     if (event.target.closest("#customer-logout-button")) {
       handleCustomerLogout();
+      return;
+    }
+
+    // Version 7, Milestone 171C: expands/collapses the review form next
+    // to a "Write a Review" prompt on the customer's own Order Detail
+    // page (components/reviewPrompt.js) — purely a visibility toggle,
+    // no data is read or sent until the form itself is submitted.
+    const reviewToggle = event.target.closest('[data-action="toggle-review-form"]');
+    if (reviewToggle) {
+      const form = document.getElementById(reviewToggle.getAttribute("aria-controls"));
+      if (!form) return;
+      const nowExpanded = form.hidden;
+      form.hidden = !nowExpanded;
+      reviewToggle.setAttribute("aria-expanded", String(nowExpanded));
+      reviewToggle.textContent = nowExpanded ? "Cancel" : "Write a Review";
     }
   });
 
@@ -1274,8 +1292,76 @@ function setupCustomerAccountForms() {
     if (resetPasswordForm) {
       event.preventDefault();
       handleCustomerResetPasswordSubmit(resetPasswordForm);
+      return;
+    }
+
+    const reviewForm = event.target.closest("[data-review-form]");
+    if (reviewForm) {
+      event.preventDefault();
+      handleProductReviewSubmit(reviewForm);
     }
   });
+}
+
+// Version 7, Milestone 171C: submits a genuine product review for one
+// specific purchased order item (components/reviewPrompt.js). The
+// backend independently re-verifies this is a real PAID purchase
+// belonging to the logged-in customer — nothing here is trusted beyond
+// "which order item and what the customer typed".
+async function handleProductReviewSubmit(form) {
+  const orderItemId = form.dataset.orderItemId;
+  const ratingInput = form.querySelector('[name="rating"]');
+  const reviewTextInput = form.querySelector('[name="reviewText"]');
+  const banner = form.querySelector("[data-review-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  const rating = Number(ratingInput?.value);
+  const reviewText = (reviewTextInput?.value || "").trim();
+
+  function showBanner(text, variant) {
+    if (!banner) return;
+    banner.textContent = text;
+    banner.classList.toggle("form-banner--error", variant === "error");
+    banner.classList.toggle("form-banner--success", variant === "success");
+    banner.hidden = false;
+  }
+
+  if (!ratingInput?.value) {
+    showBanner("Please select a rating.", "error");
+    ratingInput?.focus();
+    return;
+  }
+  if (reviewText.length < 10) {
+    showBanner("Please write at least 10 characters.", "error");
+    reviewTextInput?.focus();
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await submitProductReview({ orderItemId, rating, reviewText });
+    const prompt = form.closest("[data-review-prompt]");
+    if (prompt) {
+      prompt.outerHTML = `
+        <div class="review-prompt review-prompt--submitted">
+          <p class="review-prompt__product">${escapeHtml(prompt.querySelector(".review-prompt__product")?.textContent || "")}</p>
+          <span class="badge">Your review: Pending approval</span>
+        </div>
+      `;
+    }
+  } catch (error) {
+    if (submitButton) submitButton.disabled = false;
+    if (error instanceof ApiError && error.status === 409) {
+      showBanner("You have already reviewed this product.", "error");
+    } else if (error instanceof ApiError && error.errors?.length) {
+      showBanner(error.errors[0].message, "error");
+    } else if (error instanceof ApiError) {
+      showBanner(error.message, "error");
+    } else {
+      showBanner("We could not submit your review right now. Please try again shortly.", "error");
+    }
+  }
 }
 
 async function handleCustomerRegisterSubmit(form) {
@@ -2173,6 +2259,55 @@ function setupAdminProductImages() {
       handleAdminImageRemove(removeButton);
     }
   });
+}
+
+// Version 7, Milestone 171C: review moderation only — approve/reject an
+// existing PENDING review. Neither button creates a review; both just
+// call the matching backend endpoint (which itself only accepts a
+// review that's currently PENDING — see adminProductReview.service.ts).
+function setupAdminReviewModeration() {
+  document.addEventListener("click", (event) => {
+    const approveButton = event.target.closest('[data-action="approve-review"]');
+    if (approveButton) {
+      handleAdminReviewModeration(approveButton, approveAdminReview, "approved");
+      return;
+    }
+
+    const rejectButton = event.target.closest('[data-action="reject-review"]');
+    if (rejectButton) {
+      handleAdminReviewModeration(rejectButton, rejectAdminReview, "rejected");
+    }
+  });
+}
+
+async function handleAdminReviewModeration(button, apiCall, verb) {
+  const reviewId = button.dataset.reviewId;
+  const row = button.closest("[data-review-row]");
+  const banner = document.querySelector("[data-admin-reviews-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+
+  try {
+    await apiCall(reviewId);
+    if (row) {
+      row.remove();
+    }
+    if (banner) {
+      banner.textContent = `Review ${verb}.`;
+      banner.classList.remove("form-banner--error");
+      banner.classList.add("form-banner--success");
+      banner.hidden = false;
+    }
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.classList.remove("form-banner--success");
+      banner.classList.add("form-banner--error");
+      banner.hidden = false;
+    }
+  }
 }
 
 // 503 is deliberately never shown to the admin verbatim — the backend

@@ -3,6 +3,15 @@
 // change when real product data (from the business) replaces this file.
 // IDs are stable, slug-based strings rather than random/incrementing
 // numbers, so links and routes stay predictable.
+//
+// Version 7, Milestone 171C: rating/reviewCount zeroed on every product
+// (were fake sample values like 4.8/36 — see productCard.js's own
+// Milestone 95 comment on why the storefront stopped displaying them).
+// This file is also the storefront's genuine outage fallback (see
+// js/api/productsApi.js's getCatalog()), not just local-dev sample
+// data — a real customer could see it during a real backend outage, so
+// it must never show a fabricated rating either, matching the real
+// Product.ratingAverage/reviewCount columns' own honest 0 default.
 
 import { withBase } from "../js/paths.js";
 
@@ -32,8 +41,8 @@ export const products = [
     binding: "Saddle-stitched",
     ageRange: "3-8 years",
     stockStatus: "In Stock",
-    rating: 4.8,
-    reviewCount: 36,
+    rating: 0,
+    reviewCount: 0,
     tags: ["kids", "educational", "alphabet", "colouring book"],
     isFeatured: true,
     isBestSeller: true,
@@ -65,8 +74,8 @@ export const products = [
     binding: "Perfect binding",
     ageRange: "16+ years",
     stockStatus: "In Stock",
-    rating: 4.7,
-    reviewCount: 52,
+    rating: 0,
+    reviewCount: 0,
     tags: ["mindfulness", "adult colouring", "relaxation", "self-care"],
     isFeatured: true,
     isBestSeller: false,
@@ -98,8 +107,8 @@ export const products = [
     binding: "Saddle-stitched",
     ageRange: "6-10 years",
     stockStatus: "In Stock",
-    rating: 4.9,
-    reviewCount: 41,
+    rating: 0,
+    reviewCount: 0,
     tags: ["bible", "faith", "kids", "sunday school"],
     isFeatured: false,
     isBestSeller: true,
@@ -131,8 +140,8 @@ export const products = [
     binding: "Saddle-stitched",
     ageRange: "6-10 years",
     stockStatus: "Low Stock",
-    rating: 4.9,
-    reviewCount: 18,
+    rating: 0,
+    reviewCount: 0,
     tags: ["bible", "faith", "kids", "sunday school"],
     isFeatured: false,
     isBestSeller: false,
@@ -160,8 +169,8 @@ export const products = [
     ],
     ageRange: "6+ years",
     stockStatus: "In Stock",
-    rating: 4.6,
-    reviewCount: 29,
+    rating: 0,
+    reviewCount: 0,
     tags: ["markers", "art supplies", "colouring"],
     isFeatured: true,
     isBestSeller: false,
@@ -189,8 +198,8 @@ export const products = [
     ],
     ageRange: "3+ years",
     stockStatus: "In Stock",
-    rating: 4.5,
-    reviewCount: 22,
+    rating: 0,
+    reviewCount: 0,
     tags: ["crayons", "art supplies", "kids"],
     isFeatured: false,
     isBestSeller: false,
@@ -218,8 +227,8 @@ export const products = [
     ],
     ageRange: "3-8 years",
     stockStatus: "In Stock",
-    rating: 4.8,
-    reviewCount: 15,
+    rating: 0,
+    reviewCount: 0,
     tags: ["bundle", "kids", "gift", "markers"],
     isFeatured: false,
     isBestSeller: true,
@@ -247,8 +256,8 @@ export const products = [
     ],
     ageRange: "6-10 years",
     stockStatus: "Low Stock",
-    rating: 4.9,
-    reviewCount: 11,
+    rating: 0,
+    reviewCount: 0,
     tags: ["bundle", "bible", "faith", "gift"],
     isFeatured: true,
     isBestSeller: false,
@@ -276,8 +285,8 @@ export const products = [
     ],
     ageRange: "16+ years",
     stockStatus: "In Stock",
-    rating: 4.7,
-    reviewCount: 9,
+    rating: 0,
+    reviewCount: 0,
     tags: ["bundle", "mindfulness", "gift", "markers"],
     isFeatured: false,
     isBestSeller: false,
@@ -305,8 +314,8 @@ export const products = [
     ],
     ageRange: "5-12 years",
     stockStatus: "In Stock",
-    rating: 4.8,
-    reviewCount: 7,
+    rating: 0,
+    reviewCount: 0,
     tags: ["schools", "wholesale", "classroom", "bundle"],
     isFeatured: true,
     isBestSeller: true,

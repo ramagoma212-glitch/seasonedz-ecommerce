@@ -715,6 +715,21 @@
   .newsletter-form__fields {
     grid-template-columns: 1fr;
   }
+
+  /* Version 7, Milestone 171C: a long product name left the "Write a
+     Review"/"Cancel" button pinned to the top-right while the name
+     wrapped several lines beside it (found via direct screenshot at
+     320px with a genuinely long title) — stacked instead, full-width
+     button below the name, on narrow phones only. */
+  .review-prompt__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-prompt__header .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 /* Version 7, Milestone 150: homepage section responsive tiers. */

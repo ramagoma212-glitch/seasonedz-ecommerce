@@ -7,10 +7,11 @@
 // that discipline: the not-found message never implies whether the
 // order number is real for a different account.
 
-import { getCustomerOrder, getCustomerOrderDownloads } from "../js/api/customerApi.js";
+import { getCustomerOrder, getCustomerOrderDownloads, getEligibleReviewCandidates, getMyReviews } from "../js/api/customerApi.js";
 import { ApiError } from "../js/apiClient.js";
 import { escapeHtml } from "../js/search.js";
 import { renderDigitalDownloadsCard } from "../components/digitalDownloadsCard.js";
+import { renderReviewPromptsCard } from "../components/reviewPrompt.js";
 
 function humanizeEnum(value) {
   return value
@@ -103,7 +104,7 @@ function renderDigitalOnlyNotice(order) {
   `;
 }
 
-function renderOrderDetail(order, digitalItems) {
+function renderOrderDetail(order, digitalItems, reviewPromptsForOrder) {
   return `
     <div class="tracking-result">
       <div class="tracking-result__header">
@@ -155,6 +156,8 @@ function renderOrderDetail(order, digitalItems) {
       ${order.isDigitalOnly ? renderDigitalOnlyNotice(order) : renderShippingCard(order.shipping)}
 
       ${renderDigitalDownloadsCard(digitalItems)}
+
+      ${reviewPromptsForOrder}
 
       <div class="order-confirmation__actions">
         <a class="btn btn--secondary" href="/account">Back to My Account</a>
@@ -212,7 +215,27 @@ export async function renderAccountOrderDetail({ orderNumber: rawOrderNumber } =
     } catch {
       digitalItems = [];
     }
-    body = renderOrderDetail(response.data.order, digitalItems);
+
+    // Version 7, Milestone 171C: genuine review submission, scoped to
+    // this order. Best-effort, same discipline as the downloads lookup
+    // above — a failure here must never break the rest of the page, it
+    // just means no review prompts render. Eligible candidates are
+    // matched to this order by orderNumber (both candidates and "my
+    // reviews" already carry enough real, purchase-derived context —
+    // productSlug/orderNumber — to filter correctly without needing to
+    // extend the order-detail response itself with internal ids).
+    let reviewPromptsForOrder = "";
+    try {
+      const [eligibleResponse, myReviewsResponse] = await Promise.all([getEligibleReviewCandidates(), getMyReviews()]);
+      const eligibleForOrder = (eligibleResponse?.data?.candidates || []).filter((candidate) => candidate.orderNumber === orderNumber);
+      const orderProductSlugs = new Set(response.data.order.items.map((item) => item.productSlug));
+      const myReviewsForOrder = (myReviewsResponse?.data?.reviews || []).filter((review) => orderProductSlugs.has(review.productSlug));
+      reviewPromptsForOrder = renderReviewPromptsCard(eligibleForOrder, myReviewsForOrder);
+    } catch {
+      reviewPromptsForOrder = "";
+    }
+
+    body = renderOrderDetail(response.data.order, digitalItems, reviewPromptsForOrder);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
       body = renderNeedsLogin();

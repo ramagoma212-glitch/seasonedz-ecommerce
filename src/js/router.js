@@ -82,7 +82,6 @@ import { renderReturnsPolicy } from "../pages/returnsPolicy.js";
 import { renderPrivacyPolicy } from "../pages/privacyPolicy.js";
 import { renderTerms } from "../pages/terms.js";
 import { renderCookiesPolicy } from "../pages/cookiesPolicy.js";
-import { renderTestimonials } from "../pages/testimonials.js";
 import { renderSchools } from "../pages/schools.js";
 import { renderWholesale } from "../pages/wholesale.js";
 import { renderDistributor } from "../pages/distributor.js";
@@ -94,6 +93,7 @@ import { renderAdminHome } from "../pages/adminHome.js";
 import { renderAdminOrders } from "../pages/adminOrders.js";
 import { renderAdminOrderDetail } from "../pages/adminOrderDetail.js";
 import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
+import { renderAdminReviews } from "../pages/adminReviews.js";
 import { renderAdminProducts } from "../pages/adminProducts.js";
 import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
 
@@ -198,7 +198,6 @@ const routeDefs = [
   { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },
   { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },
   { pattern: "/cookies-policy", render: renderCookiesPolicy, title: "Cookies Policy" },
-  { pattern: "/testimonials", render: renderTestimonials, title: "Testimonials" },
   {
     pattern: "/schools",
     render: renderSchools,
@@ -238,6 +237,7 @@ const routeDefs = [
   { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order", noindex: true },
   { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders", noindex: true },
   { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries", noindex: true },
+  { pattern: "/admin/reviews", render: renderAdminReviews, title: "Admin Reviews", noindex: true },
   // Version 7, Milestone 67: admin product management. "/new" (a
   // literal) is listed before "/:id" (a wildcard) — both have the same
   // segment count after /admin/products, so registration order is what

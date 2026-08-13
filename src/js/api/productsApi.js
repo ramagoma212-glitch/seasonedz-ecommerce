@@ -87,3 +87,19 @@ export async function getProductBySlug(slug) {
   const { products } = await getCatalog();
   return products.find((product) => product.slug === slug) || null;
 }
+
+// Version 7, Milestone 171C: genuine, approved-only product reviews.
+// Deliberately no static fallback data (unlike getCatalog() above) —
+// there is no genuine substitute for real reviews to fall back to, so
+// an unreachable backend here just means an empty list (the product
+// page's own truthful "No customer reviews yet." empty state), never
+// fabricated placeholder content.
+export async function getProductReviews(slug, page = 1) {
+  try {
+    const response = await apiGet(`/products/${encodeURIComponent(slug)}/reviews?page=${page}`);
+    return response.data;
+  } catch (error) {
+    console.warn(`[Seasonedz] Could not load reviews for "${slug}" — showing no reviews.`, error);
+    return { reviews: [], total: 0, page, limit: 10 };
+  }
+}

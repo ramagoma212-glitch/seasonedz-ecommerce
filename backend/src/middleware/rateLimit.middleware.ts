@@ -134,3 +134,15 @@ export const newsletterSubscribeRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Product review submission (Version 7, Milestone 171C) — requires a
+// logged-in customer (unlike the writes above), but still gets its own
+// tight limit: a compromised/scripted session could otherwise spam
+// review attempts far faster than a genuine customer ever would.
+export const productReviewCreationRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

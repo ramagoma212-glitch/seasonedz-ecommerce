@@ -4,8 +4,11 @@
 // convention (see components/productCard.js etc.) rather than
 // introducing a different format just for admin pages.
 
-const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE"]);
-const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK"]);
+// Version 7, Milestone 171C: APPROVED/REJECTED added for the genuine
+// product review moderation queue (pages/adminReviews.js) — the same
+// generic tone convention every other admin status badge already uses.
+const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED"]);
+const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED"]);
 
 export function humanizeEnum(value) {
   return value

@@ -187,6 +187,9 @@ model Product {
   // Historical line items reference a product for convenience, but
   // never depend on it still existing — see OrderItem below.
   orderItems OrderItem[]
+  // Version 7, Milestone 171C: this is the "future Review model" the
+  // comment below already anticipated — see ProductReview.
+  reviews    ProductReview[]
 
   // Aggregate fields, recalculated whenever a future Review model is
   // added and reviews are created/removed — not maintained by hand.
@@ -316,6 +319,9 @@ model Customer {
   // DigitalDownloadLog's own comment for why real entitlement checks
   // never rely on this relation.
   digitalDownloadLogs DigitalDownloadLog[]
+  // Version 7, Milestone 171C: genuine, verified-purchase product
+  // reviews this customer has submitted — see ProductReview.
+  productReviews      ProductReview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -510,6 +516,12 @@ model OrderItem {
   giftWrapFeePerUnit Decimal? @db.Decimal(10, 2)
 
   downloadLog DigitalDownloadLog?
+  // Version 7, Milestone 171C: genuine product reviews — see
+  // ProductReview below. One OrderItem can have at most one review
+  // (reviewsForItem @@unique enforces this), but a review only ever
+  // exists here if a customer actually chose to write one; nothing
+  // about placing/paying for an order creates a review automatically.
+  reviewsForItem ProductReview[]
 
   createdAt DateTime @default(now())
 
@@ -638,6 +650,77 @@ model Shipping {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// PRODUCT REVIEWS
+// ============================================================================
+
+// Version 7, Milestone 171C: a review only ever exists here because a
+// real, logged-in customer submitted it — there is no admin "create
+// review" path anywhere in this codebase (see
+// adminProductReview.service.ts). Starts PENDING; only becomes public
+// once an admin explicitly approves it.
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Genuine, verified-purchase product reviews. Eligibility (Part E of
+// the milestone brief) is enforced entirely server-side, at write
+// time, in productReview.service.ts — never trusted from the frontend:
+// the submitting customer must be authenticated, and orderItemId must
+// reference a real OrderItem that (a) belongs to that customer's own
+// Order, (b) is for this exact product, and (c) belongs to an Order
+// whose paymentStatus is PAID. None of that is re-validated by the
+// database itself (Prisma has no cross-table CHECK constraints), which
+// is exactly why the service layer re-derives and re-checks it on
+// every single submission rather than ever trusting a previously
+// "verified" flag.
+model ProductReview {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // The specific purchase this review is based on — one of possibly
+  // several qualifying OrderItems for this product/customer pair, kept
+  // only as the proof-of-purchase reference (never displayed publicly,
+  // never used for eligibility again after submission). Not marked
+  // @unique itself: the real anti-duplicate rule is
+  // @@unique([productId, customerId]) below, which already guarantees
+  // at most one ProductReview will ever cite any given OrderItem in
+  // practice (an OrderItem has exactly one product, so a customer who
+  // already has a review for that product can never create a second
+  // one citing a different item of the same product).
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  // 1-5, enforced in the service layer (see MIN_RATING/MAX_RATING in
+  // productReview.service.ts) — Prisma/Postgres have no portable CHECK
+  // constraint in this schema today, matching this project's existing
+  // discipline of app-layer validation for bounded numeric fields.
+  rating     Int
+  reviewText String
+
+  status     ReviewStatus @default(PENDING)
+  approvedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One genuine review per product per customer — the simplest,
+  // clearest duplication rule (Part F of the milestone brief), and the
+  // one enforcement point productReview.service.ts's submitReview()
+  // relies on (a duplicate attempt fails this DB constraint inside the
+  // same transaction, never a separate racy pre-check).
+  @@unique([productId, customerId])
+  @@index([productId, status])
+  @@index([customerId])
+  @@index([status])
 }
 
 // ============================================================================

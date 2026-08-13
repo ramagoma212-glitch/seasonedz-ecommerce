@@ -14,12 +14,18 @@ import {
 } from "../controllers/customerAuth.controller.js";
 import { getCustomerOrderHandler, listCustomerOrdersHandler } from "../controllers/customerOrder.controller.js";
 import { getCustomerOrderDownloadsHandler, requestCustomerDownloadHandler } from "../controllers/digitalDownload.controller.js";
+import {
+  listEligibleReviewCandidatesHandler,
+  listMyReviewsHandler,
+  submitProductReviewHandler,
+} from "../controllers/productReview.controller.js";
 import { requireCustomerAuth } from "../middleware/requireCustomerAuth.middleware.js";
 import {
   customerForgotPasswordRateLimiter,
   customerLoginRateLimiter,
   customerRegisterRateLimiter,
   customerResetPasswordRateLimiter,
+  productReviewCreationRateLimiter,
 } from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
@@ -46,5 +52,14 @@ router.get("/orders/:orderNumber", requireCustomerAuth, getCustomerOrderHandler)
 // to req.customerUser.id and really is PAID on every single call.
 router.get("/orders/:orderNumber/downloads", requireCustomerAuth, getCustomerOrderDownloadsHandler);
 router.post("/downloads/:orderItemId/request", requireCustomerAuth, requestCustomerDownloadHandler);
+
+// Version 7, Milestone 171C: genuine, verified-purchase product
+// reviews. All three require requireCustomerAuth — productReview.
+// service.ts independently re-verifies every purchase claim against
+// req.customerUser.id on every call, same discipline as the download
+// routes above never trusting a stored "already verified" flag.
+router.get("/reviews/eligible", requireCustomerAuth, listEligibleReviewCandidatesHandler);
+router.get("/reviews", requireCustomerAuth, listMyReviewsHandler);
+router.post("/reviews", requireCustomerAuth, productReviewCreationRateLimiter, submitProductReviewHandler);
 
 export default router;

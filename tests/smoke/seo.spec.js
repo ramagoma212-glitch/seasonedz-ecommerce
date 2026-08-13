@@ -32,7 +32,6 @@ const CORE_STATIC_ROUTES = [
   "/privacy-policy",
   "/terms",
   "/cookies-policy",
-  "/testimonials",
   "/schools",
   "/wholesale",
   "/distributor",

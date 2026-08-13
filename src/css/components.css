@@ -335,7 +335,6 @@
    (e.g. .stub-page) setting text-align: center for its own heading/intro. */
 .category-card,
 .product-card,
-.testimonial-card,
 .blog-card {
   text-align: left;
 }
@@ -1890,31 +1889,6 @@ body.has-lightbox-open {
 
 .policy-card .card__body {
   padding: var(--space-xl) var(--space-lg);
-}
-
-/* ---- Testimonial card -------------------------------------------------------------- */
-.testimonials-grid {
-  margin-top: var(--space-xl);
-}
-
-.testimonial-card__category {
-  margin-bottom: var(--space-sm);
-}
-
-.testimonial-card__message {
-  margin-block: var(--space-md);
-  font-style: italic;
-  color: var(--color-text);
-}
-
-.testimonial-card__name {
-  font-weight: 700;
-  color: var(--color-text);
-}
-
-.testimonial-card__role {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
 }
 
 /* ---- Blog card ---------------------------------------------------------------------- */

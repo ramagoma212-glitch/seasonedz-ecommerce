@@ -610,6 +610,72 @@
   }
 }
 
+/* ---- Genuine product reviews (Milestone 171C) ------------------------------
+   Only ever renders real, admin-approved reviews (see components/
+   productReviews.js) — never fake stars, never a fabricated rating. */
+.product-reviews {
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--color-border);
+}
+
+.product-reviews__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-block: var(--space-sm) var(--space-lg);
+}
+
+.product-reviews__average {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.product-reviews__count {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.product-reviews__empty {
+  color: var(--color-text-muted);
+  margin-top: var(--space-sm);
+}
+
+.product-reviews__list {
+  display: grid;
+  gap: var(--space-lg);
+  margin-top: var(--space-md);
+}
+
+.product-review-card {
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+}
+
+.product-review-card__text {
+  margin-block: var(--space-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.product-review-card__meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.product-review-card__name {
+  font-weight: 600;
+  color: var(--color-text-light);
+}
+
+.product-reviews__more-note {
+  margin-top: var(--space-md);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
 .product-details__features {
   list-style: disc;
   padding-left: var(--space-lg);
@@ -859,6 +925,33 @@
 .admin-table__message {
   white-space: normal;
   min-width: 220px;
+}
+
+/* ---- Review moderation (Milestone 171C) ------------------------------------ */
+.admin-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-lg);
+}
+
+.admin-filter-tabs__tab {
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+}
+
+.admin-filter-tabs__tab.is-active {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.admin-table__actions {
+  display: flex;
+  gap: var(--space-xs);
 }
 
 .admin-reminders {
@@ -1292,6 +1385,46 @@
 
 .order-confirmation__row span:first-child {
   color: var(--color-text-muted);
+}
+
+/* ---- Genuine product review submission (Milestone 171C) -------------------
+   Shown on the customer's own Order Detail page for each PAID item
+   they haven't already reviewed — see components/reviewPrompt.js. */
+.review-prompt {
+  padding-block: var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.review-prompt:last-child {
+  border-bottom: none;
+}
+
+.review-prompt__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.review-prompt__product {
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0;
+}
+
+.review-prompt--submitted {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.review-form {
+  margin-top: var(--space-md);
+}
+
+.review-form .form-field {
+  margin-bottom: var(--space-md);
 }
 
 .order-confirmation__actions {

@@ -19,9 +19,11 @@ const STOCK_STATUS_CLASS = {
 
 // Version 7, Milestone 95: product cards no longer call this — the
 // rating/reviewCount they used to show was demo/sample data hardcoded
-// in src/data/products.js, not real customer reviews. Still exported
-// and used by pages/testimonials.js, which renders real curated
-// testimonial content, not product review data.
+// in src/data/products.js, not real customer reviews.
+// Version 7, Milestone 171C: the fake-testimonial page that used to be
+// this function's only caller was removed entirely — kept exported
+// here as a generic star-rendering helper, now reused by the genuine
+// product review display (components/productReviews.js).
 export function renderStars(rating) {
   const rounded = Math.round(rating);
   const filled = "&#9733;".repeat(rounded);
