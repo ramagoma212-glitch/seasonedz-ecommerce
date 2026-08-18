@@ -359,7 +359,7 @@ test.describe("Digital product storefront display", () => {
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("FREE");
   });
 
-  test("mixed cart (physical + digital) shows the combined delivery message and correct total", async ({ page }) => {
+  test("mixed cart (physical + digital) shows the correct subtotal-only total, no delivery estimate on the cart page", async ({ page }) => {
     const MOCK_PHYSICAL_PRODUCT = {
       ...MOCK_PUBLIC_DIGITAL_PRODUCT,
       id: "mock-physical-book",
@@ -391,19 +391,17 @@ test.describe("Digital product storefront display", () => {
     await page.goto("/cart");
     await expect(page.locator(".cart-composition-notice")).toContainText("Physical items will be delivered. Digital items will be available after payment.");
 
-    // Version 7, Milestone 168C: PayFast/checkout total math is
-    // unchanged by digital items — subtotal (49.99 + 100) + the cart
-    // page's Courier Guy Door to Door estimate (R120, product subtotal
-    // R149.99 is below the R600 threshold) must still add up correctly.
+    // Version 7, Milestone 171F: the cart page no longer shows any
+    // delivery estimate at all (removed after live owner review found
+    // it misleading — see cartPage.js's own comment) — the Total here
+    // is products only, subtotal === total, and there is no Delivery
+    // row whatsoever. Delivery is calculated and shown only once the
+    // customer reaches checkout and picks a method (see
+    // checkoutMethod tests in stockAndDelivery.spec.js).
     const expectedSubtotal = MOCK_PUBLIC_DIGITAL_PRODUCT.price + MOCK_PHYSICAL_PRODUCT.price;
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText(expectedSubtotal.toFixed(2));
-    await expect(page.locator(".order-summary__row--total")).toContainText((expectedSubtotal + 120).toFixed(2));
-
-    // Version 7, Milestone 168C (was 152B fix 3): a mixed cart is still
-    // charged the normal delivery fee, precisely because it contains a
-    // physical item — never silently waived just because a digital
-    // item is also present.
-    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toContainText("R120.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText(expectedSubtotal.toFixed(2));
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toHaveCount(0);
   });
 });
 

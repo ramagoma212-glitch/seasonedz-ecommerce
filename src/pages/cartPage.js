@@ -10,18 +10,21 @@ import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
 
-// Version 7, Milestone 168C: the cart page shows a representative
-// delivery-fee estimate before the customer has chosen a method (that
-// choice now happens at checkout, see checkoutPage.js) — Courier Guy
-// Door to Door, the closest equivalent to the old single-method
-// experience. Registered-customer status no longer affects this at
-// all (the R600 threshold now applies to every customer — see
-// config/delivery.js), so this page no longer needs to look up the
-// logged-in customer just to price delivery.
-const CART_ESTIMATE_DELIVERY_METHOD = "COURIER_DOOR";
-
+// Version 7, Milestone 168C: the cart page used to show a
+// representative delivery-fee estimate (Courier Guy Door to Door)
+// before the customer had chosen a method.
+// Version 7, Milestone 171F: removed entirely — live owner review of
+// 171E found this estimate itself misleading (e.g. "Delivery R120"
+// displayed on the cart page reads as an already-decided charge, even
+// though the customer hasn't reached the delivery-method selector at
+// checkout yet — see checkoutPage.js). getCartSummary() with no
+// argument now gives deliveryFee: null for any cart with a physical
+// item (see js/cart.js), and renderOrderSummary's own
+// omitDeliveryUntilSelected option (below) removes the Delivery row
+// from this page entirely rather than showing a "select a method"
+// prompt — this page has no delivery-method selector to point at.
 export async function renderCartPage() {
-  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary(CART_ESTIMATE_DELIVERY_METHOD);
+  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary();
 
   if (!items.length) {
     return `
@@ -80,7 +83,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical, checkoutBlocked: unavailableLineIds.size > 0 })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical, checkoutBlocked: unavailableLineIds.size > 0, omitDeliveryUntilSelected: true })}
       </div>
     </section>
   `;

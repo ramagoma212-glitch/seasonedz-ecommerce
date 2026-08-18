@@ -19,12 +19,18 @@
 // method chosen yet" (see js/cart.js's getCartSummary()) — checked
 // before the `=== 0` branch so an unselected physical cart never reads
 // as if free delivery had already been applied.
-export function getDeliveryNote(deliveryFee, hasPhysicalItems) {
+// Version 7, Milestone 171F: `omitDeliveryUntilSelected` (the cart
+// page, which has no delivery-method selector at all — that only
+// exists at checkout) gets its own wording instead of "below", which
+// would point at a selector that doesn't exist on that page.
+export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected = false } = {}) {
   if (!hasPhysicalItems) {
     return "No delivery is needed — this order is digital download(s) only.";
   }
   if (deliveryFee === null) {
-    return "Select a delivery method below to see your delivery fee.";
+    return omitDeliveryUntilSelected
+      ? "Delivery options are selected at checkout. Free Courier Guy delivery on qualifying physical product orders of R600 or more. Customer Collection is free."
+      : "Select a delivery method below to see your delivery fee.";
   }
   if (deliveryFee === 0) {
     return "Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
@@ -41,6 +47,12 @@ export function getDeliveryNote(deliveryFee, hasPhysicalItems) {
 // delivery method chosen yet" (see js/cart.js's getCartSummary()) —
 // distinct from a genuine `0`/FREE. The displayed Total excludes
 // delivery entirely until then (`?? 0`), never a fabricated R100/R120.
+// Version 7, Milestone 171F: `omitDeliveryUntilSelected` (cart page
+// only — checkoutPage.js never passes this) removes the Delivery row
+// entirely rather than showing a "Select a delivery option" prompt —
+// the cart page has no delivery-method selector at all (that only
+// exists at checkout, see checkoutPage.js), so even a neutral prompt
+// there would misleadingly suggest a choice is available on this page.
 export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
@@ -51,8 +63,10 @@ export function renderOrderSummary({
   checkoutBlocked = false,
   items = [],
   showItems = false,
+  omitDeliveryUntilSelected = false,
 }) {
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
+  const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
 
   return `
     <aside class="order-summary">
@@ -91,17 +105,23 @@ export function renderOrderSummary({
       `
           : ""
       }
+      ${
+        hideDeliveryRow
+          ? ""
+          : `
       <div class="order-summary__row${deliveryFee === null ? " order-summary__row--delivery-pending" : ""}">
         <span data-order-summary-delivery-label>${hasPhysicalItems && deliveryMethodLabel ? deliveryMethodLabel : "Delivery"}</span>
         <span data-order-summary-delivery-value>${deliveryFee === null ? "Select a delivery option" : deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`}</span>
       </div>
+      `
+      }
       <div class="order-summary__row order-summary__row--total">
         <span>Order Total</span>
         <span data-order-summary-total-value>R${total.toFixed(2)}</span>
       </div>
 
       <p class="order-summary__note" data-order-summary-delivery-note>
-        ${getDeliveryNote(deliveryFee, hasPhysicalItems)}
+        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected })}
       </p>
 
       ${
