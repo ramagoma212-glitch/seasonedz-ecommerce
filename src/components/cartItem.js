@@ -23,12 +23,24 @@ import { GIFT_WRAP_FEE_PER_ITEM } from "../js/cart.js";
 // escaped via escapeHtml() since a gift message is free-typed customer
 // input, unlike item.name which is always an admin-authored product
 // name already trusted elsewhere in this file.
-export function renderCartItem(item, { eager = false } = {}) {
+// Version 7, Milestone 171E: `unavailable` (checked against live
+// product data by the caller — see cartPage.js) marks a line the
+// customer added while it was in stock but that's since sold out or
+// left the catalogue entirely — shown as a clear "Out of Stock" badge,
+// quantity controls disabled (there's nothing valid to adjust to), but
+// Remove stays fully enabled so the customer can actually clear the
+// blocker (Part 6 of the milestone brief: never silently delete it for
+// them). `maxQuantity` (the live product's real stockQuantity, only
+// meaningful when available) disables the increase button once the
+// line already matches all remaining stock — the backend independently
+// re-validates the real limit at order-creation time either way.
+export function renderCartItem(item, { eager = false, unavailable = false, maxQuantity = Infinity } = {}) {
   const giftWrapFee = item.giftWrap ? GIFT_WRAP_FEE_PER_ITEM * item.quantity : 0;
   const lineTotal = item.price * item.quantity + giftWrapFee;
+  const atMaxStock = !unavailable && item.quantity >= maxQuantity;
 
   return `
-    <div class="cart-item">
+    <div class="cart-item${unavailable ? " cart-item--unavailable" : ""}">
       <a class="cart-item__image-link" href="/product/${item.slug}">
         <img
           class="cart-item__image"
@@ -45,6 +57,7 @@ export function renderCartItem(item, { eager = false } = {}) {
       <div class="cart-item__details">
         <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
         ${item.productType === "DIGITAL" ? `<span class="badge cart-item__digital-badge">Digital Download</span>` : ""}
+        ${unavailable ? `<span class="badge cart-item__stock-badge">Out of Stock</span>` : ""}
         <p class="cart-item__price">R${item.price.toFixed(2)} each</p>
         ${
           item.giftWrap
@@ -63,6 +76,7 @@ export function renderCartItem(item, { eager = false } = {}) {
           data-action="cart-decrease"
           data-line-id="${item.lineId}"
           aria-label="Decrease quantity of ${item.name}"
+          ${unavailable ? "disabled" : ""}
         >&minus;</button>
         <input
           type="number"
@@ -72,6 +86,7 @@ export function renderCartItem(item, { eager = false } = {}) {
           value="${item.quantity}"
           min="1"
           aria-label="Quantity of ${item.name}"
+          ${unavailable ? "disabled" : ""}
         />
         <button
           type="button"
@@ -79,6 +94,7 @@ export function renderCartItem(item, { eager = false } = {}) {
           data-action="cart-increase"
           data-line-id="${item.lineId}"
           aria-label="Increase quantity of ${item.name}"
+          ${unavailable || atMaxStock ? "disabled" : ""}
         >&plus;</button>
       </div>
 

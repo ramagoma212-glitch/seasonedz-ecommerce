@@ -25,7 +25,7 @@
 // to the JSON-LD when reviewCount > 0, never a fabricated "0 reviews"
 // claim.
 
-import { renderProductCard } from "../components/productCard.js";
+import { renderProductCard, isOutOfStockForCart } from "../components/productCard.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { renderProductMarketplaceBlock } from "../components/marketplaceLinks.js";
 import { renderProductDeliveryAccordion } from "../components/productDeliveryAccordion.js";
@@ -341,6 +341,8 @@ export async function renderProductDetails({ slug } = {}) {
   const reviewData = await getProductReviews(product.slug);
 
   const wishlisted = isInWishlist(product.id);
+  const outOfStock = isOutOfStockForCart(product);
+  const stockClass = product.stockStatus === "Low Stock" ? "product-details__stock--low" : product.stockStatus === "Out of Stock" ? "product-details__stock--out" : "";
 
   return `
     <section class="container product-details">
@@ -360,7 +362,7 @@ export async function renderProductDetails({ slug } = {}) {
             ${product.discountLabel ? `<span class="badge">${product.discountLabel}</span>` : ""}
           </div>
 
-          <p class="product-details__stock">${product.stockStatus}</p>
+          <p class="product-details__stock ${stockClass}">${product.stockStatus}</p>
           <p class="product-details__short-desc">${product.shortDescription}</p>
 
           <!--
@@ -372,12 +374,16 @@ export async function renderProductDetails({ slug } = {}) {
           <div class="product-details__purchase-row">
             <div class="product-details__quantity">
               <span>Quantity</span>
-              <div class="quantity-selector">
-                <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity">&minus;</button>
-                <input type="number" class="quantity-selector__input" value="1" min="1" readonly />
-                <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity">&plus;</button>
+              <div class="quantity-selector" ${product.productType !== "DIGITAL" ? `data-max-quantity="${product.stockQuantity}"` : ""}>
+                <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity" ${outOfStock ? "disabled" : ""}>&minus;</button>
+                <input type="number" class="quantity-selector__input" value="1" min="1" readonly ${outOfStock ? "disabled" : ""} />
+                <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity" ${outOfStock ? "disabled" : ""}>&plus;</button>
               </div>
             </div>
+            ${
+              outOfStock
+                ? `<button type="button" class="btn btn--primary product-details__add-to-cart" disabled aria-disabled="true">Out of Stock</button>`
+                : `
             <button
               type="button"
               class="btn btn--primary product-details__add-to-cart"
@@ -391,6 +397,8 @@ export async function renderProductDetails({ slug } = {}) {
             >
               Add to Cart
             </button>
+            `
+            }
           </div>
 
           <button

@@ -6,8 +6,20 @@
 import { getWishlist } from "../js/wishlist.js";
 import { renderWishlistItem } from "../components/wishlistItem.js";
 import { renderEmptyState } from "../components/filterBar.js";
+import { getCatalog } from "../js/api/productsApi.js";
 
-export function renderWishlistPage() {
+// Version 7, Milestone 171E: wishlist entries carry only a snapshot
+// from when they were saved (name/price/image — see js/wishlist.js's
+// addToWishlist()), never live stock — so whether "Add to Cart" should
+// be enabled for a saved item has to come from a fresh lookup against
+// the real catalogue (the same one shop/homepage/product pages already
+// use), never a second inventory system. Best-effort: a slow/failed
+// fetch just means every item is treated as available on this
+// particular render (Add to Cart itself, and the backend's own
+// authoritative stock check at order-creation time, still protect the
+// order regardless — see order.service.ts's verifyItems()) — it never
+// blocks the wishlist page itself from rendering.
+export async function renderWishlistPage() {
   const items = getWishlist();
 
   if (!items.length) {
@@ -24,6 +36,14 @@ export function renderWishlistPage() {
     `;
   }
 
+  let liveProductsBySlug = new Map();
+  try {
+    const { products } = await getCatalog();
+    liveProductsBySlug = new Map(products.map((product) => [product.slug, { stockStatus: product.stockStatus, productType: product.productType }]));
+  } catch {
+    liveProductsBySlug = new Map();
+  }
+
   return `
     <section class="container wishlist-page">
       <div class="wishlist-page__header">
@@ -32,7 +52,13 @@ export function renderWishlistPage() {
       </div>
 
       <div class="grid grid--3">
-        ${items.map((item, index) => renderWishlistItem(item, { eager: index < 3 })).join("")}
+        ${items
+          .map((item, index) => {
+            const live = liveProductsBySlug.get(item.slug);
+            const outOfStock = live ? live.productType !== "DIGITAL" && live.stockStatus === "Out of Stock" : false;
+            return renderWishlistItem(item, { eager: index < 3, outOfStock });
+          })
+          .join("")}
       </div>
     </section>
   `;

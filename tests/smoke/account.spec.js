@@ -164,13 +164,34 @@ test.describe("Customer account smoke checks", () => {
   // combinations needed to verify gift wrapping is excluded from the
   // R650 free-delivery threshold (giftWrap fee is quantity * R30, same
   // rule as js/cart.js's GIFT_WRAP_FEE_PER_ITEM).
+  // Version 7, Milestone 171E: slug/productId changed from a fake
+  // "mock-product" to a real, in-stock static-fallback product slug —
+  // the checkout page now cross-checks every cart line against live
+  // product data (see cart.js's getUnavailableCartItems()), and an
+  // unrecognised slug would (correctly) now be treated as unavailable,
+  // blocking these tests' own checkout flow entirely. The synthetic
+  // `price`/`quantity` stay fully independent of the real product's
+  // actual catalogue price either way — checkout always displays
+  // whatever is stored on the cart line itself.
   async function setSyntheticCart(page, { price, quantity, giftWrap = false }) {
     await page.goto("/");
     await page.evaluate(
       ({ price, quantity, giftWrap }) => {
         localStorage.setItem(
           "seasonedz_cart",
-          JSON.stringify([{ productId: "mock-product-id", slug: "mock-product", name: "Mock Product", price, quantity, image: null, productType: "PHYSICAL", giftWrap, giftMessage: giftWrap ? "Test message" : null }])
+          JSON.stringify([
+            {
+              productId: "abc-colouring-book-for-kids-with-fun-facts",
+              slug: "abc-colouring-book-for-kids-with-fun-facts",
+              name: "Mock Product",
+              price,
+              quantity,
+              image: null,
+              productType: "PHYSICAL",
+              giftWrap,
+              giftMessage: giftWrap ? "Test message" : null,
+            },
+          ])
         );
       },
       { price, quantity, giftWrap }
@@ -179,15 +200,17 @@ test.describe("Customer account smoke checks", () => {
 
   // Version 7, Milestone 168C: free delivery is no longer a
   // registered-account benefit — the R600 threshold now applies to
-  // every customer, guest or signed in (see config/delivery.js). The
-  // checkout page defaults to Courier Guy Door to Door (R120 below the
-  // threshold, free at/above it) until the customer picks a different
-  // method — see checkoutPage.js's DEFAULT_DELIVERY_METHOD.
+  // every customer, guest or signed in (see config/delivery.js).
+  // Version 7, Milestone 171E: no delivery method is pre-selected
+  // anymore (see checkoutPage.js's own comment) — every test below now
+  // explicitly checks Courier Guy Door to Door first, matching the
+  // real required customer action, before asserting on its fee.
   test("logged-in checkout shows free delivery when subtotal is R600 or more", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 250, quantity: 3 }); // subtotal R750
 
     await page.goto("/checkout");
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.getByText("Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
 
@@ -202,6 +225,7 @@ test.describe("Customer account smoke checks", () => {
     await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200
 
     await page.goto("/checkout");
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.getByText("Spend R600 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
   });
@@ -218,6 +242,7 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/checkout");
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("590.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
   });
 
@@ -228,6 +253,7 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/checkout");
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("600.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
@@ -238,17 +264,24 @@ test.describe("Customer account smoke checks", () => {
     await page.goto("/checkout");
     await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("700.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toHaveCount(0);
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
   // Version 7, Milestone 168C: switching delivery method at checkout
   // recomputes the fee/label live (see js/app.js's
   // updateCheckoutDeliveryMethodUI()) without a full page reload.
+  // Version 7, Milestone 171E: also covers the starting "nothing
+  // selected yet" state (Part 21 of the milestone brief) — no delivery
+  // fee is assumed before the first explicit choice.
   test("switching delivery method at checkout updates the fee and order summary live", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200, below threshold
 
     await page.goto("/checkout");
+    await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Select a delivery option")).toBeVisible();
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();

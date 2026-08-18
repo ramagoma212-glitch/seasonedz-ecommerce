@@ -392,6 +392,18 @@
   margin-bottom: var(--space-md);
 }
 
+/* Version 7, Milestone 171E: matches productCard.js's own 3-state
+   stock colour convention (.product-card__stock--in/--low/--out) —
+   previously this text was always green here, including when it read
+   "Out of Stock", which read as a contradiction. */
+.product-details__stock--low {
+  color: var(--color-accent-dark);
+}
+
+.product-details__stock--out {
+  color: var(--color-error);
+}
+
 .product-details__short-desc {
   margin-bottom: var(--space-lg);
 }

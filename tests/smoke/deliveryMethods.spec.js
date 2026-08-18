@@ -220,7 +220,10 @@ test.describe("Checkout: three delivery methods", () => {
     await expect(fieldset.locator('input[value=COURIER_LOCKER]')).toHaveCount(1);
     await expect(fieldset.locator('input[value=COURIER_DOOR]')).toHaveCount(1);
     await expect(fieldset.locator('input[value=COLLECTION]')).toHaveCount(1);
-    await expect(fieldset.locator('input[value=COURIER_DOOR]')).toBeChecked();
+    // Version 7, Milestone 171E: no method is pre-selected — the
+    // customer must make an explicit choice (see checkoutPage.js's own
+    // comment on why the old default-checked COURIER_DOOR was removed).
+    await expect(fieldset.locator('input[type=radio][name=deliveryMethod]:checked')).toHaveCount(0);
   });
 
   test("Customer Collection hides the address fields and shows a Pretoria/Thohoyandou selector", async ({ page }) => {

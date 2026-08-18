@@ -20,6 +20,22 @@
   transform: translateY(1px);
 }
 
+/* Version 7, Milestone 171E: one shared disabled state for every
+   button on the site (out-of-stock Add to Cart, the blocked Place
+   Order submit, etc.) — same visual convention (dimmed, not-allowed
+   cursor) .payment-method--disabled already uses for a disabled
+   payment option, just as a real :disabled pseudo-class instead of a
+   manually-toggled class, since every case this covers is a genuine
+   HTML disabled button. `pointer-events: none` is what actually stops
+   the hover colour swap below from ever triggering, not the disabled
+   state itself (a disabled button can still receive a mouse-over). */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
 .btn--primary {
   background-color: var(--color-primary);
   color: var(--color-white);
@@ -644,6 +660,16 @@
   outline-offset: -2px;
 }
 
+/* Version 7, Milestone 171E: an out-of-stock product's quantity
+   controls (productDetails.js), or a cart line at its stock limit/no
+   longer available (cartItem.js). */
+.quantity-selector__btn:disabled,
+.quantity-selector__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .quantity-selector__input {
   width: 48px;
   height: 44px;
@@ -1062,6 +1088,22 @@ body.has-lightbox-open {
   color: var(--color-white);
 }
 
+/* Version 7, Milestone 171E: a cart line whose product has gone out of
+   stock since it was added — see cart.js's getUnavailableCartItems().
+   Quantity controls are disabled (see cartItem.js), Remove stays fully
+   usable; the subtle background is enough to draw the eye to the badge
+   without the whole row reading as an error state. */
+.cart-item--unavailable {
+  background-color: var(--color-bg-alt);
+}
+
+.cart-item__stock-badge {
+  display: inline-block;
+  margin-bottom: var(--space-xs);
+  background-color: var(--color-error);
+  color: var(--color-white);
+}
+
 /* Version 7, Milestone 159: paid gift wrapping — cart-line display. */
 .cart-item__gift-wrap {
   font-size: var(--font-size-sm);
@@ -1145,10 +1187,27 @@ body.has-lightbox-open {
   color: var(--color-text);
 }
 
+/* Version 7, Milestone 171E: the "no delivery method chosen yet" state
+   (js/cart.js's getCartSummary(), deliveryFee: null) — a genuinely
+   different meaning from every other row here, so it reads as a
+   prompt rather than a value. */
+.order-summary__row--delivery-pending [data-order-summary-delivery-value] {
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
 .order-summary__note {
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
   margin-top: var(--space-sm);
+}
+
+/* Version 7, Milestone 171E: shown under a blocked "Proceed to
+   Checkout" button (an unavailable cart item) — the one place this
+   note needs to read as a real blocker, not a passive aside. */
+.order-summary__note--error {
+  color: var(--color-error);
+  font-weight: 600;
 }
 
 .order-summary .btn {
@@ -1502,6 +1561,18 @@ body.has-lightbox-open {
 
 .demo-notice strong {
   color: var(--color-text);
+}
+
+/* Version 7, Milestone 171E: an urgent variant for a genuine blocker
+   (e.g. an out-of-stock cart item preventing checkout) — same shape as
+   the informational default above, just re-accented in the existing
+   error colour instead of implying "just FYI". */
+.demo-notice--error {
+  border-left-color: var(--color-error);
+}
+
+.demo-notice--error .demo-notice__icon {
+  color: var(--color-error);
 }
 
 /* ---- Contact support note (shared across checkout, FAQ, product,

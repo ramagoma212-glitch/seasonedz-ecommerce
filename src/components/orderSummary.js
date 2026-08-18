@@ -15,9 +15,16 @@
 // honest "no delivery needed" note instead of implying a discount
 // applied — a digital-only cart's R0 delivery fee has nothing to do
 // with the threshold at all.
+// Version 7, Milestone 171E: `deliveryFee === null` means "no delivery
+// method chosen yet" (see js/cart.js's getCartSummary()) — checked
+// before the `=== 0` branch so an unselected physical cart never reads
+// as if free delivery had already been applied.
 export function getDeliveryNote(deliveryFee, hasPhysicalItems) {
   if (!hasPhysicalItems) {
     return "No delivery is needed — this order is digital download(s) only.";
+  }
+  if (deliveryFee === null) {
+    return "Select a delivery method below to see your delivery fee.";
   }
   if (deliveryFee === 0) {
     return "Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
@@ -30,6 +37,10 @@ export function getDeliveryNote(deliveryFee, hasPhysicalItems) {
 // is updated) renders exactly as before — the row only appears at all
 // when there's a real charge to show, matching the brief's own example
 // layout ("Subtotal / Gift wrapping / Delivery / Total").
+// Version 7, Milestone 171E: `deliveryFee` may now be `null` — "no
+// delivery method chosen yet" (see js/cart.js's getCartSummary()) —
+// distinct from a genuine `0`/FREE. The displayed Total excludes
+// delivery entirely until then (`?? 0`), never a fabricated R100/R120.
 export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
@@ -37,10 +48,11 @@ export function renderOrderSummary({
   deliveryMethodLabel = null,
   hasPhysicalItems = true,
   showCheckoutButton = true,
-  showItems = false,
+  checkoutBlocked = false,
   items = [],
+  showItems = false,
 }) {
-  const total = subtotal + giftWrapTotal + deliveryFee;
+  const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
 
   return `
     <aside class="order-summary">
@@ -79,9 +91,9 @@ export function renderOrderSummary({
       `
           : ""
       }
-      <div class="order-summary__row">
+      <div class="order-summary__row${deliveryFee === null ? " order-summary__row--delivery-pending" : ""}">
         <span data-order-summary-delivery-label>${hasPhysicalItems && deliveryMethodLabel ? deliveryMethodLabel : "Delivery"}</span>
-        <span data-order-summary-delivery-value>${deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`}</span>
+        <span data-order-summary-delivery-value>${deliveryFee === null ? "Select a delivery option" : deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`}</span>
       </div>
       <div class="order-summary__row order-summary__row--total">
         <span>Order Total</span>
@@ -92,7 +104,16 @@ export function renderOrderSummary({
         ${getDeliveryNote(deliveryFee, hasPhysicalItems)}
       </p>
 
-      ${showCheckoutButton ? `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>` : ""}
+      ${
+        showCheckoutButton
+          ? checkoutBlocked
+            ? `
+            <button type="button" class="btn btn--primary btn--block" disabled aria-disabled="true">Proceed to Checkout</button>
+            <p class="order-summary__note order-summary__note--error">Remove the out-of-stock item(s) above to continue.</p>
+          `
+            : `<a class="btn btn--primary btn--block" href="/checkout">Proceed to Checkout</a>`
+          : ""
+      }
     </aside>
   `;
 }

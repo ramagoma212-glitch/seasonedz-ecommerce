@@ -63,10 +63,24 @@ export function renderStars(rating) {
 // direct CSS Grid child of .product-grid and any :nth-child alignment
 // rules keyed off that). Defaults to false so every existing caller
 // renders identically to before.
+// Version 7, Milestone 171E: a PHYSICAL product whose authoritative
+// stockStatus (backend product.service.ts's deriveStockStatus() — see
+// that file's own comment) reads "Out of Stock" can never be added to
+// cart from here — Wishlist is entirely unaffected, on purpose (Part 2
+// of the milestone brief: out-of-stock blocks Cart, never Wishlist).
+// DIGITAL products are never subject to this at all: they have no
+// physical inventory concept, matching every other stock check in this
+// codebase (order.service.ts's verifyItems(), cart.js's
+// getUnavailableCartItems()).
+export function isOutOfStockForCart(product) {
+  return (product.productType || "PHYSICAL") !== "DIGITAL" && product.stockStatus === "Out of Stock";
+}
+
 export function renderProductCard(product, { eager = false, showViewLink = false, displayTitle = null, hiddenExtra = false } = {}) {
   const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
   const wishlisted = isInWishlist(product.id);
   const title = displayTitle || product.name;
+  const outOfStock = isOutOfStockForCart(product);
 
   return `
     <article class="card product-card"${hiddenExtra ? ' hidden data-extra-card="true"' : ""}>
@@ -126,6 +140,10 @@ export function renderProductCard(product, { eager = false, showViewLink = false
 
         <div class="product-card__actions">
           ${showViewLink ? `<a class="btn btn--secondary btn--sm" href="/product/${product.slug}">View Product</a>` : ""}
+          ${
+            outOfStock
+              ? `<button type="button" class="btn btn--primary btn--sm" disabled aria-disabled="true">Out of Stock</button>`
+              : `
           <button
             type="button"
             class="btn btn--primary btn--sm"
@@ -137,6 +155,8 @@ export function renderProductCard(product, { eager = false, showViewLink = false
             data-image="${product.image}"
             data-product-type="${product.productType || "PHYSICAL"}"
           >Add to Cart</button>
+          `
+          }
         </div>
       </div>
     </article>

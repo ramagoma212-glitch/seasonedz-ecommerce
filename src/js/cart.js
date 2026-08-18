@@ -215,22 +215,57 @@ export function getCartPhysicalSubtotal(items) {
 
 // Convenience bundle for pages that need the items, count, subtotal,
 // gift-wrap total, delivery fee and total together (avoids reading/
-// looping over the cart several separate times). `deliveryMethod`
-// defaults to "COURIER_DOOR" for pages that haven't asked the customer
-// to choose yet (e.g. the cart page's own estimate) — checkoutPage.js
-// passes the customer's actually-selected method once one exists.
-export function getCartSummary(deliveryMethod = "COURIER_DOOR") {
+// looping over the cart several separate times).
+//
+// Version 7, Milestone 171E: `deliveryMethod` now defaults to `null` —
+// "no delivery method chosen yet" — instead of silently assuming
+// "COURIER_DOOR". A physical/mixed cart with no method selected gets
+// `deliveryFee: null` (genuinely unknown, never a fabricated R100/R120
+// and never confused with a real R0/FREE outcome); a digital-only cart
+// still always gets `deliveryFee: 0` regardless, since no delivery
+// selection is ever needed for it. checkoutPage.js passes the
+// customer's actually-selected method once one exists; cartPage.js
+// still explicitly passes its own pre-existing "COURIER_DOOR" estimate
+// method (a deliberate, already-documented Milestone 168C choice for
+// that page, unchanged by this milestone) rather than relying on this
+// default.
+export function getCartSummary(deliveryMethod = null) {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
   const giftWrapTotal = getCartGiftWrapTotal(items);
   const composition = getCartComposition(items);
   const physicalSubtotal = getCartPhysicalSubtotal(items);
-  const deliveryFee = calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical);
-  const total = subtotal + giftWrapTotal + deliveryFee;
+  const deliveryFee = composition.hasPhysical
+    ? deliveryMethod
+      ? calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical)
+      : null
+    : 0;
+  const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
   return { items, itemCount, subtotal, giftWrapTotal, physicalSubtotal, deliveryFee, deliveryMethod, total, composition };
 }
 
 export function isInCart(productId) {
   return getCart().some((item) => item.productId === productId);
+}
+
+// Version 7, Milestone 171E: cross-references cart items against live,
+// authoritative product data — the exact same catalogue data shop/
+// homepage/product pages already use (js/api/productsApi.js's
+// getCatalog()), never a second competing stock system. A cart item is
+// "unavailable" once the matching live product is out of stock, or has
+// disappeared from the catalogue entirely (e.g. archived/deleted since
+// it was added) — either way it can no longer genuinely be bought.
+// DIGITAL items are never flagged: physical inventory rules have never
+// applied to them (see productType checks throughout this file), and
+// this milestone doesn't introduce a digital-availability concept.
+// `liveProductsBySlug` is a Map<slug, { stockStatus, productType }> —
+// callers build it once from getCatalog() and reuse it for every line.
+export function getUnavailableCartItems(items, liveProductsBySlug) {
+  return items.filter((item) => {
+    if ((item.productType || "PHYSICAL") === "DIGITAL") return false;
+    const liveProduct = liveProductsBySlug.get(item.slug);
+    if (!liveProduct) return true;
+    return liveProduct.stockStatus === "Out of Stock";
+  });
 }

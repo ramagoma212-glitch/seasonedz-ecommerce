@@ -6,7 +6,13 @@ import { getCardImageUrl } from "../js/imageTransforms.js";
 
 // Version 7, Milestone 92A: see productCard.js's comment for the
 // eager/width/height reasoning — same pattern here.
-export function renderWishlistItem(item, { eager = false } = {}) {
+// Version 7, Milestone 171E: `outOfStock` (looked up against live
+// product data by the caller — see wishlistPage.js) disables Add to
+// Cart and relabels it, matching every other Add to Cart entry point's
+// out-of-stock treatment (Part 5 of the milestone brief) — Remove from
+// Wishlist is completely unaffected either way; being out of stock
+// never removes an item from the wishlist automatically.
+export function renderWishlistItem(item, { eager = false, outOfStock = false } = {}) {
   return `
     <article class="card wishlist-item">
       <a href="/product/${item.slug}">
@@ -28,9 +34,14 @@ export function renderWishlistItem(item, { eager = false } = {}) {
           <a href="/product/${item.slug}">${item.name}</a>
         </h3>
         <p class="product-card__price">R${item.price.toFixed(2)}</p>
+        ${outOfStock ? `<p class="product-card__stock product-card__stock--out">Out of Stock</p>` : ""}
 
         <div class="product-card__actions">
           <a class="btn btn--secondary btn--sm" href="/product/${item.slug}">View Details</a>
+          ${
+            outOfStock
+              ? `<button type="button" class="btn btn--primary btn--sm" disabled aria-disabled="true">Out of Stock</button>`
+              : `
           <button
             type="button"
             class="btn btn--primary btn--sm"
@@ -41,6 +52,8 @@ export function renderWishlistItem(item, { eager = false } = {}) {
             data-price="${item.price}"
             data-image="${item.image}"
           >Add to Cart</button>
+          `
+          }
         </div>
 
         <button

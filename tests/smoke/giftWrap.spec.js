@@ -266,14 +266,27 @@ test.describe("Gift wrapping: checkout summary and backwards compatibility", () 
 
   test("a pre-existing (old-style) cart entry with no lineId/giftWrap fields still works", async ({ page }) => {
     await page.goto(`/product/${PHYSICAL_SLUG}`);
-    await page.evaluate(() => {
+    await page.evaluate(
       // Simulates a cart saved before Milestone 159 existed — no
       // lineId, no giftWrap, no giftMessage fields at all.
-      localStorage.setItem(
-        "seasonedz_cart",
-        JSON.stringify([{ productId: "legacy-product", slug: "legacy-product", name: "Legacy Product", price: 75, image: "/images/product-1.jpg", quantity: 2 }])
-      );
-    });
+      // Version 7, Milestone 171E: slug/productId must be a real,
+      // in-stock catalogue product now — the cart page cross-checks
+      // every line against live product data (see cart.js's
+      // getUnavailableCartItems()), and an unrecognised slug like the
+      // old "legacy-product" placeholder would (correctly) now show as
+      // unavailable, with its quantity controls disabled — defeating
+      // this test's own point (a legacy entry stays fully mutable).
+      // The synthetic `price: 75` stays independent of the real
+      // product's actual catalogue price either way — the cart always
+      // displays whatever price is stored on the line item itself.
+      (slug) => {
+        localStorage.setItem(
+          "seasonedz_cart",
+          JSON.stringify([{ productId: slug, slug, name: "Legacy Product", price: 75, image: "/images/product-1.jpg", quantity: 2 }])
+        );
+      },
+      PHYSICAL_SLUG
+    );
 
     await page.goto("/cart");
     await expect(page.locator(".cart-item")).toHaveCount(1);

@@ -515,7 +515,14 @@ function readGiftOptionsFromProductDetails(buttonEl) {
 // Add to Cart on the product details page must use the selected
 // quantity; everywhere else (product cards, wishlist page) there's no
 // quantity selector nearby, so it defaults to 1.
+// Version 7, Milestone 171E: a disabled HTML button never dispatches a
+// click at all — this `disabled` check is defense in depth, not the
+// real gate (every out-of-stock Add to Cart button this milestone adds
+// is rendered with the `disabled` attribute in the first place; see
+// productCard.js/productDetails.js/wishlistItem.js).
 function handleAddToCart(buttonEl) {
+  if (buttonEl.disabled) return;
+
   const quantityInput = buttonEl.closest(".product-details")?.querySelector(".quantity-selector__input");
   const quantity = quantityInput ? Math.max(1, parseInt(quantityInput.value, 10) || 1) : 1;
 
@@ -611,12 +618,24 @@ function patchWishlistButton(buttonEl, isActive) {
   }
 }
 
+// Version 7, Milestone 171E: clamps against the selector's own
+// data-max-quantity (product detail page only — see productDetails.js —
+// set to the product's real stockQuantity) so the customer can never
+// select more than is actually in stock. Absent on any other quantity
+// selector (e.g. the cart page's own +/- controls), which keeps this
+// unbounded exactly as before — the backend independently re-validates
+// requested quantity against live stock at order-creation time either
+// way (see order.service.ts's verifyItems()), so this is a UX guard,
+// never the actual limit's enforcement point.
 function adjustQuantity(buttonEl, delta) {
-  const input = buttonEl.closest(".quantity-selector")?.querySelector(".quantity-selector__input");
+  const selector = buttonEl.closest(".quantity-selector");
+  const input = selector?.querySelector(".quantity-selector__input");
   if (!input) return;
 
+  const maxRaw = selector.dataset.maxQuantity;
+  const max = maxRaw ? parseInt(maxRaw, 10) : Infinity;
   const current = parseInt(input.value, 10) || 1;
-  input.value = Math.max(1, current + delta);
+  input.value = Math.min(max, Math.max(1, current + delta));
 }
 
 // Guest checkout form: validate on submit, show field-level errors,
@@ -729,6 +748,13 @@ function updateCheckoutDeliveryMethodUI(form, method) {
 
   const valueEl = summary.querySelector("[data-order-summary-delivery-value]");
   if (valueEl) valueEl.textContent = deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`;
+  // Version 7, Milestone 171E: a real delivery method has now been
+  // picked — the row's own "no selection yet" styling (italic/muted,
+  // see components.css) no longer applies. Selecting a radio is a
+  // one-way transition (there's no UI affordance to un-check every
+  // option back to none — see checkoutPage.js's own comment), so this
+  // only ever needs to remove the class, never re-add it.
+  valueEl?.closest(".order-summary__row")?.classList.remove("order-summary__row--delivery-pending");
 
   const totalEl = summary.querySelector("[data-order-summary-total-value]");
   if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee).toFixed(2)}`;

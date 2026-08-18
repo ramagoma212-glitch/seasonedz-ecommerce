@@ -5,23 +5,17 @@
 // Card on Delivery take no online charge through this site — see
 // PAYMENT_METHODS in js/orders.js.
 
-import { getCartSummary } from "../js/cart.js";
+import { getCartSummary, getUnavailableCartItems } from "../js/cart.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { PAYMENT_METHODS } from "../js/orders.js";
 import { getCurrentCustomer } from "../js/api/customerApi.js";
+import { getCatalog } from "../js/api/productsApi.js";
 import { escapeHtml } from "../js/search.js";
-import { DELIVERY_METHODS, COLLECTION_CITIES, getDeliveryMethodLabel, calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
+import { DELIVERY_METHODS, COLLECTION_CITIES, calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
 import { withBase } from "../js/paths.js";
-
-// Version 7, Milestone 168C: no method has an obviously "right" default
-// among three genuinely different fulfilment options, so this picks
-// the one closest to the old single-method experience (a courier
-// delivers to the customer's own door) — the customer can freely
-// switch to Locker to Locker or Customer Collection before submitting.
-const DEFAULT_DELIVERY_METHOD = "COURIER_DOOR";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
 // the request failing) is never an error on the checkout page, just
@@ -104,7 +98,12 @@ function renderAccountNote(customer) {
 // free. Selecting a method toggles the address vs. collection-city
 // fields below (see js/app.js's updateCheckoutDeliveryMethodUI()) —
 // this is a real accessible radio group, not a custom widget.
-function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems, defaultMethod) {
+// Version 7, Milestone 171E: no option is pre-checked — the customer
+// must make an explicit choice (Part 13 of the milestone brief). A
+// radio group with nothing checked is valid HTML/ARIA and behaves
+// correctly with a screen reader and keyboard; the previous
+// `defaultMethod` parameter (and the auto-selection it caused) is gone.
+function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems) {
   return `
     <fieldset class="delivery-methods" data-field-group="deliveryMethod">
       <legend class="checkout-section__label">Delivery Method <span class="form-field__required" aria-hidden="true">*</span></legend>
@@ -118,7 +117,6 @@ function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems, defaultMethod
               value="${method.value}"
               class="delivery-method__radio"
               data-action="select-delivery-method"
-              ${method.value === defaultMethod ? "checked" : ""}
             />
             <span class="delivery-method__content">
               <span class="delivery-method__label">${method.label}</span>
@@ -132,13 +130,17 @@ function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems, defaultMethod
   `;
 }
 
-function renderCollectionCityField(defaultMethod) {
+// Version 7, Milestone 171E: always starts hidden/not-required — no
+// delivery method is pre-selected, so no method-specific field can be
+// known to apply yet. js/app.js's updateCheckoutDeliveryMethodUI()
+// reveals and requires this the moment the customer picks Collection.
+function renderCollectionCityField() {
   return `
-    <div class="form-field form-field--full" data-collection-fields ${defaultMethod === "COLLECTION" ? "" : "hidden"}>
+    <div class="form-field form-field--full" data-collection-fields hidden>
       <label class="form-field__label" for="collectionCity">
         Collection Location <span class="form-field__required" aria-hidden="true">*</span>
       </label>
-      <select id="collectionCity" name="collectionCity" class="form-field__input" ${defaultMethod === "COLLECTION" ? "required" : ""}>
+      <select id="collectionCity" name="collectionCity" class="form-field__input">
         <option value="">Select a location</option>
         ${COLLECTION_CITIES.map((city) => `<option value="${city}">${city}</option>`).join("")}
       </select>
@@ -251,8 +253,34 @@ function renderDemoNotice() {
   `;
 }
 
+// Version 7, Milestone 171E: a physical/mixed cart carrying an item
+// that's gone out of stock (or vanished from the catalogue) since it
+// was added — checked against live product data (js/api/productsApi.js's
+// getCatalog(), the same source every other page already uses), never
+// a second inventory system. Renders a clear banner naming the
+// affected product(s) and links back to the cart page (where the item
+// can actually be removed — see cartPage.js's own matching badge) —
+// this page never lets the customer silently proceed past it.
+function renderUnavailableItemsNotice(unavailableItems) {
+  if (!unavailableItems.length) return "";
+
+  return `
+    <div class="demo-notice demo-notice--error" data-checkout-unavailable-notice>
+      <span class="demo-notice__icon" aria-hidden="true">&#9888;</span>
+      <div>
+        <strong>Some items in your cart are no longer available.</strong>
+        <p>
+          ${unavailableItems.map((item) => escapeHtml(item.name)).join(", ")}
+          ${unavailableItems.length === 1 ? "is" : "are"} out of stock. Please
+          <a href="/cart">return to your cart</a> to remove ${unavailableItems.length === 1 ? "it" : "them"} before placing your order.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
 export async function renderCheckoutPage() {
-  const { items } = getCartSummary();
+  const { items, composition } = getCartSummary();
 
   if (!items.length) {
     return `
@@ -272,15 +300,35 @@ export async function renderCheckoutPage() {
   // slow/failed lookup beyond this one awaited call — a guest sees
   // exactly the same page either way, just without prefilled fields.
   const customer = await getLoggedInCustomerSafely();
-  // Version 7, Milestone 168C: the displayed delivery fee/total now
-  // depends on the selected delivery method, not registered-customer
-  // status (see config/delivery.js) — starts from
-  // DEFAULT_DELIVERY_METHOD and js/app.js's
-  // updateCheckoutDeliveryMethodUI() recomputes it live as the
-  // customer changes their selection. Purely a client-side estimate
-  // for display — the backend independently recalculates the real fee
-  // at order-creation time from verified DB-priced items.
-  const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal, composition } = getCartSummary(DEFAULT_DELIVERY_METHOD);
+
+  // Version 7, Milestone 171E: no delivery method is assumed anymore —
+  // getCartSummary() with no argument returns deliveryFee: null for a
+  // physical/mixed cart (composition.hasPhysical true), which
+  // renderOrderSummary shows as a neutral "Select a delivery option"
+  // state, never a fabricated R100/R120 or a misleading "FREE"/"R0"
+  // before the customer has actually chosen anything. js/app.js's
+  // updateCheckoutDeliveryMethodUI() recomputes the real fee/total live
+  // the moment a method is picked — still purely a client-side
+  // estimate either way; the backend independently recalculates the
+  // authoritative fee at order-creation time from verified DB-priced
+  // items and the delivery method actually submitted.
+  const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary();
+
+  // Version 7, Milestone 171E: best-effort, same discipline as the
+  // logged-in-customer lookup above — a slow/failed catalogue fetch
+  // must never block checkout entirely; it just means stale cart items
+  // can't be detected on this particular page load (the backend's own
+  // authoritative stock check at order-creation time still protects
+  // the order either way — see order.service.ts's verifyItems()).
+  let unavailableItems = [];
+  try {
+    const { products } = await getCatalog();
+    const productsBySlug = new Map(products.map((product) => [product.slug, { stockStatus: product.stockStatus, productType: product.productType }]));
+    unavailableItems = getUnavailableCartItems(items, productsBySlug);
+  } catch {
+    unavailableItems = [];
+  }
+  const hasUnavailableItems = unavailableItems.length > 0;
 
   return `
     <section class="stub-page container checkout-page">
@@ -291,6 +339,7 @@ export async function renderCheckoutPage() {
 
       ${renderAccountNote(customer)}
       ${renderCartCompositionNotice(composition)}
+      ${renderUnavailableItemsNotice(unavailableItems)}
 
       <div class="checkout-layout">
         <form
@@ -313,35 +362,35 @@ export async function renderCheckoutPage() {
           </div>
 
           <div class="checkout-section">
-            ${renderDeliveryMethods(physicalSubtotal, composition.hasPhysical, DEFAULT_DELIVERY_METHOD)}
+            ${renderDeliveryMethods(physicalSubtotal, composition.hasPhysical)}
           </div>
 
           <div class="checkout-section">
-            <div class="form-grid" data-delivery-address-fields ${DEFAULT_DELIVERY_METHOD === "COLLECTION" ? "hidden" : ""}>
-              <p class="form-field--full form-field__hint" data-locker-area-note ${DEFAULT_DELIVERY_METHOD === "COURIER_LOCKER" ? "" : "hidden"}>
+            <div class="form-grid" data-delivery-address-fields hidden>
+              <p class="form-field--full form-field__hint" data-locker-area-note hidden>
                 We don't yet have live locker selection online — tell us your city and province and we'll arrange the nearest Courier Guy locker to you, then confirm it with you before dispatch.
               </p>
 
-              <div data-address-full-only ${DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" ? "" : "hidden"}>
-                ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
-                ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
+              <div data-address-full-only hidden>
+                ${renderField({ id: "street", label: "Street Address", span: "form-field--full", placeholder: "12 Colouring Lane", required: false })}
+                ${renderField({ id: "suburb", label: "Suburb", placeholder: "Sunnyside", required: false })}
               </div>
 
-              ${renderField({ id: "city", label: "City", placeholder: "Pretoria", required: DEFAULT_DELIVERY_METHOD !== "COLLECTION" })}
+              ${renderField({ id: "city", label: "City", placeholder: "Pretoria", required: false })}
 
               <div class="form-field">
                 <label class="form-field__label" for="province">
                   Province <span class="form-field__required" aria-hidden="true">*</span>
                 </label>
-                <select id="province" name="province" class="form-field__input" ${DEFAULT_DELIVERY_METHOD !== "COLLECTION" ? "required" : ""}>
+                <select id="province" name="province" class="form-field__input">
                   <option value="">Select a province</option>
                   ${PROVINCES.map((province) => `<option value="${province}">${province}</option>`).join("")}
                 </select>
                 <span class="form-field__error" data-error-for="province"></span>
               </div>
 
-              <div data-address-full-only ${DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" ? "" : "hidden"}>
-                ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001", required: DEFAULT_DELIVERY_METHOD === "COURIER_DOOR" })}
+              <div data-address-full-only hidden>
+                ${renderField({ id: "postalCode", label: "Postal Code", placeholder: "0001", required: false })}
               </div>
 
               <div class="form-field form-field--full">
@@ -358,7 +407,7 @@ export async function renderCheckoutPage() {
               </div>
             </div>
 
-            ${renderCollectionCityField(DEFAULT_DELIVERY_METHOD)}
+            ${renderCollectionCityField()}
           </div>
 
           <div class="checkout-section">
@@ -369,10 +418,10 @@ export async function renderCheckoutPage() {
 
           <div class="form-banner form-banner--error" data-checkout-banner hidden></div>
 
-          <button type="submit" class="btn btn--primary btn--block">Place Order</button>
+          <button type="submit" class="btn btn--primary btn--block" data-checkout-submit ${hasUnavailableItems ? "disabled" : ""}>Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, deliveryMethodLabel: getDeliveryMethodLabel(DEFAULT_DELIVERY_METHOD), hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;
