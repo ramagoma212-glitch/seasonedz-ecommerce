@@ -146,3 +146,40 @@ export const productReviewCreationRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Social sign-in start (Version 7, Milestone 171F) — a real customer
+// only ever hits this by clicking a "Continue with ..." button, so this
+// stays generous (never blocks normal browsing/retrying after a
+// provider-side hiccup) while still bounding an automated hammer of the
+// redirect endpoint.
+export const oauthStartRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Social sign-in callback (Version 7, Milestone 171F) — the provider
+// (Google/Facebook/Apple) redirects the browser here, so this is
+// naturally called once per real attempt; the limit exists only to
+// bound a scripted replay of a captured callback URL, never to get in
+// the way of a genuine customer.
+export const oauthCallbackRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Connected-account link/disconnect (Version 7, Milestone 171F) —
+// requires an already-authenticated customer, same tighter-than-general
+// reasoning as productReviewCreationRateLimiter above.
+export const oauthAccountManagementRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

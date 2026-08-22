@@ -449,6 +449,87 @@ const courierGuyAutoBookingServiceCodes = getEnv("COURIER_GUY_AUTO_BOOKING_SERVI
 // migration ever needs to see what the old single-code value was.
 const courierGuyDefaultServiceCode = getOptionalEnv("COURIER_GUY_DEFAULT_SERVICE_CODE");
 
+// Social sign-in (Version 7, Milestone 171F). Same "safety switch,
+// optional until configured" pattern as every other *_ENABLED flag in
+// this file: the backend must keep starting normally with these all
+// "false" and none of the credential variables below set — social
+// login is entirely additive to the existing email/password system
+// (see customerAuth.service.ts), never required for it to keep
+// working. A provider's *_AUTH_ENABLED flag is deliberately separate
+// from "credentials are present" (isXConfigured() below combines both)
+// so the owner can flip a provider off instantly (e.g. if a console
+// misconfiguration is discovered) without having to also blank out its
+// secret. GET /api/auth/providers (see socialAuth.controller.ts) is
+// the only thing the frontend ever consults to decide which buttons to
+// show — never a raw env var, and never anything that could leak a
+// secret.
+const googleAuthEnabled = getEnv("GOOGLE_AUTH_ENABLED", "false").trim().toLowerCase() === "true";
+const googleClientId = getOptionalEnv("GOOGLE_CLIENT_ID");
+const googleClientSecret = getOptionalEnv("GOOGLE_CLIENT_SECRET");
+
+const facebookAuthEnabled = getEnv("FACEBOOK_AUTH_ENABLED", "false").trim().toLowerCase() === "true";
+const facebookAppId = getOptionalEnv("FACEBOOK_APP_ID");
+const facebookAppSecret = getOptionalEnv("FACEBOOK_APP_SECRET");
+
+const appleAuthEnabled = getEnv("APPLE_AUTH_ENABLED", "false").trim().toLowerCase() === "true";
+const appleTeamId = getOptionalEnv("APPLE_TEAM_ID");
+const appleKeyId = getOptionalEnv("APPLE_KEY_ID");
+const appleClientId = getOptionalEnv("APPLE_CLIENT_ID");
+// Render-friendly: a .p8 file's real newlines are commonly flattened to
+// literal "\n" sequences when pasted into a single-line env var editor
+// — restored here so the rest of the app only ever sees a real
+// multi-line PEM string. A private key that already contains real
+// newlines (e.g. set via a Render "Secret File" or a local .env with
+// literal line breaks) is left untouched, since a genuine newline
+// obviously never appears as the two-character sequence "\n".
+const appleRawPrivateKey = getOptionalEnv("APPLE_PRIVATE_KEY");
+const applePrivateKey = appleRawPrivateKey?.includes("\\n") ? appleRawPrivateKey.replace(/\\n/g, "\n") : appleRawPrivateKey;
+
+// This backend's own public origin — every OAuth provider redirects
+// back here, never directly to the frontend (see "DO NOT PUT TOKENS IN
+// URLS" in the milestone brief: the callback sets the same HttpOnly
+// customer_session cookie normal login already uses, then redirects
+// the browser on to the frontend with no token of any kind in the
+// URL). Reuses BACKEND_PUBLIC_URL — already required/optional exactly
+// this way for PayFast's return/cancel/notify URLs above, so this adds
+// no new operational variable for an owner who already has PayFast
+// configured.
+const oauthCallbackBaseUrl = backendPublicUrl;
+
+// A provider is only ever "ready" — i.e. GET /api/auth/providers ever
+// reports it true, and its start/callback routes ever do real work
+// instead of a clear 503 — when BOTH its explicit *_AUTH_ENABLED flag
+// AND every credential it needs are present. Google/Facebook/Apple are
+// intentionally independent of one another: one provider's missing
+// configuration never blocks another (see the milestone brief's
+// "Recommended activation order" — Google and Facebook can go live
+// even if Apple Developer setup takes longer).
+const isGoogleAuthConfigured = googleAuthEnabled && Boolean(googleClientId && googleClientSecret && oauthCallbackBaseUrl);
+const isFacebookAuthConfigured = facebookAuthEnabled && Boolean(facebookAppId && facebookAppSecret && oauthCallbackBaseUrl);
+const isAppleAuthConfigured = appleAuthEnabled && Boolean(appleTeamId && appleKeyId && appleClientId && applePrivateKey && oauthCallbackBaseUrl);
+
+if (googleAuthEnabled && !isGoogleAuthConfigured) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[social-auth] GOOGLE_AUTH_ENABLED is true but GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and/or BACKEND_PUBLIC_URL " +
+      "are not fully set — Google sign-in stays reported as unavailable via GET /api/auth/providers until all are set."
+  );
+}
+if (facebookAuthEnabled && !isFacebookAuthConfigured) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[social-auth] FACEBOOK_AUTH_ENABLED is true but FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and/or BACKEND_PUBLIC_URL " +
+      "are not fully set — Facebook sign-in stays reported as unavailable via GET /api/auth/providers until all are set."
+  );
+}
+if (appleAuthEnabled && !isAppleAuthConfigured) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[social-auth] APPLE_AUTH_ENABLED is true but APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_CLIENT_ID, APPLE_PRIVATE_KEY, " +
+      "and/or BACKEND_PUBLIC_URL are not fully set — Apple sign-in stays reported as unavailable via GET /api/auth/providers until all are set."
+  );
+}
+
 if (courierGuyAutoBookingEnabled && courierGuyAutoBookingServiceCodes.length === 0) {
   // eslint-disable-next-line no-console
   console.warn(
@@ -545,6 +626,26 @@ export const env = {
   courierGuyAutoBookingServiceCodes,
   // Legacy/reference only — not read by the current selection logic.
   courierGuyDefaultServiceCode,
+  // Social sign-in — see the block above. Client secrets/private keys
+  // are undefined unless explicitly set; never logged anywhere. The
+  // isXAuthConfigured booleans are the only thing GET /api/auth/providers
+  // (socialAuth.controller.ts) and the OAuth start/callback routes ever
+  // consult to decide whether a provider is real usable right now.
+  googleAuthEnabled,
+  googleClientId,
+  googleClientSecret,
+  isGoogleAuthConfigured,
+  facebookAuthEnabled,
+  facebookAppId,
+  facebookAppSecret,
+  isFacebookAuthConfigured,
+  appleAuthEnabled,
+  appleTeamId,
+  appleKeyId,
+  appleClientId,
+  applePrivateKey,
+  isAppleAuthConfigured,
+  oauthCallbackBaseUrl,
 };
 
 // Every browser origin CORS should accept — never a wildcard. Built

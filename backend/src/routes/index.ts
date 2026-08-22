@@ -15,6 +15,7 @@ import adminDashboardRoutes from "./adminDashboard.routes.js";
 import customerRoutes from "./customer.routes.js";
 import downloadsRoutes from "./downloads.routes.js";
 import newsletterRoutes from "./newsletter.routes.js";
+import socialAuthRoutes from "./socialAuth.routes.js";
 
 const router = Router();
 
@@ -43,5 +44,9 @@ router.use("/downloads", downloadsRoutes);
 // Version 7, Milestone 168F: homepage newsletter signup — public,
 // unauthenticated, write-only, same shape as /enquiries above.
 router.use("/newsletter", newsletterRoutes);
+// Version 7, Milestone 171F: Google/Facebook/Apple social sign-in —
+// fully additive to customerAuth above, ends in the exact same
+// customer_session cookie. See socialAuth.routes.ts.
+router.use("/auth", socialAuthRoutes);
 
 export default router;

@@ -38,6 +38,7 @@ import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
 import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload, submitProductReview } from "./api/customerApi.js";
+import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
 import {
   updateAdminOrderStatus,
@@ -1277,6 +1278,26 @@ function setupCustomerAccountForms() {
       return;
     }
 
+    // Version 7, Milestone 171F: Account Settings -> Connected Accounts
+    // -> Disconnect. "Connect" buttons need no handler here at all —
+    // they're plain links to the backend's OAuth start route (a real
+    // page navigation), see socialAuthButtons.js/accountPage.js.
+    const disconnectButton = event.target.closest('[data-action="disconnect-provider"]');
+    if (disconnectButton) {
+      handleDisconnectProvider(disconnectButton);
+      return;
+    }
+
+    // Version 7, Milestone 171F: purely cosmetic immediate feedback —
+    // the actual navigation to the provider's own login page is already
+    // underway by the time this runs (a plain <a href>, see
+    // socialAuthButtons.js's own header comment on why this can never
+    // be "double submitted" the way a form can).
+    const socialAuthButton = event.target.closest("[data-social-auth-button]");
+    if (socialAuthButton) {
+      socialAuthButton.classList.add("is-loading");
+    }
+
     // Version 7, Milestone 171C: expands/collapses the review form next
     // to a "Write a Review" prompt on the customer's own Order Detail
     // page (components/reviewPrompt.js) — purely a visibility toggle,
@@ -1544,6 +1565,28 @@ async function handleCustomerLogout() {
     // nothing useful to show if logout itself fails.
   }
   rerenderCurrentRoute();
+}
+
+// Version 7, Milestone 171F: disconnects a connected social provider
+// from Account Settings -> Connected Accounts. The backend independently
+// re-enforces "never remove the last usable sign-in method" (see
+// socialAuth.service.ts's unlinkProviderFromCustomer) — a 409 here is a
+// real, expected outcome, not just a defensive client-side check, so
+// its message is shown exactly as the backend sent it (the same
+// friendly, non-technical text the OAuth callback's own ?authError=
+// last_login_method banner uses).
+async function handleDisconnectProvider(button) {
+  const provider = button.getAttribute("data-provider");
+  if (!provider) return;
+
+  button.disabled = true;
+  try {
+    await disconnectProvider(provider);
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    window.alert(error?.message || "Could not disconnect that provider. Please try again.");
+  }
 }
 
 // Admin order status update (Version 7, Milestone 64). Delegated

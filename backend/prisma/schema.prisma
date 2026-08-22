@@ -126,6 +126,14 @@ enum UserRole {
   STAFF
 }
 
+// Version 7, Milestone 171F: social sign-in providers. Only identity
+// authentication is supported for each — see AuthAccount below.
+enum AuthProvider {
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
 // Version 7, Milestone 62: distinguishes who/what produced an
 // OrderStatusHistory row. Only ADMIN_DASHBOARD is ever written by the
 // first implementation (a future milestone) — the others are reserved
@@ -312,6 +320,13 @@ model Customer {
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
 
+  // Version 7, Milestone 171F: optional avatar sourced from a connected
+  // social provider (Google/Facebook may supply one; Apple never does).
+  // Never required, never fetched/stored proactively — only populated
+  // the moment a real provider profile is read during sign-in/linking.
+  // See socialAuth.service.ts.
+  profileImageUrl String?
+
   orders              Order[]
   addresses           Address[]
   sessions            CustomerSession[]
@@ -322,9 +337,44 @@ model Customer {
   // Version 7, Milestone 171C: genuine, verified-purchase product
   // reviews this customer has submitted — see ProductReview.
   productReviews      ProductReview[]
+  // Version 7, Milestone 171F: connected social sign-in identities —
+  // see AuthAccount below. A customer may have zero (password-only),
+  // one, or several (one per provider, never two of the same provider).
+  authAccounts        AuthAccount[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Version 7, Milestone 171F: one row per (customer, provider) social
+// identity — see AUTH_ACCOUNT_MODEL in the milestone brief. Deliberately
+// NOT a GoogleCustomer/FacebookCustomer/AppleCustomer table per provider
+// — one customer, one stable internal id, N linked AuthAccount rows.
+//
+// providerUserId is always the provider's own immutable subject
+// identifier (Google/Apple: "sub"; Facebook: the numeric user id) —
+// never an email address, since a provider account's email can change
+// (or, for Apple, be a rotating private-relay address) while its
+// subject identifier never does. See socialAuth.service.ts for how
+// this is looked up first, before ever falling back to email matching.
+//
+// No password, no provider access/refresh token is ever stored here —
+// this table exists purely to answer "which Seasonedz customer does
+// this verified provider identity belong to", nothing more.
+model AuthAccount {
+  id             String       @id @default(cuid())
+  customerId     String
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  provider       AuthProvider
+  providerUserId String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // A provider identity must never belong to more than one customer —
+  // this is the structural guarantee against account-takeover-by-OAuth,
+  // enforced at the database level, not just in application code.
+  @@unique([provider, providerUserId])
+  @@index([customerId])
 }
 
 // Saved addresses for a customer (useful once accounts exist so a
@@ -515,7 +565,7 @@ model OrderItem {
   giftMessage        String?
   giftWrapFeePerUnit Decimal? @db.Decimal(10, 2)
 
-  downloadLog DigitalDownloadLog?
+  downloadLog    DigitalDownloadLog?
   // Version 7, Milestone 171C: genuine product reviews — see
   // ProductReview below. One OrderItem can have at most one review
   // (reviewsForItem @@unique enforces this), but a review only ever
@@ -868,17 +918,17 @@ model OrderStatusHistory {
 // as POPIA proof-of-consent — recorded fresh on every voluntary
 // (re-)subscription, never backfilled or inferred from a purchase.
 model NewsletterSubscriber {
-  id     String                      @id @default(cuid())
+  id     String                     @id @default(cuid())
   name   String
-  email  String                      @unique
-  status NewsletterSubscriberStatus  @default(ACTIVE)
+  email  String                     @unique
+  status NewsletterSubscriberStatus @default(ACTIVE)
 
   // Always "WEBSITE" today (the only real entry point) — kept as a
   // field rather than a hardcoded assumption so a future genuinely
   // different entry point (e.g. an in-store signup sheet) doesn't need
   // a schema change, only a new value.
-  source        String    @default("WEBSITE")
-  consentAt     DateTime
+  source         String    @default("WEBSITE")
+  consentAt      DateTime
   unsubscribedAt DateTime?
 
   createdAt DateTime @default(now())

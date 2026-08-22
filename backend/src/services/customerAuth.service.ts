@@ -50,19 +50,26 @@ export interface SafeCustomerProfile {
   lastName: string;
   phone: string | null;
   type: CustomerType;
+  // Version 7, Milestone 171F: optional avatar, sourced only from a
+  // connected Google/Facebook account (Apple never supplies one) — see
+  // socialAuth.service.ts. Never required, so every pre-existing
+  // password-only account simply has null here, unchanged.
+  profileImageUrl: string | null;
   createdAt: Date;
 }
 
 // Never returns or logs a password hash, a session token, or a reset
 // token — only ever this narrow, safe shape. Every function in this
-// file that returns customer data goes through this.
-function toSafeProfile(customer: {
+// file (and socialAuth.service.ts, which shares this exact redaction
+// discipline for provider-authenticated customers) goes through this.
+export function toSafeProfile(customer: {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   phone: string | null;
   type: CustomerType;
+  profileImageUrl: string | null;
   createdAt: Date;
 }): SafeCustomerProfile {
   return {
@@ -72,6 +79,7 @@ function toSafeProfile(customer: {
     lastName: customer.lastName,
     phone: customer.phone,
     type: customer.type,
+    profileImageUrl: customer.profileImageUrl,
     createdAt: customer.createdAt,
   };
 }

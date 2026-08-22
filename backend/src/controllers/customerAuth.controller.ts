@@ -32,7 +32,12 @@ function resetPasswordBaseUrl(): string {
 // "none" — see adminAuth.controller.ts's sessionCookieOptions() for
 // the full reasoning (same cookie architecture, same fix, same
 // same-site-domain-migration timing requirement).
-function sessionCookieOptions(): CookieOptions {
+//
+// Exported (Version 7, Milestone 171F) so socialAuth.controller.ts sets
+// the exact same customer_session cookie after a Google/Facebook/Apple
+// sign-in as normal email/password login does — one cookie shape, one
+// place that defines it, whichever path created the session.
+export function sessionCookieOptions(): CookieOptions {
   return {
     httpOnly: true,
     secure: isProduction,

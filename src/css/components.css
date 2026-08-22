@@ -2147,6 +2147,104 @@ body.has-lightbox-open {
   margin-block: var(--space-lg);
 }
 
+/* ---- Social sign-in (Version 7, Milestone 171F) ---------------------
+   Deliberately sized/weighted the same as the surrounding .btn--block
+   controls — "must not overpower email/password login" per the
+   milestone brief — so these read as one more equally-weighted option,
+   not a dominant call to action. Sits above the email/password form via
+   accountPage.js's own layout, with a plain "OR" divider between. */
+.social-auth-buttons {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.btn--social {
+  background-color: var(--color-white);
+  color: var(--color-text);
+  border: 2px solid var(--color-border);
+  gap: var(--space-sm);
+}
+
+.btn--social:hover {
+  background-color: var(--color-bg-alt);
+}
+
+.btn--social__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Apple's icon is a single currentColor path (see socialAuthButtons.js)
+   — official Apple guidance renders it in the surrounding text colour,
+   unlike Google/Facebook's fixed brand-colour icons. */
+.btn--social-apple .btn--social__icon {
+  color: var(--color-text);
+}
+
+.social-auth-divider {
+  max-width: 480px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+  color: var(--color-text-light);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.social-auth-divider::before,
+.social-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border);
+}
+
+/* Version 7, Milestone 171F: cosmetic "already navigating away" state —
+   the actual double-submit prevention is structural (a real page
+   navigation, not a form POST — see socialAuthButtons.js's own header
+   comment), this just gives immediate visual feedback on click. */
+.btn--social.is-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.social-auth-error {
+  max-width: 480px;
+}
+
+/* ---- Connected Accounts (Version 7, Milestone 171F) ------------------
+   Small Account Settings panel — one row per provider, a Connect
+   button (reuses .btn--social above) or a Disconnect action. Never
+   displays a provider id/token — see socialAuth.controller.ts's
+   listConnectedAccountsHandler, which only ever returns booleans. */
+.connected-accounts {
+  max-width: 480px;
+  margin-block: var(--space-lg);
+}
+
+.connected-accounts__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.connected-accounts__row:last-child {
+  border-bottom: none;
+}
+
+.connected-accounts__provider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-weight: 600;
+}
+
 /* ==========================================================================
    Version 7, Milestone 150: homepage redesign components. General
    customer-journey/section-flow inspiration only from the Coco Wyo
