@@ -17,7 +17,14 @@
 
 import { env } from "../config/env.js";
 
-const FACEBOOK_GRAPH_VERSION = "v21.0";
+// Version 7, Milestone 171F.2: bumped from v21.0 to v25.0 ahead of
+// public activation — this is the one place the Graph API version is
+// configured for Facebook auth (dialog, token exchange, and profile
+// fetch all derive from it), a plain module constant rather than an
+// env var since it's a code-level API pin a developer bumps, not
+// something an owner configures per deployment. Exported so tests can
+// assert against it directly (see facebookOAuth.service.test.ts).
+export const FACEBOOK_GRAPH_VERSION = "v25.0";
 const FACEBOOK_DIALOG_URL = `https://www.facebook.com/${FACEBOOK_GRAPH_VERSION}/dialog/oauth`;
 const FACEBOOK_TOKEN_URL = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/oauth/access_token`;
 const FACEBOOK_PROFILE_URL = `https://graph.facebook.com/${FACEBOOK_GRAPH_VERSION}/me`;
