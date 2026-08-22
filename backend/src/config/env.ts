@@ -490,11 +490,50 @@ const applePrivateKey = appleRawPrivateKey?.includes("\\n") ? appleRawPrivateKey
 // URLS" in the milestone brief: the callback sets the same HttpOnly
 // customer_session cookie normal login already uses, then redirects
 // the browser on to the frontend with no token of any kind in the
-// URL). Reuses BACKEND_PUBLIC_URL — already required/optional exactly
-// this way for PayFast's return/cancel/notify URLs above, so this adds
-// no new operational variable for an owner who already has PayFast
-// configured.
-const oauthCallbackBaseUrl = backendPublicUrl;
+// URL).
+//
+// Version 7, Milestone 171F.1: does NOT simply reuse BACKEND_PUBLIC_URL
+// (as 171F originally did) — a real production test found Google's
+// authorization request carrying the pre-Milestone-133 legacy Render
+// hostname (seasonedz-ecommerce.onrender.com) as its redirect_uri,
+// which Google rejects outright (400 redirect_uri_mismatch) since it
+// no longer matches the registered production callback. Root cause:
+// BACKEND_PUBLIC_URL is a shared, general-purpose variable (also used
+// for PayFast's return/cancel/notify URLs above) whose value in Render
+// was apparently never updated when the API moved to
+// api.seasonedzgroup.co.za — nothing had validated it as strictly as an
+// OAuth provider's own redirect_uri whitelist does, so the staleness
+// went unnoticed. This mirrors utils/frontendUrl.ts's own established
+// preferredFrontendBaseUrl() defence (which skips a known-legacy
+// github.io origin rather than trusting FRONTEND_PRODUCTION_URL's first
+// entry blindly) — same class of problem, same fix shape, applied here
+// for the backend side. PayFast's own use of BACKEND_PUBLIC_URL above
+// is deliberately left untouched (out of this fix's scope) — a stale
+// PayFast return URL misbehaves silently rather than hard-failing, so
+// it is not addressed here.
+export const LEGACY_RENDER_BACKEND_HOST = "seasonedz-ecommerce.onrender.com";
+export const CANONICAL_PRODUCTION_BACKEND_URL = "https://api.seasonedzgroup.co.za";
+
+// Pure function (no module-level closures) so this is directly unit-
+// testable without needing to reload the env module under different
+// NODE_ENV values — see env.oauthCallbackBaseUrl.test.ts.
+export function resolveOAuthCallbackBaseUrl(params: { isProduction: boolean; rawBackendPublicUrl: string | undefined; port: string }): string {
+  if (!params.isProduction) {
+    // Development callback must remain http://localhost:<PORT> — never
+    // requires BACKEND_PUBLIC_URL to be set locally just to test OAuth.
+    return params.rawBackendPublicUrl || `http://localhost:${params.port}`;
+  }
+  if (params.rawBackendPublicUrl && !params.rawBackendPublicUrl.includes(LEGACY_RENDER_BACKEND_HOST)) {
+    return params.rawBackendPublicUrl;
+  }
+  return CANONICAL_PRODUCTION_BACKEND_URL;
+}
+
+const oauthCallbackBaseUrl = resolveOAuthCallbackBaseUrl({
+  isProduction: nodeEnvIsProduction,
+  rawBackendPublicUrl: backendPublicUrl,
+  port: getEnv("PORT", "5000"),
+});
 
 // A provider is only ever "ready" — i.e. GET /api/auth/providers ever
 // reports it true, and its start/callback routes ever do real work

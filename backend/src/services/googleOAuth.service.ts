@@ -55,8 +55,13 @@ async function getConfig(): Promise<client.Configuration> {
   return configPromise;
 }
 
+// Version 7, Milestone 171F.1: uses env.oauthCallbackBaseUrl, NOT
+// env.backendPublicUrl directly — see config/env.ts's own comment on
+// why (the shared BACKEND_PUBLIC_URL variable was found live carrying
+// a stale legacy Render hostname, which Google's strict redirect_uri
+// matching rejects outright).
 export function googleCallbackUrl(): string {
-  return `${env.backendPublicUrl}/api/auth/oauth/google/callback`;
+  return `${env.oauthCallbackBaseUrl}/api/auth/oauth/google/callback`;
 }
 
 export interface GoogleAuthorizationParams {

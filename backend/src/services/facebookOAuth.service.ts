@@ -33,8 +33,12 @@ export class FacebookOAuthError extends Error {
   }
 }
 
+// Version 7, Milestone 171F.1: uses env.oauthCallbackBaseUrl, NOT
+// env.backendPublicUrl directly — see config/env.ts and
+// googleOAuth.service.ts's own comment on why (same shared-variable
+// staleness bug affects every provider's callback equally).
 export function facebookCallbackUrl(): string {
-  return `${env.backendPublicUrl}/api/auth/oauth/facebook/callback`;
+  return `${env.oauthCallbackBaseUrl}/api/auth/oauth/facebook/callback`;
 }
 
 export interface FacebookAuthorizationParams {

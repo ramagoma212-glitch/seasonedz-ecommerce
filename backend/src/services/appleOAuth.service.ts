@@ -75,8 +75,11 @@ function generateAppleClientSecret(): string {
   );
 }
 
+// Version 7, Milestone 171F.1: uses env.oauthCallbackBaseUrl, NOT
+// env.backendPublicUrl directly — see config/env.ts and
+// googleOAuth.service.ts's own comment on why.
 export function appleCallbackUrl(): string {
-  return `${env.backendPublicUrl}/api/auth/oauth/apple/callback`;
+  return `${env.oauthCallbackBaseUrl}/api/auth/oauth/apple/callback`;
 }
 
 export interface AppleAuthorizationParams {
