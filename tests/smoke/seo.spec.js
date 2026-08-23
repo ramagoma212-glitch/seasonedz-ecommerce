@@ -137,3 +137,115 @@ test.describe("SEO smoke checks", () => {
     expect(product).not.toHaveProperty("review");
   });
 });
+
+// Version 7, Milestone 171G: the target Google branded search
+// appearance — exact homepage title/description/Open Graph/structured
+// data, matching what's ultimately requested from Google (see the
+// milestone's own final report — this is a target, never a guarantee
+// of what Google will actually display). Checked against the LIVE
+// rendered page (post-JS), not just the static HTML source, since
+// that's what a JS-executing crawler like Googlebot actually sees —
+// this exact distinction is what this milestone's audit found broken
+// (js/router.js's home route was overwriting index.html's own title
+// with a generic "Home | Seasonedz Group" on every render).
+test.describe("Google branded search appearance (Milestone 171G)", () => {
+  const HOMEPAGE_TITLE = "Seasonedz Group | Colouring Books & Creative Products";
+  const HOMEPAGE_DESCRIPTION =
+    "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.";
+
+  test("homepage title is exactly the target branded title, and there is exactly one <title>", async ({ page }) => {
+    await page.goto("/");
+    await expect(page).toHaveTitle(HOMEPAGE_TITLE);
+    expect(await page.locator("title").count()).toBe(1);
+  });
+
+  test("homepage meta description is exactly the target text, and there is exactly one description tag", async ({ page }) => {
+    await page.goto("/");
+    const descriptionTags = page.locator('meta[name="description"]');
+    await expect(descriptionTags).toHaveCount(1);
+    await expect(descriptionTags).toHaveAttribute("content", HOMEPAGE_DESCRIPTION);
+  });
+
+  test("homepage canonical is exactly https://www.seasonedzgroup.co.za/, and there is exactly one canonical tag", async ({ page }) => {
+    await page.goto("/");
+    const canonicalTags = page.locator('link[rel="canonical"]');
+    await expect(canonicalTags).toHaveCount(1);
+    await expect(canonicalTags).toHaveAttribute("href", `${SITE_URL}/`);
+  });
+
+  test("homepage Open Graph metadata matches the target branded appearance exactly", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute("content", "Seasonedz Group");
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", HOMEPAGE_TITLE);
+    await expect(page.locator('meta[property="og:description"]')).toHaveAttribute("content", HOMEPAGE_DESCRIPTION);
+    await expect(page.locator('meta[property="og:url"]')).toHaveAttribute("content", `${SITE_URL}/`);
+    await expect(page.locator('meta[property="og:type"]')).toHaveAttribute("content", "website");
+  });
+
+  test("homepage Twitter/X metadata mirrors the same title/description", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('meta[name="twitter:title"]')).toHaveAttribute("content", HOMEPAGE_TITLE);
+    await expect(page.locator('meta[name="twitter:description"]')).toHaveAttribute("content", HOMEPAGE_DESCRIPTION);
+  });
+
+  test("homepage structured data: exactly one WebSite and one Organization block, both correctly identifying Seasonedz Group, no fake ratings", async ({ page }) => {
+    await page.goto("/");
+    const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+
+    const parsed = scripts.map((raw) => JSON.parse(raw));
+    const websiteBlocks = parsed.filter((entry) => entry["@type"] === "WebSite");
+    const organizationBlocks = parsed.filter((entry) => entry["@type"] === "Organization");
+
+    expect(websiteBlocks).toHaveLength(1);
+    expect(organizationBlocks).toHaveLength(1);
+
+    const website = websiteBlocks[0];
+    expect(website.name).toBe("Seasonedz Group");
+    expect(website.url).toBe(`${SITE_URL}/`);
+
+    const organization = organizationBlocks[0];
+    expect(organization.name).toBe("Seasonedz Group");
+    expect(organization.url).toBe(`${SITE_URL}/`);
+
+    // No fake review/rating SEO — see productReviews.js's own genuine-
+    // reviews-only discipline; this applies equally to site-wide
+    // Organization/WebSite structured data.
+    for (const entity of [website, organization]) {
+      expect(entity).not.toHaveProperty("aggregateRating");
+      expect(entity).not.toHaveProperty("review");
+      expect(entity).not.toHaveProperty("ratingValue");
+      expect(entity).not.toHaveProperty("reviewCount");
+    }
+  });
+
+  test("no stale seasonedzgroup.com or github.io references anywhere in the homepage's rendered HTML", async ({ page }) => {
+    await page.goto("/");
+    const html = await page.content();
+    expect(html).not.toContain("seasonedzgroup.com");
+    expect(html).not.toContain("github.io");
+  });
+
+  test("favicon references exist and the actual asset returns 200", async ({ page, request, baseURL }) => {
+    await page.goto("/");
+    const iconLink = page.locator('link[rel="icon"][sizes="any"]');
+    await expect(iconLink).toHaveAttribute("href", "/favicon.ico");
+    const svgIconLink = page.locator('link[rel="icon"][type="image/svg+xml"]');
+    await expect(svgIconLink).toHaveAttribute("href", "/favicon.svg");
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/apple-touch-icon.png");
+
+    const faviconResponse = await request.get(`${baseURL}/favicon.ico`);
+    expect(faviconResponse.status()).toBe(200);
+    const svgResponse = await request.get(`${baseURL}/favicon.svg`);
+    expect(svgResponse.status()).toBe(200);
+  });
+
+  test("product and category pages keep their own unique titles — the homepage title never leaks onto other pages", async ({ page }) => {
+    await page.goto(`/product/${PRODUCT_SLUG}`);
+    await expect(page).not.toHaveTitle(HOMEPAGE_TITLE);
+    await expect(page).toHaveTitle(/Seasonedz Group$/);
+
+    await page.goto("/shop");
+    await expect(page).not.toHaveTitle(HOMEPAGE_TITLE);
+    await expect(page).toHaveTitle("Shop | Seasonedz Group");
+  });
+});

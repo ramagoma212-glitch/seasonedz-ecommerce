@@ -107,7 +107,20 @@ import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRed
 // unaffected — most routes render synchronously already and have
 // nothing to reserve space for.
 const routeDefs = [
-  { pattern: "/", render: renderHome, title: "Home", skeleton: "home" },
+  // Version 7, Milestone 171G: fullTitle/description bring the LIVE
+  // rendered homepage <title>/meta description in line with the target
+  // Google branded search appearance — see js/seo.js's own comment on
+  // why the plain `title` field alone (used by every other route)
+  // wasn't enough for the homepage specifically.
+  {
+    pattern: "/",
+    render: renderHome,
+    title: "Home",
+    fullTitle: "Seasonedz Group | Colouring Books & Creative Products",
+    description:
+      "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.",
+    skeleton: "home",
+  },
   {
     pattern: "/shop",
     render: renderShop,
@@ -292,6 +305,7 @@ function matchRoute(path) {
       return {
         render: route.render,
         title: route.title,
+        fullTitle: route.fullTitle,
         description: route.description,
         noindex: route.noindex,
         skeleton: route.skeleton,
@@ -324,6 +338,7 @@ async function renderCurrentRoute() {
   clearPageStructuredData();
   setPageMeta({
     title: matched ? matched.title : "Page Not Found",
+    fullTitle: matched?.fullTitle,
     description: matched?.description,
     // An unmatched path (typo, stale/removed link, or straight-up not
     // a real page) is noindexed too, same as any other error state —

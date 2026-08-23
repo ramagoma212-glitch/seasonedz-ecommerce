@@ -10,9 +10,12 @@
 // setPageStructuredData(), once it knows more — overriding the
 // router's generic default with something more specific.
 
-// Kept identical to index.html's own static <meta name="description">
-// tag, so the very first paint (before any JS runs) and every
-// subsequent SPA navigation without a more specific description agree.
+// Generic fallback for any route with no `description` of its own
+// (e.g. policy pages, blog posts). Version 7, Milestone 171G: the
+// homepage now has its own explicit description (see router.js's home
+// route) matching index.html's static tag exactly, so it never falls
+// through to this generic text any more — this constant's own wording
+// is otherwise untouched, unaffected routes keep exactly what they had.
 const DEFAULT_DESCRIPTION =
   "Educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons for parents, teachers, schools and churches.";
 
@@ -87,8 +90,25 @@ function buildCanonicalUrl() {
 // next public page the visitor navigates to, the same staleness
 // problem clearPageStructuredData() already exists to avoid for
 // structured data.
-export function setPageMeta({ title, description, noindex = false } = {}) {
-  if (title) document.title = `${title} | Seasonedz Group`;
+//
+// Version 7, Milestone 171G: `fullTitle`, used only by the home route
+// (see router.js), is set verbatim instead of going through the
+// `${title} | Seasonedz Group` suffix every other route uses — a
+// homepage's own title is conventionally "Brand | tagline" (site name
+// FIRST), the opposite order from an interior page's "Page | Brand".
+// Fixes a real gap this milestone's audit found: without this, the
+// router's own unconditional setPageMeta() call on every render
+// (including the very first one, before any user interaction) was
+// overwriting index.html's own carefully-set static <title> with a
+// generic "Home | Seasonedz Group" the instant the SPA's JS ran —
+// which is what a JS-executing crawler like Googlebot actually sees,
+// not the pre-JS static HTML.
+export function setPageMeta({ title, fullTitle, description, noindex = false } = {}) {
+  if (fullTitle) {
+    document.title = fullTitle;
+  } else if (title) {
+    document.title = `${title} | Seasonedz Group`;
+  }
   getOrCreateDescriptionTag().setAttribute("content", description || DEFAULT_DESCRIPTION);
   getOrCreateRobotsTag().setAttribute("content", noindex ? "noindex, nofollow" : "index, follow");
   getOrCreateCanonicalTag().setAttribute("href", buildCanonicalUrl());
