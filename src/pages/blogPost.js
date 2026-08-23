@@ -1,8 +1,22 @@
 // Single blog post page. Loads a post by the :slug route param
 // supplied by router.js, same pattern as productDetails.js.
+//
+// Version 7, Milestone 171I: this audit found every blog post's LIVE
+// rendered title/description was the router's own generic "Blog |
+// Seasonedz Group" fallback (router.js's /blog/:slug entry has no
+// per-post data to give it — it can't, the slug isn't known until this
+// page itself resolves it) — meaning a post genuinely written to rank
+// for a real search (e.g. "Bible colouring books in Sunday school")
+// could never actually show that as its title to a JS-executing
+// crawler. Fixed the same way productDetails.js already does for
+// products: once the real post is known, override the router's
+// generic default with the post's own title/description, and add
+// BlogPosting structured data — every field here comes straight from
+// the post's own existing data, nothing invented.
 
 import { blogPosts } from "../data/blogPosts.js";
 import { renderBlogCard } from "../components/blogCard.js";
+import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 
 function formatBlogDate(dateString) {
   return new Date(dateString).toLocaleDateString("en-ZA", {
@@ -51,11 +65,28 @@ function renderRelatedPosts(post) {
   `;
 }
 
+function buildBlogPostingStructuredData(post) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.excerpt,
+    image: new URL(post.image, window.location.origin).href,
+    datePublished: post.date,
+    url: window.location.href,
+    author: { "@type": "Organization", name: "Seasonedz Group" },
+    publisher: { "@type": "Organization", name: "Seasonedz Group" },
+  };
+}
+
 export function renderBlogPost({ slug } = {}) {
   if (!slug) return renderNoPostSelected();
 
   const post = blogPosts.find((item) => item.slug === slug);
   if (!post) return renderPostNotFound();
+
+  setPageMeta({ title: post.title, description: post.excerpt });
+  setPageStructuredData(buildBlogPostingStructuredData(post));
 
   return `
     <section class="container blog-post">
@@ -75,7 +106,7 @@ export function renderBlogPost({ slug } = {}) {
       <div class="info-page__cta">
         <h2>Ready to Explore Our Range?</h2>
         <p>Browse our colouring books, markers and crayons in the shop.</p>
-        <a class="btn btn--primary" href="/shop">Shop Now</a>
+        <a class="btn btn--primary" href="${post.relatedLink?.href || "/shop"}">${post.relatedLink?.label || "Shop Now"}</a>
       </div>
 
       ${renderRelatedPosts(post)}

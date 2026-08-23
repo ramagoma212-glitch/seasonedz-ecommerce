@@ -17,10 +17,11 @@ export function renderSchools() {
         <h2>Built for the Classroom</h2>
         <p>
           Our colouring books are designed with learning in mind, from
-          alphabet and fun fact books for young learners to Bible colouring
-          books for Sunday school, church groups and faith based
-          activities. They're an easy way to bring a calm, creative
-          activity into a busy day.
+          alphabet and fun fact books for young learners to
+          <a href="/category/bible-colouring-books">Bible colouring books</a>
+          for Sunday school, church groups and faith based activities.
+          They're an easy way to bring a calm, creative activity into a
+          busy day.
         </p>
 
         <h2>Bulk Orders for Schools</h2>
@@ -34,10 +35,11 @@ export function renderSchools() {
 
         <h2>Ready-Made School Packs</h2>
         <p>
-          Our School Starter Colouring Pack bundles our most popular
-          colouring books with crayons, ready to hand out to a class. It's
-          a simple starting point for classroom use, take a look on our
-          <a href="/shop?category=schools-and-wholesale">Shop page</a>.
+          Our <a href="/product/school-starter-colouring-pack">School Starter Colouring Pack</a>
+          bundles our most popular colouring books with crayons, ready to
+          hand out to a class. It's a simple starting point for classroom
+          use — or browse our full range of
+          <a href="/category/bundles">colouring book and marker bundles</a>.
         </p>
 
         <h2>Who We Work With</h2>

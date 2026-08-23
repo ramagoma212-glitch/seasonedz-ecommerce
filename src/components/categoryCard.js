@@ -1,6 +1,10 @@
 // Reusable category card. Used on the homepage and the categories page.
-// Links straight into the shop page, pre-filtered to this category via
-// the existing hash-route query string (?category=<slug>).
+// Links to this category's own real page — Version 7, Milestone 171I:
+// changed from a "/shop?category=<slug>" query-filtered link to the
+// new path-based "/category/<slug>" route (see categoryPage.js), which
+// self-canonicalises correctly and gets its own static/sitemap entry;
+// the old query-string form still works, this is just the stronger
+// primary link now.
 
 import { getCardImageUrl } from "../js/imageTransforms.js";
 
@@ -8,7 +12,7 @@ import { getCardImageUrl } from "../js/imageTransforms.js";
 // eager/width/height reasoning — same pattern here.
 export function renderCategoryCard(category, { eager = false } = {}) {
   return `
-    <a class="card category-card" href="/shop?category=${category.slug}">
+    <a class="card category-card" href="/category/${category.slug}">
       <img
         class="card__image"
         src="${getCardImageUrl(category.image)}"

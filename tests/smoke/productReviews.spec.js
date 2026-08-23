@@ -71,6 +71,12 @@ test.describe("Genuine public product reviews (Milestone 171C, Part J)", () => {
 
   test("Product JSON-LD omits aggregateRating entirely when there are zero approved reviews", async ({ page }) => {
     await page.goto(`/product/${PRODUCT_SLUG}`);
+    // Version 7, Milestone 171I: renderProductDetails() is async (awaits
+    // getCatalog() before ever calling setPageStructuredData()) — a bare
+    // page.evaluate() right after goto() can race that render on a
+    // loaded system, unlike locator-based assertions which auto-wait.
+    // Waiting for real visible product content first removes the race.
+    await page.locator(".product-details__stock").waitFor();
     const jsonLd = await page.evaluate(() => {
       // The per-route Product/WebSite JSON-LD (js/seo.js's
       // setPageStructuredData()) has its own id, separate from

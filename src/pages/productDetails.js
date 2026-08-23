@@ -62,6 +62,33 @@ function schemaAvailability(stockStatus) {
   return "https://schema.org/InStock";
 }
 
+// Version 7, Milestone 171I: real Home > Category > Product hierarchy,
+// now that /category/:slug pages genuinely exist (see categoryPage.js)
+// — never fabricated, this mirrors exactly the same category link the
+// visible breadcrumb nav below uses. Returned as a plain array (not
+// full JSON-LD) so it can back both the visible breadcrumb and
+// buildBreadcrumbStructuredData() from one source of truth.
+function buildBreadcrumbTrail(product) {
+  return [
+    { name: "Home", url: "/" },
+    { name: product.category, url: `/category/${product.categorySlug}` },
+    { name: product.name, url: `/product/${product.slug}` },
+  ];
+}
+
+function buildBreadcrumbStructuredData(trail) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map((crumb, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: crumb.name,
+      item: new URL(crumb.url, window.location.origin).href,
+    })),
+  };
+}
+
 function buildProductStructuredData(product) {
   return {
     "@context": "https://schema.org",
@@ -69,7 +96,16 @@ function buildProductStructuredData(product) {
     name: product.name,
     description: product.shortDescription,
     image: new URL(product.image, window.location.origin).href,
+    url: window.location.href,
     category: product.category,
+    brand: { "@type": "Brand", name: "Seasonedz Group" },
+    // Version 7, Milestone 171I: only when the admin has genuinely set
+    // one — never invented (see mappers.js). Seasonedz is itself the
+    // seller/manufacturer of these products, so its own SKU is used as
+    // both sku and mpn, same reasoning as the Merchant Center feed
+    // (scripts/generate-static-routes.mjs) — not a fabricated
+    // identifier, and no gtin/isbn is ever added since none exists.
+    ...(product.sku ? { sku: product.sku, mpn: product.sku } : {}),
     offers: {
       "@type": "Offer",
       priceCurrency: "ZAR",
@@ -336,7 +372,8 @@ export async function renderProductDetails({ slug } = {}) {
   if (!product) return renderNotFound();
 
   setPageMeta({ title: product.name, description: product.shortDescription });
-  setPageStructuredData(buildProductStructuredData(product));
+  const breadcrumbTrail = buildBreadcrumbTrail(product);
+  setPageStructuredData([buildProductStructuredData(product), buildBreadcrumbStructuredData(breadcrumbTrail)]);
 
   const reviewData = await getProductReviews(product.slug);
 
@@ -346,7 +383,15 @@ export async function renderProductDetails({ slug } = {}) {
 
   return `
     <section class="container product-details">
-      <a class="product-details__back" href="/shop">&larr; Back to Shop</a>
+      <nav class="product-details__breadcrumb" aria-label="Breadcrumb">
+        ${breadcrumbTrail
+          .map((crumb, index) =>
+            index === breadcrumbTrail.length - 1
+              ? `<span aria-current="page">${escapeHtml(crumb.name)}</span>`
+              : `<a href="${crumb.url}">${escapeHtml(crumb.name)}</a><span aria-hidden="true"> / </span>`
+          )
+          .join("")}
+      </nav>
 
       <div class="product-details__layout">
         ${renderGallery(product)}

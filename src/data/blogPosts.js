@@ -2,6 +2,15 @@
 // listing cards and a `content` array of paragraphs for the full post
 // page — kept as plain paragraph strings (not HTML) so rendering stays
 // simple and safe.
+//
+// Version 7, Milestone 171I: `relatedLink` — each post already
+// naturally discusses one real product family (e.g. post-1 mentions
+// the ABC Colouring Book by name in its own text); this is the one
+// genuinely relevant category/page a reader would want next, used by
+// blogPost.js's own bottom CTA instead of a generic "/shop" link —
+// real internal linking from content to commerce (Blog -> Category),
+// per the milestone brief, without needing to turn plain-text content
+// paragraphs into HTML just to add inline links.
 
 import { withBase } from "../js/paths.js";
 
@@ -14,6 +23,7 @@ export const blogPosts = [
     excerpt: "Discover how colouring activities build fine motor skills and focus.",
     image: "/images/product-1.jpg",
     date: "2026-01-15",
+    relatedLink: { href: "/category/kids-colouring-books", label: "Shop Kids & Educational Colouring Books" },
     content: [
       "Colouring is often seen as simple play, but it does a lot of quiet work in the background. For young children, holding a crayon or marker and staying inside the lines builds the fine motor control they'll later use for writing.",
       "Colouring books that pair pictures with letters, numbers or fun facts also give children a gentle way to absorb new information without it feeling like a lesson. That's the idea behind our ABC Colouring Book for Kids with Fun Facts — each page combines a letter, an illustration and a bite-sized fact.",
@@ -29,6 +39,7 @@ export const blogPosts = [
     excerpt: "Practical tips for teachers integrating colouring into scripture lessons.",
     image: "/images/product-2.jpg",
     date: "2026-02-02",
+    relatedLink: { href: "/category/bible-colouring-books", label: "Shop Bible Colouring Books" },
     content: [
       "Sunday school teachers know that keeping young minds engaged with scripture takes creativity. Colouring pages are a simple, low-prep way to reinforce a Bible story after it's been told.",
       "Our Little Hands Big Faith series pairs simple, warm illustrations with well-loved Old and New Testament stories, giving children something to take home that reminds them of what they learned.",
@@ -44,6 +55,7 @@ export const blogPosts = [
     excerpt: "Why intricate colouring patterns have become a popular way for adults to unwind.",
     image: "/images/product-3.jpg",
     date: "2026-03-10",
+    relatedLink: { href: "/category/mindfulness-colouring", label: "Shop Mindfulness Colouring Books" },
     content: [
       "Mindfulness colouring books have grown in popularity as a screen-free way to slow down. The repetitive, focused nature of filling in intricate patterns gives your mind something gentle to settle on.",
       "Unlike a blank page, a printed pattern removes the pressure to 'be creative' — you simply choose colours and fill in shapes at your own pace. Many people find this genuinely relaxing after a long day.",
@@ -59,6 +71,7 @@ export const blogPosts = [
     excerpt: "Simple ways teachers can use colouring activities to support classroom learning.",
     image: "/images/product-6.jpg",
     date: "2026-04-05",
+    relatedLink: { href: "/schools", label: "See Schools & Churches Bulk Packs" },
     content: [
       "Creative activities like colouring give children a break from structured tasks while still keeping them engaged and calm — useful for transitions between lessons or as an early-finisher activity.",
       "Classroom colouring packs, like our School Starter Colouring Pack, are designed to make this easy: a set of colouring books and crayons ready to hand out without extra prep.",
@@ -74,6 +87,7 @@ export const blogPosts = [
     excerpt: "A few things to consider when picking colouring supplies for young children.",
     image: "/images/product-4.jpg",
     date: "2026-05-18",
+    relatedLink: { href: "/category/markers-and-crayons", label: "Shop Markers & Crayons" },
     content: [
       "Not all colouring supplies are created equal, especially for younger children. Chunky, twist-up crayons like our Rotating Wax Crayons are easier for little hands to grip and don't need sharpening.",
       "For older children who want bolder colour, acrylic markers offer vibrant, richly pigmented lines — our 24-colour set includes both fine and broad tips for different styles of colouring.",

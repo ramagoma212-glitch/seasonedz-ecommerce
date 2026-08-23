@@ -17,7 +17,9 @@ import { withBase } from "../js/paths.js";
 //  - "Colouring Books" has no single matching category (there are
 //    three: Kids/Bible/Mindfulness) — links to /shop.
 //  - "Creative Supplies" maps to the real "Markers and Crayons"
-//    category (closest existing match).
+//    category (closest existing match) — Version 7, Milestone 171I:
+//    now its own real page at /category/markers-and-crayons rather
+//    than a "/shop?category=" query filter, see categoryPage.js.
 //  - "Digital Downloads" has no route at all yet (no digital product
 //    records exist — see pages/home.js's Digital Colouring Books
 //    section) — links to /shop.
@@ -43,7 +45,7 @@ const NAV_LINKS = [
   { href: "/", label: "Home", inMore: false },
   { href: "/shop", label: "Shop", inMore: false },
   { href: "/shop", label: "Colouring Books", inMore: true },
-  { href: "/shop?category=markers-and-crayons", label: "Creative Supplies", inMore: true },
+  { href: "/category/markers-and-crayons", label: "Creative Supplies", inMore: true },
   { href: "/shop", label: "Digital Downloads", inMore: false },
   { href: "/schools", label: "Schools & Churches", inMore: true },
   { href: "/about", label: "About", inMore: true },

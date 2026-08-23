@@ -66,7 +66,9 @@ const SITE_URL = "https://www.seasonedzgroup.co.za";
 // own same-site custom domain) to the current canonical API host, for
 // consistency with every other reference to the API in this repo.
 const PRODUCTS_API_URL = "https://api.seasonedzgroup.co.za/api/products?limit=100";
+const CATEGORIES_API_URL = "https://api.seasonedzgroup.co.za/api/categories";
 const PRODUCTS_FALLBACK_FILE = join(ROOT, "src/data/products.js");
+const CATEGORIES_FALLBACK_FILE = join(ROOT, "src/data/categories.js");
 const BLOG_POSTS_FILE = join(ROOT, "src/data/blogPosts.js");
 
 function extractSlugs(filePath) {
@@ -89,6 +91,35 @@ async function getProductSlugs() {
   } catch (error) {
     console.warn(`[generate-static-routes] Live products API unavailable (${error.message}) — falling back to local product data.`);
     return { slugs: extractSlugs(PRODUCTS_FALLBACK_FILE), source: "local fallback data" };
+  }
+}
+
+// Version 7, Milestone 171I: real, path-based /category/:slug pages —
+// see src/pages/categoryPage.js's own header comment for why these
+// exist. Only categories with at least one real product get a static
+// file/sitemap entry here — an empty category page is thin/duplicate-
+// looking content with nothing for a visitor or Googlebot to find
+// (confirmed live: "Schools and Wholesale" currently has zero
+// products), so it's deliberately excluded rather than generating a
+// page that would just show "No products found."
+async function getIndexableCategorySlugs() {
+  try {
+    const response = await fetch(CATEGORIES_API_URL);
+    if (!response.ok) throw new Error(`API responded with ${response.status}`);
+    const json = await response.json();
+    const slugs = (json?.data?.categories || []).filter((c) => c.productCount > 0).map((c) => c.slug).filter(Boolean);
+    if (slugs.length === 0) throw new Error("API returned zero categories with products");
+    return { slugs, source: "live API" };
+  } catch (error) {
+    console.warn(`[generate-static-routes] Live categories API unavailable (${error.message}) — falling back to local category/product data.`);
+    // Fallback: cross-reference the two local static data files —
+    // any category slug that appears as at least one product's own
+    // categorySlug has a product, the same rule as the live API's
+    // productCount > 0 above.
+    const categorySlugs = extractSlugs(CATEGORIES_FALLBACK_FILE);
+    const productsText = readFileSync(PRODUCTS_FALLBACK_FILE, "utf8");
+    const productCategorySlugs = new Set([...productsText.matchAll(/categorySlug:\s*"([^"]+)"/g)].map((m) => m[1]));
+    return { slugs: categorySlugs.filter((slug) => productCategorySlugs.has(slug)), source: "local fallback data" };
   }
 }
 
@@ -149,6 +180,97 @@ function buildSitemapXml(urlPaths) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlEntries}\n</urlset>\n`;
 }
 
+// Version 7, Milestone 171I: Google Merchant Center product feed —
+// standard RSS 2.0 + the "g:" Google Shopping namespace, the plain,
+// well-documented feed format Merchant Center's "Scheduled fetch" can
+// pull directly from a URL, deliberately chosen over building a custom
+// API integration (the milestone brief's own "do not create a
+// complicated API integration unless necessary"). Written to dist/ as
+// a build artifact alongside sitemap.xml — no new runtime dependency,
+// no third-party feed library.
+//
+// Only ever built from the LIVE product API, never the static fallback
+// data — a Merchant Center feed makes real availability/price claims
+// to Google, so it must reflect the actual current catalogue or not be
+// generated at all for that build (see getProductsForFeed() below).
+//
+// Deliberately does NOT include g:mpn/g:gtin as invented values —
+// Seasonedz's own SKU (when the admin has set one) is used as the mpn,
+// since Seasonedz is itself the manufacturer of these products (a
+// small business's own SKU is a legitimate MPN in exactly this
+// situation, not a fabricated identifier) and identifier_exists is set
+// to "no" only when no SKU exists, per Google's own documented support
+// for genuinely identifier-less small-business listings — never a
+// made-up GTIN/ISBN. g:google_product_category is deliberately omitted
+// — Google's own taxonomy IDs aren't something to guess at without the
+// real reference list to hand; product_type (Seasonedz's own real
+// category name) is a safe, accurate substitute Google also supports.
+function escapeXml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildMerchantFeedXml(products) {
+  const items = products
+    .map((product) => {
+      const availability = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
+      const link = `${SITE_URL}/product/${product.slug}/`;
+      const priceValue = Number(product.price).toFixed(2);
+
+      return [
+        "  <item>",
+        `    <g:id>${escapeXml(product.slug)}</g:id>`,
+        `    <title>${escapeXml(product.name)}</title>`,
+        `    <description>${escapeXml(product.shortDescription || product.name)}</description>`,
+        `    <link>${escapeXml(link)}</link>`,
+        `    <g:image_link>${escapeXml(product.image)}</g:image_link>`,
+        `    <g:availability>${availability}</g:availability>`,
+        `    <g:price>${priceValue} ZAR</g:price>`,
+        "    <g:brand>Seasonedz Group</g:brand>",
+        "    <g:condition>new</g:condition>",
+        product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
+        product.sku ? `    <g:mpn>${escapeXml(product.sku)}</g:mpn>` : "    <g:identifier_exists>no</g:identifier_exists>",
+      ]
+        .filter(Boolean)
+        .join("\n") + "\n  </item>";
+    })
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+<channel>
+  <title>Seasonedz Group Products</title>
+  <link>${SITE_URL}/</link>
+  <description>Seasonedz Group product feed for Google Merchant Center free listings.</description>
+${items}
+</channel>
+</rss>
+`;
+}
+
+// Live-API-only, on purpose — see this function's own header comment
+// above buildMerchantFeedXml(). An unreachable API means no feed file
+// is written for this build at all, rather than one built from
+// possibly-stale local fallback data making real price/availability
+// claims to Google.
+async function getProductsForFeed() {
+  try {
+    const response = await fetch(PRODUCTS_API_URL);
+    if (!response.ok) throw new Error(`API responded with ${response.status}`);
+    const json = await response.json();
+    const products = json?.data?.products || [];
+    if (products.length === 0) throw new Error("API returned zero products");
+    return products;
+  } catch (error) {
+    console.warn(`[generate-static-routes] Live products API unavailable (${error.message}) — Merchant Center feed not generated for this build.`);
+    return null;
+  }
+}
+
 async function main() {
   if (!existsSync(INDEX_HTML_PATH)) {
     console.error("[generate-static-routes] dist/index.html not found — run `npm run build` first.");
@@ -167,6 +289,12 @@ async function main() {
   }
   console.log(`[generate-static-routes] Generated ${productSlugs.length} product route(s) from ${source}.`);
 
+  const { slugs: categorySlugs, source: categorySource } = await getIndexableCategorySlugs();
+  for (const slug of categorySlugs) {
+    writeRouteFile(`/category/${slug}`, shellHtml);
+  }
+  console.log(`[generate-static-routes] Generated ${categorySlugs.length} category route(s) from ${categorySource}.`);
+
   const blogSlugs = getBlogSlugsSafely();
   if (blogSlugs) {
     for (const slug of blogSlugs) {
@@ -177,17 +305,24 @@ async function main() {
     console.log("[generate-static-routes] Blog post route generation deferred — slugs not safely available.");
   }
 
-  const total = PUBLIC_STATIC_ROUTES.length + productSlugs.length + (blogSlugs ? blogSlugs.length : 0);
+  const total = PUBLIC_STATIC_ROUTES.length + productSlugs.length + categorySlugs.length + (blogSlugs ? blogSlugs.length : 0);
   console.log(`[generate-static-routes] Done. ${total} static route file(s) written to dist/.`);
 
   const sitemapPaths = [
     "/",
     ...PUBLIC_STATIC_ROUTES,
+    ...categorySlugs.map((slug) => `/category/${slug}`),
     ...productSlugs.map((slug) => `/product/${slug}`),
     ...(blogSlugs ? blogSlugs.map((slug) => `/blog/${slug}`) : []),
   ];
   writeFileSync(join(DIST, "sitemap.xml"), buildSitemapXml(sitemapPaths));
   console.log(`[generate-static-routes] Generated sitemap.xml with ${sitemapPaths.length} URL(s).`);
+
+  const feedProducts = await getProductsForFeed();
+  if (feedProducts) {
+    writeFileSync(join(DIST, "google-merchant-feed.xml"), buildMerchantFeedXml(feedProducts));
+    console.log(`[generate-static-routes] Generated google-merchant-feed.xml with ${feedProducts.length} product(s).`);
+  }
 }
 
 main();

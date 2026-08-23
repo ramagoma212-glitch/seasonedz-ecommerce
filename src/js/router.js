@@ -58,6 +58,7 @@ import {
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
 import { renderCategories } from "../pages/categories.js";
+import { renderCategoryPage } from "../pages/categoryPage.js";
 import { renderProductDetails } from "../pages/productDetails.js";
 import { renderSearchResults } from "../pages/searchResults.js";
 import { renderCartPage } from "../pages/cartPage.js";
@@ -126,6 +127,20 @@ const routeDefs = [
     render: renderShop,
     title: "Shop",
     description: "Browse educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons from Seasonedz Group.",
+    skeleton: "product-grid",
+  },
+  // Version 7, Milestone 171I: real, path-based category landing pages
+  // — see categoryPage.js's own header comment for why this exists
+  // (fixes a canonical-tag bug that undermined every category's own
+  // ability to rank independently). "Category" here is just the
+  // router-level fallback shown for the instant before data loads —
+  // renderCategoryPage()'s reused shop.js logic immediately overrides
+  // it with the real category name once the catalogue resolves, same
+  // pattern as /product/:slug below.
+  {
+    pattern: "/category/:slug",
+    render: renderCategoryPage,
+    title: "Category",
     skeleton: "product-grid",
   },
   {

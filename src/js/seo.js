@@ -114,21 +114,38 @@ export function setPageMeta({ title, fullTitle, description, noindex = false } =
   getOrCreateCanonicalTag().setAttribute("href", buildCanonicalUrl());
 }
 
-// One JSON-LD block per page, replacing whatever the previous page set
-// (never accumulating) — see clearPageStructuredData(), which
+// One or more JSON-LD blocks per page, replacing whatever the previous
+// page set (never accumulating) — see clearPageStructuredData(), which
 // router.js calls on every navigation before a page has a chance to
 // set its own, so a page that doesn't call this never inherits stale
 // structured data from whatever the customer viewed before it.
+//
+// Version 7, Milestone 171I: `data` may be a single object (unchanged
+// behaviour, every pre-existing call site) or an array — used by
+// productDetails.js to emit its Product block and a BreadcrumbList
+// block as two separate <script> tags (each staying its own top-level
+// entity, e.g. `"@type": "Product"`, rather than nesting both inside
+// one `@graph` array) — the existing Product JSON-LD SEO test already
+// looks for a script whose top-level @type is "Product", so keeping
+// them separate avoids quietly breaking that check.
 export function setPageStructuredData(data) {
   clearPageStructuredData();
   if (!data) return;
-  const script = document.createElement("script");
-  script.type = "application/ld+json";
-  script.id = STRUCTURED_DATA_ID;
-  script.textContent = JSON.stringify(data);
-  document.head.appendChild(script);
+  const blocks = Array.isArray(data) ? data.filter(Boolean) : [data];
+  blocks.forEach((block, index) => {
+    const script = document.createElement("script");
+    script.type = "application/ld+json";
+    script.id = index === 0 ? STRUCTURED_DATA_ID : `${STRUCTURED_DATA_ID}-${index}`;
+    script.textContent = JSON.stringify(block);
+    document.head.appendChild(script);
+  });
 }
 
 export function clearPageStructuredData() {
   document.getElementById(STRUCTURED_DATA_ID)?.remove();
+  // Version 7, Milestone 171I: also removes any additional blocks a
+  // multi-block setPageStructuredData() call added (see its own
+  // comment) — a `[id^="..."]` attribute-prefix selector, since the ids
+  // are only known at the point they were created, not here.
+  document.querySelectorAll(`[id^="${STRUCTURED_DATA_ID}-"]`).forEach((el) => el.remove());
 }

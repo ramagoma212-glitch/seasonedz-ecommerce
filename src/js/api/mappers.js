@@ -18,6 +18,11 @@ export function mapApiProductToFrontendShape(apiProduct) {
     id: apiProduct.slug,
     slug: apiProduct.slug,
     name: apiProduct.name,
+    // Version 7, Milestone 171I: only ever real admin-set data — never
+    // fabricated when absent (see productDetails.js's buildProductStructuredData()
+    // and scripts/generate-static-routes.mjs's Merchant Center feed,
+    // both of which only add a sku/mpn field when this is truthy).
+    sku: apiProduct.sku || null,
     category: apiProduct.category?.name ?? "",
     categorySlug: apiProduct.category?.slug ?? "",
     price: apiProduct.price,

@@ -164,6 +164,29 @@
   margin-bottom: var(--space-xl);
 }
 
+/* Version 7, Milestone 171I: Home > Category breadcrumb, shown only on
+   a real /category/:slug page — see shop.js. Same visual treatment as
+   productDetails.js's own breadcrumb one level deeper. */
+.shop-page__breadcrumb {
+  display: block;
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.shop-page__breadcrumb a {
+  color: var(--color-secondary);
+}
+
+.shop-page__breadcrumb a:hover {
+  color: var(--color-primary);
+}
+
+.shop-page__breadcrumb [aria-current="page"] {
+  color: var(--color-text-light);
+  font-weight: 400;
+}
+
 .shop-layout {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -209,15 +232,29 @@
   padding-bottom: var(--space-3xl);
 }
 
-.product-details__back {
-  display: inline-block;
+/* Version 7, Milestone 171I: replaces the old .product-details__back
+   "&larr; Back to Shop" link — a real breadcrumb (Home > Category >
+   Product) serves the same "get back out" purpose while also being a
+   genuine internal link to the product's own category and matching
+   BreadcrumbList structured data (see productDetails.js). */
+.product-details__breadcrumb {
+  display: block;
   margin-block: var(--space-lg);
+  font-size: var(--font-size-sm);
   font-weight: 600;
+}
+
+.product-details__breadcrumb a {
   color: var(--color-secondary);
 }
 
-.product-details__back:hover {
+.product-details__breadcrumb a:hover {
   color: var(--color-primary);
+}
+
+.product-details__breadcrumb [aria-current="page"] {
+  color: var(--color-text-light);
+  font-weight: 400;
 }
 
 .product-details__layout {

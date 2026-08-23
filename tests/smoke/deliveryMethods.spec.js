@@ -47,7 +47,9 @@ test.describe("Desktop header More menu", () => {
     const links = panel.locator("a");
     await expect(links).toHaveCount(4);
     await expect(panel.locator('a:has-text("Colouring Books")')).toHaveAttribute("href", "/shop");
-    await expect(panel.locator('a:has-text("Creative Supplies")')).toHaveAttribute("href", /category=markers-and-crayons/);
+    // Version 7, Milestone 171I: real /category/:slug page now, not a
+    // "/shop?category=" query filter — see categoryPage.js.
+    await expect(panel.locator('a:has-text("Creative Supplies")')).toHaveAttribute("href", "/category/markers-and-crayons");
     await expect(panel.locator('a:has-text("Schools & Churches")')).toHaveAttribute("href", "/schools");
     await expect(panel.locator('a:has-text("About")')).toHaveAttribute("href", "/about");
   });
