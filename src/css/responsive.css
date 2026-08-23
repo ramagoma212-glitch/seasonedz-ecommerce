@@ -749,3 +749,30 @@
    removed — it now composes .home-3col-grid (layout.css) for identical
    sizing/centering to New Releases, so no separate breakpoint rules
    are needed here. */
+
+/* Version 7, Milestone 171H: cookie consent banner — Accept/Reject/
+   Manage stack full-width on narrow phones (per the milestone brief's
+   own allowance), staying comfortably tappable and never overflowing.
+   Buttons already wrap onto their own row at any width via flex-wrap
+   (components.css); this only changes them from side-by-side chips to
+   full-width stacked buttons below ~480px, where three chips would
+   otherwise get uncomfortably cramped. */
+@media (max-width: 480px) {
+  .cookie-consent-banner__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cookie-consent-banner__actions .btn {
+    width: 100%;
+  }
+
+  .cookie-preferences-modal__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cookie-preferences-modal__actions .btn {
+    width: 100%;
+  }
+}

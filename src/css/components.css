@@ -432,6 +432,25 @@
   color: var(--color-accent-dark);
 }
 
+/* Version 7, Milestone 171H: "Cookie Settings" is a real <button> (it
+   opens the preferences modal, it doesn't navigate anywhere) styled to
+   read identically to the <a> links around it in .footer-links. */
+.footer-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-text-light);
+  line-height: 1.6;
+  transition: color var(--transition-fast);
+}
+
+.footer-link-button:hover {
+  color: var(--color-accent-dark);
+}
+
 
 /* ---- Placeholder panel (used by stub pages/sections) ----------------------- */
 .placeholder-panel {
@@ -885,6 +904,219 @@
 }
 
 body.has-lightbox-open {
+  overflow: hidden;
+}
+
+/* ---- Cookie consent (Version 7, Milestone 171H) -----------------------
+   A compact bottom banner, not a full-screen takeover — deliberately no
+   animation/gradient/heavy shadow, matching the milestone brief's own
+   "no intrusive popups" instruction. z-index 1200/1300 sit above the
+   toast (1000) and image lightbox (1100) — the two only ever compete
+   for a customer's attention in an unlikely combination, and the
+   consent banner/modal winning that is the safer default. */
+.cookie-consent-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-md);
+}
+
+.cookie-consent-banner__inner {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.cookie-consent-banner__copy {
+  flex: 1 1 320px;
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* Accept/Reject/Manage all share .btn--sm — comparable size and
+   prominence for Accept and Reject per the milestone brief's own
+   explicit requirement (neither is visually favoured over the other;
+   Accept uses the site's existing .btn--primary only because a primary
+   CTA styling convention already exists site-wide, not to make Reject
+   harder to notice — it sits at full, equal size right beside it). */
+.cookie-consent-banner__actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.cookie-preferences-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background-color: rgba(59, 42, 32, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+}
+
+.cookie-preferences-modal {
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--space-lg);
+}
+
+.cookie-preferences-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.cookie-preferences-modal__header h2 {
+  font-size: var(--font-size-lg);
+  margin: 0;
+}
+
+.cookie-preferences-modal__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: var(--font-size-2xl);
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-text-light);
+  padding: var(--space-xs);
+}
+
+.cookie-preferences-modal__close:hover {
+  color: var(--color-text);
+}
+
+.cookie-preferences-modal__intro {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+  line-height: 1.5;
+  margin: 0 0 var(--space-lg);
+}
+
+.cookie-preferences-modal__categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.cookie-category {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.cookie-category__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.cookie-category__label {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cookie-category__always-active {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cookie-category__description {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-light);
+  line-height: 1.5;
+}
+
+.cookie-preferences-modal__actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/* Checkbox-based toggle switch — a real, screen-reader-accessible
+   native checkbox (.cookie-toggle__input) visually rendered as a
+   slider via its sibling track/thumb, rather than a div with a click
+   handler. No new pattern existed in this codebase to reuse (audited
+   first — only plain checkboxes elsewhere, e.g. admin product forms). */
+.cookie-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.cookie-toggle__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.cookie-toggle__track {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-border);
+  border-radius: var(--radius-full);
+  transition: background-color var(--transition-fast);
+}
+
+.cookie-toggle__track::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background-color: var(--color-white);
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition-fast);
+}
+
+.cookie-toggle__input:checked + .cookie-toggle__track {
+  background-color: var(--color-secondary);
+}
+
+.cookie-toggle__input:checked + .cookie-toggle__track::before {
+  transform: translateX(20px);
+}
+
+.cookie-toggle__input:focus-visible + .cookie-toggle__track {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+body.has-cookie-preferences-open {
   overflow: hidden;
 }
 
@@ -1782,6 +2014,25 @@ body.has-lightbox-open {
 .info-page__body a:hover,
 .faq-item__answer a:hover,
 .blog-post__article a:hover {
+  color: var(--color-primary-dark);
+}
+
+/* Version 7, Milestone 171H: an inline <button> reading identically to
+   the prose links above it (e.g. the Cookie Policy page's own "Cookie
+   Settings" button) — real semantics for something that opens a modal
+   rather than navigating, styled to match so it doesn't stand out as a
+   different kind of control mid-paragraph. */
+.info-page__body .link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.info-page__body .link-button:hover {
   color: var(--color-primary-dark);
 }
 

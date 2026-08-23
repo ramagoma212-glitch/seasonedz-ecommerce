@@ -61,6 +61,8 @@ import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliv
 import { getDeliveryNote } from "../components/orderSummary.js";
 import { escapeHtml } from "./search.js";
 import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
+import { getConsent, needsConsentPrompt, acceptAllConsent, rejectNonEssentialConsent, saveConsent } from "./consent.js";
+import { renderCookieConsentBanner, renderCookiePreferencesModal } from "../components/cookieConsent.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -70,6 +72,14 @@ function mountApp() {
   app.insertAdjacentHTML("beforeend", '<main id="main-content"></main>');
   app.insertAdjacentHTML("beforeend", renderFooter());
 
+  // Version 7, Milestone 171H: initialized before initRouter() and
+  // every other feature below — this is where a future optional
+  // analytics/marketing script would first become able to check
+  // consent (see js/consent.js's hasConsent()/subscribeToConsentChanges()),
+  // so it must run before anything else has a chance to load one.
+  // Seasonedz has zero such scripts today; this ordering is purely
+  // future-readiness, not fixing an existing problem.
+  setupCookieConsent();
   initRouter();
   setupMobileMenu();
   setupNavMoreMenu();
@@ -3129,6 +3139,105 @@ function setupProductImageLightbox() {
   });
 
   setupGallerySwipe();
+}
+
+// Cookie consent banner + preferences modal (Version 7, Milestone
+// 171H). Same modal philosophy as the image lightbox above —
+// deliberately no hand-rolled Tab focus-trap loop, just Escape/close-
+// button/backdrop-click, focus moved to the modal's own close button
+// on open and back to whatever triggered it on close.
+let cookiePreferencesTriggerEl = null;
+
+function setupCookieConsent() {
+  if (needsConsentPrompt()) {
+    showCookieBanner();
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="cookie-accept"]')) {
+      acceptAllConsent();
+      hideCookieBanner();
+      closeCookiePreferences();
+      return;
+    }
+
+    if (event.target.closest('[data-action="cookie-reject"]')) {
+      rejectNonEssentialConsent();
+      hideCookieBanner();
+      closeCookiePreferences();
+      return;
+    }
+
+    const manageTrigger = event.target.closest('[data-action="cookie-manage"]');
+    if (manageTrigger) {
+      openCookiePreferences(manageTrigger);
+      return;
+    }
+
+    if (event.target.closest('[data-action="cookie-save"]')) {
+      const analytics = document.getElementById("cookie-category-analytics")?.checked ?? false;
+      const marketing = document.getElementById("cookie-category-marketing")?.checked ?? false;
+      saveConsent({ analytics, marketing });
+      hideCookieBanner();
+      closeCookiePreferences();
+      return;
+    }
+
+    if (event.target.closest('[data-action="cookie-close-preferences"]')) {
+      closeCookiePreferences();
+      return;
+    }
+
+    // A click landing directly on the overlay backdrop (never on the
+    // modal dialog itself or anything inside it) closes without saving
+    // — same "click outside" convention as the image lightbox.
+    if (event.target.hasAttribute("data-cookie-preferences-overlay")) {
+      closeCookiePreferences();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    if (document.querySelector("[data-cookie-preferences-overlay]")) {
+      closeCookiePreferences();
+    }
+  });
+}
+
+function showCookieBanner() {
+  if (document.querySelector("[data-cookie-consent-banner]")) return;
+  document.body.insertAdjacentHTML("beforeend", renderCookieConsentBanner());
+}
+
+function hideCookieBanner() {
+  document.querySelector("[data-cookie-consent-banner]")?.remove();
+}
+
+// Version 7, Milestone 171H: reused by both the banner's own "Manage
+// Preferences" button AND the footer's persistent "Cookie Settings"
+// link (see components/footer.js) — either one calls this the same
+// way, so a customer can change their mind at any time, not just
+// during their first visit.
+function openCookiePreferences(triggerEl) {
+  if (document.querySelector("[data-cookie-preferences-overlay]")) return;
+  cookiePreferencesTriggerEl = triggerEl || null;
+
+  document.body.insertAdjacentHTML("beforeend", renderCookiePreferencesModal(getConsent()));
+  document.body.classList.add("has-cookie-preferences-open");
+  document.querySelector('[data-action="cookie-close-preferences"]')?.focus();
+}
+
+function closeCookiePreferences() {
+  const overlay = document.querySelector("[data-cookie-preferences-overlay]");
+  if (!overlay) return;
+
+  overlay.remove();
+  document.body.classList.remove("has-cookie-preferences-open");
+
+  if (cookiePreferencesTriggerEl) {
+    cookiePreferencesTriggerEl.focus();
+    cookiePreferencesTriggerEl = null;
+  }
 }
 
 document.addEventListener("DOMContentLoaded", mountApp);

@@ -210,7 +210,12 @@ const routeDefs = [
   { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
   { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },
   { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },
-  { pattern: "/cookies-policy", render: renderCookiesPolicy, title: "Cookies Policy" },
+  {
+    pattern: "/cookies-policy",
+    render: renderCookiesPolicy,
+    title: "Cookie Policy",
+    description: "What cookies and Local Storage Seasonedz Group actually uses, and how to manage your cookie preferences.",
+  },
   {
     pattern: "/schools",
     render: renderSchools,

@@ -9,7 +9,7 @@ const POLICY_LINKS = [
   { href: "/returns-policy", label: "Returns Policy", description: "Damaged, incorrect or unwanted items." },
   { href: "/privacy-policy", label: "Privacy Policy", description: "How your information is handled." },
   { href: "/terms", label: "Terms & Conditions", description: "The basics of using this website." },
-  { href: "/cookies-policy", label: "Cookies Policy", description: "Local Storage and browser data." },
+  { href: "/cookies-policy", label: "Cookie Policy", description: "Cookies, Local Storage and your consent preferences." },
 ];
 
 export function renderPolicies() {

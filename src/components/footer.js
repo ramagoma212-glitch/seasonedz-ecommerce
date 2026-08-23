@@ -109,6 +109,19 @@ export function renderFooter() {
             <li><a href="/returns-policy">Returns Policy</a></li>
             <li><a href="/terms">Terms &amp; Conditions</a></li>
             <li><a href="/privacy-policy">Privacy Policy</a></li>
+            <!-- Version 7, Milestone 171H: /cookies-policy already
+                 existed as a real page (src/pages/cookiesPolicy.js) but
+                 had no footer link pointing to it — added here rather
+                 than creating a second "/cookie-policy" route, per the
+                 milestone's own "don't duplicate an existing correct
+                 implementation" principle. "Cookie Settings" is a real
+                 <button>, not a dead link — it reopens the same
+                 preferences manager the consent banner uses (see
+                 js/app.js's openCookiePreferences()), so a customer can
+                 change their choice at any time without needing an
+                 account. -->
+            <li><a href="/cookies-policy">Cookie Policy</a></li>
+            <li><button type="button" class="footer-link-button" data-action="cookie-manage">Cookie Settings</button></li>
             <li><a href="/track-order">Track Order</a></li>
           </ul>
         </div>
