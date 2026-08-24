@@ -1,90 +1,190 @@
-// Cookies policy page (rewritten Version 7, Milestone 171H to reflect
-// a real, current audit of this codebase, replacing an older version
-// written before customer accounts/social login/PayFast existed). See
-// js/consent.js's own header comment for the full technical inventory
-// this page's content is based on — nothing here is invented.
-//
-// "Cookie Settings" reopens the same preferences manager the consent
-// banner uses (js/app.js's openCookiePreferences()) — a real <button>,
-// not a dead link, wired the same way as the footer's own equivalent
-// link (components/footer.js).
+// Cookie Policy page: owner-approved legal content (URGENT OWNER
+// UPDATE, 24 August 2026), replacing the previous Milestone 171H
+// version in full. This is the owner's own supplied text, transcribed
+// exactly, including its conditional "where enabled"/"may in future"
+// wording for analytics and marketing, which is accurate: no
+// analytics or marketing trackers are active on this site today. The
+// route stays at /cookies-policy, the one already live and linked
+// from the footer and consent banner; no duplicate /cookie-policy
+// route is created. The "Cookie Settings" button is the same live
+// control the consent banner uses (js/app.js's cookie-manage handler,
+// opening js/consent.js's preferences manager), kept working inside
+// section 11 so the page's own text about changing your preferences
+// later has a real control to point to.
+
+import { businessInfo } from "../data/businessInfo.js";
+
+function renderOfficeAddress() {
+  return businessInfo.registeredOfficeLines.join("<br />");
+}
 
 export function renderCookiesPolicy() {
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Cookie Policy</h1>
-      <p class="stub-page__text">
-        What cookies and similar technologies Seasonedz Group actually uses, and how to control them.
-      </p>
+      <p class="stub-page__text">Last updated: 24 August 2026</p>
 
       <div class="info-page__body policy-page">
-        <h2>What This Page Covers</h2>
         <p>
-          "Cookies and similar technologies" covers both real browser
-          cookies and your browser's Local Storage — a similar way for
-          a website to remember information on your own device. This
-          page explains exactly what Seasonedz Group uses, honestly and
-          without exaggeration.
+          This Cookie Policy explains how Seasonedz Group may use
+          cookies, local storage and similar technologies when you visit
+          <a href="${businessInfo.websiteUrl}">${businessInfo.websiteDisplay}</a>.
+        </p>
+        <p>This policy should be read together with our <a href="/privacy-policy">Privacy Policy</a>.</p>
+
+        <h2>1. Who We Are</h2>
+        <p><strong>${businessInfo.registeredName}</strong></p>
+        <p>Registration number: <strong>${businessInfo.registrationNumber}</strong></p>
+        <p>${renderOfficeAddress()}</p>
+        <p>
+          <strong>Website:</strong> <a href="${businessInfo.websiteUrl}">${businessInfo.websiteDisplay}</a><br />
+          <strong>Email:</strong> <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a><br />
+          <strong>Telephone:</strong> <a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a>
         </p>
 
-        <h2>Strictly Necessary</h2>
-        <p>
-          These keep the site working securely and can't be switched
-          off — they're only ever used for the service you've actually
-          asked for (browsing, signing in, checking out).
-        </p>
+        <h2>2. What Are Cookies?</h2>
+        <p>Cookies are small pieces of information that a website may store on your browser or device.</p>
+        <p>Cookies can help a website remember information about your visit and allow certain features to work correctly.</p>
+        <p>Websites may also use similar technologies such as:</p>
         <ul>
-          <li><strong>Session cookies</strong> (<code>customer_session</code>, and <code>admin_session</code> for staff): keep you signed in to your account securely. Set directly by our server, HttpOnly (never readable by any script), and expire after 7 days or when you log out.</li>
-          <li><strong>Sign-in security cookie</strong> (<code>oauth_state</code>): used only during the few seconds of a "Continue with Google" or "Continue with Facebook" sign-in, to protect that process from being hijacked. Expires after 10 minutes.</li>
-          <li><strong>Cart</strong> and <strong>Wishlist</strong> (Local Storage): remembers the items you've added, so they're still there if you refresh the page or come back later. This is stored only on your own device.</li>
-          <li><strong>Recent order reference</strong> (Local Storage): a small, non-sensitive note of your most recent order number, so we can show you the right confirmation page after checkout. Expires automatically after 24 hours.</li>
-          <li><strong>Your cookie preference</strong> (Local Storage): remembers the choice you make below, so we don't ask you again every visit.</li>
+          <li>Local storage.</li>
+          <li>Session storage.</li>
+          <li>Tracking pixels.</li>
+          <li>Tags.</li>
+          <li>Other browser based storage technologies.</li>
+        </ul>
+        <p>In this policy, we may refer to these technologies collectively as cookies unless a distinction is necessary.</p>
+
+        <h2>3. Why Seasonedz Group May Use Cookies</h2>
+        <p>Cookies and similar technologies may be used to:</p>
+        <ul>
+          <li>Keep the website functioning correctly.</li>
+          <li>Maintain website security.</li>
+          <li>Remember shopping cart information.</li>
+          <li>Remember wishlist selections.</li>
+          <li>Maintain customer sessions.</li>
+          <li>Remember preferences.</li>
+          <li>Understand how visitors use our website.</li>
+          <li>Identify and correct technical problems.</li>
+          <li>Improve website performance.</li>
+          <li>Measure the effectiveness of marketing where applicable.</li>
         </ul>
 
-        <h2>Analytics and Marketing</h2>
-        <p>
-          Seasonedz Group does not currently use any analytics or
-          marketing cookies — no Google Analytics, no advertising
-          pixels, no third-party trackers of any kind. The choices
-          below for these categories exist so you're in control from
-          day one, in case that ever changes; nothing is switched on
-          behind the scenes. If we do introduce analytics or marketing
-          tools in future, this page will be updated first to explain
-          exactly what's added and why, and you'll be asked again for
-          consent.
-        </p>
+        <h2>4. Strictly Necessary Cookies</h2>
+        <p>Some technologies may be necessary for the website to operate.</p>
+        <p>These may support functions such as:</p>
+        <ul>
+          <li>Website security.</li>
+          <li>Shopping cart functionality.</li>
+          <li>Checkout.</li>
+          <li>Login sessions.</li>
+          <li>Account authentication.</li>
+          <li>Fraud prevention.</li>
+          <li>Saving essential customer preferences.</li>
+        </ul>
+        <p>Disabling essential technologies may prevent parts of the website from working correctly.</p>
 
-        <h2>Your Choices</h2>
+        <h2>5. Functional Technologies</h2>
+        <p>Functional cookies or browser storage may remember choices you make.</p>
+        <p>These may include:</p>
+        <ul>
+          <li>Wishlist items.</li>
+          <li>Shopping cart contents.</li>
+          <li>User preferences.</li>
+          <li>Certain account preferences.</li>
+        </ul>
+        <p>These technologies help make the website more convenient to use.</p>
+
+        <h2>6. Analytics Cookies</h2>
+        <p>Where analytics tools are enabled, they may collect information about how visitors use our website.</p>
+        <p>This may include:</p>
+        <ul>
+          <li>Pages viewed.</li>
+          <li>General traffic patterns.</li>
+          <li>Time spent on pages.</li>
+          <li>Referring pages or websites.</li>
+          <li>Device and browser information.</li>
+          <li>General technical information.</li>
+        </ul>
+        <p>Analytics information helps us understand how the website performs and where improvements may be needed.</p>
+        <p>Where required, non essential analytics technologies will be managed in accordance with applicable privacy requirements.</p>
+
+        <h2>7. Marketing Cookies</h2>
+        <p>Seasonedz Group may in future use marketing or advertising technologies to understand the effectiveness of advertising or show more relevant advertising.</p>
+        <p>Where such technologies are used, they may be provided by third party advertising or social media platforms.</p>
+        <p>Non essential marketing cookies will only be used where permitted under applicable law.</p>
+
+        <h2>8. Local Storage</h2>
+        <p>Our website may use local browser storage to remember information directly on your device.</p>
+        <p>This may include shopping cart contents, wishlist information or website preferences.</p>
+        <p>Local storage operates differently from a traditional cookie but may serve a similar purpose.</p>
+        <p>You can normally remove local storage through your browser settings or by clearing website data.</p>
+
+        <h2>9. Payment Providers</h2>
+        <p>When you proceed to an external payment provider or payment service, that provider may use its own cookies or similar technologies.</p>
+        <p>Those technologies are controlled by the relevant payment provider and may be governed by its own privacy and cookie policies.</p>
+
+        <h2>10. Social Media and External Services</h2>
+        <p>Our website may contain links or integrations relating to third party platforms such as social media services or online marketplaces.</p>
+        <p>If you interact with those platforms, they may use their own cookies or tracking technologies.</p>
+        <p>Seasonedz Group does not control cookies placed independently by third party websites.</p>
+
+        <h2>11. Your Cookie Choices</h2>
+        <p>Where the website offers a cookie preference tool, you may be able to:</p>
+        <ul>
+          <li>Accept non essential cookies.</li>
+          <li>Reject non essential cookies.</li>
+          <li>Choose particular cookie categories.</li>
+          <li>Change your preferences later.</li>
+        </ul>
         <p>
-          When you first visit, a banner lets you Accept All, Reject
-          Non-essential, or open Manage Preferences to choose per
-          category. Strictly necessary items are always on, since the
-          site can't function securely without them. You can change
-          your mind at any time — use the
+          Strictly necessary technologies may continue to operate where
+          required for the website to function. You can open this
+          website's own cookie preference tool at any time using the
           <button type="button" class="link-button" data-action="cookie-manage">Cookie Settings</button>
           button here, or in the footer of any page.
         </p>
-        <p>
-          Your saved choice is kept for up to 6 months, after which
-          you'll be asked again — or sooner, if the categories on this
-          page ever materially change.
-        </p>
 
-        <h2>What Is Sent to Seasonedz Group</h2>
-        <p>
-          When you place an order, your order details, including your
-          customer and delivery information, are sent to and stored on
-          the Seasonedz Group website backend so your order can be
-          processed. See our <a href="/privacy-policy">Privacy Policy</a>
-          for more detail on how that information is used.
-        </p>
+        <h2>12. Browser Controls</h2>
+        <p>Most browsers allow you to manage cookies through their settings.</p>
+        <p>Depending on your browser, you may be able to:</p>
+        <ul>
+          <li>View stored cookies.</li>
+          <li>Delete cookies.</li>
+          <li>Block cookies.</li>
+          <li>Clear website data.</li>
+          <li>Clear local storage.</li>
+          <li>Block third party cookies.</li>
+        </ul>
+        <p>If you disable all cookies or browser storage, some Seasonedz Group website functions may not operate correctly.</p>
 
-        <h2>Questions</h2>
+        <h2>13. Cookie Consent</h2>
+        <p>Where consent is legally required for a particular technology, Seasonedz Group will seek the appropriate consent before using that technology.</p>
+        <p>You may withdraw or change consent where applicable.</p>
+
+        <h2>14. Changes to This Cookie Policy</h2>
+        <p>Technology used by the Seasonedz Group website may change over time.</p>
+        <p>We may therefore update this Cookie Policy when:</p>
+        <ul>
+          <li>New website features are introduced.</li>
+          <li>New technology providers are used.</li>
+          <li>Our analytics or marketing practices change.</li>
+          <li>Applicable legal requirements change.</li>
+        </ul>
+        <p>The latest version will be published on <a href="${businessInfo.websiteUrl}">${businessInfo.websiteDisplay}</a>.</p>
+
+        <h2>15. Contact Us</h2>
+        <p>If you have questions about cookies or the way Seasonedz Group processes personal information, contact:</p>
+        <p><strong>${businessInfo.businessName}</strong></p>
         <p>
-          If you have any questions about cookies, Local Storage, or
-          your privacy on this site, please
-          <a href="/contact">contact us</a>.
+          <strong>Email:</strong> <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a><br />
+          <strong>Telephone:</strong> <a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a><br />
+          <strong>WhatsApp:</strong> <a href="${businessInfo.whatsappUrl}">${businessInfo.phoneDisplay}</a><br />
+          <strong>Website:</strong> <a href="${businessInfo.websiteUrl}">${businessInfo.websiteDisplay}</a>
         </p>
+        <p>${renderOfficeAddress()}</p>
+
+        <p class="about-closing"><strong>Where Creativity Meets Purpose.</strong></p>
       </div>
     </section>
   `;

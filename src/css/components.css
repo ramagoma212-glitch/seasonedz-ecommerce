@@ -2051,6 +2051,21 @@ body.has-cookie-preferences-open {
   margin-block: var(--space-2xl);
 }
 
+/* Owner content update (24 August 2026): plain text emphasis only —
+   no new visual component, matching the brief's "no decorative
+   gradients/animations/cards beyond what already exists" instruction. */
+.about-flow {
+  font-size: var(--font-size-lg);
+  text-align: center;
+  margin-block: var(--space-md);
+}
+
+.about-closing {
+  text-align: center;
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--space-xs);
+}
+
 .info-page__cta {
   max-width: 60ch;
   margin-inline: auto;

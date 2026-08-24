@@ -198,10 +198,14 @@ const routeDefs = [
   // account/order-specific page.
   { pattern: "/download/:token", render: renderGuestDownloadPage, title: "Your Digital Downloads", noindex: true },
   {
+    // Owner content update (24 August 2026): title/description brought
+    // in line with the new owner-approved About page content, see
+    // about.js. "About Seasonedz Group" (not "About Us") to match the
+    // page's own H1 exactly, per the brief's own suggested SEO title.
     pattern: "/about",
     render: renderAbout,
-    title: "About Us",
-    description: "Seasonedz Group is a South African small business selling educational, Bible and mindfulness colouring books for families, schools and churches.",
+    title: "About Seasonedz Group",
+    description: "A South African creative publishing and growing print business, making educational, Bible and mindfulness colouring books today while building towards print on demand for South African and African creators.",
   },
   {
     pattern: "/contact",
@@ -222,9 +226,35 @@ const routeDefs = [
     title: "Shipping Policy",
     description: "Delivery available nationwide through The Courier Guy. Locker to Locker R100, Door to Door R120, both free from R600, plus free Customer Collection in Pretoria or Thohoyandou.",
   },
-  { pattern: "/returns-policy", render: renderReturnsPolicy, title: "Returns Policy" },
-  { pattern: "/privacy-policy", render: renderPrivacyPolicy, title: "Privacy Policy" },
-  { pattern: "/terms", render: renderTerms, title: "Terms & Conditions" },
+  {
+    // Owner content update (24 August 2026): title/description brought
+    // in line with the new owner-approved Returns, Refunds and
+    // Exchanges Policy, see returnsPolicy.js. Title matches the page's
+    // own H1 exactly.
+    pattern: "/returns-policy",
+    render: renderReturnsPolicy,
+    title: "Returns, Refunds and Exchanges Policy",
+    description: "How Seasonedz Group handles returns, refunds and exchanges for physical products, books, creative supplies, personalised products and digital products, in line with South African consumer law.",
+  },
+  {
+    // Owner content update (24 August 2026): description added for the
+    // new owner-approved Privacy Policy, see privacyPolicy.js. Title
+    // already matched the page's own H1 exactly.
+    pattern: "/privacy-policy",
+    render: renderPrivacyPolicy,
+    title: "Privacy Policy",
+    description: "How Seasonedz Group collects, uses, stores, shares and protects personal information, in line with the Protection of Personal Information Act, POPIA.",
+  },
+  {
+    // Owner content update (24 August 2026): title/description brought
+    // in line with the new owner-approved Terms and Conditions, see
+    // terms.js. Title changed from "Terms & Conditions" to "Terms and
+    // Conditions" to match the page's own H1 exactly.
+    pattern: "/terms",
+    render: renderTerms,
+    title: "Terms and Conditions",
+    description: "The terms and conditions that apply when you browse, create an account, place an order or purchase a digital product from Seasonedz Group.",
+  },
   {
     pattern: "/cookies-policy",
     render: renderCookiesPolicy,

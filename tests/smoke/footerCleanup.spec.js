@@ -78,8 +78,8 @@ test.describe("Footer owner layout refinement (Milestone 171B.0.3)", () => {
     await expect(columns.getByRole("link", { name: "Blog", exact: true })).toHaveAttribute("href", "/blog");
     await expect(columns.getByRole("link", { name: "FAQ", exact: true })).toHaveAttribute("href", "/faq");
     await expect(columns.getByRole("link", { name: "Delivery Information" })).toHaveAttribute("href", "/shipping-policy");
-    await expect(columns.getByRole("link", { name: "Returns Policy" })).toHaveAttribute("href", "/returns-policy");
-    await expect(columns.getByRole("link", { name: "Terms & Conditions" })).toHaveAttribute("href", "/terms");
+    await expect(columns.getByRole("link", { name: "Returns, Refunds and Exchanges" })).toHaveAttribute("href", "/returns-policy");
+    await expect(columns.getByRole("link", { name: "Terms and Conditions" })).toHaveAttribute("href", "/terms");
     await expect(columns.getByRole("link", { name: "Privacy Policy" })).toHaveAttribute("href", "/privacy-policy");
     await expect(columns.getByRole("link", { name: "Track Order" })).toHaveAttribute("href", "/track-order");
     await expect(columns.getByRole("link", { name: "My Account" })).toHaveAttribute("href", "/account");

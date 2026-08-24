@@ -7,6 +7,19 @@
 
 export const businessInfo = {
   businessName: "Seasonedz Group",
+  // Owner content update (24 August 2026): official registration/
+  // office details, supplied by the owner for the Terms and
+  // Conditions / Privacy Policy update, used by both and by anywhere
+  // else that needs the same consistent legal identity, per those
+  // documents' own "Supplier Information" / "Who We Are" sections.
+  registeredName: "SEASONEDZ GROUP",
+  registrationNumber: "2024/618215/07",
+  enterpriseType: "Private Company",
+  registrationDate: "2 October 2024",
+  director: "Rolivhuwa Nedzamba",
+  registeredOfficeLines: ["99 Proclamation Hill", "Pretoria West", "Pretoria", "Gauteng", "0183", "South Africa"],
+  websiteDisplay: "www.seasonedzgroup.co.za",
+  websiteUrl: "https://www.seasonedzgroup.co.za",
   // Version 7, Milestone 134 correction: stays on seasonedzgroup@outlook.com
   // for now — info@seasonedzgroup.co.za has no mailbox yet (email hosting
   // is planned via Afrihost). Update once that mailbox exists and is tested.

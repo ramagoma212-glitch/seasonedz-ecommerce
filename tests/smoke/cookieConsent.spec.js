@@ -326,12 +326,14 @@ test.describe("Cookie consent — security (Milestone 171H)", () => {
   });
 });
 
-test.describe("Cookie Policy page (Milestone 171H)", () => {
+test.describe("Cookie Policy page (Milestone 171H, content replaced 24 August 2026)", () => {
   test("the existing /cookies-policy page was updated in place, not duplicated — loads with accurate content and its own working Cookie Settings button", async ({ page }) => {
     await page.goto("/cookies-policy");
     await expect(page.locator("h1")).toHaveText("Cookie Policy");
-    await expect(page.locator(".info-page__body")).toContainText("customer_session");
-    await expect(page.locator(".info-page__body")).toContainText("does not currently use any analytics or marketing cookies");
+    await expect(page.locator(".stub-page__text")).toHaveText("Last updated: 24 August 2026");
+    await expect(page.locator(".info-page__body")).toContainText("Where analytics tools are enabled");
+    await expect(page.locator(".info-page__body")).toContainText("may in future use marketing or advertising technologies");
+    await expect(page.locator(".info-page__body")).toContainText("2024/618215/07");
 
     await page.locator(".info-page__body .link-button").click();
     await page.waitForTimeout(200);

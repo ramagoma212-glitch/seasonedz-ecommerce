@@ -106,8 +106,8 @@ export function renderFooter() {
           <h4 class="footer-heading">Orders &amp; Support</h4>
           <ul class="footer-links">
             <li><a href="/shipping-policy">Delivery Information</a></li>
-            <li><a href="/returns-policy">Returns Policy</a></li>
-            <li><a href="/terms">Terms &amp; Conditions</a></li>
+            <li><a href="/returns-policy">Returns, Refunds and Exchanges</a></li>
+            <li><a href="/terms">Terms and Conditions</a></li>
             <li><a href="/privacy-policy">Privacy Policy</a></li>
             <!-- Version 7, Milestone 171H: /cookies-policy already
                  existed as a real page (src/pages/cookiesPolicy.js) but
