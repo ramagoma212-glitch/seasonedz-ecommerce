@@ -12,6 +12,18 @@ import { test, expect } from "@playwright/test";
 const SITE_URL = "https://www.seasonedzgroup.co.za";
 const PRODUCT_SLUG = "little-hands-big-faith-old-testament-bible-colouring-book";
 
+// Mirrors scripts/generate-static-routes.mjs's own escapeXml() — a SKU
+// like the real "N&M" bundle SKU is written into the feed as "N&amp;M",
+// so matching against the raw API value needs the same escaping.
+function escapeXmlForMatch(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 const REAL_CATEGORIES = [
   { slug: "bible-colouring-books", name: "Bible Colouring Books" },
   { slug: "mindfulness-colouring", name: "Mindfulness Colouring" },
@@ -278,6 +290,32 @@ test.describe("Sitemap and feed (Milestone 171I)", () => {
     }
   });
 
+  test("Milestone 171I.2: every g:id is <= 50 characters (Google's own limit), stable and SKU-based rather than the (sometimes longer) slug", async ({ request, baseURL }) => {
+    const resp = await request.get(`${baseURL}/google-merchant-feed.xml`);
+    const body = await resp.text();
+
+    const items = body.split("<item>").slice(1);
+    expect(items.length).toBe(11);
+
+    const ids = items.map((item) => item.match(/<g:id>(.*?)<\/g:id>/)?.[1]);
+    for (const id of ids) {
+      expect(id, "every item must have a g:id").toBeTruthy();
+      expect(id.length, `g:id "${id}" exceeds Google's 50 character limit`).toBeLessThanOrEqual(50);
+      expect(id).not.toContain(" ");
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+
+    // The three products whose slug alone was already over 50 characters
+    // (the original Merchant Center failure) now carry their short SKU
+    // as g:id instead.
+    const overLimitSlugItem = items.find((item) =>
+      item.includes("little-hands-big-faith-new-testament-bible-colouring-book")
+    );
+    expect(overLimitSlugItem).toBeTruthy();
+    expect(overLimitSlugItem).toMatch(/<g:id>SG-0004<\/g:id>/);
+    expect(overLimitSlugItem).not.toMatch(/<g:id>little-hands-big-faith-new-testament-bible-colouring-book<\/g:id>/);
+  });
+
   test("every feed image URL is a real, crawlable, non-placeholder image that returns 200", async ({ request, baseURL }) => {
     const resp = await request.get(`${baseURL}/google-merchant-feed.xml`);
     const body = await resp.text();
@@ -308,11 +346,14 @@ test.describe("Sitemap and feed (Milestone 171I)", () => {
 
     const items = feedBody.split("<item>").slice(1);
     for (const product of apiJson.data.products) {
-      const item = items.find((entry) => entry.includes(`<g:id>${product.slug}</g:id>`));
+      // Milestone 171I.2: g:id is the product's SKU, not its slug (see
+      // generate-static-routes.mjs's own header comment above
+      // buildMerchantFeedXml() for why) — matched here the same way.
+      const item = items.find((entry) => entry.includes(`<g:id>${escapeXmlForMatch(product.sku)}</g:id>`));
       if (!item) continue; // A product could be absent from this build's feed if it was added after the feed was generated — not this test's concern.
       const feedAvailability = item.match(/<g:availability>(.*?)<\/g:availability>/)?.[1];
       const expected = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
-      expect(feedAvailability, `mismatch for ${product.slug}`).toBe(expected);
+      expect(feedAvailability, `mismatch for ${product.slug} (sku ${product.sku})`).toBe(expected);
     }
   });
 });

@@ -221,6 +221,17 @@ function buildSitemapXml(urlPaths) {
 // product, so this path is dormant (proven by the tests in
 // merchantFeed.test.mjs) until real ISBN/GTIN data is added to the
 // authoritative Product record.
+//
+// Version 7, Milestone 171I.2: g:id is Seasonedz's own SKU, not the
+// product slug. Google rejects any g:id over 50 characters, and three
+// of the eleven live products (long, SEO-friendly slugs) were already
+// past that limit — Merchant Center flagged them the day the feed was
+// first connected. The SKU is short, human-readable and already the
+// identifier this file trusts elsewhere as g:mpn, so it also serves as
+// the stable Merchant Center id now. The product URL in <link> still
+// uses the slug, unchanged — only g:id moved. validateFeedIdentifiers()
+// below refuses to build the feed at all if any product is ever missing
+// a SKU or two products share one, rather than emit a broken id.
 export function escapeXml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -256,6 +267,27 @@ function buildIdentifierFields(product) {
   return ["    <g:identifier_exists>no</g:identifier_exists>"];
 }
 
+// Version 7, Milestone 171I.2: g:id must be a real, stable identifier —
+// never invented. If any product is missing a SKU, or two products
+// share one, the whole feed is withheld for this build (same discipline
+// as getProductsForFeed()'s own live-API-only rule above) rather than
+// publish a broken or duplicate id to Google.
+export function validateFeedIdentifiers(products) {
+  const missingSku = products.filter((product) => !product.sku);
+  if (missingSku.length > 0) {
+    console.warn(
+      `[generate-static-routes] ${missingSku.length} product(s) have no SKU — Merchant Center feed not generated for this build (g:id requires a genuine SKU; see this script's own header comment above buildMerchantFeedXml()).`
+    );
+    return false;
+  }
+  const skus = products.map((product) => product.sku);
+  if (new Set(skus).size !== skus.length) {
+    console.warn("[generate-static-routes] duplicate SKUs found across products — Merchant Center feed not generated for this build.");
+    return false;
+  }
+  return true;
+}
+
 export function buildMerchantFeedXml(products) {
   const items = products
     .map((product) => {
@@ -265,7 +297,7 @@ export function buildMerchantFeedXml(products) {
 
       return [
         "  <item>",
-        `    <g:id>${escapeXml(product.slug)}</g:id>`,
+        `    <g:id>${escapeXml(product.sku)}</g:id>`,
         `    <title>${escapeXml(product.name)}</title>`,
         `    <description>${escapeXml(product.shortDescription || product.name)}</description>`,
         `    <link>${escapeXml(link)}</link>`,
@@ -306,6 +338,7 @@ async function getProductsForFeed() {
     const json = await response.json();
     const products = json?.data?.products || [];
     if (products.length === 0) throw new Error("API returned zero products");
+    if (!validateFeedIdentifiers(products)) return null;
     return products;
   } catch (error) {
     console.warn(`[generate-static-routes] Live products API unavailable (${error.message}) — Merchant Center feed not generated for this build.`);

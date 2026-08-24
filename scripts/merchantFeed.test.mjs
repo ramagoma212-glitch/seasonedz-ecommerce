@@ -18,7 +18,7 @@
 // correct for whenever real ISBN/GTIN data is added.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildMerchantFeedXml, escapeXml } from "./generate-static-routes.mjs";
+import { buildMerchantFeedXml, escapeXml, validateFeedIdentifiers } from "./generate-static-routes.mjs";
 
 function baseProduct(overrides = {}) {
   return {
@@ -69,6 +69,58 @@ test("two different products never share the same emitted identifier, and no pro
   const mpns = [...xml.matchAll(/<g:mpn>(.*?)<\/g:mpn>/g)].map((m) => m[1]);
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(new Set(mpns).size, mpns.length);
+});
+
+// Version 7, Milestone 171I.2: g:id switched from the product slug to
+// the product's own SKU — Google rejects any id over 50 characters, and
+// three of the eleven live slugs already exceeded it. The SKU is short,
+// stable and already the trusted identifier this file uses as g:mpn.
+test("g:id is the product's own SKU, not its slug — even when the slug alone would exceed Google's 50 character limit", () => {
+  const longSlug = "little-hands-big-faith-new-testament-bible-colouring-book"; // 59 chars, a real slug that broke Merchant Center
+  assert.ok(longSlug.length > 50, "test fixture must reproduce the real over-limit slug");
+  const xml = buildMerchantFeedXml([baseProduct({ slug: longSlug, sku: "SG-0004" })]);
+  assert.match(xml, /<g:id>SG-0004<\/g:id>/);
+  assert.doesNotMatch(xml, new RegExp(`<g:id>${longSlug}`));
+  // The customer-facing product URL still uses the slug — only g:id moved.
+  assert.match(xml, new RegExp(`<link>https://www\\.seasonedzgroup\\.co\\.za/product/${longSlug}/</link>`));
+});
+
+test("g:id stays within Google's 50 character limit for every product, regardless of slug length", () => {
+  const xml = buildMerchantFeedXml([
+    baseProduct({ slug: "a".repeat(90), sku: "SG-0099" }),
+    baseProduct({ slug: "school-starter-colouring-pack", sku: "SG-0010" }),
+  ]);
+  const ids = [...xml.matchAll(/<g:id>(.*?)<\/g:id>/g)].map((m) => m[1]);
+  for (const id of ids) {
+    assert.ok(id.length <= 50, `g:id "${id}" exceeds Google's 50 character limit`);
+  }
+});
+
+test("using SKU as g:id does not turn the SKU into a GTIN — a genuine gtin still wins, and SKU never appears as g:gtin", () => {
+  const xml = buildMerchantFeedXml([baseProduct({ sku: "SG-0004", gtin: "9781234567897" })]);
+  assert.match(xml, /<g:id>SG-0004<\/g:id>/);
+  assert.match(xml, /<g:gtin>9781234567897<\/g:gtin>/);
+  assert.doesNotMatch(xml, /<g:gtin>SG-0004<\/g:gtin>/);
+  assert.doesNotMatch(xml, /<g:mpn>/, "gtin still wins over mpn per the existing priority logic — unrelated to the g:id change");
+});
+
+test("validateFeedIdentifiers passes for genuinely unique, non-empty SKUs (the real 11-product catalogue shape)", () => {
+  const products = [
+    baseProduct({ slug: "a", sku: "N&M" }),
+    baseProduct({ slug: "b", sku: "SG-0010" }),
+    baseProduct({ slug: "c", sku: "SG-0009" }),
+  ];
+  assert.equal(validateFeedIdentifiers(products), true);
+});
+
+test("validateFeedIdentifiers fails, and never invents a replacement, when a product has no SKU", () => {
+  const products = [baseProduct({ slug: "a", sku: "SG-0001" }), baseProduct({ slug: "b", sku: null })];
+  assert.equal(validateFeedIdentifiers(products), false);
+});
+
+test("validateFeedIdentifiers fails when two products share the same SKU", () => {
+  const products = [baseProduct({ slug: "a", sku: "SG-0001" }), baseProduct({ slug: "b", sku: "SG-0001" })];
+  assert.equal(validateFeedIdentifiers(products), false);
 });
 
 test("a bundle product (no identifier of its own) never inherits an identifier from an unrelated product — each item's fields come only from that item's own data", () => {
@@ -126,9 +178,10 @@ test("brand is always the genuine Seasonedz Group identity — never a third-par
   assert.match(xml, /<g:brand>Seasonedz Group<\/g:brand>/);
 });
 
-test("special characters in title/description/mpn are XML-escaped, producing valid, well-formed markup", () => {
+test("special characters in title/description/sku are XML-escaped, producing valid, well-formed markup — matches the real 'N&M' bundle SKU in production", () => {
   const xml = buildMerchantFeedXml([baseProduct({ name: 'Kids & "Fun" Book <Special>', sku: "N&M" })]);
   assert.match(xml, /Kids &amp; &quot;Fun&quot; Book &lt;Special&gt;/);
+  assert.match(xml, /<g:id>N&amp;M<\/g:id>/);
   assert.match(xml, /<g:mpn>N&amp;M<\/g:mpn>/);
   assert.doesNotMatch(xml, /Kids & "Fun"/);
 });
