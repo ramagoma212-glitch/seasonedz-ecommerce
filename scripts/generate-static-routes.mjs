@@ -32,7 +32,7 @@
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -205,7 +205,23 @@ function buildSitemapXml(urlPaths) {
 // — Google's own taxonomy IDs aren't something to guess at without the
 // real reference list to hand; product_type (Seasonedz's own real
 // category name) is a safe, accurate substitute Google also supports.
-function escapeXml(value) {
+//
+// Version 7, Milestone 171I.1: identifier priority is GTIN (a genuine
+// ISBN-13, for a book, or a real GS1 barcode for anything else) first,
+// then MPN (the Seasonedz-assigned SKU), then identifier_exists=no —
+// matching Google's own required hierarchy: a real GTIN, when the
+// product genuinely has one, must always be submitted; brand+MPN is
+// only the correct fallback when no GTIN exists; identifier_exists=no
+// is only correct when neither is available. `product.gtin` is read
+// here defensively (an optional field, forward-ready for whenever a
+// real identifier is captured in the authoritative product data — see
+// this milestone's own audit for why none exists there today) — it is
+// never fabricated, and this file never invents one. As of this
+// milestone, the live product API returns no such field for any
+// product, so this path is dormant (proven by the tests in
+// merchantFeed.test.mjs) until real ISBN/GTIN data is added to the
+// authoritative Product record.
+export function escapeXml(value) {
   return String(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -214,7 +230,33 @@ function escapeXml(value) {
     .replace(/'/g, "&apos;");
 }
 
-function buildMerchantFeedXml(products) {
+// Strips only cosmetic separators (hyphens/spaces) — the digits
+// themselves are never altered, generated, or guessed. A real ISBN-13
+// is commonly entered/stored with hyphens (e.g. "978-0-123456-78-9");
+// Google's GTIN field wants digits only.
+function normalizeGtin(rawGtin) {
+  return String(rawGtin).replace(/[\s-]/g, "");
+}
+
+function buildIdentifierFields(product) {
+  // Priority per Google's own required hierarchy — a genuine GTIN
+  // (e.g. a real ISBN-13 for a book) always wins when the authoritative
+  // product data actually has one; MPN (Seasonedz's own SKU, since
+  // Seasonedz is the manufacturer/publisher) is the correct fallback
+  // when it doesn't; identifier_exists=no only when neither exists.
+  // Never both gtin and identifier_exists=no on the same item, and
+  // never mpn alongside identifier_exists=no either — brand+mpn is
+  // itself already a valid identifier combination.
+  if (product.gtin) {
+    return [`    <g:gtin>${escapeXml(normalizeGtin(product.gtin))}</g:gtin>`];
+  }
+  if (product.sku) {
+    return [`    <g:mpn>${escapeXml(product.sku)}</g:mpn>`];
+  }
+  return ["    <g:identifier_exists>no</g:identifier_exists>"];
+}
+
+export function buildMerchantFeedXml(products) {
   const items = products
     .map((product) => {
       const availability = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
@@ -233,7 +275,7 @@ function buildMerchantFeedXml(products) {
         "    <g:brand>Seasonedz Group</g:brand>",
         "    <g:condition>new</g:condition>",
         product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
-        product.sku ? `    <g:mpn>${escapeXml(product.sku)}</g:mpn>` : "    <g:identifier_exists>no</g:identifier_exists>",
+        ...buildIdentifierFields(product),
       ]
         .filter(Boolean)
         .join("\n") + "\n  </item>";
@@ -325,4 +367,14 @@ async function main() {
   }
 }
 
-main();
+// Version 7, Milestone 171I.1: only runs when this file is executed
+// directly as a script (`node scripts/generate-static-routes.mjs`),
+// never as a side effect of importing its pure functions elsewhere —
+// see merchantFeed.test.mjs, which imports buildMerchantFeedXml()/
+// escapeXml() for unit testing and must never trigger a real build/
+// live-API-fetch/dist/ write just by doing so. pathToFileURL() (not a
+// hand-built "file://" string) handles Windows drive-letter paths
+// correctly — a naive string comparison silently never matches there.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

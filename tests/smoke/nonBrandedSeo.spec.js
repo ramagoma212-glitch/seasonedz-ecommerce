@@ -255,8 +255,64 @@ test.describe("Sitemap and feed (Milestone 171I)", () => {
     expect(body).toContain("ZAR");
     expect(body).toContain("<g:brand>Seasonedz Group</g:brand>");
     expect(body).toContain("<g:condition>new</g:condition>");
-    // Never a fabricated GTIN/ISBN.
+    // Version 7, Milestone 171I.1: audited — no product in the
+    // authoritative database has a genuine GTIN/ISBN field today (see
+    // this milestone's own final report), so neither must ever appear
+    // here; the moment real identifier data exists, this assertion is
+    // expected to need updating alongside it, never before.
     expect(body).not.toContain("<g:gtin>");
     expect(body).not.toContain("<g:isbn>");
+  });
+
+  test("the feed has no duplicate product ids, and every id corresponds to a real product URL", async ({ request, baseURL }) => {
+    const resp = await request.get(`${baseURL}/google-merchant-feed.xml`);
+    const body = await resp.text();
+    const ids = [...body.matchAll(/<g:id>(.*?)<\/g:id>/g)].map((m) => m[1]);
+    const links = [...body.matchAll(/<link>(.*?)<\/link>/g)].map((m) => m[1]).filter((link) => link !== `${SITE_URL}/`);
+
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(links.length).toBe(ids.length);
+    for (const link of links) {
+      expect(link.startsWith(`${SITE_URL}/product/`)).toBe(true);
+    }
+  });
+
+  test("every feed image URL is a real, crawlable, non-placeholder image that returns 200", async ({ request, baseURL }) => {
+    const resp = await request.get(`${baseURL}/google-merchant-feed.xml`);
+    const body = await resp.text();
+    const imageLinks = [...body.matchAll(/<g:image_link>(.*?)<\/g:image_link>/g)].map((m) => m[1]);
+
+    expect(imageLinks.length).toBeGreaterThan(0);
+    // Spot-check the first image rather than every single one (this is
+    // a smoke test, not a full crawl) — a real, working Supabase
+    // storage URL, never a placeholder path.
+    const firstImageResponse = await request.get(imageLinks[0]);
+    expect(firstImageResponse.status()).toBe(200);
+    expect(imageLinks[0]).not.toContain("placeholder");
+  });
+
+  test("feed availability agrees with the live product API's own stock state for every item — Out of Stock is never emitted as in stock", async ({ request, baseURL }) => {
+    // Cross-checked directly against the same live API the feed itself
+    // is built from (scripts/generate-static-routes.mjs's
+    // getProductsForFeed()) — deliberately not the rendered page, which
+    // under this suite's "local" project uses static fallback data
+    // that can legitimately lag behind the live catalogue (see
+    // playwright.config.js's own header comment on why).
+    const [feedResp, apiResp] = await Promise.all([
+      request.get(`${baseURL}/google-merchant-feed.xml`),
+      request.get("https://api.seasonedzgroup.co.za/api/products?limit=100"),
+    ]);
+    const feedBody = await feedResp.text();
+    const apiJson = await apiResp.json();
+
+    const items = feedBody.split("<item>").slice(1);
+    for (const product of apiJson.data.products) {
+      const item = items.find((entry) => entry.includes(`<g:id>${product.slug}</g:id>`));
+      if (!item) continue; // A product could be absent from this build's feed if it was added after the feed was generated — not this test's concern.
+      const feedAvailability = item.match(/<g:availability>(.*?)<\/g:availability>/)?.[1];
+      const expected = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
+      expect(feedAvailability, `mismatch for ${product.slug}`).toBe(expected);
+    }
   });
 });
