@@ -97,6 +97,8 @@ import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
 import { renderAdminReviews } from "../pages/adminReviews.js";
 import { renderAdminProducts } from "../pages/adminProducts.js";
 import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
+import { renderAdminAffiliateProducts } from "../pages/adminAffiliateProducts.js";
+import { renderAdminAffiliateProductCreate, renderAdminAffiliateProductEdit } from "../pages/adminAffiliateProductForm.js";
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -312,6 +314,14 @@ const routeDefs = [
   { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product", noindex: true },
   { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product", noindex: true },
   { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products", noindex: true },
+  // Version 7, Milestone 172B: admin affiliate-product management.
+  // Same "/new" before "/:id/edit" ordering as /admin/products above.
+  // Not linked from anywhere public, and no public route reads any of
+  // this yet — the Recommended Books page and its own SEO metadata are
+  // Milestone 172C.
+  { pattern: "/admin/affiliate/new", render: renderAdminAffiliateProductCreate, title: "Add Affiliate Product", noindex: true },
+  { pattern: "/admin/affiliate/:id/edit", render: renderAdminAffiliateProductEdit, title: "Edit Affiliate Product", noindex: true },
+  { pattern: "/admin/affiliate", render: renderAdminAffiliateProducts, title: "Admin Affiliate Products", noindex: true },
 ];
 
 // Reads "/product/abc?ref=home" style URLs straight from the address

@@ -18,6 +18,8 @@
 // correct for whenever real ISBN/GTIN data is added.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { buildMerchantFeedXml, escapeXml, validateFeedIdentifiers } from "./generate-static-routes.mjs";
 
 function baseProduct(overrides = {}) {
@@ -188,4 +190,19 @@ test("special characters in title/description/sku are XML-escaped, producing val
 
 test("escapeXml handles every reserved XML character correctly", () => {
   assert.equal(escapeXml(`& < > " '`), "&amp; &lt; &gt; &quot; &apos;");
+});
+
+// Version 7, Milestone 172B: the Merchant Center feed must remain
+// direct Seasonedz inventory only — an AffiliateProduct (172B's new,
+// fully separate Prisma model) must never be able to appear in it.
+// The structural guarantee is that this file's own source code never
+// mentions anything affiliate-related at all: buildMerchantFeedXml()
+// and getProductsForFeed() only ever read whatever product array
+// they're given, and nothing in this script fetches or imports
+// affiliate data. A future change that ever wires an affiliate source
+// into this file would have to add a reference this test would catch
+// immediately.
+test("generate-static-routes.mjs (the Merchant feed generator) has no code path into affiliate products", () => {
+  const source = readFileSync(fileURLToPath(new URL("./generate-static-routes.mjs", import.meta.url)), "utf8");
+  assert.doesNotMatch(source.toLowerCase(), /affiliate/, "the Merchant feed generator must never reference anything affiliate-related");
 });

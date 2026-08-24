@@ -23,6 +23,12 @@ const NAV_LINKS = [
   // approve/reject an existing customer-submitted review, never create
   // one (see pages/adminReviews.js's own header comment).
   { key: "reviews", href: "/admin/reviews", label: "Reviews" },
+  // Version 7, Milestone 172B: affiliate recommendation products.
+  // Products/Commissions/Overview all live under this one flat link
+  // for now, matching this nav's own existing "no nested menu" shape
+  // (see 172A's own admin-integration finding) — 172B only builds the
+  // Products area; Commissions/Overview arrive in 172D.
+  { key: "affiliate", href: "/admin/affiliate", label: "Affiliate" },
 ];
 
 export function renderAdminNav(activeKey) {

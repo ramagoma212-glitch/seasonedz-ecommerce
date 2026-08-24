@@ -55,6 +55,14 @@ import {
   approveAdminReview,
   rejectAdminReview,
 } from "./api/adminDashboardApi.js";
+import {
+  createAdminAffiliateProduct,
+  updateAdminAffiliateProduct,
+  activateAdminAffiliateProduct,
+  deactivateAdminAffiliateProduct,
+  featureAdminAffiliateProduct,
+  unfeatureAdminAffiliateProduct,
+} from "./api/adminAffiliateApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
@@ -104,6 +112,9 @@ function mountApp() {
   setupAdminProductImages();
   setupAdminDigitalAsset();
   setupAdminReviewModeration();
+  setupAdminAffiliateFilterForm();
+  setupAdminAffiliateForm();
+  setupAdminAffiliateActions();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -2384,6 +2395,197 @@ async function handleAdminReviewModeration(button, apiCall, verb) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.classList.remove("form-banner--success");
       banner.classList.add("form-banner--error");
+      banner.hidden = false;
+    }
+  }
+}
+
+// Admin affiliate products (Version 7, Milestone 172B). Same filter/
+// form/action wiring shape as the product management functions above,
+// applied to the new, fully separate AffiliateProduct admin surface.
+// Nothing here is public — no cart/checkout/Merchant-feed code is
+// imported or touched anywhere in this section.
+function setupAdminAffiliateFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-affiliate-filter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const isActive = form.querySelector('select[name="isActive"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (isActive) params.set("isActive", isActive);
+    params.set("page", "1");
+
+    navigateTo(`/admin/affiliate?${params.toString()}`);
+  });
+}
+
+function setupAdminAffiliateForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-affiliate-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminAffiliateFormSubmit(form);
+  });
+}
+
+function readAdminAffiliateFormValues(form) {
+  const title = form.querySelector("#affiliateTitle")?.value.trim() || "";
+  const author = form.querySelector("#affiliateAuthor")?.value.trim() || "";
+  const slug = form.querySelector("#affiliateSlug")?.value.trim() || "";
+  const trackingSlug = form.querySelector("#affiliateTrackingSlug")?.value.trim() || "";
+  const description = form.querySelector("#affiliateDescription")?.value.trim() || "";
+  const imageUrl = form.querySelector("#affiliateImageUrl")?.value.trim() || "";
+  const category = form.querySelector("#affiliateCategory")?.value.trim() || "";
+  const merchantName = form.querySelector("#affiliateMerchantName")?.value.trim() || "";
+  const affiliateNetwork = form.querySelector("#affiliateNetwork")?.value.trim() || "";
+  const affiliateUrl = form.querySelector("#affiliateUrl")?.value.trim() || "";
+  const priceRaw = form.querySelector("#affiliatePrice")?.value;
+  const currency = form.querySelector("#affiliateCurrency")?.value.trim() || "ZAR";
+  const discountText = form.querySelector("#affiliateDiscountText")?.value.trim() || "";
+  const ratingRaw = form.querySelector("#affiliateRating")?.value;
+  const isFeatured = form.querySelector("#affiliateIsFeatured")?.checked || false;
+  const isActive = form.querySelector("#affiliateIsActive")?.checked ?? true;
+
+  return {
+    title,
+    author: author || null,
+    slug: slug || undefined,
+    trackingSlug: trackingSlug || undefined,
+    description: description || null,
+    imageUrl: imageUrl || null,
+    category: category || null,
+    merchantName,
+    affiliateNetwork: affiliateNetwork || null,
+    affiliateUrl,
+    price: priceRaw ? Number(priceRaw) : null,
+    currency,
+    discountText: discountText || null,
+    rating: ratingRaw ? Number(ratingRaw) : null,
+    isFeatured,
+    isActive,
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (adminAffiliateProduct.service.ts, including affiliateUrl.validator.ts)
+// independently re-validates every field regardless and remains the
+// final authority, same discipline as validateAdminProductForm() above.
+function validateAdminAffiliateForm(values) {
+  if (!values.title) return "Title is required.";
+  if (!values.merchantName) return "Merchant is required.";
+  if (!values.affiliateUrl) return "Affiliate URL is required.";
+  try {
+    const parsed = new URL(values.affiliateUrl);
+    if (parsed.protocol !== "https:") return "Affiliate URL must start with https://.";
+  } catch {
+    return "Affiliate URL must be a valid, absolute URL.";
+  }
+  if (values.price !== null && (!Number.isFinite(values.price) || values.price < 0)) return "Price must be a non-negative number.";
+  if (values.rating !== null && (!Number.isFinite(values.rating) || values.rating < 0 || values.rating > 5)) return "Rating must be a number between 0 and 5.";
+  return null;
+}
+
+async function handleAdminAffiliateFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-affiliate-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminAffiliateFormValues(form);
+  const validationError = validateAdminAffiliateForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminAffiliateProduct(values);
+      setPendingAdminMessage(`Affiliate product "${response.data.title}" created successfully.`);
+      navigateTo(`/admin/affiliate/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const affiliateProductId = form.dataset.affiliateProductId;
+      // slug/trackingSlug are only included when the field actually
+      // changed from what was rendered — readAdminAffiliateFormValues()
+      // always reads the current input value, so an untouched field
+      // round-trips as the same value it was loaded with, never
+      // silently cleared or regenerated by an unrelated edit.
+      await updateAdminAffiliateProduct(affiliateProductId, values);
+      setPendingAdminMessage("Affiliate product updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiError && error.status === 404) {
+      message = "Affiliate product not found.";
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+const ADMIN_AFFILIATE_ACTIONS = {
+  "activate-affiliate-product": { apiCall: activateAdminAffiliateProduct, verb: "activated" },
+  "deactivate-affiliate-product": { apiCall: deactivateAdminAffiliateProduct, verb: "deactivated" },
+  "feature-affiliate-product": { apiCall: featureAdminAffiliateProduct, verb: "featured" },
+  "unfeature-affiliate-product": { apiCall: unfeatureAdminAffiliateProduct, verb: "unfeatured" },
+};
+
+function setupAdminAffiliateActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const action = ADMIN_AFFILIATE_ACTIONS[button.dataset.action];
+    if (!action) return;
+
+    handleAdminAffiliateAction(button, action.apiCall, action.verb);
+  });
+}
+
+async function handleAdminAffiliateAction(button, apiCall, verb) {
+  const affiliateProductId = button.dataset.affiliateProductId;
+  const row = button.closest("[data-affiliate-product-row]");
+  const banner = document.querySelector("[data-admin-affiliate-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(affiliateProductId);
+    setPendingAdminMessage(`Affiliate product ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
   }

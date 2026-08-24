@@ -937,3 +937,152 @@ model NewsletterSubscriber {
   @@index([status])
   @@index([createdAt])
 }
+
+// ============================================================================
+// AFFILIATE RECOMMENDATIONS
+// ============================================================================
+
+// Version 7, Milestone 172B: schema foundation for the affiliate
+// recommendation system (see the 172A architecture audit for the full
+// reasoning). Deliberately unrelated to Product/Category — an
+// AffiliateProduct is never sold, shipped or fulfilled by Seasonedz,
+// so it carries no foreign key into either table. This is what makes
+// direct-store separation structural rather than a rule someone has
+// to remember: nothing in cart/checkout/Order/the Merchant feed ever
+// looks up an AffiliateProduct, because none of those code paths know
+// this table exists.
+//
+// No public route reads or writes any of these three models yet —
+// the public /go/:trackingSlug redirect and GET /api/affiliate/products
+// are Milestone 172C. This migration exists now so 172C's own change
+// can be additive too, the same "schema first, feature after"
+// discipline already used for DigitalAsset (Milestone 152) and
+// ProductReview (Milestone 171C) before their own features shipped.
+model AffiliateProduct {
+  id           String  @id @default(cuid())
+  title        String
+  author       String?
+  slug         String  @unique
+  // The public identifier used only by the future /go/:trackingSlug
+  // redirect (172C) — kept distinct from slug so a cosmetic slug edit
+  // never has to also break a link an owner has already shared. See
+  // affiliateProduct.validator.ts for the "never silently rewrite an
+  // existing trackingSlug" rule.
+  trackingSlug String  @unique
+  description  String?
+  imageUrl     String?
+  // Deliberately free text, not a relation to Category — an affiliate
+  // recommendation is never a Seasonedz product and must never be
+  // able to appear alongside real inventory through a shared category
+  // join. See the 172A audit's own Phase 4 finding.
+  category     String?
+
+  merchantName     String
+  affiliateNetwork String?
+  // The actual redirect destination. Never returned by the public API
+  // and never supplied by a site visitor — only ever written by an
+  // admin, through affiliateProductUrl.validator.ts's HTTPS-only
+  // checks.
+  affiliateUrl     String
+
+  // Optional and paired with priceLastCheckedAt on purpose — an
+  // external merchant's price can move at any time and this database
+  // has no way to know when it last did. The future public card
+  // (172C) only ever shows a number when priceLastCheckedAt is
+  // recent; otherwise it shows "View current price on {merchant}"
+  // instead of a figure that might already be wrong. See the 172A
+  // audit's own pricing finding.
+  price              Decimal?  @db.Decimal(10, 2)
+  currency           String    @default("ZAR")
+  priceLastCheckedAt DateTime?
+  // Owner-entered only, e.g. "Save 20%" — never computed from price.
+  discountText       String?
+  // Owner-entered only, never fabricated — the same "never invent an
+  // identifier" discipline already proven for GTIN (Milestone 171I.1)
+  // and product ids (171I.2), applied here to a rating instead.
+  rating             Decimal?  @db.Decimal(3, 2)
+
+  isFeatured Boolean @default(false)
+  isActive   Boolean @default(true)
+
+  clicks      AffiliateClick[]
+  commissions AffiliateCommission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([isFeatured])
+  @@index([merchantName])
+}
+
+// Version 7, Milestone 172B: one row per successful future
+// /go/:trackingSlug redirect (172C) — created now so that migration
+// is unnecessary. Deliberately minimal: see the 172A audit's own
+// privacy-minimising design. No public writer exists yet in 172B, so
+// this table can only ever be empty in production until 172C ships.
+model AffiliateClick {
+  id                 String           @id @default(cuid())
+  affiliateProductId String
+  affiliateProduct   AffiliateProduct @relation(fields: [affiliateProductId], references: [id], onDelete: Cascade)
+
+  clickedAt   DateTime @default(now())
+  // Short, validated attribution strings only — never a customer
+  // identifier of any kind. See the 172A audit's own Phase 8
+  // constraints.
+  campaign    String?
+  source      String?
+  placement   String?
+  // Hostname only (e.g. "seasonedzgroup.co.za") — never the full
+  // referrer URL or its query string, which can carry personal
+  // information from a search or email link. See the 172A audit's own
+  // Phase 6 finding.
+  refererHost String?
+
+  @@index([affiliateProductId, clickedAt])
+  @@index([campaign])
+}
+
+// Version 7, Milestone 172B: manual commission records for networks
+// with no reporting API — entered one at a time by an admin, never
+// derived from AffiliateClick. A click is not a sale; nothing in this
+// codebase is ever allowed to infer commissionEarned from a click
+// count. affiliateProductId is optional with onDelete: SetNull, and
+// productTitleSnapshot always remains — the same "financial history
+// must survive the row it points to being removed" discipline already
+// used for OrderStatusHistory.changedByAdminUserId above.
+model AffiliateCommission {
+  id                   String            @id @default(cuid())
+  affiliateProductId   String?
+  affiliateProduct     AffiliateProduct? @relation(fields: [affiliateProductId], references: [id], onDelete: SetNull)
+  productTitleSnapshot String
+
+  affiliateNetwork  String?
+  externalReference String?
+  saleDate          DateTime
+  saleAmount        Decimal  @db.Decimal(10, 2)
+  commissionRate    Decimal? @db.Decimal(5, 2)
+  commissionEarned  Decimal  @db.Decimal(10, 2)
+  currency          String   @default("ZAR")
+
+  status CommissionStatus @default(PENDING)
+  notes  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([affiliateProductId])
+  @@index([status])
+  @@index([saleDate])
+}
+
+// Version 7, Milestone 172B: matches this schema's own existing
+// status-enum vocabulary — ReviewStatus above already uses PENDING/
+// APPROVED/REJECTED. PAID is the one addition, reading the same way
+// PaymentStatus.PAID already does elsewhere in this file.
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+}

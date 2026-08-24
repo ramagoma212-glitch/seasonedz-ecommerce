@@ -1001,6 +1001,18 @@
 .admin-table__actions {
   display: flex;
   gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+/* Version 7, Milestone 172B: small muted secondary line inside a table
+   cell (e.g. an author name under a title, a "checked" date under a
+   price) — same --color-text-muted token as every other admin-table__*
+   caption above, just without .admin-table__gift-message's italic. */
+.admin-table__meta {
+  display: block;
+  margin-top: var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: 0.85em;
 }
 
 .admin-reminders {

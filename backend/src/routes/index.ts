@@ -16,6 +16,7 @@ import customerRoutes from "./customer.routes.js";
 import downloadsRoutes from "./downloads.routes.js";
 import newsletterRoutes from "./newsletter.routes.js";
 import socialAuthRoutes from "./socialAuth.routes.js";
+import adminAffiliateRoutes from "./adminAffiliate.routes.js";
 
 const router = Router();
 
@@ -48,5 +49,10 @@ router.use("/newsletter", newsletterRoutes);
 // fully additive to customerAuth above, ends in the exact same
 // customer_session cookie. See socialAuth.routes.ts.
 router.use("/auth", socialAuthRoutes);
+// Version 7, Milestone 172B: admin affiliate-product management —
+// requireAdminAuth applied at the router level, see
+// adminAffiliate.routes.ts's own header comment. No public affiliate
+// route is mounted anywhere yet; that's Milestone 172C.
+router.use("/admin/affiliate", adminAffiliateRoutes);
 
 export default router;
