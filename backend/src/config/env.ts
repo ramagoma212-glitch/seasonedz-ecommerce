@@ -247,26 +247,74 @@ if (!adminSessionSecret) {
   );
 }
 
-// Referral attribution signing (Version 7, Milestone 172B.4). Signs the
-// {code, capturedAt} pair a storefront visitor's browser stores in
-// Local Storage (seasonedz_referral) after following a ?ref=CODE link,
-// so order.service.ts can trust capturedAt when enforcing
-// attributionWindowDays — a plain client-editable timestamp could
-// otherwise be edited to make a stale referral look freshly captured
-// forever. See utils/referralAttributionToken.ts.
+// Referral attribution signing (Version 7, Milestone 172B.4; hardened
+// Milestone 172B.4.2). Signs the {code, capturedAt} pair a storefront
+// visitor's browser stores in Local Storage (seasonedz_referral) after
+// following a ?ref=CODE link, so order.service.ts can trust capturedAt
+// when enforcing attributionWindowDays — a plain client-editable
+// timestamp could otherwise be edited to make a stale referral look
+// freshly captured forever. See utils/referralAttributionToken.ts,
+// which reads only env.referralAttributionSecret below — the single
+// authoritative resolution path; nothing else in this backend reads
+// process.env.REFERRAL_ATTRIBUTION_SECRET directly.
 //
-// Same "safe to fall back to a random per-process secret" reasoning as
-// ADMIN_SESSION_SECRET above: nothing this signs is ever a login
-// credential, and the only consequence of a restart-triggered rotation
-// is that any *already-captured, not-yet-checked-out* referral token
-// signed under the old secret stops verifying — it simply stops
-// applying a discount/commission (a safe, non-financial degrade, never
-// a crash and never a false grant), not a security hole.
-const referralAttributionSecret = getOptionalEnv("REFERRAL_ATTRIBUTION_SECRET");
-if (!referralAttributionSecret) {
+// Version 7, Milestone 172B.4.2: unlike ADMIN_SESSION_SECRET above,
+// this is NO LONGER allowed to silently fall back to a random,
+// process-only secret in production. 172B.4's original "safe,
+// non-financial degrade" reasoning undersold the real impact once the
+// referral programme went live with real discounts/commissions: a
+// silently-rotating secret invalidates every in-flight referral
+// attribution on every single restart, with no error and no visible
+// symptom beyond a real affiliate quietly not getting credited —
+// exactly the kind of failure that should be loud at startup, not
+// silent in production. Development/test still fall back to a random
+// secret (no real affiliate/commission risk there, and requiring a
+// real value locally would only add friction).
+//
+// resolveReferralAttributionSecret() is a pure function (no
+// module-level closures) so this is directly unit-testable without
+// needing to reload the env module under different NODE_ENV values —
+// see this file's own resolveOAuthCallbackBaseUrl() above for the
+// exact same pattern, and referralAttributionSecret.test.ts.
+export const REFERRAL_ATTRIBUTION_SECRET_MIN_LENGTH = 32;
+
+export function resolveReferralAttributionSecret(params: { isProduction: boolean; rawSecret: string | undefined; minLength: number }): string | null {
+  const trimmed = params.rawSecret?.trim() || undefined;
+
+  if (params.isProduction) {
+    if (!trimmed) {
+      throw new Error(
+        "REFERRAL_ATTRIBUTION_SECRET is required in production. Set a real, random value " +
+          `(at least ${params.minLength} characters) in Render's Environment tab — see backend/.env.example.`
+      );
+    }
+    if (trimmed.length < params.minLength) {
+      throw new Error(
+        `REFERRAL_ATTRIBUTION_SECRET must be at least ${params.minLength} characters in production. ` +
+          "Set a real, random value in Render's Environment tab — see backend/.env.example."
+      );
+    }
+    return trimmed;
+  }
+
+  // Development/test: a missing value is fine, resolved to null here so
+  // the caller below can fall back to a random per-process secret —
+  // never a hard failure outside production.
+  return trimmed ?? null;
+}
+
+const rawReferralAttributionSecret = getOptionalEnv("REFERRAL_ATTRIBUTION_SECRET");
+const resolvedReferralAttributionSecret = resolveReferralAttributionSecret({
+  isProduction: nodeEnvIsProduction,
+  rawSecret: rawReferralAttributionSecret,
+  minLength: REFERRAL_ATTRIBUTION_SECRET_MIN_LENGTH,
+});
+if (!resolvedReferralAttributionSecret) {
+  // Only ever reached outside production — resolveReferralAttributionSecret()
+  // always either returns a valid string or throws when isProduction is true.
   // eslint-disable-next-line no-console
   console.warn(
-    "[referrals] REFERRAL_ATTRIBUTION_SECRET is not set — using a random, process-only secret. " +
+    "[referrals] REFERRAL_ATTRIBUTION_SECRET is not set — using a random, process-only secret (development/test only). " +
       "A referral captured before a restart will stop applying its discount/commission after one, until a real secret is set."
   );
 }
@@ -650,10 +698,12 @@ export const env = {
   // Admin auth — see the block above. Falls back to a random,
   // process-only secret when unset (never logged, never persisted).
   adminSessionSecret: adminSessionSecret || randomBytes(32).toString("hex"),
-  // Referral attribution signing — see the block above. Falls back to a
-  // random, process-only secret, same "safe degrade, not a crash or a
-  // false grant" reasoning as adminSessionSecret.
-  referralAttributionSecret: referralAttributionSecret || randomBytes(32).toString("hex"),
+  // Referral attribution signing — see the block above. Production:
+  // resolvedReferralAttributionSecret is always a real, validated value
+  // here (resolveReferralAttributionSecret() already threw a clear
+  // startup error otherwise). Development/test only: falls back to a
+  // random, process-only secret.
+  referralAttributionSecret: resolvedReferralAttributionSecret || randomBytes(32).toString("hex"),
   // Product image upload — see the block above. supabaseServiceRoleKey
   // is undefined unless explicitly set; never logged anywhere.
   supabaseUrl,
