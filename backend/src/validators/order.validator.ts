@@ -65,6 +65,38 @@ export interface ValidatedOrderInput {
   collectionCity: CollectionCityValue | null;
   paymentMethod: PaymentMethod;
   items: ValidatedOrderItem[];
+  // Version 7, Milestone 172B.4: the referral programme's ONLY input
+  // from the client — the exact {code, capturedAt, signature} object
+  // referralCapture.service.ts issued and the browser stored verbatim
+  // in Local Storage (seasonedz_referral), never anything the checkout
+  // form itself lets a customer type. No rate, amount, affiliate id or
+  // eligibility flag is ever accepted here or anywhere else in this
+  // request — order.service.ts re-derives every one of those itself
+  // from the signature-verified code and the database, exactly the
+  // same "never trust the body for money" discipline this file already
+  // applies to price/subtotal/total. Shape-checked only, below — the
+  // signature itself is verified by order.service.ts, which needs the
+  // server secret this file deliberately never touches.
+  referralAttribution: ValidatedReferralAttribution | null;
+}
+
+export interface ValidatedReferralAttribution {
+  code: string;
+  capturedAt: string;
+  signature: string;
+}
+
+// A missing/malformed referralAttribution is never a validation error —
+// same "unknown/invalid extra data is dropped, not fatal" discipline
+// this file's own header comment already establishes, and the same
+// "a referral problem must never block a legitimate order" rule
+// order.service.ts applies at the point it actually resolves this.
+function extractReferralAttribution(raw: unknown): ValidatedReferralAttribution | null {
+  const record = asRecord(raw);
+  if (!isNonEmptyString(record.code) || !isNonEmptyString(record.capturedAt) || !isNonEmptyString(record.signature)) {
+    return null;
+  }
+  return { code: record.code, capturedAt: record.capturedAt, signature: record.signature };
 }
 
 export interface OrderValidationResult {
@@ -265,6 +297,7 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
       collectionCity,
       paymentMethod: root.paymentMethod as PaymentMethod,
       items: validatedItems,
+      referralAttribution: extractReferralAttribution(root.referralAttribution),
     },
   };
 }

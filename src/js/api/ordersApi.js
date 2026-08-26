@@ -8,6 +8,7 @@
 
 import { apiGet, apiPost } from "../apiClient.js";
 import { mapPaymentMethodToBackend } from "./mappers.js";
+import { getStoredReferralAttribution } from "../referral.js";
 
 // Version 7, Milestone 168C.1: `deliveryMethod` is required.
 // `deliveryAddress` is sent for COURIER_DOOR (full: street/suburb/
@@ -22,6 +23,7 @@ import { mapPaymentMethodToBackend } from "./mappers.js";
 // exactly as before.
 export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, collectionCity, deliveryNotes, paymentMethod, items }) {
   const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
+  const referralAttribution = getStoredReferralAttribution();
 
   return {
     customer: {
@@ -52,6 +54,14 @@ export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, c
       giftWrap: Boolean(item.giftWrap),
       giftMessage: item.giftWrap ? item.giftMessage || null : null,
     })),
+    // Version 7, Milestone 172B.4: the referral programme's ONLY input
+    // from this frontend — the exact {code, capturedAt, signature}
+    // object the backend itself issued at capture time (js/referral.js),
+    // never anything the checkout form lets a customer type or that
+    // this file computes. Omitted entirely (not even sent as null) when
+    // nothing is stored, so an order placed with no referral looks
+    // exactly like it did before this milestone.
+    ...(referralAttribution ? { referralAttribution } : {}),
   };
 }
 

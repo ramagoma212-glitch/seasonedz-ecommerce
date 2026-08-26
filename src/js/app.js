@@ -33,6 +33,7 @@ import {
 } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
+import { clearReferralAttribution, markReferralAttributionPendingOrder } from "./referral.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
@@ -759,6 +760,12 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   const hasPhysicalItems = form.dataset.hasPhysicalItems === "true";
   const subtotal = parseFloat(form.dataset.subtotal || "0");
   const giftWrapTotal = parseFloat(form.dataset.giftWrapTotal || "0");
+  // Version 7, Milestone 172B.4: the checkout page's own referral
+  // discount PREVIEW (see checkoutPage.js's getReferralDiscountPreview())
+  // — never recomputed here on a delivery-method change, since the
+  // discount is based on the qualifying product subtotal, which a
+  // delivery method choice never affects.
+  const discountTotal = parseFloat(form.dataset.discountTotal || "0");
 
   const feeForMethod = (candidateMethod) => {
     if (!hasPhysicalItems) return 0;
@@ -792,7 +799,7 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   valueEl?.closest(".order-summary__row")?.classList.remove("order-summary__row--delivery-pending");
 
   const totalEl = summary.querySelector("[data-order-summary-total-value]");
-  if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee).toFixed(2)}`;
+  if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee - discountTotal).toFixed(2)}`;
 
   const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
   if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems).trim();
@@ -975,9 +982,22 @@ async function handleCheckoutSubmit(form) {
     updateHeaderCounters();
 
     if (data.paymentMethod === "payfast") {
+      // Version 7, Milestone 172B.4: deliberately NOT cleared here — a
+      // PayFast order is only PENDING at this point, not yet a
+      // genuinely successful/confirmed order (payment could still fail
+      // or be cancelled on PayFast's own page). Flagged as pending
+      // instead, so pages/paymentSuccess.js can clear it once (and
+      // only once) this exact order is confirmed PAID.
+      markReferralAttributionPendingOrder(orderNumber);
       await redirectToPayfast(orderNumber);
       return;
     }
+
+    // Version 7, Milestone 172B.4: Bank Transfer / Cash on Delivery have
+    // no separate payment-confirmation step in this business model —
+    // order creation IS the final, accepted state (matches this exact
+    // moment already being when the cart itself clears, two lines up).
+    clearReferralAttribution();
 
     navigateTo(`/order-confirmation?order=${encodeURIComponent(orderNumber)}`);
   } catch (error) {

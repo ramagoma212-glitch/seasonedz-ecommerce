@@ -11,6 +11,7 @@ import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { parsePositiveIntParam } from "../utils/query.js";
 import * as adminDashboardService from "../services/adminDashboard.service.js";
 import { getOrderByNumber } from "../services/order.service.js";
+import { getReferralCommissionFieldsForOrder } from "../services/referralCommission.service.js";
 
 const DEFAULT_LIST_LIMIT = 20;
 const MAX_LIST_LIMIT = 50;
@@ -107,7 +108,16 @@ export async function getOrderDetailHandler(req: Request, res: Response, next: N
       ? { ...order, shipping: { ...order.shipping, ...courierBookingFields } }
       : order;
 
-    sendSuccess(res, { message: "Order retrieved successfully", data: orderWithCourierFields });
+    // Version 7, Milestone 172B.4: referral affiliate/code/commission —
+    // admin-only, same "small, separately-queried augmentation, never
+    // added to the shared customer-facing shape" pattern as the courier
+    // fields above. null (no commission row) whenever this order wasn't
+    // referred at all, or was a genuine self-referral — see
+    // referralCommission.service.ts's own comment on the latter.
+    const referralFields = await getReferralCommissionFieldsForOrder(orderNumber);
+    const orderWithReferralFields = referralFields ? { ...orderWithCourierFields, referral: referralFields } : orderWithCourierFields;
+
+    sendSuccess(res, { message: "Order retrieved successfully", data: orderWithReferralFields });
   } catch (error) {
     next(error);
   }

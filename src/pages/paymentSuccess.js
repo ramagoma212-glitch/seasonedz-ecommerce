@@ -11,6 +11,7 @@
 import { getOrderTracking } from "../js/api/ordersApi.js";
 import { ApiError } from "../js/apiClient.js";
 import { getPendingPayment, clearPendingPayment } from "../js/pendingPayment.js";
+import { clearReferralAttributionIfPendingForOrder } from "../js/referral.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { escapeHtml } from "../js/search.js";
 import { isPayfastRetryEligible, renderPayfastRetryButton } from "../components/payfastRetry.js";
@@ -133,7 +134,17 @@ async function renderResultForOrderNumber(orderNumber) {
       clearPendingPayment();
     }
 
-    if (tracking.paymentStatus === "PAID") return renderPaidResult(tracking);
+    // Version 7, Milestone 172B.4: this is the one place a PayFast
+    // order's stored referral is ever cleared — only once the backend
+    // has genuinely confirmed PAID, and only if it's still flagged as
+    // pending for exactly this order (never a referral captured fresh
+    // since — see js/referral.js's own comment). Never cleared on
+    // FAILED/CANCELLED/PENDING below, so a customer can retry payment
+    // with the same referral still attached.
+    if (tracking.paymentStatus === "PAID") {
+      clearReferralAttributionIfPendingForOrder(orderNumber);
+      return renderPaidResult(tracking);
+    }
     if (tracking.paymentStatus === "FAILED" || tracking.paymentStatus === "CANCELLED") return renderUnsuccessfulResult(tracking);
     return renderPendingResult(tracking);
   } catch (error) {

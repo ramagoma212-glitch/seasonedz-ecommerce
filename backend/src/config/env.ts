@@ -247,6 +247,30 @@ if (!adminSessionSecret) {
   );
 }
 
+// Referral attribution signing (Version 7, Milestone 172B.4). Signs the
+// {code, capturedAt} pair a storefront visitor's browser stores in
+// Local Storage (seasonedz_referral) after following a ?ref=CODE link,
+// so order.service.ts can trust capturedAt when enforcing
+// attributionWindowDays — a plain client-editable timestamp could
+// otherwise be edited to make a stale referral look freshly captured
+// forever. See utils/referralAttributionToken.ts.
+//
+// Same "safe to fall back to a random per-process secret" reasoning as
+// ADMIN_SESSION_SECRET above: nothing this signs is ever a login
+// credential, and the only consequence of a restart-triggered rotation
+// is that any *already-captured, not-yet-checked-out* referral token
+// signed under the old secret stops verifying — it simply stops
+// applying a discount/commission (a safe, non-financial degrade, never
+// a crash and never a false grant), not a security hole.
+const referralAttributionSecret = getOptionalEnv("REFERRAL_ATTRIBUTION_SECRET");
+if (!referralAttributionSecret) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[referrals] REFERRAL_ATTRIBUTION_SECRET is not set — using a random, process-only secret. " +
+      "A referral captured before a restart will stop applying its discount/commission after one, until a real secret is set."
+  );
+}
+
 // Product image upload (Version 7, Milestone 69 — backend only, no
 // admin upload UI yet). See VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md.
 //
@@ -626,6 +650,10 @@ export const env = {
   // Admin auth — see the block above. Falls back to a random,
   // process-only secret when unset (never logged, never persisted).
   adminSessionSecret: adminSessionSecret || randomBytes(32).toString("hex"),
+  // Referral attribution signing — see the block above. Falls back to a
+  // random, process-only secret, same "safe degrade, not a crash or a
+  // false grant" reasoning as adminSessionSecret.
+  referralAttributionSecret: referralAttributionSecret || randomBytes(32).toString("hex"),
   // Product image upload — see the block above. supabaseServiceRoleKey
   // is undefined unless explicitly set; never logged anywhere.
   supabaseUrl,

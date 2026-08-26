@@ -10,6 +10,16 @@
 // makes one of these files reference an affiliate model, this test
 // fails immediately and loudly, rather than the separation quietly
 // eroding.
+//
+// Version 7, Milestone 172B.4: order.service.ts and order.validator.ts
+// moved OUT of this "never mentions affiliate at all" list into the
+// narrower one below — Seasonedz's own internal referral programme
+// (Affiliate, OrderAffiliateCommission — a fully separate system from
+// AffiliateProduct, see the 172B.2 audit) is now genuinely wired into
+// checkout, so a blanket "never says affiliate" check would fail on
+// legitimate code. What this file actually needs to keep proving is
+// narrower and still true: the EXTERNAL AffiliateProduct system has no
+// path into either file.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -22,7 +32,6 @@ const SRC_ROOT = __dirname;
 const FILES_THAT_MUST_NEVER_MENTION_AFFILIATE = [
   "services/product.service.ts",
   "services/adminProduct.service.ts",
-  "services/order.service.ts",
   "services/customerOrder.service.ts",
   "services/category.service.ts",
   "services/digitalDownload.service.ts",
@@ -31,13 +40,21 @@ const FILES_THAT_MUST_NEVER_MENTION_AFFILIATE = [
   "controllers/product.controller.ts",
   "controllers/order.controller.ts",
   "controllers/category.controller.ts",
-  "validators/order.validator.ts",
 ];
 
 for (const relativePath of FILES_THAT_MUST_NEVER_MENTION_AFFILIATE) {
   test(`${relativePath} has no code path into affiliate products`, () => {
     const contents = readFileSync(join(SRC_ROOT, relativePath), "utf8");
     assert.doesNotMatch(contents.toLowerCase(), /affiliate/, `${relativePath} must never reference anything affiliate-related`);
+  });
+}
+
+const FILES_THAT_MUST_NEVER_REFERENCE_EXTERNAL_AFFILIATE_PRODUCTS = ["services/order.service.ts", "validators/order.validator.ts"];
+
+for (const relativePath of FILES_THAT_MUST_NEVER_REFERENCE_EXTERNAL_AFFILIATE_PRODUCTS) {
+  test(`${relativePath} has no code path into the EXTERNAL AffiliateProduct system (may reference the internal referral programme)`, () => {
+    const contents = readFileSync(join(SRC_ROOT, relativePath), "utf8");
+    assert.doesNotMatch(contents, /AffiliateProduct|AffiliateClick|\bAffiliateCommission\b/, `${relativePath} must never reference the dormant external-merchant models`);
   });
 }
 

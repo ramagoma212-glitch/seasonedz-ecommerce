@@ -1,18 +1,22 @@
-// Version 7, Milestone 172B.3: structural proofs specific to this
-// milestone, extending directStoreSeparation.test.ts's own approach
-// (172B) rather than duplicating it. Two things are proven cheaply by
-// reading source text instead of exercising real behaviour:
+// Version 7, Milestone 172B.3: structural proof, extending
+// directStoreSeparation.test.ts's own approach (172B) rather than
+// duplicating it — Seasonedz's own affiliate/referral programme
+// (Affiliate, AffiliateProgrammeSettings, OrderAffiliateCommission) and
+// 172B's dormant external-merchant system (AffiliateProduct,
+// AffiliateClick, AffiliateCommission) never reference each other's
+// files or models, proven cheaply by reading source text instead of
+// exercising real behaviour. See the 172B.2 architecture audit for why
+// they must stay separate.
 //
-// 1. Seasonedz's own affiliate/referral programme (Affiliate,
-//    AffiliateProgrammeSettings, OrderAffiliateCommission) and 172B's
-//    dormant external-merchant system (AffiliateProduct, AffiliateClick,
-//    AffiliateCommission) never reference each other's files or models
-//    — see the 172B.2 architecture audit for why they must stay
-//    separate.
-// 2. Nothing in this milestone wires a referral into checkout or order
-//    creation yet (§14/§28 of the brief) — order.service.ts and its
-//    validator must still have no code path into Affiliate/
-//    OrderAffiliateCommission at all.
+// Version 7, Milestone 172B.4: order.service.ts and order.validator.ts
+// DO now have a real code path into the referral programme (referral
+// discount/commission are live) — the two tests that used to assert
+// the opposite were removed; see order.service.test.ts for the real
+// behavioural coverage of that wiring instead. This file's own job
+// narrows to what's still true after 172B.4: order.service.ts/
+// order.validator.ts must still never reference 172B's DORMANT
+// external-merchant models, exactly like every other file in this
+// backend.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -32,8 +36,20 @@ function read(relativePath: string): string {
 // way of explaining why they stay apart (see this file's own header
 // above). What actually matters structurally is the CODE never
 // referencing the other system, not prose explaining the boundary.
+//
+// Normalises CRLF to LF first: on a checkout with git's
+// core.autocrlf=true (the default on a Windows dev machine, unrelated
+// to this milestone), every line ends in "\r\n" rather than "\n" alone
+// — and JavaScript's `.` in `/\/\/.*$/` never matches a literal "\r"
+// (it's one of regex's own line-terminator characters), so on an
+// un-normalised CRLF line the whole `.*$` fails to match anywhere and
+// the comment silently survives un-stripped. CI itself runs on Linux
+// (LF-native) and never hit this; normalising here makes the check
+// correct on every platform instead of only accidentally correct on
+// one.
 function stripLineComments(source: string): string {
   return source
+    .replace(/\r\n/g, "\n")
     .split("\n")
     .map((line) => line.replace(/\/\/.*$/, ""))
     .join("\n");
@@ -68,20 +84,21 @@ test("172B's external affiliate-product files never reference the new internal r
   }
 });
 
-test("order.service.ts and order.validator.ts have no code path into the referral programme yet — no discount, no commission, no attribution", () => {
-  const orderService = read("services/order.service.ts");
-  const orderValidator = read("validators/order.validator.ts");
+test("order.service.ts and order.validator.ts never reference 172B's dormant external-merchant models, even though the referral programme is now wired in", () => {
+  const orderService = stripLineComments(read("services/order.service.ts"));
+  const orderValidator = stripLineComments(read("validators/order.validator.ts"));
   for (const [name, contents] of [
     ["order.service.ts", orderService],
     ["order.validator.ts", orderValidator],
   ] as const) {
-    assert.doesNotMatch(contents, /referral|Affiliate|OrderAffiliateCommission/i, `${name} must not yet reference the referral programme — that is Milestone 172B.4`);
+    assert.doesNotMatch(contents, /AffiliateProduct|AffiliateClick|\bAffiliateCommission\b/, `${name} must never reference the dormant external-merchant models`);
   }
 });
 
-test("Order.discountTotal is still hard-coded to zero in order.service.ts — the referral discount is not live yet", () => {
+test("order.service.ts resolves a referral before creating the commission, and skips commission creation entirely for a self-referral", () => {
   const orderService = read("services/order.service.ts");
-  assert.match(orderService, /discountTotal\s*=\s*new Prisma\.Decimal\(0\)/, "discountTotal must still be the existing hard-coded zero, unchanged by this milestone");
+  assert.match(orderService, /resolveReferralForOrder/, "createOrder() must resolve the referral via resolveReferralForOrder()");
+  assert.match(orderService, /referral && !referral\.isSelfReferral/, "commission creation must be guarded on both a resolved referral and it not being a self-referral");
 });
 
 test("payfast.service.ts is untouched by this milestone — still reads amount from order.total directly", () => {

@@ -16,6 +16,8 @@ import { getCatalog } from "../js/api/productsApi.js";
 import { escapeHtml } from "../js/search.js";
 import { DELIVERY_METHODS, COLLECTION_CITIES, calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
 import { withBase } from "../js/paths.js";
+import { getStoredReferralAttribution } from "../js/referral.js";
+import { previewReferral } from "../js/api/referralApi.js";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
 // the request failing) is never an error on the checkout page, just
@@ -24,6 +26,33 @@ async function getLoggedInCustomerSafely() {
   try {
     const response = await getCurrentCustomer();
     return response?.data?.customer || null;
+  } catch {
+    return null;
+  }
+}
+
+// Version 7, Milestone 172B.4: a non-binding PREVIEW of the referral
+// discount, shown on the checkout order summary before submission. Best-
+// effort, same discipline as the logged-in-customer lookup above — a
+// slow/failed backend call here must never block checkout; it just
+// means no preview shows for this page load. The REAL, binding amount
+// is only ever decided at actual order-creation time
+// (order.service.ts), re-derived from scratch there — this preview
+// exists purely so the customer isn't surprised, never trusted as the
+// authoritative figure (see js/app.js's own handling of the real order
+// response). Deliberately calls previewReferral(), never
+// captureReferral() — the latter mints a fresh capturedAt and would
+// silently re-arm the attribution window on every checkout page load.
+async function getReferralDiscountPreview(qualifyingSubtotal) {
+  const stored = getStoredReferralAttribution();
+  if (!stored) return null;
+
+  try {
+    const response = await previewReferral(stored);
+    if (!response?.data?.isValid) return null;
+    const discountRatePercent = response.data.discountRatePercent;
+    const discountTotal = Math.round(qualifyingSubtotal * discountRatePercent) / 100;
+    return discountTotal > 0 ? discountTotal : null;
   } catch {
     return null;
   }
@@ -314,6 +343,13 @@ export async function renderCheckoutPage() {
   // items and the delivery method actually submitted.
   const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary();
 
+  // Version 7, Milestone 172B.4: qualifying subtotal for the discount
+  // preview is the cart's own `subtotal` — gift wrap/delivery are
+  // already excluded from it (see js/cart.js's getCartSummary()),
+  // matching the approved V1 rule and the backend's own
+  // qualifyingProductSubtotal exactly.
+  const discountTotal = (await getReferralDiscountPreview(subtotal)) ?? 0;
+
   // Version 7, Milestone 171E: best-effort, same discipline as the
   // logged-in-customer lookup above — a slow/failed catalogue fetch
   // must never block checkout entirely; it just means stale cart items
@@ -350,6 +386,7 @@ export async function renderCheckoutPage() {
           data-has-physical-items="${composition.hasPhysical}"
           data-subtotal="${subtotal}"
           data-gift-wrap-total="${giftWrapTotal}"
+          data-discount-total="${discountTotal}"
         >
           <div class="checkout-section">
             <h2 class="checkout-section__label">Delivery Details</h2>
@@ -421,7 +458,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block" data-checkout-submit ${hasUnavailableItems ? "disabled" : ""}>Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, discountTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
       </div>
     </section>
   `;

@@ -49,6 +49,7 @@
 
 import { setPageMeta, clearPageStructuredData } from "./seo.js";
 import { navigateTo } from "./navigation.js";
+import { captureReferralFromUrl } from "./referral.js";
 import {
   renderProductGridSkeleton,
   renderCategoryGridSkeleton,
@@ -407,6 +408,13 @@ async function renderCurrentRoute() {
 
   const { path, query } = parseLocation();
   const matched = matchRoute(path);
+
+  // Version 7, Milestone 172B.4: detects a ?ref=CODE on the CURRENT
+  // page and, if present, captures it — covers a fresh external link
+  // landing anywhere on the site AND an in-app link that happens to
+  // carry ?ref=. Fire-and-forget: never awaited, so it can never delay
+  // or block this render — see js/referral.js's own comment.
+  void captureReferralFromUrl(query);
 
   // Cleared unconditionally before every render so a page that doesn't
   // set its own structured data never inherits stale data left over

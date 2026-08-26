@@ -7,9 +7,14 @@
 // 172B's dormant, external-merchant AffiliateProduct/AffiliateClick/
 // AffiliateCommission files — see the 172B.2 architecture audit.
 //
-// No route in this milestone wires a referral into checkout, applies a
-// discount, or creates an OrderAffiliateCommission — that's 172B.4/
-// 172B.5. This file only manages Affiliate rows for admin approval.
+// Version 7, Milestone 172B.4: isSelfReferral() and
+// validateReferralCodeFormat() (below) are now genuinely used by the
+// live checkout path — order.service.ts and the public
+// referralCapture.service.ts respectively. Every other function here
+// remains admin-only Affiliate row management; no admin route in this
+// file ever applies a discount or creates an OrderAffiliateCommission
+// itself — that still only ever happens inside order.service.ts's own
+// transaction.
 
 import { Prisma, AffiliateStatus } from "@prisma/client";
 import sanitizeHtml from "sanitize-html";
@@ -103,7 +108,13 @@ function optionalPhone(raw: unknown): string | null {
 // comment). Normalised to lowercase, HTML/script/control-character-
 // free by construction (the pattern below only ever matches
 // [a-z0-9-]), 3-30 characters, no spaces.
-function validateReferralCodeFormat(raw: string, fieldName = "referralCode"): string {
+//
+// Exported so referralCapture.service.ts (the public, unauthenticated
+// ?ref=CODE capture/preview endpoints, Milestone 172B.4) can reuse this
+// exact shape check rather than a second, slightly different regex —
+// this project has exactly one "URL-safe short code" format, not
+// several (see this function's own reasoning above).
+export function validateReferralCodeFormat(raw: string, fieldName = "referralCode"): string {
   const trimmed = raw.trim().toLowerCase();
   if (trimmed.length < MIN_REFERRAL_CODE_LENGTH || trimmed.length > MAX_REFERRAL_CODE_LENGTH) {
     throw new ReferralAffiliateError(`${fieldName} must be between ${MIN_REFERRAL_CODE_LENGTH} and ${MAX_REFERRAL_CODE_LENGTH} characters.`);
@@ -497,11 +508,11 @@ export async function reactivateAffiliate(id: string): Promise<AffiliateOutput> 
 }
 
 // ---------------------------------------------------------------------------
-// Self-referral detection (§20 of the brief). A pure, side-effect-free
-// helper — nothing calls this from any live route yet. 172B.4 will use
-// it at the moment a referred checkout is attributed, to apply the
-// approved V1 rule: the affiliate keeps the customer discount on their
-// own purchase, but zero commission is ever created for it.
+// Self-referral detection (§20 of the 172B.3 brief). A pure, side-effect-
+// free helper — called by order.service.ts's resolveReferralForOrder()
+// (Milestone 172B.4) at the moment a referred checkout is attributed, to
+// apply the approved V1 rule: the affiliate keeps the customer discount
+// on their own purchase, but zero commission is ever created for it.
 // ---------------------------------------------------------------------------
 
 export interface CheckoutIdentity {

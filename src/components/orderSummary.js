@@ -53,9 +53,19 @@ export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUnt
 // the cart page has no delivery-method selector at all (that only
 // exists at checkout, see checkoutPage.js), so even a neutral prompt
 // there would misleadingly suggest a choice is available on this page.
+//
+// Version 7, Milestone 172B.4: `discountTotal` defaults to 0 so every
+// existing call site (cart page, and checkout/order-confirmation before
+// a referral applies) renders exactly as before — the row only appears
+// at all when there's a real discount to show. The cart page never
+// passes a non-zero value at all (no premature/duplicated financial
+// calculation there — see cartPage.js); checkoutPage.js passes a
+// backend-confirmed PREVIEW amount, order-confirmation.js passes the
+// real, backend-persisted order.discountTotal.
 export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
+  discountTotal = 0,
   deliveryFee,
   deliveryMethodLabel = null,
   hasPhysicalItems = true,
@@ -65,7 +75,7 @@ export function renderOrderSummary({
   showItems = false,
   omitDeliveryUntilSelected = false,
 }) {
-  const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
+  const total = subtotal + giftWrapTotal + (deliveryFee ?? 0) - discountTotal;
   const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
 
   return `
@@ -114,6 +124,16 @@ export function renderOrderSummary({
         <span data-order-summary-delivery-value>${deliveryFee === null ? "Select a delivery option" : deliveryFee === 0 ? "FREE" : `R${deliveryFee.toFixed(2)}`}</span>
       </div>
       `
+      }
+      ${
+        discountTotal > 0
+          ? `
+        <div class="order-summary__row order-summary__row--discount" data-order-summary-discount-row>
+          <span>Referral discount</span>
+          <span data-order-summary-discount-value>-R${discountTotal.toFixed(2)}</span>
+        </div>
+      `
+          : ""
       }
       <div class="order-summary__row order-summary__row--total">
         <span>Order Total</span>

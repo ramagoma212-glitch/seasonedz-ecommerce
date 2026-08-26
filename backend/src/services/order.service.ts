@@ -1,10 +1,14 @@
-import { FulfilmentStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType, DeliveryMethod } from "@prisma/client";
+import { AffiliateStatus, FulfilmentStatus, OrderAffiliateCommissionStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType, DeliveryMethod } from "@prisma/client";
 import type { PaymentMethod, Product } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { calculateDeliveryFee, calculateGiftWrapFee } from "../utils/money.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
 import { GIFT_WRAP_FEE_PER_ITEM } from "../config/giftWrap.js";
 import type { ValidatedOrderInput } from "../validators/order.validator.js";
+import { verifyReferralCapture, captureAgeInDays } from "../utils/referralAttributionToken.js";
+import { getReferralProgrammeSettings } from "./referralProgrammeSettings.service.js";
+import { isSelfReferral, type CheckoutIdentity } from "./referralAffiliate.service.js";
+import { calculateReferralPricing, type ReferralPricingResult } from "./referralPricing.service.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
 // insufficient stock, etc.) — distinct from an unexpected error, so
@@ -327,6 +331,75 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
   };
 }
 
+interface ResolvedReferral {
+  affiliateId: string;
+  affiliateNameSnapshot: string;
+  affiliateReferralCodeSnapshot: string;
+  isSelfReferral: boolean;
+  pricing: ReferralPricingResult;
+}
+
+// Version 7, Milestone 172B.4: resolves input.referralAttribution (if
+// any) into real discount/commission figures, entirely re-derived
+// server-side — nothing here ever trusts a rate, amount, affiliate id
+// or eligibility flag the client sent. The client only ever sends the
+// referral CODE, wrapped in a token this backend itself signed at
+// capture time (see order.validator.ts, referralCapture.service.ts,
+// utils/referralAttributionToken.ts).
+//
+// Returns null for ANY reason the referral doesn't apply — missing,
+// tampered/forged signature, expired attribution window, programme
+// inactive, unknown code, or an affiliate that isn't ACTIVE. Every one
+// of these is a silent "no referral" outcome, never an order-blocking
+// error: a referral problem must never stop a legitimate customer order
+// (the approved V1 rule — see this milestone's own audit).
+//
+// Deliberately runs BEFORE the transaction below, not inside it: it
+// only reads (AffiliateProgrammeSettings, Affiliate), so it needs none
+// of the atomicity the stock decrement requires. An admin changing
+// programme settings or suspending the affiliate in the instant between
+// this read and the transaction committing is the same ordinary
+// "settings can change at any moment" race every other read in this
+// codebase already accepts — it can only ever affect whether a discount/
+// commission is granted, never stock correctness or order integrity.
+async function resolveReferralForOrder(
+  referralAttribution: ValidatedOrderInput["referralAttribution"],
+  checkoutIdentity: CheckoutIdentity,
+  qualifyingProductSubtotal: Prisma.Decimal
+): Promise<ResolvedReferral | null> {
+  if (!referralAttribution) return null;
+
+  const verified = verifyReferralCapture(referralAttribution);
+  if (!verified) return null;
+
+  const settings = await getReferralProgrammeSettings();
+  if (!settings.isProgrammeActive) return null;
+  if (captureAgeInDays(verified.capturedAt) > settings.attributionWindowDays) return null;
+
+  const affiliate = await prisma.affiliate.findUnique({ where: { referralCode: verified.code } });
+  if (!affiliate || affiliate.status !== AffiliateStatus.ACTIVE) return null;
+
+  const isSelf = isSelfReferral({ customerId: affiliate.customerId, email: affiliate.email }, checkoutIdentity);
+
+  const pricing = calculateReferralPricing(
+    qualifyingProductSubtotal,
+    { discountRateOverride: affiliate.discountRateOverride, commissionRateOverride: affiliate.commissionRateOverride },
+    {
+      defaultReferralDiscountRate: new Prisma.Decimal(settings.defaultReferralDiscountRate),
+      defaultCommissionRate: new Prisma.Decimal(settings.defaultCommissionRate),
+    },
+    isSelf
+  );
+
+  return {
+    affiliateId: affiliate.id,
+    affiliateNameSnapshot: affiliate.name,
+    affiliateReferralCodeSnapshot: affiliate.referralCode,
+    isSelfReferral: isSelf,
+    pricing,
+  };
+}
+
 // Orders are created as PENDING (not CONFIRMED): paymentStatus also
 // starts PENDING, since no real payment has actually been confirmed
 // yet — for BANK_TRANSFER/CASH_ON_DELIVERY there's nothing to
@@ -372,7 +445,18 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
     .filter((item) => item.productType === ProductType.PHYSICAL)
     .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
   const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems);
-  const discountTotal = new Prisma.Decimal(0);
+
+  // Version 7, Milestone 172B.4: qualifyingProductSubtotal is `subtotal`
+  // itself — the approved V1 rule excludes gift wrap and delivery, and
+  // V1 has no product-level referral exclusion, so this is exactly the
+  // same value already computed above, never a second calculation that
+  // could drift from it. Resolved BEFORE deliveryFee's own threshold
+  // check has any bearing here — deliveryFee was already computed two
+  // lines up from physicalSubtotal (the ORIGINAL, pre-discount
+  // physical-only subtotal), so a referral discount can never retroactively
+  // change which delivery-fee tier an order qualifies for.
+  const referral = await resolveReferralForOrder(input.referralAttribution, { customerId, email: input.customer.email }, subtotal);
+  const discountTotal = referral ? referral.pricing.discountAmount : new Prisma.Decimal(0);
   const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
 
   const orderNumber = await generateOrderNumber();
@@ -400,7 +484,7 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
       }
     }
 
-    return tx.order.create({
+    const createdOrder = await tx.order.create({
       data: {
         orderNumber,
         customerId,
@@ -459,6 +543,41 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
       },
       include: orderInclude,
     });
+
+    // Version 7, Milestone 172B.4: exactly one commission row per
+    // referred order, created in the SAME transaction as the order
+    // itself so the two can never diverge (an order with no matching
+    // commission, or a commission with no matching order). Every
+    // figure here is a permanent snapshot — a later change to
+    // AffiliateProgrammeSettings' defaults, an affiliate's own
+    // override, or even their name/code, must never retroactively
+    // alter it (see OrderAffiliateCommission's own schema comment).
+    //
+    // Deliberately skipped ENTIRELY for a self-referral: the customer
+    // still keeps their discount (already folded into discountTotal
+    // above), but no commission row is ever created for it at all —
+    // the strongest possible guarantee that a self-referral commission
+    // can never later become payable by accident, since there is
+    // nothing here to approve or pay, not even a zero-value row.
+    if (referral && !referral.isSelfReferral) {
+      await tx.orderAffiliateCommission.create({
+        data: {
+          orderId: createdOrder.id,
+          affiliateId: referral.affiliateId,
+          affiliateNameSnapshot: referral.affiliateNameSnapshot,
+          affiliateReferralCodeSnapshot: referral.affiliateReferralCodeSnapshot,
+          qualifyingProductSubtotal: subtotal,
+          discountRateApplied: referral.pricing.discountRateApplied,
+          discountAmount: referral.pricing.discountAmount,
+          netQualifyingAmount: referral.pricing.netQualifyingAmount,
+          commissionRateApplied: referral.pricing.commissionRateApplied,
+          commissionAmount: referral.pricing.commissionAmount,
+          status: OrderAffiliateCommissionStatus.PENDING,
+        },
+      });
+    }
+
+    return createdOrder;
   }, { timeout: 20000 });
 
   return toOrderOutput(order);

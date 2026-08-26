@@ -183,3 +183,16 @@ export const oauthAccountManagementRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Referral capture/preview (Version 7, Milestone 172B.4) — public,
+// read-only (neither ever writes to the database), called on every
+// storefront pageview that carries a ?ref= link and again from the
+// checkout page for a live preview, so this stays as generous as
+// oauthStartRateLimiter above rather than as tight as a write endpoint.
+export const referralCaptureRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

@@ -18,6 +18,7 @@ import newsletterRoutes from "./newsletter.routes.js";
 import socialAuthRoutes from "./socialAuth.routes.js";
 import adminAffiliateRoutes from "./adminAffiliate.routes.js";
 import adminReferralsRoutes from "./adminReferrals.routes.js";
+import referralsRoutes from "./referrals.routes.js";
 
 const router = Router();
 
@@ -60,5 +61,10 @@ router.use("/admin/affiliate", adminAffiliateRoutes);
 // requireAdminAuth applied at the router level, see
 // adminReferrals.routes.ts's own header comment.
 router.use("/admin/referrals", adminReferralsRoutes);
+// Version 7, Milestone 172B.4: public, unauthenticated referral
+// capture/preview — the live checkout-facing counterpart to the
+// admin-only /admin/referrals above. See referrals.routes.ts's own
+// header comment for why these stay two fully separate routers.
+router.use("/referrals", referralsRoutes);
 
 export default router;

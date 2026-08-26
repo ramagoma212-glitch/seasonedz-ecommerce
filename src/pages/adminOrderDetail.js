@@ -386,6 +386,33 @@ function renderDigitalOnlyAdminNotice() {
   `;
 }
 
+// Version 7, Milestone 172B.4: read-only referral attribution — the
+// admin order detail page's own small window into the referral
+// programme (backend/src/controllers/adminDashboard.controller.ts
+// merges `order.referral` in from referralCommission.service.ts's
+// getReferralCommissionFieldsForOrder(), the exact same "small,
+// separately-queried augmentation" pattern renderCourierSection()
+// above already relies on for its own courier fields). No lifecycle
+// controls here — approve/pay/reverse a commission is still 172B.5;
+// this is display only. Renders nothing at all for an order that
+// wasn't referred, and (a known, documented limitation — see that
+// service's own comment) also nothing for a genuine self-referral,
+// since no commission row exists to read in that case even though the
+// order's own Discount row above still shows correctly.
+function renderReferralSection(order) {
+  if (!order.referral) return "";
+
+  return `
+    <div class="order-confirmation__card">
+      <h3>Referral</h3>
+      <div class="order-confirmation__row"><span>Affiliate</span><span>${escapeHtml(order.referral.affiliateNameSnapshot)}</span></div>
+      <div class="order-confirmation__row"><span>Referral Code</span><span>${escapeHtml(order.referral.affiliateReferralCodeSnapshot)}</span></div>
+      <div class="order-confirmation__row"><span>Discount Applied</span><span>${formatCurrency(order.referral.discountAmount)}</span></div>
+      <div class="order-confirmation__row"><span>Commission</span><span>${formatCurrency(order.referral.commissionAmount)} (${escapeHtml(order.referral.commissionStatus)})</span></div>
+    </div>
+  `;
+}
+
 function renderCourierSection(order) {
   if (order.isDigitalOnly) return renderDigitalOnlyAdminNotice();
 
@@ -535,6 +562,8 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           ${order.discountTotal ? `<div class="order-confirmation__row"><span>Discount</span><span>-${formatCurrency(order.discountTotal)}</span></div>` : ""}
           <div class="order-confirmation__row admin-total-row"><span>Total</span><span>${formatCurrency(order.total)}</span></div>
         </div>
+
+        ${renderReferralSection(order)}
 
         <div class="order-confirmation__card">
           ${renderStatusUpdateSection(order)}
