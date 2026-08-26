@@ -521,6 +521,61 @@ const courierGuyAutoBookingServiceCodes = getEnv("COURIER_GUY_AUTO_BOOKING_SERVI
 // migration ever needs to see what the old single-code value was.
 const courierGuyDefaultServiceCode = getOptionalEnv("COURIER_GUY_DEFAULT_SERVICE_CODE");
 
+// Courier Guy automatic delivery status sync (Version 7, Milestone
+// 173). A FOURTH, separate flag from quote/booking/auto-booking above
+// — deploying this milestone's code must never itself start receiving
+// webhook traffic; the owner enables it explicitly once the callback
+// URL is registered in the ShipLogic portal (manual, portal-only —
+// there is no API to register it). Same "safety switch, optional
+// until configured" pattern as every other *_ENABLED flag in this
+// file: the backend must keep starting normally with this "false" and
+// no webhook secret set.
+//
+// The secret is NOT a Courier Guy-issued value — ShipLogic's own
+// webhook documentation (see courierWebhook.service.ts's own header
+// comment) has no verified signature/HMAC/token mechanism, so this
+// backend supplies its own protection instead: an unguessable secret
+// segment embedded in the registered callback URL itself, compared in
+// constant time. Same "required, minimum length, loud production
+// failure" discipline as REFERRAL_ATTRIBUTION_SECRET above, since a
+// forged delivery event could falsely trigger the affiliate commission
+// validation clock (see referralCommission.service.ts).
+export const COURIER_GUY_WEBHOOK_SECRET_MIN_LENGTH = 24;
+
+// Pure function (same pattern as resolveReferralAttributionSecret()
+// above) so this is directly unit-testable without reloading the env
+// module under different env vars — see
+// courierGuyWebhookSecret.test.ts.
+export function resolveCourierGuyWebhookSecret(params: { statusSyncEnabled: boolean; rawSecret: string | undefined; minLength: number }): string | undefined {
+  const trimmed = params.rawSecret?.trim() || undefined;
+
+  if (!params.statusSyncEnabled) {
+    return trimmed; // Feature off: whatever's set (or nothing) is fine, never validated.
+  }
+
+  if (!trimmed) {
+    throw new Error(
+      "COURIER_GUY_STATUS_SYNC_ENABLED is true but COURIER_GUY_WEBHOOK_SECRET is not set. " +
+        `Set a real, random value (at least ${params.minLength} characters) in Render's Environment tab, ` +
+        "use it in the callback URL registered in the ShipLogic portal, or set COURIER_GUY_STATUS_SYNC_ENABLED=false until it's ready — see backend/DELIVERY_SETUP.md."
+    );
+  }
+  if (trimmed.length < params.minLength) {
+    throw new Error(
+      `COURIER_GUY_WEBHOOK_SECRET must be at least ${params.minLength} characters. ` +
+        "Set a real, random value in Render's Environment tab — see backend/DELIVERY_SETUP.md."
+    );
+  }
+  return trimmed;
+}
+
+const courierGuyStatusSyncEnabled = getEnv("COURIER_GUY_STATUS_SYNC_ENABLED", "false").trim().toLowerCase() === "true";
+const courierGuyWebhookSecret = resolveCourierGuyWebhookSecret({
+  statusSyncEnabled: courierGuyStatusSyncEnabled,
+  rawSecret: getOptionalEnv("COURIER_GUY_WEBHOOK_SECRET"),
+  minLength: COURIER_GUY_WEBHOOK_SECRET_MIN_LENGTH,
+});
+
 // Social sign-in (Version 7, Milestone 171F). Same "safety switch,
 // optional until configured" pattern as every other *_ENABLED flag in
 // this file: the backend must keep starting normally with these all
@@ -743,6 +798,11 @@ export const env = {
   courierGuyAutoBookingServiceCodes,
   // Legacy/reference only — not read by the current selection logic.
   courierGuyDefaultServiceCode,
+  // Courier Guy automatic status sync — see the block above.
+  // courierGuyWebhookSecret is undefined unless explicitly set; never
+  // logged anywhere, never returned in any response.
+  courierGuyStatusSyncEnabled,
+  courierGuyWebhookSecret,
   // Social sign-in — see the block above. Client secrets/private keys
   // are undefined unless explicitly set; never logged anywhere. The
   // isXAuthConfigured booleans are the only thing GET /api/auth/providers

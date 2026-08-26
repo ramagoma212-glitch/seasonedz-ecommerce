@@ -711,6 +711,20 @@ model Shipping {
   courierBookingAttemptedAt DateTime?
   courierBookingError       String?
 
+  // Version 7, Milestone 173: automatic courier delivery status sync.
+  // Both nullable, additive. lastCourierStatus is the raw, unmapped
+  // status string exactly as received from the courier webhook (e.g.
+  // "in-transit", "undeliverable") — kept for admin visibility and as
+  // the idempotency/out-of-order-protection comparison key (see
+  // courierStatusSync.service.ts's STATUS_RANK table), never itself
+  // shown to customers. lastCourierStatusAt is when this backend last
+  // processed a genuine courier status event for this shipment — used
+  // as the admin-facing "last status update" time, distinct from
+  // deliveredAt (which is only ever set once the mapped stage reaches
+  // DELIVERED).
+  lastCourierStatus   String?
+  lastCourierStatusAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

@@ -334,6 +334,31 @@ function renderCourierQuoteForm(order) {
 // re-applies after any future rerenderCurrentRoute(). The duplicate-
 // booking check in courierGuy.service.ts is the real enforcement; this
 // is just the admin-facing reflection of that same fact.
+//
+// Version 7, Milestone 173: raw courier status strings that mean "an
+// admin should look at this order" — mirrors the EXCEPTION/
+// READY_FOR_PICKUP/RETURNED stages in the backend's own
+// courierStatusSync.service.ts (KNOWN_STATUS_STAGE). Display-only
+// duplication: this list decides a warning colour, nothing else — the
+// backend's own copy is the one that ever decides a real status
+// change, and never reads this file.
+const COURIER_STATUS_NEEDS_ATTENTION = ["cancelled", "undeliverable", "returned-to-sender", "ready-for-pickup"];
+
+function renderLastCourierStatusRow(shipping) {
+  if (!shipping.lastCourierStatus) return "";
+  const needsAttention = COURIER_STATUS_NEEDS_ATTENTION.includes(shipping.lastCourierStatus);
+  return `
+    <div class="order-confirmation__row">
+      <span>Latest Courier Guy Status</span>
+      <span>
+        <span class="admin-badge ${needsAttention ? "admin-badge--danger" : "admin-badge--neutral"}">${escapeHtml(humanizeEnum(shipping.lastCourierStatus.replace(/-/g, "_")))}</span>
+        ${shipping.lastCourierStatusAt ? ` &bull; ${formatDateTime(shipping.lastCourierStatusAt)}` : ""}
+      </span>
+    </div>
+    ${needsAttention ? `<p class="admin-status-update__payment-note">This status may need admin attention — automatic sync will not change the order or shipping status for it.</p>` : ""}
+  `;
+}
+
 function renderCourierBookedSummary(order) {
   const shipping = order.shipping;
   const cost = shipping.courierCost !== null && shipping.courierCost !== undefined ? Number(shipping.courierCost) : null;
@@ -346,6 +371,7 @@ function renderCourierBookedSummary(order) {
       ${cost !== null ? `<div class="order-confirmation__row"><span>Courier Cost</span><span>${formatCurrency(cost)}</span></div>` : ""}
       ${shipping.trackingNumber ? `<div class="order-confirmation__row"><span>Tracking Number</span><span>${escapeHtml(shipping.trackingNumber)}</span></div>` : ""}
       ${shipping.courierBookedAt ? `<div class="order-confirmation__row"><span>Booked At</span><span>${formatDateTime(shipping.courierBookedAt)}</span></div>` : ""}
+      ${renderLastCourierStatusRow(shipping)}
     </div>
   `;
 }

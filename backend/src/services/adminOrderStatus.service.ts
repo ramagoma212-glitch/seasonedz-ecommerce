@@ -38,7 +38,11 @@ const MAX_NOTE_LENGTH = 500;
 // VERSION_7_ORDER_STATUS_WORKFLOW_PLAN.md's decision to keep refunds
 // entirely out of this workflow — a future, separate, payment-aware
 // feature, not something reachable from this endpoint.
-const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+// Exported (Version 7, Milestone 173) so courierStatusSync.service.ts
+// can reuse the exact same admin-approved transition graph for
+// system-driven (courier webhook) transitions, instead of maintaining
+// a second, potentially-drifting copy of it.
+export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
   [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
   [OrderStatus.PROCESSING]: [OrderStatus.READY_FOR_DELIVERY, OrderStatus.CANCELLED],

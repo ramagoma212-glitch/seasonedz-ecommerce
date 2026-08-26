@@ -268,6 +268,10 @@ export interface CourierBookingFields {
   // field above (see this function's own comment).
   courierBookingAttemptedAt: Date | null;
   courierBookingError: string | null;
+  // Version 7, Milestone 173: automatic courier status sync — same
+  // admin-only boundary as every field above.
+  lastCourierStatus: string | null;
+  lastCourierStatusAt: Date | null;
 }
 
 // Version 7, Milestone 112: the admin order detail view needs the
@@ -292,6 +296,8 @@ export async function getCourierBookingFieldsForOrder(orderNumber: string): Prom
       courierBookedAt: true,
       courierBookingAttemptedAt: true,
       courierBookingError: true,
+      lastCourierStatus: true,
+      lastCourierStatusAt: true,
     },
   });
 
@@ -306,5 +312,7 @@ export async function getCourierBookingFieldsForOrder(orderNumber: string): Prom
     courierBookedAt: shipping.courierBookedAt,
     courierBookingAttemptedAt: shipping.courierBookingAttemptedAt,
     courierBookingError: shipping.courierBookingError,
+    lastCourierStatus: shipping.lastCourierStatus,
+    lastCourierStatusAt: shipping.lastCourierStatusAt,
   };
 }

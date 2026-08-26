@@ -286,3 +286,71 @@ booked.
 2. Get explicit owner approval for a real, controlled live test.
 3. Watch the very first automatically-booked order closely in the admin dashboard.
 4. Know how to cancel/correct a booking in the Courier Guy portal before you need to.
+
+## Automatic Courier Delivery Status Sync (Version 7, Milestone 173 — built, DISABLED by default)
+
+Updates the "Why Courier Tracking Is Not Live Yet" section above:
+that's still true for any order without a real Courier Guy shipment
+(Customer Collection, or a courier order not yet booked), but an order
+**with** one now has its `Order.status`/`Shipping.status` kept current
+automatically by ShipLogic's own "Tracking event" webhook — once the
+owner completes the manual portal setup below. See
+`courierStatusSync.service.ts` for the full mapping/effects engine and
+`courierWebhook.controller.ts` for the receiving endpoint.
+
+### Why a webhook, not polling
+
+ShipLogic's own portal documentation confirms a webhook subscription
+mechanism (Settings → Webhook subscriptions → "Tracking event" topic).
+Their tracking/status GET endpoint could not be independently verified
+against current official documentation (their API reference is a
+JavaScript-rendered site this project's tooling could not access, and
+no working API credentials were available to test one real call). The
+webhook is therefore the preferred, better-verified mechanism; polling
+was deliberately not built this milestone — see
+`courierStatusSync.service.ts`'s own header comment.
+
+### Owner action required — this feature does nothing until you do this
+
+Deploying this milestone's code does **not** start receiving webhook
+traffic. Two things need to happen, in order:
+
+1. **Generate a secret and set two Render environment variables:**
+   - `COURIER_GUY_STATUS_SYNC_ENABLED=true`
+   - `COURIER_GUY_WEBHOOK_SECRET=<a long, random value — at least 24 characters, e.g. generated with `openssl rand -hex 32`>`
+
+   The backend will refuse to start if the first is `true` without the
+   second (same fail-loud discipline as `REFERRAL_ATTRIBUTION_SECRET`).
+   Never commit this value or paste it anywhere public — it's the only
+   thing standing between this endpoint and an arbitrary caller (see
+   `courierWebhook.controller.ts`'s own security-model comment for why
+   there's no Courier-Guy-issued signature to rely on instead).
+
+2. **Register the callback URL in the ShipLogic/Courier Guy portal:**
+   `Settings → Webhook subscriptions → Add webhook subscription`,
+   Topic = **Tracking event**, Delivery URL =
+   `https://api.seasonedzgroup.co.za/api/webhooks/courier-guy/<the same secret>/tracking-event`
+   — sandbox and production are registered separately in that portal;
+   register production only once you're confident this is working.
+
+### Status vocabulary — a documented, evidence-based caveat
+
+The raw status strings this backend recognises
+(`courierStatusSync.service.ts`'s `KNOWN_STATUS_STAGE`) come from a
+current third-party integration's documented ShipLogic status list,
+**not** from ShipLogic's own official reference, which this project
+could not access. An unrecognised status is always logged and safely
+ignored — never guessed as `DELIVERED`. If ShipLogic's real webhook
+payload turns out to use different field names or additional statuses
+once a genuine event is observed, `courierWebhook.service.ts`'s
+defensive, multi-candidate parser is the place to extend — nothing
+about the security model or the safe-by-default status handling
+depends on getting the vocabulary exactly right on the first attempt.
+
+### Verifying it's working
+
+Once both steps above are done, the fastest real check is the next
+genuine physical order that reaches Courier Guy: watch its admin order
+detail page for a "Latest Courier Guy Status" row appearing on its own,
+without anyone touching the Update Shipping form. No fake order or fake
+booking should ever be created just to test this.

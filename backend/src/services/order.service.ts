@@ -626,7 +626,7 @@ export interface OrderTrackingOutput {
   deliveryProvince: string | null;
   collectionCity: string | null;
   trackingSteps: OrderTrackingStep[];
-  trackingSource: "backend-demo";
+  trackingSource: "backend-demo" | "courier-guy-automatic";
   hasPhysicalItems: boolean;
   hasDigitalItems: boolean;
   isDigitalOnly: boolean;
@@ -668,10 +668,16 @@ export async function getOrderTracking(orderNumber: string): Promise<OrderTracki
     deliveryProvince: order.deliveryProvince,
     collectionCity: order.collectionCity,
     trackingSteps,
-    // No real courier tracking exists yet — this whole response is
-    // derived from Order/Shipping rows set by this backend, never a
-    // live courier API. See API_ROUTES.md.
-    trackingSource: "backend-demo",
+    // Version 7, Milestone 173: an order with a real Courier Guy
+    // shipment (courierShipmentId set) now has its Order.status/
+    // Shipping.status kept current automatically by the Tracking event
+    // webhook (see courierStatusSync.service.ts) — genuinely live, not
+    // a manual/demo value, though still only these Seasonedz-mapped
+    // stages, never the courier's own raw provider payload. Every
+    // other order (no courier booking — e.g. Customer Collection, or a
+    // courier order not yet booked) is still purely backend-status-
+    // derived, exactly as before. See API_ROUTES.md.
+    trackingSource: order.shipping?.courierShipmentId ? "courier-guy-automatic" : "backend-demo",
     hasPhysicalItems,
     hasDigitalItems,
     isDigitalOnly: hasDigitalItems && !hasPhysicalItems,

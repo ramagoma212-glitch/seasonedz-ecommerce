@@ -19,6 +19,7 @@ import socialAuthRoutes from "./socialAuth.routes.js";
 import adminAffiliateRoutes from "./adminAffiliate.routes.js";
 import adminReferralsRoutes from "./adminReferrals.routes.js";
 import referralsRoutes from "./referrals.routes.js";
+import courierWebhookRoutes from "./courierWebhook.routes.js";
 
 const router = Router();
 
@@ -66,5 +67,11 @@ router.use("/admin/referrals", adminReferralsRoutes);
 // admin-only /admin/referrals above. See referrals.routes.ts's own
 // header comment for why these stay two fully separate routers.
 router.use("/referrals", referralsRoutes);
+// Version 7, Milestone 173: inbound Courier Guy (ShipLogic) tracking
+// webhook. Deliberately its own top-level "/webhooks" group (not
+// nested under /admin or /customers) — a server-to-server callback,
+// same category as PayFast's own /payments/payfast/notify. See
+// courierWebhook.controller.ts for the full security model.
+router.use("/webhooks", courierWebhookRoutes);
 
 export default router;
