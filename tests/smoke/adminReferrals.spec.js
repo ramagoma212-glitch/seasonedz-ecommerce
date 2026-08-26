@@ -92,9 +92,16 @@ test.describe("Admin referrals routes are noindex and not publicly reachable (Mi
   });
 
   test("/admin/referrals requires admin auth — a 401 redirects to admin login", async ({ page }) => {
-    await page.route("**/api/admin/referrals/overview", (route) =>
-      route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) })
-    );
+    // The overview page fetches both /overview and /settings in
+    // parallel (Promise.all) — both must return the 401 explicitly.
+    // Leaving one unmocked lets it fall through to a real network
+    // request instead, racing against the mocked 401 and making the
+    // outcome timing-dependent (this passed locally but failed in CI
+    // for exactly that reason before this fix).
+    const unauthorised = (route) =>
+      route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) });
+    await page.route("**/api/admin/referrals/overview", unauthorised);
+    await page.route("**/api/admin/referrals/settings", unauthorised);
     await page.goto("/admin/referrals");
     await expect(page).toHaveURL(/\/admin\/login/);
   });
