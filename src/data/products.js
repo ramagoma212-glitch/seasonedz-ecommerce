@@ -297,8 +297,16 @@ export const products = [
     id: "school-starter-colouring-pack",
     slug: "school-starter-colouring-pack",
     name: "School Starter Colouring Pack",
-    category: "Schools and Wholesale",
-    categorySlug: "schools-and-wholesale",
+    // Milestone 172B.4.2A: was "Schools and Wholesale" — stale. The
+    // live catalogue moved this product to "Bundles" at some point
+    // after this fallback file was last synced, and "Schools and
+    // Wholesale" is genuinely empty in production (confirmed live:
+    // productCount 0). This mismatch surfaced as a CI-only sitemap
+    // test failure whenever a build happens to fall back to this local
+    // data (e.g. a brief live-API outage during an unrelated deploy) —
+    // see nonBrandedSeo.spec.js's "no thin/empty content" assertion.
+    category: "Bundles",
+    categorySlug: "bundles",
     price: 459.0,
     oldPrice: null,
     image: "/images/product-1.jpg",
