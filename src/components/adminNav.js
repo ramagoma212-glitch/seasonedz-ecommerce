@@ -27,8 +27,15 @@ const NAV_LINKS = [
   // Products/Commissions/Overview all live under this one flat link
   // for now, matching this nav's own existing "no nested menu" shape
   // (see 172A's own admin-integration finding) — 172B only builds the
-  // Products area; Commissions/Overview arrive in 172D.
+  // Products area; Commissions/Overview arrive in 172D. Dormant for
+  // now — kept separate from Referrals below (see the 172B.2 audit).
   { key: "affiliate", href: "/admin/affiliate", label: "Affiliate" },
+  // Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
+  // programme — a completely separate feature from the dormant
+  // external-merchant "Affiliate" entry above. Overview/Affiliates/
+  // Settings live under this one flat link, with their own local
+  // sub-navigation (components/referralsSubNav.js) once inside it.
+  { key: "referrals", href: "/admin/referrals", label: "Referrals" },
 ];
 
 export function renderAdminNav(activeKey) {

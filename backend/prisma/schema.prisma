@@ -341,6 +341,11 @@ model Customer {
   // see AuthAccount below. A customer may have zero (password-only),
   // one, or several (one per provider, never two of the same provider).
   authAccounts        AuthAccount[]
+  // Version 7, Milestone 172B.3: optional link to Seasonedz's own
+  // affiliate/referral programme — see Affiliate's own comment. Zero
+  // or one, never more (Affiliate.customerId is @unique): one Customer
+  // can never be linked to two affiliate records.
+  affiliate           Affiliate?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -504,6 +509,14 @@ model Order {
   // items and for every order placed by a logged-in customer (who
   // downloads via their account instead, never a token).
   guestDownloadTokens GuestDownloadToken[]
+  // Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
+  // programme (distinct from the dormant, external-merchant
+  // AffiliateProduct/AffiliateClick/AffiliateCommission models above —
+  // see OrderAffiliateCommission's own header comment). Optional and
+  // one-to-one: most orders are never referred at all, and no code in
+  // this milestone ever creates one automatically yet — that's
+  // Milestone 172B.4.
+  affiliateCommission OrderAffiliateCommission?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -829,12 +842,19 @@ model AdminUser {
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
 
-  sessions           AdminSession[]
+  sessions                          AdminSession[]
   // Version 7, Milestone 62: SetNull (not Cascade) — deleting an admin
   // user must never delete the audit history of what they did. See
   // OrderStatusHistory below and
   // VERSION_7_ORDER_STATUS_AUDIT_MODEL_PLAN.md Section 4.
-  orderStatusHistory OrderStatusHistory[]
+  orderStatusHistory                OrderStatusHistory[]
+  // Version 7, Milestone 172B.3: audit trail for who last changed the
+  // affiliate programme's rates — see AffiliateProgrammeSettings' own
+  // comment. In practice at most one row ever references a given
+  // admin at a time (the settings table is a singleton), but the
+  // relation is still an array from this side since Prisma requires
+  // the reverse of a to-one relation to be declared as one.
+  affiliateProgrammeSettingsUpdates AffiliateProgrammeSettings[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1085,4 +1105,201 @@ enum CommissionStatus {
   APPROVED
   PAID
   REJECTED
+}
+
+// ============================================================================
+// SEASONEDZ'S OWN AFFILIATE / REFERRAL PROGRAMME
+// ============================================================================
+
+// Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
+// programme — affiliates promote Seasonedz's genuine Product catalogue
+// and earn commission on real Orders. This is a completely different
+// business from the AffiliateProduct/AffiliateClick/AffiliateCommission
+// models above (external merchant recommendations, e.g. Amazon links) —
+// see the 172B.2 architecture audit for why those stay untouched and
+// dormant rather than being renamed or reused here. Model names below
+// are deliberately distinct (Affiliate, not AffiliateProduct;
+// OrderAffiliateCommission, not AffiliateCommission) so the two systems
+// can never be confused in code or in the database.
+//
+// Nothing in this migration wires a referral into checkout, discount
+// calculation, or commission creation — see AffiliateProgrammeSettings
+// and OrderAffiliateCommission's own comments. That's Milestone 172B.4
+// (discount/attribution) and 172B.5 (lifecycle).
+model Affiliate {
+  id String @id @default(cuid())
+
+  // Optional and unique — an affiliate MAY have a Customer account
+  // (needed for a future affiliate portal, see the 172B.2 audit), but
+  // applying doesn't require one. A future admin action links an
+  // existing Customer; nothing here creates one.
+  customerId String?   @unique
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  name  String
+  // Case-insensitively normalised by the service layer before every
+  // write/lookup — same discipline NewsletterSubscriber.email already
+  // documents above, applied here so "Person@Example.com" and
+  // "person@example.com" can never become two different affiliates.
+  email String  @unique
+  phone String?
+
+  // Public and shareable — never a secret. Guessing another affiliate's
+  // code only misattributes a sale to them, it exposes nothing and
+  // grants no access; that's why a short, admin-assignable code is
+  // appropriate here rather than a cryptographically random token.
+  referralCode String @unique
+
+  status AffiliateStatus @default(PENDING)
+
+  // Null means "use AffiliateProgrammeSettings' current default at the
+  // moment of order creation" — never copied in at creation time, so a
+  // later programme-wide rate change still applies to every affiliate
+  // who has no override of their own. Only a real, deliberately-set
+  // override diverges from the shared default.
+  commissionRateOverride Decimal? @db.Decimal(5, 2)
+  discountRateOverride   Decimal? @db.Decimal(5, 2)
+
+  approvedAt DateTime?
+  // Admin-authored context only — never customer-facing.
+  notes      String?
+
+  commissions OrderAffiliateCommission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // No hard-delete workflow anywhere in this codebase for this model —
+  // matches the Product/ARCHIVED and AdminUser/isActive precedent.
+  // SUSPENDED (not deletion) is how an affiliate stops being eligible
+  // while their historical commission records stay fully intact.
+  @@index([status])
+}
+
+enum AffiliateStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+}
+
+// Version 7, Milestone 172B.3: the one authoritative, admin-editable
+// source of truth for the programme's default rates and policy
+// numbers. Deliberately a database row, not a config/*.ts constant —
+// every other configurable value in this backend (delivery fees, gift
+// wrap pricing, feature-enable flags) lives in a TypeScript file and
+// needs a redeploy to change; this table exists specifically because
+// the owner must be able to change these numbers without one. Exactly
+// the seven fields the approved V1 rules name as admin-editable — see
+// this milestone's own final report for why several other V1 rules
+// (free-delivery threshold basis, repeat-referral-use, self-referral's
+// discount-yes/commission-no split) are deliberately fixed service-
+// layer policy instead of settings rows here, so there is never a
+// second, competing place either kind of rule could live.
+//
+// Singleton by convention, not a database constraint — Prisma has no
+// clean "exactly one row" guarantee. The service layer always reads
+// (or creates, on first read, using the values below) the one existing
+// row; no route here ever creates a second one — see
+// affiliateProgrammeSettings.service.ts's own header comment.
+model AffiliateProgrammeSettings {
+  id String @id @default(cuid())
+
+  defaultCommissionRate       Decimal @default(7.00) @db.Decimal(5, 2)
+  defaultReferralDiscountRate Decimal @default(5.00) @db.Decimal(5, 2)
+  // How long a captured referral stays valid before it must be re-
+  // captured — see the 172B.2 audit's own "last valid referral wins"
+  // attribution design. Not enforced by any code in this milestone;
+  // read by whatever captures/resolves attribution in 172B.4.
+  attributionWindowDays       Int     @default(30)
+  // How long after fulfilment a commission stays PENDING before it may
+  // become APPROVED — the actual lifecycle wiring is 172B.5; this is
+  // the number that milestone will read.
+  commissionValidationDays    Int     @default(30)
+  minimumPayoutAmount         Decimal @default(500.00) @db.Decimal(10, 2)
+  // Day of the month payouts are targeted for. Monthly cadence itself
+  // is implied by this single field existing, not a separate
+  // "frequency" field — V1 has exactly one supported frequency, so a
+  // frequency enum with one legal value would be complexity with
+  // nothing to select between.
+  payoutDayOfMonth            Int     @default(15)
+  isProgrammeActive           Boolean @default(true)
+
+  // Who last changed these numbers, and when (via updatedAt) — same
+  // audit-trail intent as OrderStatusHistory's own admin attribution
+  // above, SetNull so deleting an AdminUser can never delete the record
+  // of what they changed.
+  updatedByAdminUserId String?
+  updatedByAdminUser   AdminUser? @relation(fields: [updatedByAdminUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Version 7, Milestone 172B.3: one row per Order that was genuinely
+// referred — the durable, order-linked record this programme actually
+// runs on. Nothing in this milestone creates one: no code path here
+// wires this into checkout or order creation yet (that's 172B.4), so
+// this table is expected to have zero rows in production until then.
+//
+// Every financial figure below is captured at the moment the (future)
+// referred order is created and never recalculated afterward — a later
+// change to AffiliateProgrammeSettings' defaults, an affiliate's own
+// override, or even the affiliate's name/code, must never retroactively
+// alter a historical commission. affiliateId stays a required (never
+// nullable) relation, unlike AffiliateProduct's own nullable
+// affiliateProductId on the external AffiliateCommission model — an
+// Affiliate is never hard-deleted (see Affiliate's own comment), so
+// there is no "the referenced row might vanish" case to guard against
+// here. affiliateNameSnapshot/affiliateReferralCodeSnapshot exist
+// anyway, for the same "stay readable without a live join" discipline
+// OrderItem.productName already established.
+model OrderAffiliateCommission {
+  id      String @id @default(cuid())
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  affiliateId                   String
+  affiliate                     Affiliate @relation(fields: [affiliateId], references: [id])
+  affiliateNameSnapshot         String
+  affiliateReferralCodeSnapshot String
+
+  // The financial basis, locked in at order-creation time. Base =
+  // qualifying product subtotal only — delivery and gift wrapping are
+  // never part of it (the approved V1 rule). Commission is calculated
+  // on the NET amount, after the referral discount, per the approved
+  // worked example (R500 qualifying -> R25 discount -> R475 net -> 7%
+  // -> R33.25 commission).
+  qualifyingProductSubtotal Decimal @db.Decimal(10, 2)
+  discountRateApplied       Decimal @db.Decimal(5, 2)
+  discountAmount            Decimal @db.Decimal(10, 2)
+  netQualifyingAmount       Decimal @db.Decimal(10, 2)
+  commissionRateApplied     Decimal @db.Decimal(5, 2)
+  commissionAmount          Decimal @db.Decimal(10, 2)
+
+  status         OrderAffiliateCommissionStatus @default(PENDING)
+  // Never set merely because PayFast payment succeeded — the approved
+  // V1 policy is fulfilment/delivery plus a commissionValidationDays
+  // waiting period. Wiring that transition is 172B.5.
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  // Set on order cancellation or full refund (the approved V1 rule);
+  // a partial refund is manual admin review in V1, never automatic.
+  reversedAt     DateTime?
+  reversalReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // At most one commission per order, enforced at the database level
+  // via orderId's own @unique above, not only in application code.
+  @@index([affiliateId, status])
+  @@index([status])
+}
+
+enum OrderAffiliateCommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REVERSED
 }

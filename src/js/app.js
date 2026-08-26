@@ -63,6 +63,15 @@ import {
   featureAdminAffiliateProduct,
   unfeatureAdminAffiliateProduct,
 } from "./api/adminAffiliateApi.js";
+import {
+  createAdminAffiliate,
+  updateAdminAffiliate,
+  approveAdminAffiliate,
+  rejectAdminAffiliate,
+  suspendAdminAffiliate,
+  reactivateAdminAffiliate,
+  updateReferralSettings,
+} from "./api/adminReferralsApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
@@ -115,6 +124,10 @@ function mountApp() {
   setupAdminAffiliateFilterForm();
   setupAdminAffiliateForm();
   setupAdminAffiliateActions();
+  setupAdminReferralAffiliateFilterForm();
+  setupAdminReferralAffiliateForm();
+  setupAdminReferralAffiliateActions();
+  setupAdminReferralSettingsForm();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -2588,6 +2601,257 @@ async function handleAdminAffiliateAction(button, apiCall, verb) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
+  }
+}
+
+// Seasonedz's own affiliate/referral programme admin (Version 7,
+// Milestone 172B.3). Same filter/form/action wiring shape as the
+// affiliate-product functions above, applied to the new, fully
+// separate Referrals admin surface. No checkout/discount/commission
+// code is touched anywhere in this section — creating or editing an
+// Affiliate here has no effect on the live storefront.
+function setupAdminReferralAffiliateFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-referral-affiliate-filter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const status = form.querySelector('select[name="status"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (status) params.set("status", status);
+    params.set("page", "1");
+
+    navigateTo(`/admin/referrals/affiliates?${params.toString()}`);
+  });
+}
+
+function setupAdminReferralAffiliateForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-referral-affiliate-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminReferralAffiliateFormSubmit(form);
+  });
+}
+
+function readAdminReferralAffiliateFormValues(form) {
+  const name = form.querySelector("#referralAffiliateName")?.value.trim() || "";
+  const email = form.querySelector("#referralAffiliateEmail")?.value.trim() || "";
+  const phone = form.querySelector("#referralAffiliatePhone")?.value.trim() || "";
+  const referralCode = form.querySelector("#referralAffiliateCode")?.value.trim() || "";
+  const commissionRateOverrideRaw = form.querySelector("#referralAffiliateCommissionOverride")?.value;
+  const discountRateOverrideRaw = form.querySelector("#referralAffiliateDiscountOverride")?.value;
+  const customerId = form.querySelector("#referralAffiliateCustomerId")?.value.trim() || "";
+  const notes = form.querySelector("#referralAffiliateNotes")?.value.trim() || "";
+
+  return {
+    name,
+    email,
+    phone: phone || null,
+    referralCode: referralCode || undefined,
+    commissionRateOverride: commissionRateOverrideRaw ? Number(commissionRateOverrideRaw) : null,
+    discountRateOverride: discountRateOverrideRaw ? Number(discountRateOverrideRaw) : null,
+    customerId: customerId || null,
+    notes: notes || null,
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (referralAffiliate.service.ts) independently re-validates every
+// field regardless and remains the final authority.
+function validateAdminReferralAffiliateForm(values) {
+  if (!values.name) return "Name is required.";
+  if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) return "A valid email is required.";
+  if (values.commissionRateOverride !== null && (!Number.isFinite(values.commissionRateOverride) || values.commissionRateOverride < 0 || values.commissionRateOverride > 50)) {
+    return "Commission rate override must be a number between 0 and 50.";
+  }
+  if (values.discountRateOverride !== null && (!Number.isFinite(values.discountRateOverride) || values.discountRateOverride < 0 || values.discountRateOverride > 50)) {
+    return "Referral discount override must be a number between 0 and 50.";
+  }
+  return null;
+}
+
+async function handleAdminReferralAffiliateFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-referral-affiliate-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminReferralAffiliateFormValues(form);
+  const validationError = validateAdminReferralAffiliateForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminAffiliate(values);
+      setPendingAdminMessage(`Affiliate "${response.data.name}" created successfully.`);
+      navigateTo(`/admin/referrals/affiliates/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const affiliateId = form.dataset.affiliateId;
+      // email/customerId/referralCode/notes/overrides are only ever
+      // read from this form's current input values — an untouched
+      // field round-trips as the same value it was loaded with, never
+      // silently cleared by an unrelated edit.
+      await updateAdminAffiliate(affiliateId, values);
+      setPendingAdminMessage("Affiliate updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiError && error.status === 404) {
+      message = "Affiliate not found.";
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+const ADMIN_REFERRAL_AFFILIATE_ACTIONS = {
+  "approve-affiliate": { apiCall: approveAdminAffiliate, verb: "approved" },
+  "reject-affiliate": { apiCall: rejectAdminAffiliate, verb: "rejected" },
+  "suspend-affiliate": { apiCall: suspendAdminAffiliate, verb: "suspended" },
+  "reactivate-affiliate": { apiCall: reactivateAdminAffiliate, verb: "reactivated" },
+};
+
+function setupAdminReferralAffiliateActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const action = ADMIN_REFERRAL_AFFILIATE_ACTIONS[button.dataset.action];
+    if (!action) return;
+
+    handleAdminReferralAffiliateAction(button, action.apiCall, action.verb);
+  });
+}
+
+async function handleAdminReferralAffiliateAction(button, apiCall, verb) {
+  const affiliateId = button.dataset.affiliateId;
+  const row = button.closest("[data-affiliate-row]");
+  const banner = document.querySelector("[data-admin-referral-affiliate-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(affiliateId);
+    setPendingAdminMessage(`Affiliate ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminReferralSettingsForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-referral-settings-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminReferralSettingsFormSubmit(form);
+  });
+}
+
+function readAdminReferralSettingsFormValues(form) {
+  return {
+    defaultCommissionRate: Number(form.querySelector("#referralSettingsCommissionRate")?.value),
+    defaultReferralDiscountRate: Number(form.querySelector("#referralSettingsDiscountRate")?.value),
+    attributionWindowDays: Number(form.querySelector("#referralSettingsAttributionWindow")?.value),
+    commissionValidationDays: Number(form.querySelector("#referralSettingsValidationDays")?.value),
+    minimumPayoutAmount: Number(form.querySelector("#referralSettingsMinimumPayout")?.value),
+    payoutDayOfMonth: Number(form.querySelector("#referralSettingsPayoutDay")?.value),
+    isProgrammeActive: form.querySelector("#referralSettingsProgrammeActive")?.checked ?? true,
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (referralProgrammeSettings.service.ts) independently re-validates
+// every field regardless and remains the final authority.
+function validateAdminReferralSettingsForm(values) {
+  if (!Number.isFinite(values.defaultCommissionRate) || values.defaultCommissionRate < 0 || values.defaultCommissionRate > 50) return "Default commission rate must be a number between 0 and 50.";
+  if (!Number.isFinite(values.defaultReferralDiscountRate) || values.defaultReferralDiscountRate < 0 || values.defaultReferralDiscountRate > 50) return "Default referral discount must be a number between 0 and 50.";
+  if (!Number.isInteger(values.attributionWindowDays) || values.attributionWindowDays < 1 || values.attributionWindowDays > 365) return "Attribution window must be a whole number of days between 1 and 365.";
+  if (!Number.isInteger(values.commissionValidationDays) || values.commissionValidationDays < 0 || values.commissionValidationDays > 365) return "Commission validation period must be a whole number of days between 0 and 365.";
+  if (!Number.isFinite(values.minimumPayoutAmount) || values.minimumPayoutAmount < 0) return "Minimum payout amount must be a non-negative number.";
+  if (!Number.isInteger(values.payoutDayOfMonth) || values.payoutDayOfMonth < 1 || values.payoutDayOfMonth > 28) return "Payout day of month must be a whole number between 1 and 28.";
+  return null;
+}
+
+async function handleAdminReferralSettingsFormSubmit(form) {
+  const banner = form.querySelector("[data-admin-referral-settings-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminReferralSettingsFormValues(form);
+  const validationError = validateAdminReferralSettingsForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateReferralSettings(values);
+    setPendingAdminMessage("Referral programme settings updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && error.status === 400) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 

@@ -99,6 +99,10 @@ import { renderAdminProducts } from "../pages/adminProducts.js";
 import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
 import { renderAdminAffiliateProducts } from "../pages/adminAffiliateProducts.js";
 import { renderAdminAffiliateProductCreate, renderAdminAffiliateProductEdit } from "../pages/adminAffiliateProductForm.js";
+import { renderAdminReferralsOverview } from "../pages/adminReferralsOverview.js";
+import { renderAdminReferralAffiliates } from "../pages/adminReferralAffiliates.js";
+import { renderAdminReferralAffiliateCreate, renderAdminReferralAffiliateEdit } from "../pages/adminReferralAffiliateForm.js";
+import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -322,6 +326,18 @@ const routeDefs = [
   { pattern: "/admin/affiliate/new", render: renderAdminAffiliateProductCreate, title: "Add Affiliate Product", noindex: true },
   { pattern: "/admin/affiliate/:id/edit", render: renderAdminAffiliateProductEdit, title: "Edit Affiliate Product", noindex: true },
   { pattern: "/admin/affiliate", render: renderAdminAffiliateProducts, title: "Admin Affiliate Products", noindex: true },
+  // Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
+  // programme — a fully separate route tree from /admin/affiliate
+  // above (see the 172B.2 audit). "/affiliates/new" before
+  // "/affiliates/:id/edit", same ordering discipline as every other
+  // admin list/:id-wildcard pair in this file. No referral discount or
+  // commission is live on the public storefront yet — that's 172B.4/
+  // 172B.5, so nothing here is linked from anywhere public.
+  { pattern: "/admin/referrals/affiliates/new", render: renderAdminReferralAffiliateCreate, title: "Add Affiliate", noindex: true },
+  { pattern: "/admin/referrals/affiliates/:id/edit", render: renderAdminReferralAffiliateEdit, title: "Edit Affiliate", noindex: true },
+  { pattern: "/admin/referrals/affiliates", render: renderAdminReferralAffiliates, title: "Referral Affiliates", noindex: true },
+  { pattern: "/admin/referrals/settings", render: renderAdminReferralSettings, title: "Referral Programme Settings", noindex: true },
+  { pattern: "/admin/referrals", render: renderAdminReferralsOverview, title: "Referrals", noindex: true },
 ];
 
 // Reads "/product/abc?ref=home" style URLs straight from the address

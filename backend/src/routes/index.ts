@@ -17,6 +17,7 @@ import downloadsRoutes from "./downloads.routes.js";
 import newsletterRoutes from "./newsletter.routes.js";
 import socialAuthRoutes from "./socialAuth.routes.js";
 import adminAffiliateRoutes from "./adminAffiliate.routes.js";
+import adminReferralsRoutes from "./adminReferrals.routes.js";
 
 const router = Router();
 
@@ -54,5 +55,10 @@ router.use("/auth", socialAuthRoutes);
 // adminAffiliate.routes.ts's own header comment. No public affiliate
 // route is mounted anywhere yet; that's Milestone 172C.
 router.use("/admin/affiliate", adminAffiliateRoutes);
+// Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
+// programme — fully separate router/path from /admin/affiliate above.
+// requireAdminAuth applied at the router level, see
+// adminReferrals.routes.ts's own header comment.
+router.use("/admin/referrals", adminReferralsRoutes);
 
 export default router;
