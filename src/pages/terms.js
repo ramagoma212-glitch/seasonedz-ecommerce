@@ -369,6 +369,16 @@ export function renderTerms() {
           has been an obvious error, misuse or technical problem, subject
           to applicable law.
         </p>
+        <p>
+          If you place a qualifying order using a valid Seasonedz Affiliate
+          Programme referral link, a discount is applied automatically at
+          checkout at the rate current at the time of your order. Referral
+          discounts are subject to our attribution window, are not
+          combinable with fraudulent or abusive referral activity, and the
+          applicable rate may change for future orders without affecting
+          discounts already applied to past ones. Full details are set out
+          in our <a href="/affiliate-terms">Affiliate Programme Terms</a>.
+        </p>
 
         <h2>14. Stock Availability</h2>
         <p>Products displayed on the website may become unavailable.</p>

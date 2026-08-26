@@ -53,6 +53,7 @@ const PUBLIC_STATIC_ROUTES = [
   "/privacy-policy",
   "/terms",
   "/cookies-policy",
+  "/affiliate-terms",
   "/schools",
   "/wholesale",
   "/distributor",

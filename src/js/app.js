@@ -38,7 +38,7 @@ import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload, submitProductReview } from "./api/customerApi.js";
+import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload, submitProductReview, applyForAffiliateProgramme } from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
 import {
@@ -55,6 +55,7 @@ import {
   deleteAdminDigitalAsset,
   approveAdminReview,
   rejectAdminReview,
+  confirmAdminManualPayment,
 } from "./api/adminDashboardApi.js";
 import {
   createAdminAffiliateProduct,
@@ -136,6 +137,7 @@ function mountApp() {
   setupAdminCommissionActions();
   setupAdminCommissionReverseForm();
   setupAdminPayoutActions();
+  setupAdminPaymentConfirmation();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -1349,6 +1351,20 @@ function setupCustomerAccountForms() {
       return;
     }
 
+    // Version 7, Milestone 172B.6: affiliate portal — Copy referral
+    // link / Apply.
+    const copyLinkButton = event.target.closest('[data-action="copy-referral-link"]');
+    if (copyLinkButton) {
+      handleCopyReferralLink(copyLinkButton);
+      return;
+    }
+
+    const applyAffiliateButton = event.target.closest('[data-action="apply-for-affiliate"]');
+    if (applyAffiliateButton) {
+      handleApplyForAffiliate(applyAffiliateButton);
+      return;
+    }
+
     // Version 7, Milestone 171F: purely cosmetic immediate feedback —
     // the actual navigation to the provider's own login page is already
     // underway by the time this runs (a plain <a href>, see
@@ -1647,6 +1663,51 @@ async function handleDisconnectProvider(button) {
   } catch (error) {
     button.disabled = false;
     window.alert(error?.message || "Could not disconnect that provider. Please try again.");
+  }
+}
+
+// Version 7, Milestone 172B.6: purely client-side — the link itself
+// was already rendered from the real backend response, this just puts
+// it on the clipboard. navigator.clipboard can be unavailable (very
+// old browser, non-HTTPS context) — falls back to a visible "select
+// the text" hint rather than a silent failure.
+async function handleCopyReferralLink(button) {
+  const link = button.dataset.link;
+  if (!link) return;
+
+  try {
+    await navigator.clipboard.writeText(link);
+    const originalText = button.textContent;
+    button.textContent = "Copied!";
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 2000);
+  } catch {
+    const input = document.getElementById("affiliateReferralLink");
+    if (input) {
+      input.select();
+    }
+    window.alert("Could not copy automatically — the link is selected, copy it manually (Ctrl/Cmd+C).");
+  }
+}
+
+async function handleApplyForAffiliate(button) {
+  const banner = document.querySelector("[data-affiliate-apply-banner]");
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  button.disabled = true;
+
+  try {
+    await applyForAffiliateProgramme();
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
   }
 }
 
@@ -3012,6 +3073,44 @@ async function handlePayAffiliateCommissions(button) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Manual payment confirmation (Version 7, Milestone 172B.6) — Bank
+// Transfer/Cash on Delivery only, never PayFast. §27 of the brief:
+// "Require confirmation modal. Clearly identify: payment method, order
+// number, amount expected." Same window.confirm() pattern as the
+// payout "Mark Paid" action above.
+// ---------------------------------------------------------------------------
+
+function setupAdminPaymentConfirmation() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="confirm-manual-payment"]');
+    if (!button) return;
+    handleConfirmManualPayment(button);
+  });
+}
+
+async function handleConfirmManualPayment(button) {
+  const orderNumber = button.dataset.orderNumber;
+  const paymentMethod = button.dataset.paymentMethod;
+  const amount = button.dataset.amount;
+
+  const confirmed = window.confirm(
+    `Confirm you have genuinely received payment for order ${orderNumber}.\n\nPayment method: ${paymentMethod}\nAmount expected: R${amount}\n\nThis will mark the order's payment as PAID.`
+  );
+  if (!confirmed) return;
+
+  button.disabled = true;
+
+  try {
+    await confirmAdminManualPayment(orderNumber);
+    setPendingAdminMessage("Payment confirmed as received.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    window.alert(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
   }
 }
 

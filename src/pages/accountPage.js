@@ -13,7 +13,7 @@
 // matched by email; a customer looking for one is pointed at the
 // existing public /track-order page instead.
 
-import { getCurrentCustomer, getCustomerOrders } from "../js/api/customerApi.js";
+import { getCurrentCustomer, getCustomerOrders, getMyAffiliatePortal } from "../js/api/customerApi.js";
 import { getAuthProviders, getConnectedAccounts, getOAuthStartUrl } from "../js/api/socialAuthApi.js";
 import { renderSocialAuthButtons, SOCIAL_AUTH_PROVIDER_LABELS } from "../components/socialAuthButtons.js";
 import { ApiError } from "../js/apiClient.js";
@@ -268,6 +268,169 @@ async function renderConnectedAccountsSection() {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// Affiliate Programme (Version 7, Milestone 172B.6). Reuses this exact
+// customer session — there is no second affiliate login anywhere. Every
+// figure shown here is whatever the backend's own
+// customerAffiliate.service.ts returns for req.customerUser.id; this
+// page never computes a rate, balance, or eligibility itself.
+// ---------------------------------------------------------------------------
+
+function renderReferralLink(link) {
+  return `
+    <div class="form-field">
+      <label class="form-field__label" for="affiliateReferralLink">Your Referral Link</label>
+      <div class="account-affiliate__link-row">
+        <input type="text" id="affiliateReferralLink" class="form-field__input" value="${escapeHtml(link)}" readonly />
+        <button type="button" class="btn btn--secondary btn--sm" data-action="copy-referral-link" data-link="${escapeHtml(link)}">Copy</button>
+      </div>
+      <p class="admin-product-form__hint">Share this link, or add <code>?ref=${escapeHtml(link.split("ref=")[1] || "")}</code> to any Seasonedz product page link.</p>
+    </div>
+  `;
+}
+
+function renderPayoutStatusMessage(totals, payoutDayOfMonth) {
+  if (totals.approvedUnpaidTotal <= 0) {
+    return `<p class="admin-product-form__hint">No approved balance yet.</p>`;
+  }
+  if (totals.isPayoutEligible) {
+    return `<p class="admin-product-form__hint">Your approved balance has reached the minimum payout amount — Seasonedz Group will arrange payment, targeted for the ${payoutDayOfMonth}${daySuffix(payoutDayOfMonth)} of the following month.</p>`;
+  }
+  return `<p class="admin-product-form__hint">Your approved balance will carry forward until it reaches the minimum payout amount of R${totals.minimumPayoutAmount.toFixed(2)} — nothing you've earned is ever lost.</p>`;
+}
+
+function daySuffix(day) {
+  if (day >= 11 && day <= 13) return "th";
+  switch (day % 10) {
+    case 1: return "st";
+    case 2: return "nd";
+    case 3: return "rd";
+    default: return "th";
+  }
+}
+
+function renderRecentCommissionsTable(commissions) {
+  if (commissions.length === 0) {
+    return `<p class="admin-product-form__hint">No referred orders yet.</p>`;
+  }
+  return `
+    <div class="admin-table-wrap">
+      <table class="admin-table">
+        <thead><tr><th>Order</th><th>Date</th><th>Qualifying Amount</th><th>Commission</th><th>Status</th></tr></thead>
+        <tbody>
+          ${commissions
+            .map(
+              (row) => `
+            <tr>
+              <td>${escapeHtml(row.orderNumber)}</td>
+              <td>${formatDate(row.orderDate)}</td>
+              <td>${formatRand(row.qualifyingProductSubtotal)}</td>
+              <td>${formatRand(row.commissionAmount)}</td>
+              <td><span class="badge">${humanizeEnum(row.commissionStatus)}</span></td>
+            </tr>
+          `
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderActiveAffiliatePortal(affiliate) {
+  return `
+    <div class="order-confirmation__row"><span>Status</span><span class="badge">Active</span></div>
+    <div class="order-confirmation__row"><span>Referral Code</span><span>${escapeHtml(affiliate.referralCode)}</span></div>
+    ${renderReferralLink(affiliate.referralLink)}
+    <div class="order-confirmation__row"><span>Your Customer Discount Rate</span><span>${affiliate.effectiveDiscountRate}%</span></div>
+    <div class="order-confirmation__row"><span>Your Commission Rate</span><span>${affiliate.effectiveCommissionRate}%</span></div>
+
+    <h4 class="checkout-section__label">Commission Balance</h4>
+    <div class="admin-cards">
+      <div class="admin-card"><p class="admin-card__label">Pending</p><p class="admin-card__value">${formatRand(affiliate.commissionTotals.pendingTotal)}</p></div>
+      <div class="admin-card"><p class="admin-card__label">Approved, unpaid</p><p class="admin-card__value">${formatRand(affiliate.commissionTotals.approvedUnpaidTotal)}</p></div>
+      <div class="admin-card"><p class="admin-card__label">Paid (lifetime)</p><p class="admin-card__value">${formatRand(affiliate.commissionTotals.paidLifetimeTotal)}</p></div>
+      <div class="admin-card"><p class="admin-card__label">Reversed</p><p class="admin-card__value">${formatRand(affiliate.commissionTotals.reversedTotal)}</p></div>
+    </div>
+    ${renderPayoutStatusMessage(affiliate.commissionTotals, affiliate.payoutDayOfMonth)}
+    <p class="admin-product-form__hint">Payouts are arranged manually by Seasonedz Group, monthly, once your approved balance reaches R${affiliate.commissionTotals.minimumPayoutAmount.toFixed(2)}.</p>
+
+    <h4 class="checkout-section__label">Recent Referred Orders</h4>
+    ${renderRecentCommissionsTable(affiliate.recentCommissions)}
+    <p class="admin-product-form__hint">
+      When sharing your link, please disclose your affiliate relationship — e.g. "I may earn a commission if you purchase through my Seasonedz referral link."
+      See the <a href="/affiliate-terms">Affiliate Programme Terms</a> for full details.
+    </p>
+  `;
+}
+
+function renderPendingAffiliatePortal() {
+  return `
+    <div class="order-confirmation__row"><span>Status</span><span class="badge">Pending</span></div>
+    <p class="admin-product-form__hint">Your application to join the Seasonedz Affiliate Programme is awaiting review. We'll approve genuine applications as soon as we can — no referral tools are active yet.</p>
+  `;
+}
+
+function renderSuspendedAffiliatePortal(affiliate) {
+  return `
+    <div class="order-confirmation__row"><span>Status</span><span class="badge">Suspended</span></div>
+    <p class="admin-product-form__hint">Your affiliate account is currently suspended — new referrals are not active. Contact Seasonedz Group if you believe this is a mistake.</p>
+    ${affiliate.recentCommissions.length ? `<h4 class="checkout-section__label">Historical Referred Orders</h4>${renderRecentCommissionsTable(affiliate.recentCommissions)}` : ""}
+  `;
+}
+
+function renderRejectedAffiliatePortal() {
+  return `
+    <div class="order-confirmation__row"><span>Status</span><span class="badge">Not Approved</span></div>
+    <p class="admin-product-form__hint">Your affiliate application was not approved. Contact Seasonedz Group if you have questions.</p>
+  `;
+}
+
+function renderNoAffiliateSection() {
+  return `
+    <p class="admin-product-form__hint">
+      Earn a commission for every genuine sale you refer to Seasonedz Group, and give your friends a discount too.
+      Read the <a href="/affiliate-terms">Affiliate Programme Terms</a>, then apply below.
+    </p>
+    <div class="form-banner form-banner--error" data-affiliate-apply-banner hidden></div>
+    <button type="button" class="btn btn--primary" data-action="apply-for-affiliate">Apply to Become an Affiliate</button>
+  `;
+}
+
+// Best-effort, same discipline as renderConnectedAccountsSection()/
+// renderMyOrdersSection() above — a failed fetch never breaks the rest
+// of the account page.
+async function renderAffiliateProgrammeSection() {
+  let response;
+  try {
+    response = await getMyAffiliatePortal();
+  } catch {
+    return "";
+  }
+
+  const { hasAffiliate, affiliate } = response.data;
+
+  let body;
+  if (!hasAffiliate) {
+    body = renderNoAffiliateSection();
+  } else if (affiliate.status === "ACTIVE") {
+    body = renderActiveAffiliatePortal(affiliate);
+  } else if (affiliate.status === "PENDING") {
+    body = renderPendingAffiliatePortal();
+  } else if (affiliate.status === "SUSPENDED") {
+    body = renderSuspendedAffiliatePortal(affiliate);
+  } else {
+    body = renderRejectedAffiliatePortal();
+  }
+
+  return `
+    <div class="order-confirmation__card account-affiliate">
+      <h2 class="checkout-section__label">Affiliate Programme</h2>
+      ${body}
+    </div>
+  `;
+}
+
 async function renderLoggedInView(customer) {
   return `
     <section class="container account-page">
@@ -284,6 +447,8 @@ async function renderLoggedInView(customer) {
       </div>
 
       ${await renderConnectedAccountsSection()}
+
+      ${await renderAffiliateProgrammeSection()}
 
       ${await renderMyOrdersSection()}
 

@@ -417,6 +417,42 @@ function renderReferralSection(order) {
   `;
 }
 
+// Version 7, Milestone 172B.6: manual payment confirmation for Bank
+// Transfer/Cash on Delivery orders — the frontend half of
+// adminPaymentConfirmation.service.ts. Mirrors every backend rule so
+// the button is never shown/enabled in a state the backend would
+// reject anyway (a UX convenience only — the backend independently
+// re-validates every one of these regardless). PayFast orders never
+// show anything here at all: PayFast payment state comes exclusively
+// from the verified ITN, never from an admin click.
+function renderManualPaymentConfirmation(order) {
+  if (order.paymentMethod !== "BANK_TRANSFER" && order.paymentMethod !== "CASH_ON_DELIVERY") return "";
+  if (order.paymentStatus === "PAID") return "";
+  if (order.status === "CANCELLED" || order.status === "REFUNDED") return "";
+
+  const isCodNotYetDelivered = order.paymentMethod === "CASH_ON_DELIVERY" && order.status !== "DELIVERED";
+
+  return `
+    <div class="order-confirmation__row">
+      <span></span>
+      <span>
+        <button
+          type="button"
+          class="btn btn--primary btn--sm"
+          data-action="confirm-manual-payment"
+          data-order-number="${escapeHtml(order.orderNumber)}"
+          data-payment-method="${escapeHtml(humanizeEnum(order.paymentMethod))}"
+          data-amount="${order.total.toFixed(2)}"
+          ${isCodNotYetDelivered ? "disabled" : ""}
+        >
+          Confirm Payment Received
+        </button>
+        ${isCodNotYetDelivered ? `<p class="admin-product-form__hint">Cash on Delivery payment can only be confirmed once this order is marked Delivered.</p>` : ""}
+      </span>
+    </div>
+  `;
+}
+
 function renderCourierSection(order) {
   if (order.isDigitalOnly) return renderDigitalOnlyAdminNotice();
 
@@ -487,6 +523,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
             <div class="order-confirmation__row"><span>Order Status</span>${renderStatusBadge(order.status)}</div>
             <div class="order-confirmation__row"><span>Payment Status</span>${renderStatusBadge(order.paymentStatus)}</div>
             <div class="order-confirmation__row"><span>Payment Method</span><span>${escapeHtml(humanizeEnum(order.paymentMethod))}</span></div>
+            ${renderManualPaymentConfirmation(order)}
             <div class="order-confirmation__row"><span>Fulfilment Status</span>${renderStatusBadge(order.fulfilmentStatus)}</div>
             <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
           </div>

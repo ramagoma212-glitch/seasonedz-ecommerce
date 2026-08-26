@@ -1419,6 +1419,19 @@ body.has-cookie-preferences-open {
   color: var(--color-text);
 }
 
+/* Version 7, Milestone 172B.6: the account-page affiliate portal's
+   referral link field — a readonly input plus a Copy button, side by
+   side, wrapping on narrow viewports rather than overflowing. */
+.account-affiliate__link-row {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.account-affiliate__link-row .form-field__input {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
 /* Version 7, Milestone 172B.4: referral discount row — see
    components/orderSummary.js. Only ever rendered when a real,
    backend-confirmed discount applies (checkout preview or a real

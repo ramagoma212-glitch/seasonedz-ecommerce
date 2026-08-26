@@ -190,7 +190,20 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>You can unsubscribe using the unsubscribe option provided in the communication or by contacting us.</p>
 
-        <h2>14. Cookies and Similar Technologies</h2>
+        <h2>14. Affiliate Programme</h2>
+        <p>Seasonedz Group operates its own Affiliate Programme, allowing customers and other supporters to apply to refer new customers in exchange for a commission. If you apply to become an affiliate, we process:</p>
+        <ul>
+          <li>Your name, email address and phone number, taken from your existing Seasonedz Group account.</li>
+          <li>Your affiliate application status.</li>
+          <li>Your referral code and referral activity.</li>
+          <li>Commission and payout records connected to orders you refer.</li>
+        </ul>
+        <p>If you follow another customer's referral link, we store a referral code and a signed capture timestamp in your browser's local storage, described in full in our separate <a href="/cookies-policy">Cookie Policy</a>, so that a qualifying order you place can be correctly attributed to that affiliate. This referral information is first party only; it is never shared with, or read by, any third party advertising or tracking service.</p>
+        <p>When an order is genuinely referred and completed, we associate it with the relevant affiliate's account for the purpose of calculating and recording their commission. An affiliate can see limited information about orders referred through their own link (such as the order reference, date and commission amount) but never a referred customer's password, full delivery address, or unnecessary contact details.</p>
+        <p>Affiliate payout records (amounts owed, approved, and paid) are kept for the same reasons, and for the same periods, as our other financial and accounting records — see section 19 below.</p>
+        <p>Full programme rules are set out in our <a href="/affiliate-terms">Affiliate Programme Terms</a>.</p>
+
+        <h2>15. Cookies and Similar Technologies</h2>
         <p>Seasonedz Group may use cookies and similar browser technologies to support:</p>
         <ul>
           <li>Website functionality.</li>
@@ -201,9 +214,9 @@ export function renderPrivacyPolicy() {
           <li>Website improvement.</li>
           <li>Marketing where applicable and permitted.</li>
         </ul>
-        <p>You can learn more in our separate <a href="/cookies-policy">Cookie Policy</a>.</p>
+        <p>You can learn more, including about our first party affiliate referral storage, in our separate <a href="/cookies-policy">Cookie Policy</a>.</p>
 
-        <h2>15. Information We Share</h2>
+        <h2>16. Information We Share</h2>
         <p>Seasonedz Group does not sell customers' personal information.</p>
         <p>We may share information with trusted service providers where reasonably necessary to operate our business.</p>
         <p>These may include:</p>
@@ -221,16 +234,16 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>Service providers should process personal information only for legitimate purposes connected with the services they provide.</p>
 
-        <h2>16. Third Party Marketplaces</h2>
+        <h2>17. Third Party Marketplaces</h2>
         <p>Seasonedz Group products may also be sold through third party marketplaces.</p>
         <p>When you purchase directly through another marketplace, that marketplace may collect and process your personal information under its own privacy policy.</p>
         <p>Seasonedz Group is not responsible for the independent privacy practices of third party platforms.</p>
 
-        <h2>17. International Processing</h2>
+        <h2>18. International Processing</h2>
         <p>Some technology or service providers may operate outside South Africa or store information using infrastructure located in another country.</p>
         <p>Where personal information is transferred outside South Africa, Seasonedz Group will take reasonable steps to ensure that the transfer is handled in accordance with applicable South African data protection requirements.</p>
 
-        <h2>18. How Long We Keep Information</h2>
+        <h2>19. How Long We Keep Information</h2>
         <p>We keep personal information only for as long as reasonably necessary for the purpose for which it was collected or where retention is required by law.</p>
         <p>Retention periods may depend on:</p>
         <ul>
@@ -244,7 +257,7 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>When information is no longer required, we may delete, destroy or de identify it as appropriate.</p>
 
-        <h2>19. Information Security</h2>
+        <h2>20. Information Security</h2>
         <p>Seasonedz Group takes reasonable technical and organisational steps to protect personal information from:</p>
         <ul>
           <li>Loss.</li>
@@ -256,16 +269,16 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>No online system can guarantee absolute security, but we take reasonable measures appropriate to the information we process.</p>
 
-        <h2>20. Personal Information Security Incidents</h2>
+        <h2>21. Personal Information Security Incidents</h2>
         <p>If Seasonedz Group becomes aware of a security compromise involving personal information, we will take reasonable steps to investigate and contain the incident.</p>
         <p>Where legally required, affected persons and the Information Regulator will be notified in accordance with applicable law.</p>
 
-        <h2>21. Children's Personal Information</h2>
+        <h2>22. Children's Personal Information</h2>
         <p>Some Seasonedz Group products are designed for children, but our ecommerce website and checkout are primarily intended for adults purchasing products.</p>
         <p>We do not intentionally collect children's personal information without appropriate authorisation where that authorisation is required.</p>
         <p>Parents or guardians should contact us if they believe a child has provided personal information without appropriate permission.</p>
 
-        <h2>22. Your Privacy Rights</h2>
+        <h2>23. Your Privacy Rights</h2>
         <p>Subject to applicable law, you may have the right to:</p>
         <ul>
           <li>Ask whether we hold personal information about you.</li>
@@ -279,7 +292,7 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>We may need to verify your identity before responding to certain requests.</p>
 
-        <h2>23. How to Exercise Your Rights</h2>
+        <h2>24. How to Exercise Your Rights</h2>
         <p>You can contact Seasonedz Group at:</p>
         <p>
           <strong>Email:</strong> <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a><br />
@@ -288,16 +301,16 @@ export function renderPrivacyPolicy() {
         </p>
         <p>Please explain the nature of your request clearly.</p>
 
-        <h2>24. Complaints to the Information Regulator</h2>
+        <h2>25. Complaints to the Information Regulator</h2>
         <p>You have the right to approach the Information Regulator of South Africa if you believe your personal information has been processed unlawfully.</p>
         <p>Information about complaints and current contact methods is available from the Information Regulator's official website.</p>
 
-        <h2>25. Links to Other Websites</h2>
+        <h2>26. Links to Other Websites</h2>
         <p>Our website may link to social media platforms, marketplaces, payment providers or other third party websites.</p>
         <p>Those organisations operate independently and may have their own privacy policies.</p>
         <p>We recommend reviewing those policies when using third party services.</p>
 
-        <h2>26. Changes to This Privacy Policy</h2>
+        <h2>27. Changes to This Privacy Policy</h2>
         <p>Seasonedz Group may update this Privacy Policy when:</p>
         <ul>
           <li>Our website changes.</li>
@@ -307,7 +320,7 @@ export function renderPrivacyPolicy() {
         </ul>
         <p>The latest version will be published on <a href="${businessInfo.websiteUrl}">${businessInfo.websiteDisplay}</a> with its updated date.</p>
 
-        <h2>27. Contact Us</h2>
+        <h2>28. Contact Us</h2>
         <p>For privacy related questions or requests:</p>
         <p><strong>${businessInfo.registeredName}</strong></p>
         <p>Registration number: <strong>${businessInfo.registrationNumber}</strong></p>

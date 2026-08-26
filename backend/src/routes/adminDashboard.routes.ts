@@ -31,6 +31,7 @@ import {
 } from "../controllers/adminDashboard.controller.js";
 import { getOrderStatusHistoryHandler, updateOrderStatusHandler } from "../controllers/adminOrderStatus.controller.js";
 import { updateShippingHandler } from "../controllers/adminShipping.controller.js";
+import { confirmManualPaymentHandler } from "../controllers/adminPaymentConfirmation.controller.js";
 import { bookCourierShipmentHandler, getCourierQuoteHandler } from "../controllers/adminCourier.controller.js";
 import {
   createAdminProductHandler,
@@ -67,6 +68,12 @@ router.get("/orders/:orderNumber/status-history", getOrderStatusHistoryHandler);
 // Order.fulfilmentStatus and Shipping.status are written together.
 // No courier API is called anywhere behind this route.
 router.patch("/orders/:orderNumber/shipping", updateShippingHandler);
+// Version 7, Milestone 172B.6: manual payment confirmation for Bank
+// Transfer/Cash on Delivery orders — see
+// adminPaymentConfirmation.service.ts's own header comment. PayFast
+// payment state is never touched by this route; it comes exclusively
+// from the verified PayFast ITN in payfast.service.ts.
+router.patch("/orders/:orderNumber/confirm-payment", confirmManualPaymentHandler);
 // Version 7, Milestone 108: admin-only Courier Guy RATE QUOTE only —
 // see courierGuy.service.ts's own header comment for why no booking/
 // shipment endpoint is ever called from here. Never mutates the order,

@@ -19,6 +19,7 @@ import {
   listMyReviewsHandler,
   submitProductReviewHandler,
 } from "../controllers/productReview.controller.js";
+import { applyForAffiliateProgrammeHandler, getMyAffiliatePortalHandler } from "../controllers/customerAffiliate.controller.js";
 import { requireCustomerAuth } from "../middleware/requireCustomerAuth.middleware.js";
 import {
   customerForgotPasswordRateLimiter,
@@ -26,6 +27,7 @@ import {
   customerRegisterRateLimiter,
   customerResetPasswordRateLimiter,
   productReviewCreationRateLimiter,
+  customerAffiliateApplyRateLimiter,
 } from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
@@ -61,5 +63,12 @@ router.post("/downloads/:orderItemId/request", requireCustomerAuth, requestCusto
 router.get("/reviews/eligible", requireCustomerAuth, listEligibleReviewCandidatesHandler);
 router.get("/reviews", requireCustomerAuth, listMyReviewsHandler);
 router.post("/reviews", requireCustomerAuth, productReviewCreationRateLimiter, submitProductReviewHandler);
+
+// Version 7, Milestone 172B.6: affiliate portal — reuses this exact
+// customer session, never a second affiliate login. Affiliate identity
+// is always derived server-side from req.customerUser.id
+// (customerAffiliate.service.ts), never from anything the client sends.
+router.get("/affiliate", requireCustomerAuth, getMyAffiliatePortalHandler);
+router.post("/affiliate/apply", requireCustomerAuth, customerAffiliateApplyRateLimiter, applyForAffiliateProgrammeHandler);
 
 export default router;

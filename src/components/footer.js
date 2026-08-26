@@ -122,6 +122,7 @@ export function renderFooter() {
                  account. -->
             <li><a href="/cookies-policy">Cookie Policy</a></li>
             <li><button type="button" class="footer-link-button" data-action="cookie-manage">Cookie Settings</button></li>
+            <li><a href="/affiliate-terms">Affiliate Programme Terms</a></li>
             <li><a href="/track-order">Track Order</a></li>
           </ul>
         </div>

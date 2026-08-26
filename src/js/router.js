@@ -84,6 +84,7 @@ import { renderReturnsPolicy } from "../pages/returnsPolicy.js";
 import { renderPrivacyPolicy } from "../pages/privacyPolicy.js";
 import { renderTerms } from "../pages/terms.js";
 import { renderCookiesPolicy } from "../pages/cookiesPolicy.js";
+import { renderAffiliateTerms } from "../pages/affiliateTerms.js";
 import { renderSchools } from "../pages/schools.js";
 import { renderWholesale } from "../pages/wholesale.js";
 import { renderDistributor } from "../pages/distributor.js";
@@ -270,6 +271,14 @@ const routeDefs = [
     render: renderCookiesPolicy,
     title: "Cookie Policy",
     description: "What cookies and Local Storage Seasonedz Group actually uses, and how to manage your cookie preferences.",
+  },
+  {
+    // Version 7, Milestone 172B.6: a real, indexable legal page (like
+    // /terms, /privacy-policy, /cookies-policy above) — not noindex.
+    pattern: "/affiliate-terms",
+    render: renderAffiliateTerms,
+    title: "Affiliate Programme Terms",
+    description: "The rules of the Seasonedz Affiliate Programme — referral discounts, commission rates, payouts, and affiliate responsibilities.",
   },
   {
     pattern: "/schools",

@@ -84,3 +84,16 @@ export function submitProductReview({ orderItemId, rating, reviewText }) {
     body: JSON.stringify({ orderItemId, rating, reviewText }),
   });
 }
+
+// Version 7, Milestone 172B.6: affiliate portal — reuses this exact
+// customer session, never a second affiliate login. Both require the
+// caller to already be logged in; the backend derives affiliate
+// identity solely from the authenticated customer, never from anything
+// this client sends (see customerAffiliate.service.ts).
+export function getMyAffiliatePortal() {
+  return customerRequest("/customers/affiliate", { method: "GET" });
+}
+
+export function applyForAffiliateProgramme() {
+  return customerRequest("/customers/affiliate/apply", { method: "POST" });
+}

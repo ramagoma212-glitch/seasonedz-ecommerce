@@ -109,7 +109,12 @@ test.describe("Owner About + Legal content update (24 August 2026)", () => {
     const body = page.locator(".info-page__body");
     await expect(body).toContainText("Protection of Personal Information Act 4 of 2013");
     await expect(body).toContainText("Information Regulator");
-    await expect(page.locator('.info-page__body a[href="/cookies-policy"]')).toHaveCount(2);
+    // Was 2 before Milestone 172B.6: the new "14. Affiliate Programme"
+    // section added its own genuine, non-duplicate Cookie Policy
+    // cross-reference (for the seasonedz_referral local storage entry),
+    // on top of the two that already existed (Cart/Wishlist/Preferences
+    // and Cookies and Similar Technologies).
+    await expect(page.locator('.info-page__body a[href="/cookies-policy"]')).toHaveCount(3);
   });
 
   test("Returns, Refunds and Exchanges Policy preserves the specific statutory time periods without alteration", async ({ page }) => {

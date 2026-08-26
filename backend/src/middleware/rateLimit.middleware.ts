@@ -184,6 +184,19 @@ export const oauthAccountManagementRateLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+// Affiliate programme application (Version 7, Milestone 172B.6) —
+// requires an already-authenticated customer, same tighter-than-general
+// reasoning as productReviewCreationRateLimiter above: a compromised/
+// scripted session could otherwise hammer this write endpoint far
+// faster than a genuine customer applying once ever would.
+export const customerAffiliateApplyRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
 // Referral capture/preview (Version 7, Milestone 172B.4) — public,
 // read-only (neither ever writes to the database), called on every
 // storefront pageview that carries a ?ref= link and again from the

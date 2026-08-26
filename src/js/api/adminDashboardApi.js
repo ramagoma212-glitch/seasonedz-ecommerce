@@ -59,6 +59,16 @@ export function updateAdminShipping(orderNumber, fields) {
   });
 }
 
+// Version 7, Milestone 172B.6: manual payment confirmation for Bank
+// Transfer/Cash on Delivery orders only — see
+// adminPaymentConfirmation.service.ts. Never available for PayFast
+// orders; the backend rejects the attempt regardless of what this
+// client sends. No amount is ever sent here — the confirmed figure is
+// always the order's own existing, authoritative Payment.amount.
+export function confirmAdminManualPayment(orderNumber) {
+  return adminRequest(`/admin/orders/${encodeURIComponent(orderNumber)}/confirm-payment`, { method: "PATCH" });
+}
+
 // Version 7, Milestone 108: admin-only Courier Guy rate quote — no
 // booking/shipment endpoint is called anywhere behind this (see
 // backend/src/services/courierGuy.service.ts's own header comment).
