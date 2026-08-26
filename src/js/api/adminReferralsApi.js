@@ -15,6 +15,10 @@ function buildQuery(params) {
   if (params.status) query.set("status", params.status);
   if (params.search) query.set("search", params.search);
   if (params.affiliateId) query.set("affiliateId", params.affiliateId);
+  // Version 7, Milestone 172B.5.
+  if (params.eligibleOnly) query.set("eligibleOnly", "true");
+  if (params.fromDate) query.set("fromDate", params.fromDate);
+  if (params.toDate) query.set("toDate", params.toDate);
   const qs = query.toString();
   return qs ? `?${qs}` : "";
 }
@@ -63,8 +67,36 @@ export function updateReferralSettings(payload) {
   return adminRequest("/admin/referrals/settings", { method: "PATCH", body: JSON.stringify(payload) });
 }
 
-// Foundation only — the list is expected to be empty until Milestone
-// 172B.4/172B.5 wire real commission creation into checkout.
 export function getAdminReferralCommissions(params = {}) {
   return adminRequest(`/admin/referrals/commissions${buildQuery(params)}`, { method: "GET" });
+}
+
+// Version 7, Milestone 172B.5: commission lifecycle + payout. Every
+// eligibility/threshold/balance decision is made server-side — this
+// file never computes any of it, only relays the admin's action and
+// displays whatever the backend decides.
+export function getAdminReferralCommission(id) {
+  return adminRequest(`/admin/referrals/commissions/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function approveAdminReferralCommission(id) {
+  return adminRequest(`/admin/referrals/commissions/${encodeURIComponent(id)}/approve`, { method: "PATCH" });
+}
+
+export function reverseAdminReferralCommission(id, { reason, confirmClawback = false } = {}) {
+  return adminRequest(`/admin/referrals/commissions/${encodeURIComponent(id)}/reverse`, {
+    method: "PATCH",
+    body: JSON.stringify({ reason, confirmClawback }),
+  });
+}
+
+export function getAdminReferralPayoutOverview() {
+  return adminRequest("/admin/referrals/payouts", { method: "GET" });
+}
+
+export function payAdminAffiliateCommissions(affiliateId, commissionIds) {
+  return adminRequest(`/admin/referrals/payouts/${encodeURIComponent(affiliateId)}/pay`, {
+    method: "POST",
+    body: JSON.stringify(commissionIds ? { commissionIds } : {}),
+  });
 }

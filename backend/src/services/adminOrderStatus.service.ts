@@ -12,6 +12,7 @@
 import { OrderStatus, OrderStatusHistorySource } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SafeAdminProfile } from "./adminAuth.service.js";
+import { reverseCommissionsForOrder } from "./referralCommission.service.js";
 
 // A business-rule failure (order not found, invalid status, disallowed
 // transition, invalid note) — distinct from an unexpected error, so
@@ -136,6 +137,17 @@ export async function updateOrderStatus(
       data: { status: newStatus },
       select: { orderNumber: true, status: true, paymentStatus: true, updatedAt: true },
     });
+
+    // Version 7, Milestone 172B.5: a referred order that becomes
+    // CANCELLED (reachable today) or REFUNDED (not currently reachable
+    // by any code in this backend — see reverseCommissionsForOrder()'s
+    // own comment) automatically reverses its commission, if any. A
+    // no-op for every non-referred order (the vast majority) and for an
+    // order whose commission is already PAID (that's a clawback case,
+    // deliberately left for explicit admin action instead).
+    if (newStatus === OrderStatus.CANCELLED || newStatus === OrderStatus.REFUNDED) {
+      await reverseCommissionsForOrder(tx, order.id, order.orderNumber, `Order ${newStatus.toLowerCase()}.`);
+    }
 
     const historyRow = await tx.orderStatusHistory.create({
       data: {

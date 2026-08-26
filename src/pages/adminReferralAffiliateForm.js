@@ -20,6 +20,34 @@ import { renderAdminNav } from "../components/adminNav.js";
 import { renderReferralsSubNav } from "../components/referralsSubNav.js";
 import { escapeHtml } from "../js/search.js";
 
+// Version 7, Milestone 172B.5: real commission totals — merged into
+// GET /admin/referrals/affiliates/:id's own response (see
+// adminReferralAffiliate.controller.ts). Never shown on the "create"
+// form, which has no affiliate/history to summarise yet.
+function renderCommissionSummary(affiliate) {
+  const totals = affiliate.commissionTotals;
+  if (!totals) return "";
+
+  function statCard(label, value) {
+    return `<div class="admin-card"><p class="admin-card__label">${label}</p><p class="admin-card__value">${value}</p></div>`;
+  }
+
+  return `
+    <h2 class="admin-page__section-title">Commission Summary</h2>
+    <div class="admin-cards">
+      ${statCard("Pending", `R${totals.pendingTotal.toFixed(2)}`)}
+      ${statCard("Approved, unpaid", `R${totals.approvedUnpaidTotal.toFixed(2)}`)}
+      ${statCard("Paid (lifetime)", `R${totals.paidLifetimeTotal.toFixed(2)}`)}
+      ${statCard("Reversed (lifetime)", `R${totals.reversedTotal.toFixed(2)}`)}
+      ${statCard("Payout eligible", totals.isPayoutEligible ? "Yes" : `No (min. R${totals.minimumPayoutAmount.toFixed(2)})`)}
+    </div>
+    <p class="admin-page__subtitle">
+      <a href="/admin/referrals/commissions?affiliateId=${encodeURIComponent(affiliate.id)}">View this affiliate's commissions</a>
+      ${totals.isPayoutEligible ? ` &bull; <a href="/admin/referrals/payouts">Go to Payouts</a>` : ""}
+    </p>
+  `;
+}
+
 function renderNotFound(id) {
   return `
     <section class="container admin-page">
@@ -155,6 +183,7 @@ export async function renderAdminReferralAffiliateEdit({ id } = {}) {
         <a class="admin-back-link" href="/admin/referrals/affiliates">&larr; Back to Affiliates</a>
         <h2 class="admin-page__section-title">Edit ${escapeHtml(affiliate.name)}</h2>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
+        ${renderCommissionSummary(affiliate)}
         ${renderAffiliateForm("edit", affiliate)}
       </section>
     `;

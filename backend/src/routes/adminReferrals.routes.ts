@@ -24,7 +24,14 @@ import {
   updateAffiliateHandler,
 } from "../controllers/adminReferralAffiliate.controller.js";
 import { getReferralSettingsHandler, updateReferralSettingsHandler } from "../controllers/adminReferralSettings.controller.js";
-import { listOrderAffiliateCommissionsHandler } from "../controllers/adminReferralCommission.controller.js";
+import {
+  approveCommissionHandler,
+  getOrderAffiliateCommissionHandler,
+  getPayoutOverviewHandler,
+  listOrderAffiliateCommissionsHandler,
+  payAffiliateCommissionsHandler,
+  reverseCommissionHandler,
+} from "../controllers/adminReferralCommission.controller.js";
 
 const router = Router();
 
@@ -49,5 +56,14 @@ router.get("/settings", getReferralSettingsHandler);
 router.patch("/settings", updateReferralSettingsHandler);
 
 router.get("/commissions", listOrderAffiliateCommissionsHandler);
+router.get("/commissions/:id", getOrderAffiliateCommissionHandler);
+router.patch("/commissions/:id/approve", approveCommissionHandler);
+router.patch("/commissions/:id/reverse", reverseCommissionHandler);
+
+// Version 7, Milestone 172B.5: payout — grouped view over existing
+// APPROVED commissions (no AffiliatePayout table; see
+// referralCommission.service.ts's own header comment for why).
+router.get("/payouts", getPayoutOverviewHandler);
+router.post("/payouts/:affiliateId/pay", payAffiliateCommissionsHandler);
 
 export default router;

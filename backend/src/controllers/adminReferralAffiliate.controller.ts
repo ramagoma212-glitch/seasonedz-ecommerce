@@ -9,6 +9,7 @@ import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { parsePositiveIntParam, parseStringParam } from "../utils/query.js";
 import * as referralAffiliateService from "../services/referralAffiliate.service.js";
 import { ReferralAffiliateError } from "../services/referralAffiliate.service.js";
+import { getAffiliateCommissionTotals, getCommissionOverviewStats } from "../services/referralCommission.service.js";
 
 const DEFAULT_LIST_LIMIT = 20;
 const MAX_LIST_LIMIT = 50;
@@ -74,7 +75,14 @@ export async function getAffiliateHandler(req: Request, res: Response, next: Nex
       return;
     }
 
-    sendSuccess(res, { message: "Affiliate retrieved successfully", data: affiliate });
+    // Version 7, Milestone 172B.5: real commission totals merged in —
+    // same "small, separately-queried augmentation" pattern used
+    // throughout this backend (e.g. adminDashboard.controller.ts's
+    // courier fields). Never fabricated; all zero for an affiliate with
+    // no commissions yet.
+    const commissionTotals = await getAffiliateCommissionTotals(id);
+
+    sendSuccess(res, { message: "Affiliate retrieved successfully", data: { ...affiliate, commissionTotals } });
   } catch (error) {
     next(error);
   }
@@ -164,13 +172,13 @@ export async function reactivateAffiliateHandler(req: Request, res: Response, ne
   }
 }
 
-// Structural summary only — total/pending/active/suspended/rejected
-// affiliate counts. Never fabricates clicks/orders/commission/sales
-// figures (§16 of the brief); those belong to referralCommission
-// controller/service once real referred orders exist.
+// Affiliate counts were structural-only (172B.3); Milestone 172B.5
+// added real commission figures alongside them — every value here is a
+// genuine database aggregate (referralCommission.service.ts's
+// getCommissionOverviewStats()), never a fabricated click/sale figure.
 export async function getReferralsOverviewHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const statusCounts = await referralAffiliateService.getAffiliateStatusCounts();
+    const [statusCounts, commissionStats] = await Promise.all([referralAffiliateService.getAffiliateStatusCounts(), getCommissionOverviewStats()]);
     const total = Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
 
     sendSuccess(res, {
@@ -181,6 +189,7 @@ export async function getReferralsOverviewHandler(req: Request, res: Response, n
         activeAffiliates: statusCounts.ACTIVE,
         suspendedAffiliates: statusCounts.SUSPENDED,
         rejectedAffiliates: statusCounts.REJECTED,
+        ...commissionStats,
       },
     });
   } catch (error) {

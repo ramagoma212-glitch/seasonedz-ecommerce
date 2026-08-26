@@ -72,6 +72,9 @@ import {
   suspendAdminAffiliate,
   reactivateAdminAffiliate,
   updateReferralSettings,
+  approveAdminReferralCommission,
+  reverseAdminReferralCommission,
+  payAdminAffiliateCommissions,
 } from "./api/adminReferralsApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
@@ -129,6 +132,10 @@ function mountApp() {
   setupAdminReferralAffiliateForm();
   setupAdminReferralAffiliateActions();
   setupAdminReferralSettingsForm();
+  setupAdminCommissionFilterForm();
+  setupAdminCommissionActions();
+  setupAdminCommissionReverseForm();
+  setupAdminPayoutActions();
   setupDescriptionEditors();
 
   window.addEventListener("popstate", onRouteChange);
@@ -2872,6 +2879,139 @@ async function handleAdminReferralSettingsFormSubmit(form) {
     }
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Commission lifecycle + payout (Version 7, Milestone 172B.5). Every
+// eligibility/threshold/status decision is made server-side
+// (referralCommission.service.ts) — these handlers only relay the
+// admin's action and display whatever the backend decides.
+// ---------------------------------------------------------------------------
+
+function setupAdminCommissionFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-commission-filter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+
+    const status = form.querySelector('select[name="status"]')?.value || "";
+    const eligibleOnly = form.querySelector('input[name="eligibleOnly"]')?.checked || false;
+    const affiliateId = form.querySelector('input[name="affiliateId"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    if (eligibleOnly) params.set("eligibleOnly", "true");
+    if (affiliateId) params.set("affiliateId", affiliateId);
+    params.set("page", "1");
+
+    navigateTo(`/admin/referrals/commissions?${params.toString()}`);
+  });
+}
+
+function setupAdminCommissionActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="approve-commission"]');
+    if (!button) return;
+    handleApproveCommission(button);
+  });
+}
+
+async function handleApproveCommission(button) {
+  const commissionId = button.dataset.commissionId;
+  const banner = document.querySelector("[data-admin-commission-banner]") || document.querySelector("[data-admin-commission-detail-banner]");
+
+  button.disabled = true;
+  if (banner) banner.hidden = true;
+
+  try {
+    await approveAdminReferralCommission(commissionId);
+    setPendingAdminMessage("Commission approved.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminCommissionReverseForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-commission-reverse-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleReverseCommission(form);
+  });
+}
+
+async function handleReverseCommission(form) {
+  const commissionId = form.dataset.commissionId;
+  const banner = document.querySelector("[data-admin-commission-detail-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  const reason = form.querySelector('textarea[name="reason"]')?.value.trim() || "";
+  const confirmClawback = form.querySelector('input[name="confirmClawback"]')?.checked ?? false;
+
+  if (banner) banner.hidden = true;
+  if (!reason || reason.length < 3) {
+    if (banner) {
+      banner.textContent = "A reversal reason of at least 3 characters is required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await reverseAdminReferralCommission(commissionId, { reason, confirmClawback });
+    setPendingAdminMessage("Commission reversed.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (submitButton) submitButton.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminPayoutActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="pay-affiliate-commissions"]');
+    if (!button) return;
+    handlePayAffiliateCommissions(button);
+  });
+}
+
+async function handlePayAffiliateCommissions(button) {
+  const affiliateId = button.dataset.affiliateId;
+  const affiliateName = button.dataset.affiliateName || "this affiliate";
+  const balance = button.dataset.balance;
+  const banner = document.querySelector("[data-admin-payout-banner]");
+
+  // A real, off-platform payment already happened before this button is
+  // ever clicked — this confirmation exists so an admin can't mark a
+  // payout paid by mis-click; it never sends any money itself.
+  const confirmed = window.confirm(`Confirm that you have already paid ${affiliateName} R${balance} for real, outside this system. This will mark their approved commissions as PAID.`);
+  if (!confirmed) return;
+
+  button.disabled = true;
+  if (banner) banner.hidden = true;
+
+  try {
+    await payAdminAffiliateCommissions(affiliateId);
+    setPendingAdminMessage(`Marked R${balance} paid to ${affiliateName}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
   }
 }
 

@@ -1,9 +1,13 @@
 // Version 7, Milestone 172B.3: admin Referrals overview — structural
-// summary values only (affiliate counts by status, the programme's
-// current default rates). Never fabricates clicks/orders/commission/
-// sales figures — those stay honestly absent until real referred
-// orders exist (172B.4+), matching this project's own established
-// "never invent business data" discipline.
+// summary values (affiliate counts by status, the programme's current
+// default rates). Never fabricates clicks/orders/commission/sales
+// figures, matching this project's own established "never invent
+// business data" discipline.
+//
+// Version 7, Milestone 172B.5: real commission figures added alongside
+// — every value is a genuine database aggregate (see
+// referralCommission.service.ts's getCommissionOverviewStats()), never
+// a fabricated one.
 
 import { getReferralsOverview, getReferralSettings } from "../js/api/adminReferralsApi.js";
 import {
@@ -58,9 +62,20 @@ export async function renderAdminReferralsOverview() {
           ${renderStatCard("Payout day", `Day ${settings.payoutDayOfMonth}`)}
           ${renderStatCard("Programme status", settings.isProgrammeActive ? "Active" : "Inactive")}
         </div>
+        <p class="admin-page__subtitle"><a href="/admin/referrals/settings">Change these defaults</a>.</p>
+
+        <h2 class="admin-page__section-title">Commissions</h2>
+        <div class="admin-cards">
+          ${renderStatCard("Pending", overview.pendingCount)}
+          ${renderStatCard("Pending value", formatCurrency(overview.pendingValue))}
+          ${renderStatCard("Approved, unpaid", overview.approvedUnpaidCount)}
+          ${renderStatCard("Approved, unpaid value", formatCurrency(overview.approvedUnpaidValue))}
+          ${renderStatCard("Paid (lifetime)", formatCurrency(overview.paidValue))}
+          ${renderStatCard("Reversed (lifetime)", formatCurrency(overview.reversedValue))}
+          ${renderStatCard("Affiliates payout-eligible", overview.payoutEligibleAffiliateCount)}
+        </div>
         <p class="admin-page__subtitle">
-          No referral discount or affiliate commission is live on the storefront yet — this foundation only manages
-          affiliate applications and programme settings. <a href="/admin/referrals/settings">Change these defaults</a>.
+          <a href="/admin/referrals/commissions">Review commissions</a> &bull; <a href="/admin/referrals/payouts">Manage payouts</a>.
         </p>
       </section>
     `;

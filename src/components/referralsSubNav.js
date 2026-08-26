@@ -9,6 +9,10 @@
 const SUB_NAV_LINKS = [
   { key: "overview", href: "/admin/referrals", label: "Overview" },
   { key: "affiliates", href: "/admin/referrals/affiliates", label: "Affiliates" },
+  // Version 7, Milestone 172B.5: the real commission lifecycle and
+  // payout views.
+  { key: "commissions", href: "/admin/referrals/commissions", label: "Commissions" },
+  { key: "payouts", href: "/admin/referrals/payouts", label: "Payouts" },
   { key: "settings", href: "/admin/referrals/settings", label: "Settings" },
 ];
 

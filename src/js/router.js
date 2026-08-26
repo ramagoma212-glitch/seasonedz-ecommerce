@@ -104,6 +104,9 @@ import { renderAdminReferralsOverview } from "../pages/adminReferralsOverview.js
 import { renderAdminReferralAffiliates } from "../pages/adminReferralAffiliates.js";
 import { renderAdminReferralAffiliateCreate, renderAdminReferralAffiliateEdit } from "../pages/adminReferralAffiliateForm.js";
 import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
+import { renderAdminReferralCommissions } from "../pages/adminReferralCommissions.js";
+import { renderAdminReferralCommissionDetail } from "../pages/adminReferralCommissionDetail.js";
+import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -337,6 +340,12 @@ const routeDefs = [
   { pattern: "/admin/referrals/affiliates/new", render: renderAdminReferralAffiliateCreate, title: "Add Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates/:id/edit", render: renderAdminReferralAffiliateEdit, title: "Edit Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates", render: renderAdminReferralAffiliates, title: "Referral Affiliates", noindex: true },
+  // Version 7, Milestone 172B.5: commission lifecycle + payout. "/:id"
+  // before the bare list, same ordering discipline as every other
+  // admin list/:id-wildcard pair in this file.
+  { pattern: "/admin/referrals/commissions/:id", render: renderAdminReferralCommissionDetail, title: "Commission Detail", noindex: true },
+  { pattern: "/admin/referrals/commissions", render: renderAdminReferralCommissions, title: "Referral Commissions", noindex: true },
+  { pattern: "/admin/referrals/payouts", render: renderAdminReferralPayouts, title: "Referral Payouts", noindex: true },
   { pattern: "/admin/referrals/settings", render: renderAdminReferralSettings, title: "Referral Programme Settings", noindex: true },
   { pattern: "/admin/referrals", render: renderAdminReferralsOverview, title: "Referrals", noindex: true },
 ];

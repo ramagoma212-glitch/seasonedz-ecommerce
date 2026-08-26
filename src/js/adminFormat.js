@@ -8,7 +8,7 @@
 // product review moderation queue (pages/adminReviews.js) — the same
 // generic tone convention every other admin status badge already uses.
 const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED"]);
-const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED"]);
+const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED"]);
 
 export function humanizeEnum(value) {
   return value
