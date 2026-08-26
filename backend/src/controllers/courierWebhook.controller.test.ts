@@ -1,12 +1,14 @@
-// Version 7, Milestone 173: secret-path gating + always-200-past-the-gate
-// behaviour. courierGuyConfig is a plain mutable object (safe to stub
-// directly, same as every other config object in this codebase's
-// tests); applyCourierStatusEvent itself is a real ES module export
-// and cannot be monkey-patched (Node freezes module namespace objects)
-// — so these tests exercise the REAL sync service underneath, stubbing
-// prisma the same way courierStatusSync.service.test.ts does. Its own
-// mapping/effects logic is fully covered there; this file is only
-// about the HTTP boundary (the secret gate and the always-200 policy).
+// Version 7, Milestone 173A: bearer-token webhook authentication.
+// courierGuyConfig is a plain mutable object (safe to stub directly,
+// same as every other config object in this codebase's tests);
+// applyCourierStatusEvent itself is a real ES module export and cannot
+// be monkey-patched (Node freezes module namespace objects) — so these
+// tests exercise the REAL sync service underneath, stubbing prisma the
+// same way courierStatusSync.service.test.ts does. Its own
+// mapping/effects logic is fully covered there (idempotency, delivered
+// mapping, unknown-status safety, Collection/digital exclusion,
+// affiliate DELIVERED integration — none of it touched by this
+// milestone); this file is only about the HTTP/auth boundary.
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import type { Request, Response } from "express";
@@ -38,34 +40,27 @@ function fakeRes() {
   return res;
 }
 
+function fakeReq(overrides: { headers?: Record<string, string>; query?: Record<string, string>; params?: Record<string, string>; body?: unknown } = {}) {
+  return {
+    headers: overrides.headers ?? {},
+    query: overrides.query ?? {},
+    params: overrides.params ?? {},
+    body: overrides.body ?? {},
+  } as unknown as Request;
+}
+
 const REAL_SECRET = "a".repeat(32);
 
-test("wrong secret path segment: 404, and the sync service never even queries the database", async () => {
+function withSyncEnabled() {
   const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", true);
   const restoreSecret = stub(courierGuyConfig, "webhookSecret", REAL_SECRET);
-  const findMany = mock.fn(async () => {
-    throw new Error("should never be called — the secret gate must reject first");
-  });
-  const restoreFindMany = stub(prisma.shipping, "findMany", findMany);
-
-  const req = { params: { webhookSecret: "wrong-secret-value-not-matching" }, body: {} } as unknown as Request;
-  const res = fakeRes();
-  const next = mock.fn();
-
-  try {
-    await courierGuyTrackingWebhookHandler(req, res as Response, next);
-    assert.equal(res.statusCode, 404);
-    assert.equal(res.ended, true);
-    assert.equal(findMany.mock.callCount(), 0);
-    assert.equal(next.mock.callCount(), 0);
-  } finally {
+  return () => {
     restoreEnabled();
     restoreSecret();
-    restoreFindMany();
-  }
-});
+  };
+}
 
-test("sync disabled entirely: 404 regardless of secret correctness, no database query", async () => {
+test("sync disabled entirely: 404 regardless of any header, no database query", async () => {
   const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", false);
   const restoreSecret = stub(courierGuyConfig, "webhookSecret", REAL_SECRET);
   const findMany = mock.fn(async () => {
@@ -73,7 +68,7 @@ test("sync disabled entirely: 404 regardless of secret correctness, no database 
   });
   const restoreFindMany = stub(prisma.shipping, "findMany", findMany);
 
-  const req = { params: { webhookSecret: REAL_SECRET }, body: {} } as unknown as Request;
+  const req = fakeReq({ headers: { authorization: `Bearer ${REAL_SECRET}` } });
   const res = fakeRes();
   const next = mock.fn();
 
@@ -92,25 +87,7 @@ test("no secret configured at all: 404, never crashes comparing against undefine
   const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", true);
   const restoreSecret = stub(courierGuyConfig, "webhookSecret", undefined);
 
-  const req = { params: { webhookSecret: "anything" }, body: {} } as unknown as Request;
-  const res = fakeRes();
-  const next = mock.fn();
-
-  try {
-    await courierGuyTrackingWebhookHandler(req, res as Response, next);
-    assert.equal(res.statusCode, 404);
-    assert.equal(next.mock.callCount(), 0);
-  } finally {
-    restoreEnabled();
-    restoreSecret();
-  }
-});
-
-test("secret comparison is not fooled by a trivially different-length attempt (constant-time path used)", async () => {
-  const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", true);
-  const restoreSecret = stub(courierGuyConfig, "webhookSecret", REAL_SECRET);
-
-  const req = { params: { webhookSecret: "x" }, body: {} } as unknown as Request; // deliberately very short
+  const req = fakeReq({ headers: { authorization: "Bearer anything" } });
   const res = fakeRes();
   const next = mock.fn();
 
@@ -123,51 +100,218 @@ test("secret comparison is not fooled by a trivially different-length attempt (c
   }
 });
 
-test("correct secret: real sync service is invoked and a 200 is returned even for an unresolved-shipment outcome", async () => {
-  const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", true);
-  const restoreSecret = stub(courierGuyConfig, "webhookSecret", REAL_SECRET);
+test("missing Authorization header: 401, no database query", async () => {
+  const restore = withSyncEnabled();
+  const findMany = mock.fn(async () => {
+    throw new Error("should never be called — auth must reject first");
+  });
+  const restoreFindMany = stub(prisma.shipping, "findMany", findMany);
+
+  const req = fakeReq({ headers: {} });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+    assert.equal(findMany.mock.callCount(), 0);
+  } finally {
+    restore();
+    restoreFindMany();
+  }
+});
+
+test("wrong bearer token: 401, no database query", async () => {
+  const restore = withSyncEnabled();
+  const findMany = mock.fn(async () => {
+    throw new Error("should never be called");
+  });
+  const restoreFindMany = stub(prisma.shipping, "findMany", findMany);
+
+  const req = fakeReq({ headers: { authorization: "Bearer wrong-token-entirely" } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+    assert.equal(findMany.mock.callCount(), 0);
+  } finally {
+    restore();
+    restoreFindMany();
+  }
+});
+
+test("empty bearer token (\"Bearer \" with nothing after): 401", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: "Bearer " } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("empty bearer token (whitespace only after Bearer): 401", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: "Bearer    " } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("Basic auth scheme: rejected with 401, never accepted as an alternative", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: `Basic ${Buffer.from(`user:${REAL_SECRET}`).toString("base64")}` } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("malformed Authorization header (no scheme, just the raw token): 401", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: REAL_SECRET } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("malformed Authorization header (\"Bearer\" with no space/token at all): 401", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: "Bearer" } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("the old Milestone 173 pattern — secret as a URL path param — no longer authenticates anything", async () => {
+  const restore = withSyncEnabled();
+  // Simulates a stale/misremembered caller still trying the old
+  // /courier-guy/:webhookSecret/tracking-event shape — even if a
+  // caller populated req.params this way, the handler must never read
+  // req.params at all for authentication any more.
+  const req = fakeReq({ params: { webhookSecret: REAL_SECRET }, headers: {} });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("the secret supplied as a query string parameter does not authenticate", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ query: { secret: REAL_SECRET, webhookSecret: REAL_SECRET, token: REAL_SECRET }, headers: {} });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("the secret supplied in the request body does not authenticate", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ body: { webhookSecret: REAL_SECRET, secret: REAL_SECRET }, headers: {} });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+  } finally {
+    restore();
+  }
+});
+
+test("correct bearer token: real sync service is invoked and a 200 is returned even for an unresolved-shipment outcome", async () => {
+  const restore = withSyncEnabled();
   // $transaction stubbed to run its callback against the plain prisma
-  // object instead of opening a real transaction — same discipline as
-  // courierStatusSync.service.test.ts; without this, the real sync
-  // service would attempt a genuine transaction against the production
-  // database (the transaction-scoped `tx` client is a distinct object
-  // from `prisma.shipping`, so stubbing only the latter would silently
-  // bypass the stub and hit the real DB).
+  // object instead of opening a real transaction — see
+  // courierStatusSync.service.test.ts for why this is required.
   const restoreTransaction = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const findMany = mock.fn(async () => []); // genuinely unresolved — no matching Shipping row
   const restoreFindMany = stub(prisma.shipping, "findMany", findMany);
 
-  const req = { params: { webhookSecret: REAL_SECRET }, body: { id: "ship-1", status: "delivered" } } as unknown as Request;
+  const req = fakeReq({ headers: { authorization: `Bearer ${REAL_SECRET}` }, body: { id: "ship-1", status: "delivered" } });
   const res = fakeRes();
   const next = mock.fn();
 
   try {
     await courierGuyTrackingWebhookHandler(req, res as Response, next);
-    assert.equal(findMany.mock.callCount(), 1);
+    assert.equal(findMany.mock.callCount(), 1, "payload processing proceeded unchanged after valid authentication");
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.body, { received: true });
     assert.equal(next.mock.callCount(), 0);
   } finally {
-    restoreEnabled();
-    restoreSecret();
+    restore();
+    restoreTransaction();
+    restoreFindMany();
+  }
+});
+
+test("bearer scheme is case-insensitive (\"bearer\"/\"BEARER\"), matching RFC 7235", async () => {
+  const restore = withSyncEnabled();
+  const restoreTransaction = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const restoreFindMany = stub(prisma.shipping, "findMany", async () => []);
+
+  try {
+    for (const scheme of ["bearer", "BEARER", "Bearer"]) {
+      const req = fakeReq({ headers: { authorization: `${scheme} ${REAL_SECRET}` } });
+      const res = fakeRes();
+      const next = mock.fn();
+      await courierGuyTrackingWebhookHandler(req, res as Response, next);
+      assert.equal(res.statusCode, 200, `scheme "${scheme}" should authenticate`);
+    }
+  } finally {
+    restore();
     restoreTransaction();
     restoreFindMany();
   }
 });
 
 test("correct secret, an unexpected internal error from the sync service: passed to next(), never a raw 500 leak or a crash", async () => {
-  const restoreEnabled = stub(courierGuyConfig, "statusSyncEnabled", true);
-  const restoreSecret = stub(courierGuyConfig, "webhookSecret", REAL_SECRET);
+  const restore = withSyncEnabled();
   const boom = new Error("unexpected database failure");
-  // Stub $transaction itself to throw — same reasoning as above (never
-  // let a real transaction open against production in this test), and
-  // simpler than stubbing the transaction wrapper plus a findMany that
-  // throws inside it.
   const restoreTransaction = stub(prisma, "$transaction", async () => {
     throw boom;
   });
 
-  const req = { params: { webhookSecret: REAL_SECRET }, body: {} } as unknown as Request;
+  const req = fakeReq({ headers: { authorization: `Bearer ${REAL_SECRET}` } });
   const res = fakeRes();
   const next = mock.fn();
 
@@ -177,8 +321,22 @@ test("correct secret, an unexpected internal error from the sync service: passed
     assert.equal(next.mock.calls[0]!.arguments[0], boom);
     assert.equal(res.statusCode, undefined, "no response sent — next() owns the error response");
   } finally {
-    restoreEnabled();
-    restoreSecret();
+    restore();
     restoreTransaction();
+  }
+});
+
+test("Authorization header value is never echoed back in any response", async () => {
+  const restore = withSyncEnabled();
+  const req = fakeReq({ headers: { authorization: "Bearer wrong-token-value-should-never-appear-anywhere" } });
+  const res = fakeRes();
+  const next = mock.fn();
+
+  try {
+    await courierGuyTrackingWebhookHandler(req, res as Response, next);
+    assert.equal(res.statusCode, 401);
+    assert.ok(!JSON.stringify(res.body ?? {}).includes("wrong-token-value-should-never-appear-anywhere"));
+  } finally {
+    restore();
   }
 });

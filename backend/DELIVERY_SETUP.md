@@ -298,6 +298,15 @@ owner completes the manual portal setup below. See
 `courierStatusSync.service.ts` for the full mapping/effects engine and
 `courierWebhook.controller.ts` for the receiving endpoint.
 
+**Milestone 173A update:** after inspecting the real, live ShipLogic
+production portal, the webhook subscription form's own "Authentication
+type" offers a genuine **Static bearer token** option (field: "Auth
+key") — a real, provider-native credential this backend didn't have to
+invent a workaround for. The endpoint below and the owner steps
+further down reflect that; the original 173 design (a secret embedded
+in the URL path) was never registered in production and is no longer
+how this works.
+
 ### Why a webhook, not polling
 
 ShipLogic's own portal documentation confirms a webhook subscription
@@ -321,16 +330,17 @@ traffic. Two things need to happen, in order:
 
    The backend will refuse to start if the first is `true` without the
    second (same fail-loud discipline as `REFERRAL_ATTRIBUTION_SECRET`).
-   Never commit this value or paste it anywhere public — it's the only
-   thing standing between this endpoint and an arbitrary caller (see
-   `courierWebhook.controller.ts`'s own security-model comment for why
-   there's no Courier-Guy-issued signature to rely on instead).
+   Never commit this value or paste it anywhere public.
 
-2. **Register the callback URL in the ShipLogic/Courier Guy portal:**
-   `Settings → Webhook subscriptions → Add webhook subscription`,
-   Topic = **Tracking event**, Delivery URL =
-   `https://api.seasonedzgroup.co.za/api/webhooks/courier-guy/<the same secret>/tracking-event`
-   — sandbox and production are registered separately in that portal;
+2. **Register the webhook in the ShipLogic/Courier Guy portal:**
+   `Settings → Webhook subscriptions → Add webhook subscription`:
+   - Topic = **Parcel tracking event**
+   - Delivery URL = `https://api.seasonedzgroup.co.za/api/webhooks/courier-guy/tracking-event` (no secret in the URL)
+   - Authentication type = **Static bearer token**
+   - Auth key = the exact same value as `COURIER_GUY_WEBHOOK_SECRET` above
+   - "Exclude tracking event list in webhook payload/body" = **leave OFF**, so the tracking-event detail this backend parses is actually included
+
+   Sandbox and production are registered separately in that portal;
    register production only once you're confident this is working.
 
 ### Status vocabulary — a documented, evidence-based caveat
