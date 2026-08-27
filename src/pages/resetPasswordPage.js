@@ -8,14 +8,11 @@
 // no-enumeration discipline the backend itself applies.
 
 import { escapeHtml } from "../js/search.js";
+import { renderPasswordToggleButton } from "../js/passwordToggle.js";
 
 function renderField({ id, name, label, type = "password", autocomplete = "" }) {
-  return `
-    <div class="form-field">
-      <label class="form-field__label" for="${id}">
-        ${label}
-        <span class="form-field__required" aria-hidden="true">*</span>
-      </label>
+  const isPassword = type === "password";
+  const input = `
       <input
         type="${type}"
         id="${id}"
@@ -24,6 +21,14 @@ function renderField({ id, name, label, type = "password", autocomplete = "" }) 
         required
         ${autocomplete ? `autocomplete="${autocomplete}"` : ""}
       />
+  `;
+  return `
+    <div class="form-field">
+      <label class="form-field__label" for="${id}">
+        ${label}
+        <span class="form-field__required" aria-hidden="true">*</span>
+      </label>
+      ${isPassword ? `<div class="form-field__input-wrap">${input}${renderPasswordToggleButton(id)}</div>` : input}
       <span class="form-field__error" data-error-for="${name}"></span>
     </div>
   `;

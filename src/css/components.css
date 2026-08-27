@@ -1546,6 +1546,51 @@ body.has-cookie-preferences-open {
   border-color: var(--color-error);
 }
 
+/* Show/hide password toggle (Version 7, Milestone 176). The wrap only
+   exists on genuine password fields (see js/passwordToggle.js) — the
+   button sits absolutely inside it, and the input keeps extra
+   right-padding so long typed text never runs under the icon. */
+.form-field__input-wrap {
+  position: relative;
+}
+
+.form-field__input-wrap .form-field__input {
+  padding-right: 2.75rem;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 2px;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  color: var(--color-text);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.password-toggle__icon {
+  width: 20px;
+  height: 20px;
+}
+
 .form-field__textarea {
   resize: vertical;
   min-height: 80px;

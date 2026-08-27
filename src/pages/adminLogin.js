@@ -9,6 +9,8 @@
 // VERSION_7_ADMIN_AUTH_FOUNDATION_RESULT.md's "Navigation Safety"
 // section for why that's a deliberate choice, not an oversight.
 
+import { renderPasswordToggleButton } from "../js/passwordToggle.js";
+
 export function renderAdminLogin() {
   return `
     <section class="stub-page container admin-login-page">
@@ -28,14 +30,17 @@ export function renderAdminLogin() {
           <label class="form-field__label" for="adminPassword">
             Password<span class="form-field__required" aria-hidden="true"> *</span>
           </label>
-          <input
-            type="password"
-            id="adminPassword"
-            name="password"
-            class="form-field__input"
-            required
-            autocomplete="current-password"
-          />
+          <div class="form-field__input-wrap">
+            <input
+              type="password"
+              id="adminPassword"
+              name="password"
+              class="form-field__input"
+              required
+              autocomplete="current-password"
+            />
+            ${renderPasswordToggleButton("adminPassword")}
+          </div>
           <span class="form-field__error" data-error-for="password"></span>
         </div>
 

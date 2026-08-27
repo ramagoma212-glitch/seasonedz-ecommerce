@@ -102,6 +102,7 @@ import { escapeHtml } from "./search.js";
 import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
 import { getConsent, needsConsentPrompt, acceptAllConsent, rejectNonEssentialConsent, saveConsent } from "./consent.js";
 import { renderCookieConsentBanner, renderCookiePreferencesModal } from "../components/cookieConsent.js";
+import { setupPasswordVisibilityToggles } from "./passwordToggle.js";
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -133,6 +134,7 @@ function mountApp() {
   setupNewsletterForm();
   setupEnquiryForms();
   setupCustomerAccountForms();
+  setupPasswordVisibilityToggles();
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
   setupAdminShippingForm();

@@ -24,6 +24,7 @@ import { getAuthProviders, getConnectedAccounts, getOAuthStartUrl } from "../js/
 import { renderSocialAuthButtons, SOCIAL_AUTH_PROVIDER_LABELS } from "../components/socialAuthButtons.js";
 import { ApiError } from "../js/apiClient.js";
 import { escapeHtml } from "../js/search.js";
+import { renderPasswordToggleButton } from "../js/passwordToggle.js";
 
 // Version 7, Milestone 171F: friendly messages for every ?authError=
 // code socialAuth.controller.ts's redirectToAccountWithError() can
@@ -81,12 +82,8 @@ function formatRand(amount) {
 // so showAccountFormErrors() (js/app.js) can actually find the right
 // error slot for each field.
 function renderField({ id, name, label, type = "text", required = true, autocomplete = "" }) {
-  return `
-    <div class="form-field">
-      <label class="form-field__label" for="${id}">
-        ${label}
-        ${required ? '<span class="form-field__required" aria-hidden="true">*</span>' : '<span class="form-field__optional">(optional)</span>'}
-      </label>
+  const isPassword = type === "password";
+  const input = `
       <input
         type="${type}"
         id="${id}"
@@ -95,6 +92,14 @@ function renderField({ id, name, label, type = "text", required = true, autocomp
         ${required ? "required" : ""}
         ${autocomplete ? `autocomplete="${autocomplete}"` : ""}
       />
+  `;
+  return `
+    <div class="form-field">
+      <label class="form-field__label" for="${id}">
+        ${label}
+        ${required ? '<span class="form-field__required" aria-hidden="true">*</span>' : '<span class="form-field__optional">(optional)</span>'}
+      </label>
+      ${isPassword ? `<div class="form-field__input-wrap">${input}${renderPasswordToggleButton(id)}</div>` : input}
       <span class="form-field__error" data-error-for="${name}"></span>
     </div>
   `;
