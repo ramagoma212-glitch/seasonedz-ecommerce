@@ -23,6 +23,19 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// approveCommission()/payAffiliateCommissions() each fire a
+// fire-and-forget notification after their own transaction commits,
+// which keeps running (through prisma.affiliate.findUnique, then
+// prisma.notification.create/updateMany/findUnique/update) after the
+// function itself has already returned. Restoring prisma stubs
+// synchronously right after that await let those dangling chains fall
+// through to the REAL (production) database mid-flight — confirmed
+// empirically, this leaked real rows into production once already.
+// flushAsync() lets one full microtask queue drain before restoring.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const ADMIN = { id: "admin-1", name: "Owner", email: "owner@example.com", role: "ADMIN" };
 
 const SETTINGS_ROW = {
@@ -85,14 +98,41 @@ function stubEligibleCommission(overrides: Record<string, unknown> = {}) {
   const update = stub(prisma.orderAffiliateCommission, "update", async ({ data }: { data: Record<string, unknown> }) =>
     commissionRow({ ...overrides, ...data })
   );
+  // Only the "approves successfully" test actually reaches
+  // notifyCommissionApproved() — stubbed unconditionally here (harmless
+  // no-op for every other test using this helper) so it's never
+  // missing when it does fire. See flushAsync()'s comment above.
+  const affiliateFind = stub(prisma.affiliate, "findUnique", async () => ({ email: "alice@example.com" }));
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1",
+    eventType: "COMMISSION_APPROVED",
+    templateName: "commission-approved",
+    recipientEmail: "alice@example.com",
+    orderNumber: "SZ-TEST-1",
+    affiliateId: "affiliate-1",
+    productId: null,
+    renderedSubject: "Subject",
+    renderedBody: "Body",
+    attemptCount: 1,
+    maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
   return {
     update,
-    restore: () => {
+    restore: async () => {
+      await flushAsync();
       settingsFind.restore();
       transactionStub.restore();
       findUnique.restore();
       historyFind.restore();
       update.restore();
+      affiliateFind.restore();
+      notificationCreate.restore();
+      notificationUpdateMany.restore();
+      notificationFindUnique.restore();
+      notificationUpdate.restore();
     },
   };
 }
@@ -113,7 +153,7 @@ test("an eligible PENDING commission approves successfully, setting APPROVED + a
   assert.equal(callArgs.arguments[0].data.status, "APPROVED");
   assert.ok(callArgs.arguments[0].data.approvedAt instanceof Date);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("approve rejects an unpaid order's commission with a clear reason, never approving it", async () => {
@@ -125,7 +165,7 @@ test("approve rejects an unpaid order's commission with a clear reason, never ap
   );
   assert.equal(stubs.update.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("approve rejects an already-APPROVED commission (no double-approval)", async () => {
@@ -134,7 +174,7 @@ test("approve rejects an already-APPROVED commission (no double-approval)", asyn
   await assert.rejects(() => approveCommission("commission-1", ADMIN), (error: unknown) => error instanceof CommissionLifecycleError);
   assert.equal(stubs.update.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("approve rejects an already-PAID commission", async () => {
@@ -143,7 +183,7 @@ test("approve rejects an already-PAID commission", async () => {
   await assert.rejects(() => approveCommission("commission-1", ADMIN), (error: unknown) => error instanceof CommissionLifecycleError);
   assert.equal(stubs.update.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("approve rejects a REVERSED commission", async () => {
@@ -152,7 +192,7 @@ test("approve rejects a REVERSED commission", async () => {
   await assert.rejects(() => approveCommission("commission-1", ADMIN), (error: unknown) => error instanceof CommissionLifecycleError);
   assert.equal(stubs.update.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 // ---------------------------------------------------------------------------
@@ -348,6 +388,20 @@ test("R320 + R260 = R580 crosses the R500 threshold and pays both atomically", a
     approvedCommission("c2", "affiliate-1", "260.00"),
   ]);
   const updateMany = stub(prisma.orderAffiliateCommission, "updateMany", async () => ({ count: 2 }));
+  // notifyPayoutRecorded() fires fire-and-forget after the transaction
+  // commits (via the SAME prisma.affiliate.findUnique/notification.*
+  // stubs, since transactionStub's callback runs against the top-level
+  // prisma object) — stubbed and flushed so it never reaches the real
+  // (production) database. See flushAsync()'s comment near the top of
+  // this file.
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1", eventType: "PAYOUT_RECORDED", templateName: "payout-recorded", recipientEmail: "alice@example.com",
+    orderNumber: null, affiliateId: "affiliate-1", productId: null, renderedSubject: "Subject", renderedBody: "Body",
+    attemptCount: 1, maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
 
   const result = await payAffiliateCommissions("affiliate-1", undefined, ADMIN);
   assert.equal(result.totalPaid, 580);
@@ -358,6 +412,11 @@ test("R320 + R260 = R580 crosses the R500 threshold and pays both atomically", a
   affiliateFind.restore();
   findMany.restore();
   updateMany.restore();
+  await flushAsync();
+  notificationCreate.restore();
+  notificationUpdateMany.restore();
+  notificationFindUnique.restore();
+  notificationUpdate.restore();
 });
 
 test("exactly R500 is payout-eligible", async () => {
@@ -366,6 +425,14 @@ test("exactly R500 is payout-eligible", async () => {
   const affiliateFind = stub(prisma.affiliate, "findUnique", async () => ({ id: "affiliate-1" }));
   const findMany = stub(prisma.orderAffiliateCommission, "findMany", async () => [approvedCommission("c1", "affiliate-1", "500.00")]);
   const updateMany = stub(prisma.orderAffiliateCommission, "updateMany", async () => ({ count: 1 }));
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1", eventType: "PAYOUT_RECORDED", templateName: "payout-recorded", recipientEmail: "alice@example.com",
+    orderNumber: null, affiliateId: "affiliate-1", productId: null, renderedSubject: "Subject", renderedBody: "Body",
+    attemptCount: 1, maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
 
   const result = await payAffiliateCommissions("affiliate-1", undefined, ADMIN);
   assert.equal(result.totalPaid, 500);
@@ -375,6 +442,11 @@ test("exactly R500 is payout-eligible", async () => {
   affiliateFind.restore();
   findMany.restore();
   updateMany.restore();
+  await flushAsync();
+  notificationCreate.restore();
+  notificationUpdateMany.restore();
+  notificationFindUnique.restore();
+  notificationUpdate.restore();
 });
 
 test("R499.99 is NOT payout-eligible — exact boundary, never rounded up", async () => {

@@ -13,6 +13,9 @@ import { OrderStatus, OrderStatusHistorySource } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SafeAdminProfile } from "./adminAuth.service.js";
 import { reverseCommissionsForOrder } from "./referralCommission.service.js";
+import { renderOrderCancelledEmail, renderOrderProcessingEmail } from "./email/emailTemplates.js";
+import type { OrderEmailData } from "./email/email.types.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 // A business-rule failure (order not found, invalid status, disallowed
 // transition, invalid note) — distinct from an unexpected error, so
@@ -115,13 +118,97 @@ export interface OrderStatusUpdateResult {
 // order update below is the enforcement: only `status` is ever passed
 // to `data`, and only orderNumber/status/paymentStatus/updatedAt are
 // ever read back out.
+// Version 7, Milestone 174B: builds the minimal OrderEmailData these
+// two templates actually need (neither renderOrderProcessingEmail nor
+// renderOrderCancelledEmail reads `items`) straight from the plain
+// scalar Order fields already available — no extra `include` needed.
+function toStatusChangeEmailData(order: {
+  orderNumber: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerEmail: string;
+  customerPhone: string;
+  total: import("@prisma/client").Prisma.Decimal;
+  paymentStatus: string;
+  paymentMethod: string;
+  deliveryMethod: string;
+  deliveryFee: import("@prisma/client").Prisma.Decimal;
+  collectionCity: string | null;
+  deliveryStreetAddress: string | null;
+  deliverySuburb: string | null;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  deliveryPostalCode: string | null;
+  deliveryNotes: string | null;
+}): OrderEmailData {
+  return {
+    orderNumber: order.orderNumber,
+    customerFirstName: order.customerFirstName,
+    customerLastName: order.customerLastName,
+    customerEmail: order.customerEmail,
+    customerPhone: order.customerPhone,
+    total: order.total.toNumber(),
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    items: [],
+    deliveryMethod: order.deliveryMethod,
+    deliveryFee: order.deliveryFee.toNumber(),
+    collectionCity: order.collectionCity,
+    deliveryStreetAddress: order.deliveryStreetAddress,
+    deliverySuburb: order.deliverySuburb,
+    deliveryCity: order.deliveryCity,
+    deliveryProvince: order.deliveryProvince,
+    deliveryPostalCode: order.deliveryPostalCode,
+    deliveryNotes: order.deliveryNotes,
+  };
+}
+
+// Version 7, Milestone 174B: ORDER_PROCESSING/ORDER_CANCELLED
+// notifications — enqueued strictly AFTER the transaction below has
+// committed (brief section 8/39: a notification failure must never be
+// able to roll back the real status change), using a dedupeKey scoped
+// to this exact transition (orderNumber + the specific
+// OrderStatusHistory row id — never just orderNumber alone, since an
+// order could in principle be cancelled, and separately some other
+// status could reach PROCESSING again is not possible, but this stays
+// correct regardless of how many times a given status is genuinely
+// re-entered over an order's lifetime).
+async function notifyOrderStatusChange(orderNumber: string, newStatus: OrderStatus, historyRowId: string): Promise<void> {
+  if (newStatus !== OrderStatus.PROCESSING && newStatus !== OrderStatus.CANCELLED) return;
+
+  const order = await prisma.order.findUnique({ where: { orderNumber } });
+  if (!order) return;
+
+  const emailData = toStatusChangeEmailData(order);
+
+  if (newStatus === OrderStatus.PROCESSING) {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "ORDER_PROCESSING",
+      templateName: "order-processing",
+      recipientEmail: emailData.customerEmail,
+      orderNumber,
+      dedupeKey: `ORDER_PROCESSING:${orderNumber}:${historyRowId}`,
+      rendered: renderOrderProcessingEmail(emailData),
+    });
+  } else {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "ORDER_CANCELLED",
+      templateName: "order-cancelled",
+      recipientEmail: emailData.customerEmail,
+      orderNumber,
+      dedupeKey: `ORDER_CANCELLED:${orderNumber}:${historyRowId}`,
+      rendered: renderOrderCancelledEmail(emailData),
+    });
+  }
+}
+
 export async function updateOrderStatus(
   orderNumber: string,
   newStatusRaw: unknown,
   noteRaw: unknown,
   admin: SafeAdminProfile
 ): Promise<OrderStatusUpdateResult> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { orderNumber } });
     if (!order) {
       throw new OrderStatusUpdateError(`Order not found: ${orderNumber}`, 404);
@@ -168,21 +255,34 @@ export async function updateOrderStatus(
     });
 
     return {
-      orderNumber: updatedOrder.orderNumber,
-      status: updatedOrder.status,
-      paymentStatus: updatedOrder.paymentStatus,
-      updatedAt: updatedOrder.updatedAt,
-      latestStatusHistory: {
-        oldStatus: historyRow.oldStatus,
-        newStatus: historyRow.newStatus,
-        note: historyRow.note,
-        source: historyRow.source,
-        createdAt: historyRow.createdAt,
-        changedByAdminName: historyRow.changedByAdminNameSnapshot,
-        changedByAdminEmail: historyRow.changedByAdminEmailSnapshot,
+      historyRowId: historyRow.id,
+      result: {
+        orderNumber: updatedOrder.orderNumber,
+        status: updatedOrder.status,
+        paymentStatus: updatedOrder.paymentStatus,
+        updatedAt: updatedOrder.updatedAt,
+        latestStatusHistory: {
+          oldStatus: historyRow.oldStatus,
+          newStatus: historyRow.newStatus,
+          note: historyRow.note,
+          source: historyRow.source,
+          createdAt: historyRow.createdAt,
+          changedByAdminName: historyRow.changedByAdminNameSnapshot,
+          changedByAdminEmail: historyRow.changedByAdminEmailSnapshot,
+        },
       },
     };
   });
+
+  // Version 7, Milestone 174B: strictly after the transaction above has
+  // committed — see notifyOrderStatusChange()'s own comment. Never
+  // awaited-into-failure: a notification problem must not turn a
+  // genuinely successful status change into an error response.
+  void notifyOrderStatusChange(orderNumber, result.result.status, result.historyRowId).catch((error) => {
+    console.warn(`[notifications] failed to notify order status change for ${orderNumber}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+
+  return result.result;
 }
 
 export interface OrderStatusHistoryEntry {

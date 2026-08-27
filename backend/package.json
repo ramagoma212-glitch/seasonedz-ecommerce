@@ -16,7 +16,8 @@
     "test": "tsx --test src/**/*.test.ts",
     "seed": "tsx prisma/seed.ts",
     "db:sync-product-content": "tsx prisma/scripts/update-product-content.ts",
-    "admin:setup": "tsx prisma/scripts/setupAdminUser.ts"
+    "admin:setup": "tsx prisma/scripts/setupAdminUser.ts",
+    "notifications:process": "tsx prisma/scripts/processNotifications.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

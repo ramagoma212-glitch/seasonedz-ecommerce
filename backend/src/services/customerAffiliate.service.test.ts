@@ -15,6 +15,19 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// applyForAffiliateProgramme() fires two fire-and-forget notifications
+// (AFFILIATE_APPLICATION_RECEIVED, ADMIN_NEW_AFFILIATE) that keep
+// running after the function itself has already returned — restoring
+// prisma stubs synchronously right after that await let those dangling
+// chains fall through to the REAL (production) database mid-flight,
+// confirmed empirically once already. flushAsync() lets one full
+// microtask queue drain before restoring, so any test that reaches a
+// successful application must stub prisma.notification.* and await
+// this before restoring them.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const SETTINGS_ROW = {
   id: "settings-1",
   defaultCommissionRate: new Prisma.Decimal("7.00"),
@@ -153,6 +166,22 @@ test("a valid application creates a PENDING affiliate using the customer's own r
   const create = stub(prisma.affiliate, "create", async ({ data }: { data: Record<string, unknown> }) =>
     ({ id: "new-affiliate-1", ...data, approvedAt: null, createdAt: new Date(), updatedAt: new Date() })
   );
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1",
+    eventType: "AFFILIATE_APPLICATION_RECEIVED",
+    templateName: "affiliate-application-received",
+    recipientEmail: "thandiwe@example.com",
+    orderNumber: null,
+    affiliateId: "new-affiliate-1",
+    productId: null,
+    renderedSubject: "Subject",
+    renderedBody: "Body",
+    attemptCount: 1,
+    maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
 
   const result = await applyForAffiliateProgramme("customer-1");
   assert.equal(result.status, "PENDING");
@@ -162,6 +191,11 @@ test("a valid application creates a PENDING affiliate using the customer's own r
   customerFind.restore();
   affiliateFind.restore();
   create.restore();
+  await flushAsync();
+  notificationCreate.restore();
+  notificationUpdateMany.restore();
+  notificationFindUnique.restore();
+  notificationUpdate.restore();
 });
 
 test("a customer who already has a linked affiliate cannot apply again", async () => {

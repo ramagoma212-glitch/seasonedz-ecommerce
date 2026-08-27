@@ -2,7 +2,9 @@ import type { NextFunction, Request, Response } from "express";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { validateEnquiryRequest } from "../validators/enquiry.validator.js";
 import * as enquiryService from "../services/enquiry.service.js";
-import { sendAdminNewEnquiryEmail, sendEnquiryReceivedEmail } from "../services/email/email.service.js";
+import { renderAdminNewEnquiryEmail, renderEnquiryReceivedEmail } from "../services/email/emailTemplates.js";
+import { env } from "../config/env.js";
+import * as notificationEngine from "../services/notificationEngine.service.js";
 
 export async function createEnquiryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -29,8 +31,24 @@ export async function createEnquiryHandler(req: Request, res: Response, next: Ne
       email: validation.value.email,
       message: validation.value.message,
     };
-    void sendAdminNewEnquiryEmail(emailData).catch(() => {});
-    void sendEnquiryReceivedEmail(emailData).catch(() => {});
+    void notificationEngine
+      .enqueueAndSendNow({
+        eventType: "ADMIN_NEW_ENQUIRY",
+        templateName: "admin-new-enquiry",
+        recipientEmail: env.adminNotificationEmail,
+        dedupeKey: `ADMIN_NEW_ENQUIRY:${enquiry.id}`,
+        rendered: renderAdminNewEnquiryEmail(emailData),
+      })
+      .catch(() => {});
+    void notificationEngine
+      .enqueueAndSendNow({
+        eventType: "CUSTOMER_ENQUIRY_ACKNOWLEDGEMENT",
+        templateName: "enquiry-received",
+        recipientEmail: emailData.email,
+        dedupeKey: `CUSTOMER_ENQUIRY_ACKNOWLEDGEMENT:${enquiry.id}`,
+        rendered: renderEnquiryReceivedEmail(emailData),
+      })
+      .catch(() => {});
 
     sendSuccess(res, {
       message: "Enquiry received successfully",

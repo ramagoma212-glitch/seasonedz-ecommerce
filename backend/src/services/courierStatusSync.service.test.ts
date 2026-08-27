@@ -31,22 +31,58 @@ function shipmentRow(overrides: { order?: Record<string, unknown>; [key: string]
   };
 }
 
+// applyCourierStatusEvent() fires notifyCourierStatusChange() as a
+// genuine fire-and-forget call (brief section 8/39 — never awaited
+// into the webhook's own response) — so every test here also stubs
+// prisma.notification.*/prisma.order.findUnique (the post-commit
+// re-fetch notifyCourierStatusChange() itself does) and, critically,
+// flushes the microtask queue before restoring any stub. Without the
+// flush, restore() (a synchronous call in each test's own `finally`)
+// runs before the still-pending notification chain reaches its own
+// next `await`, which would silently swap the stubs back to the REAL
+// prisma client mid-chain — confirmed empirically once, the hard way,
+// against the real production database, before this fix.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 function wireStubs(shipment: ReturnType<typeof shipmentRow> | null) {
   const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const findMany = stub(prisma.shipping, "findMany", async () => (shipment ? [shipment] : []));
   const shippingUpdate = stub(prisma.shipping, "update", async () => ({}));
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
   const historyCreate = stub(prisma.orderStatusHistory, "create", async () => ({}));
+  const orderFindUnique = stub(prisma.order, "findUnique", async () => (shipment ? { ...shipment.order, customerFirstName: "Thandiwe", customerLastName: "Nkosi", customerEmail: "thandiwe@example.com", customerPhone: "0821234567", total: { toNumber: () => 500 }, paymentStatus: "PAID", paymentMethod: "PAYFAST", deliveryFee: { toNumber: () => 100 }, collectionCity: null, deliveryStreetAddress: "1 Real Street", deliverySuburb: "Sandton", deliveryCity: "Johannesburg", deliveryProvince: "Gauteng", deliveryPostalCode: "2196", deliveryNotes: null } : null));
+  const notificationCreate = stub(prisma.notification, "create", async (args: { data: Record<string, unknown> }) => ({ id: "notif-1", ...args.data }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1",
+    recipientEmail: "thandiwe@example.com",
+    renderedSubject: "subject",
+    renderedBody: "body",
+    orderNumber: shipment?.order.orderNumber ?? null,
+    affiliateId: null,
+    productId: null,
+    eventType: "COURIER_COLLECTED",
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
   return {
     shippingUpdate,
     orderUpdate,
     historyCreate,
-    restore: () => {
+    notificationCreate,
+    restore: async () => {
+      await flushAsync();
       transactionStub.restore();
       findMany.restore();
       shippingUpdate.restore();
       orderUpdate.restore();
       historyCreate.restore();
+      orderFindUnique.restore();
+      notificationCreate.restore();
+      notificationUpdateMany.restore();
+      notificationFindUnique.restore();
+      notificationUpdate.restore();
     },
   };
 }
@@ -67,7 +103,7 @@ test("unresolved shipment: no matching Shipping row, safe no-op result, no write
     assert.equal(stubs.shippingUpdate.fn.mock.callCount(), 0);
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -77,7 +113,7 @@ test("no candidate identifiers at all: unresolved, no DB query even attempted", 
     const result = await applyCourierStatusEvent({ candidateIdentifiers: [], rawStatus: "delivered", providerEventAt: null });
     assert.equal(result.outcome, "unresolved_shipment");
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -88,7 +124,7 @@ test("Customer Collection order: excluded even if somehow matched", async () => 
     assert.deepEqual(result, { outcome: "excluded", reason: "collection" });
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -98,7 +134,7 @@ test("digital-only order: excluded even if somehow matched", async () => {
     const result = await applyCourierStatusEvent({ candidateIdentifiers: ["ship-1"], rawStatus: "delivered", providerEventAt: null });
     assert.deepEqual(result, { outcome: "excluded", reason: "digital_only" });
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -110,7 +146,7 @@ test("mixed order (physical + digital): not excluded, physical shipment still sy
     assert.equal((result as { shippingStatusChanged: boolean }).shippingStatusChanged, true);
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, "SHIPPED");
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -124,7 +160,7 @@ test("unmapped/unknown status string: never guessed, no status change, recorded 
     assert.equal(stubs.shippingUpdate.fn.mock.callCount(), 1);
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.lastCourierStatus, "some-brand-new-status-nobody-has-seen");
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -135,7 +171,7 @@ test("null/absent rawStatus: unmapped, no writes at all", async () => {
     assert.deepEqual(result, { outcome: "unmapped_status", rawStatus: "" });
     assert.equal(stubs.shippingUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -147,7 +183,7 @@ test("EXCEPTION status (cancelled/undeliverable): informational only, never touc
       assert.deepEqual(result, { outcome: "informational", stage: "EXCEPTION", orderNumber: "SZ-2026-0001" });
       assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
     } finally {
-      stubs.restore();
+      await stubs.restore();
     }
   }
 });
@@ -159,7 +195,7 @@ test("READY_FOR_PICKUP status: informational only, never auto-marked DELIVERED",
     assert.deepEqual(result, { outcome: "informational", stage: "READY_FOR_PICKUP", orderNumber: "SZ-2026-0001" });
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -173,7 +209,7 @@ test("collected/in-transit: Shipping.status bumps PACKING -> SHIPPED, Order.stat
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, "SHIPPED");
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -190,7 +226,7 @@ test("out-for-delivery: Order.status jumps to OUT_FOR_DELIVERY with a genuine au
     assert.equal(historyArgs.source, "SYSTEM");
     assert.equal(historyArgs.changedByAdminUserId, null);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -208,7 +244,7 @@ test("delivered: single event from PROCESSING jumps directly to DELIVERED in one
     assert.equal(historyArgs.newStatus, "DELIVERED");
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, "DELIVERED");
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -219,7 +255,7 @@ test("delivered: uses genuine provider event timestamp when present and plausibl
     await applyCourierStatusEvent({ candidateIdentifiers: ["ship-1"], rawStatus: "delivered", providerEventAt });
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.deliveredAt, providerEventAt);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -232,7 +268,7 @@ test("delivered: falls back to processing time (a genuine signal, never a fabric
     assert.ok(deliveredAt instanceof Date);
     assert.ok(deliveredAt.getTime() >= before);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -247,7 +283,7 @@ test("idempotent: the exact same status received twice in a row only writes once
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
     assert.equal(stubs.historyCreate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -260,7 +296,7 @@ test("out-of-order: an old in-transit event arriving after DELIVERED never regre
     assert.equal(stubs.shippingUpdate.fn.mock.callCount(), 1, "lastCourierStatus still recorded for visibility");
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, undefined, "but Shipping.status itself is never touched");
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -273,7 +309,7 @@ test("returned-to-sender: Shipping bumps to RETURNED, Order.status untouched, ne
     assert.equal(stubs.shippingUpdate.fn.mock.calls.at(-1)?.arguments[0].data.status, "RETURNED");
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -283,7 +319,7 @@ test("returned-to-sender after already DELIVERED: rejected as suspect/stale, nev
     const result = await applyCourierStatusEvent({ candidateIdentifiers: ["ship-1"], rawStatus: "returned-to-sender", providerEventAt: null });
     assert.deepEqual(result, { outcome: "no_op", stage: "RETURNED", reason: "duplicate_or_behind" });
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -294,7 +330,7 @@ test("RETURNED is terminal: a later delivered/in-transit event can never re-prog
     assert.deepEqual(result, { outcome: "no_op", stage: "DELIVERED", reason: "duplicate_or_behind" });
     assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
   } finally {
-    stubs.restore();
+    await stubs.restore();
   }
 });
 
@@ -310,7 +346,7 @@ test("cancelled/refunded Order.status: excluded entirely — courier events neve
       assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.lastCourierStatus, "delivered");
       assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, undefined);
     } finally {
-      stubs.restore();
+      await stubs.restore();
     }
   }
 });

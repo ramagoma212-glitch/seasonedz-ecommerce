@@ -17,7 +17,7 @@ import {
   resetPasswordWithToken,
   verifyCustomerCredentials,
 } from "../services/customerAuth.service.js";
-import { sendPasswordResetEmail } from "../services/email/email.service.js";
+import { sendPasswordResetEmailAndRecord } from "../services/notificationEngine.service.js";
 import { asRecord, isNonEmptyString, isValidEmail } from "../validators/shared.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 
@@ -155,10 +155,16 @@ export async function forgotPasswordHandler(req: Request, res: Response, next: N
       const result = await requestPasswordReset(email);
       if (result) {
         const resetUrl = `${resetPasswordBaseUrl()}/account/reset-password?token=${result.rawToken}`;
-        // Fire-and-forget, same discipline as every other send*Email
-        // call site — a Brevo failure must never affect this response,
-        // and dispatch() already never throws regardless.
-        void sendPasswordResetEmail({
+        // Fire-and-forget, same discipline as every other notification
+        // call site — a Brevo failure must never affect this response.
+        // sendPasswordResetEmailAndRecord() keeps the exact same direct
+        // send path this has always used (see email.service.ts's own
+        // header comment on why password reset never goes through the
+        // Notification engine's stored-content model) and only adds a
+        // safe audit row afterward — no reset token/URL is ever
+        // persisted or logged by that audit step.
+        void sendPasswordResetEmailAndRecord({
+          customerId: result.customer.id,
           customerFirstName: result.customer.firstName,
           customerEmail: result.customer.email,
           resetUrl,

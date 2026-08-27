@@ -25,6 +25,51 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// submitProductReview() fires a fire-and-forget notifyAdminNewReview()
+// after prisma.productReview.create() succeeds, which keeps running
+// (through prisma.customer.findUnique, then prisma.notification.create/
+// updateMany/findUnique/update) after submitProductReview() has already
+// returned. Restoring prisma stubs synchronously right after that await
+// let this dangling chain fall through to the REAL (production)
+// database mid-flight — confirmed empirically, this leaked real rows
+// into production once already. flushAsync() lets one full microtask
+// queue drain before restoring, so every test reaching a successful
+// review submission must stub these calls and await this before
+// restoring them.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function stubReviewNotificationChain() {
+  const customerFind = stub(prisma.customer, "findUnique", async () => ({ firstName: "Thandiwe", lastName: "Nkosi" }));
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1",
+    eventType: "ADMIN_NEW_REVIEW",
+    templateName: "admin-new-review",
+    recipientEmail: "admin@example.com",
+    orderNumber: null,
+    affiliateId: null,
+    productId: null,
+    renderedSubject: "Subject",
+    renderedBody: "Body",
+    attemptCount: 1,
+    maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
+  return {
+    restore: async () => {
+      await flushAsync();
+      customerFind.restore();
+      notificationCreate.restore();
+      notificationUpdateMany.restore();
+      notificationFindUnique.restore();
+      notificationUpdate.restore();
+    },
+  };
+}
+
 const ELIGIBLE_ORDER_ITEM = {
   id: "item-1",
   productId: "product-1",
@@ -74,6 +119,7 @@ test("PAID purchaser can submit a valid review (happy path)", async () => {
     status: "PENDING",
     createdAt: new Date("2026-08-12"),
   }));
+  const notifications = stubReviewNotificationChain();
 
   const result = await submitProductReview("cust-1", {
     orderItemId: "item-1",
@@ -88,6 +134,7 @@ test("PAID purchaser can submit a valid review (happy path)", async () => {
 
   findFirst.restore();
   create.restore();
+  await notifications.restore();
 });
 
 test("submitted review always starts PENDING, regardless of what a caller might try to pass", async () => {
@@ -97,6 +144,7 @@ test("submitted review always starts PENDING, regardless of what a caller might 
     capturedData = data;
     return { id: "review-1", productId: data.productId, rating: data.rating, reviewText: data.reviewText, status: "PENDING", createdAt: new Date() };
   });
+  const notifications = stubReviewNotificationChain();
 
   // status/approvedAt are not accepted input fields at all — parseRating/
   // parseReviewText/parseOrderItemId only ever read rating/reviewText/
@@ -115,6 +163,7 @@ test("submitted review always starts PENDING, regardless of what a caller might 
 
   findFirst.restore();
   create.restore();
+  await notifications.restore();
 });
 
 // ---------------------------------------------------------------------------
@@ -141,12 +190,14 @@ for (const goodRating of [1, 2, 3, 4, 5]) {
       status: "PENDING",
       createdAt: new Date(),
     }));
+    const notifications = stubReviewNotificationChain();
 
     const result = await submitProductReview("cust-1", { orderItemId: "item-1", rating: goodRating, reviewText: "A perfectly valid review length." });
     assert.equal(result.rating, goodRating);
 
     findFirst.restore();
     create.restore();
+    await notifications.restore();
   });
 }
 

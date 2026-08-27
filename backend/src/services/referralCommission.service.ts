@@ -27,6 +27,8 @@ import { prisma } from "../config/prisma.js";
 import { getReferralProgrammeSettings } from "./referralProgrammeSettings.service.js";
 import { computeApprovalEligibility, ELIGIBILITY_REASON_LABELS, type EligibilityReason, type FulfilmentBasis } from "./commissionEligibility.service.js";
 import type { SafeAdminProfile } from "./adminAuth.service.js";
+import { renderCommissionApprovedEmail, renderPayoutRecordedEmail } from "./email/emailTemplates.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 export class CommissionLifecycleError extends Error {
   statusCode: number;
@@ -344,7 +346,7 @@ export async function getOrderAffiliateCommissionDetail(id: string): Promise<Ord
 export async function approveCommission(id: string, admin: SafeAdminProfile): Promise<OrderAffiliateCommissionOutput> {
   const settings = await getReferralProgrammeSettings();
 
-  return prisma.$transaction(async (tx) => {
+  const output = await prisma.$transaction(async (tx) => {
     const row = await tx.orderAffiliateCommission.findUnique({ where: { id }, include: commissionWithOrderInclude });
     if (!row) throw new CommissionLifecycleError(`Commission not found: ${id}`, 404);
 
@@ -381,7 +383,32 @@ export async function approveCommission(id: string, admin: SafeAdminProfile): Pr
       adminEmail: admin.email,
     });
 
-    return toOutput(updated);
+    return { ...toOutput(updated), orderNumber: row.order.orderNumber };
+  });
+
+  // Version 7, Milestone 174B: strictly after the transaction above has
+  // committed (brief section 8/39) — a fresh, plain (non-tx) lookup of
+  // the affiliate's current email, since OrderAffiliateCommission only
+  // snapshots the affiliate's name/referral code, never their email.
+  void notifyCommissionApproved(output).catch((error) => {
+    console.warn(`[notifications] failed to notify commission approval for commission=${output.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+
+  return output;
+}
+
+async function notifyCommissionApproved(commission: OrderAffiliateCommissionOutput & { orderNumber: string }): Promise<void> {
+  const affiliate = await prisma.affiliate.findUnique({ where: { id: commission.affiliateId }, select: { email: true } });
+  if (!affiliate) return;
+
+  await notificationEngine.enqueueAndSendNow({
+    eventType: "COMMISSION_APPROVED",
+    templateName: "commission-approved",
+    recipientEmail: affiliate.email,
+    affiliateId: commission.affiliateId,
+    orderNumber: commission.orderNumber,
+    dedupeKey: `COMMISSION_APPROVED:${commission.id}`,
+    rendered: renderCommissionApprovedEmail({ affiliateName: commission.affiliateNameSnapshot, affiliateEmail: affiliate.email, orderNumber: commission.orderNumber, commissionAmount: commission.commissionAmount }),
   });
 }
 
@@ -595,7 +622,7 @@ export async function payAffiliateCommissions(affiliateId: string, requestedComm
   const settings = await getReferralProgrammeSettings();
   const minimumPayoutAmount = new Prisma.Decimal(settings.minimumPayoutAmount);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const affiliate = await tx.affiliate.findUnique({ where: { id: affiliateId }, select: { id: true } });
     if (!affiliate) throw new CommissionLifecycleError(`Affiliate not found: ${affiliateId}`, 404);
 
@@ -655,6 +682,31 @@ export async function payAffiliateCommissions(affiliateId: string, requestedComm
     }
 
     return { affiliateId, paidCommissionIds: targetIds, totalPaid: totalPaid.toNumber(), paidAt };
+  });
+
+  // Version 7, Milestone 174B: ONE payout summary notification per
+  // payout action (brief section 33 — never one per commission), fired
+  // strictly after the transaction above has committed. Fetches the
+  // affiliate's current email fresh (never snapshotted on
+  // OrderAffiliateCommission).
+  void notifyPayoutRecorded(result).catch((error) => {
+    console.warn(`[notifications] failed to notify payout for affiliate=${result.affiliateId}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+
+  return result;
+}
+
+async function notifyPayoutRecorded(payout: PayAffiliateCommissionsResult): Promise<void> {
+  const affiliate = await prisma.affiliate.findUnique({ where: { id: payout.affiliateId }, select: { name: true, email: true } });
+  if (!affiliate) return;
+
+  await notificationEngine.enqueueAndSendNow({
+    eventType: "PAYOUT_RECORDED",
+    templateName: "payout-recorded",
+    recipientEmail: affiliate.email,
+    affiliateId: payout.affiliateId,
+    dedupeKey: `PAYOUT_RECORDED:${payout.affiliateId}:${payout.paidAt.toISOString()}`,
+    rendered: renderPayoutRecordedEmail({ affiliateName: affiliate.name, affiliateEmail: affiliate.email, amountPaid: payout.totalPaid, paidAt: payout.paidAt }),
   });
 }
 

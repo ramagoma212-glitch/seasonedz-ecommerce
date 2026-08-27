@@ -19,7 +19,23 @@ export type EmailTemplateName =
   | "enquiry-received"
   | "admin-new-order"
   | "admin-new-enquiry"
-  | "password-reset";
+  | "password-reset"
+  // Version 7, Milestone 174B: routed through notificationEngine.service.ts,
+  // not called directly — see that file's own header comment.
+  | "order-processing"
+  | "order-cancelled"
+  | "courier-collected"
+  | "out-for-delivery"
+  | "delivered"
+  | "admin-delivery-exception"
+  | "affiliate-application-received"
+  | "admin-new-affiliate"
+  | "affiliate-approved"
+  | "affiliate-rejected"
+  | "affiliate-suspended"
+  | "commission-approved"
+  | "payout-recorded"
+  | "admin-new-review";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -98,4 +114,59 @@ export interface PasswordResetEmailData {
   customerFirstName: string;
   customerEmail: string;
   resetUrl: string;
+}
+
+// Version 7, Milestone 174B: courier/delivery-stage emails reuse
+// OrderEmailData as-is (same "who/what order/delivery method" shape
+// already covers it) — no separate courier data type needed.
+
+// Version 7, Milestone 174B: an admin-facing alert for a courier
+// exception/return status — deliberately narrow, admin-only, never
+// sent to a customer (see courierStatusSync.service.ts's own
+// EXCEPTION/RETURNED handling — customer messaging for these stays
+// conservative, see notificationEngine.service.ts).
+export interface AdminDeliveryExceptionEmailData {
+  orderNumber: string;
+  rawCourierStatus: string;
+}
+
+// Version 7, Milestone 174B: shared shape for every affiliate lifecycle
+// email (application received, approved, rejected, suspended) —
+// referralCode/referralLink/rates are only ever populated once genuine
+// (i.e. only for "approved"; every other status leaves them undefined
+// rather than guessing).
+export interface AffiliateEmailData {
+  affiliateName: string;
+  affiliateEmail: string;
+  referralCode?: string;
+  referralLink?: string;
+  effectiveCommissionRate?: number;
+  effectiveDiscountRate?: number;
+}
+
+export interface CommissionEmailData {
+  affiliateName: string;
+  affiliateEmail: string;
+  orderNumber: string;
+  commissionAmount: number;
+}
+
+export interface PayoutEmailData {
+  affiliateName: string;
+  affiliateEmail: string;
+  amountPaid: number;
+  paidAt: Date;
+}
+
+// Version 7, Milestone 174B: admin-facing only. reviewText is the
+// customer's own free text, included verbatim — safe here only because
+// every template body is plain text (Brevo's textContent field, never
+// HTML), so there's no markup for it to break out of, same as
+// enquiry.message already being included verbatim in
+// renderEnquiryReceivedEmail/renderAdminNewEnquiryEmail today.
+export interface AdminNewReviewEmailData {
+  productName: string;
+  customerName: string;
+  rating: number;
+  reviewText: string;
 }

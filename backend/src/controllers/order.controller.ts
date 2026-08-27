@@ -3,8 +3,10 @@ import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { validateOrderRequest } from "../validators/order.validator.js";
 import * as orderService from "../services/order.service.js";
 import { OrderError, type OrderOutput } from "../services/order.service.js";
-import { sendAdminNewOrderEmail, sendOrderCreatedEmail } from "../services/email/email.service.js";
+import { renderAdminNewOrderEmail, renderOrderCreatedEmail } from "../services/email/emailTemplates.js";
 import type { OrderEmailData } from "../services/email/email.types.js";
+import { env } from "../config/env.js";
+import * as notificationEngine from "../services/notificationEngine.service.js";
 
 // Version 7, Milestone 117: maps the full, already-safe OrderOutput
 // shape onto the small, independent OrderEmailData shape the email
@@ -57,16 +59,34 @@ export async function createOrderHandler(req: Request, res: Response, next: Next
     // isRegisteredCustomer argument at all.
     const order = await orderService.createOrder(validation.value, req.customerUser?.id ?? null);
 
-    // Version 7, Milestone 117: fire-and-forget, deliberately not
-    // awaited into the response — sendOrderCreatedEmail/
-    // sendAdminNewOrderEmail already never throw (email.service.ts's
-    // dispatch() catches every Brevo failure internally), but this is
-    // belt-and-braces so a checkout can never fail or slow down
-    // because of an email problem, current or future. Both are true
-    // no-ops while EMAIL_ENABLED=false (the default).
+    // Version 7, Milestone 117, migrated to the Notification engine in
+    // 174B: fire-and-forget, deliberately not awaited into the response
+    // — enqueueAndSendNow() never throws to its caller, but this is
+    // belt-and-braces so a checkout can never fail or slow down because
+    // of a notification problem, current or future. Dedupe keys are
+    // stable per orderNumber — order creation is naturally one-shot, so
+    // these can never double-enqueue for the same order.
     const emailData = toOrderEmailData(order);
-    void sendOrderCreatedEmail(emailData).catch(() => {});
-    void sendAdminNewOrderEmail(emailData).catch(() => {});
+    void notificationEngine
+      .enqueueAndSendNow({
+        eventType: "ORDER_PLACED",
+        templateName: "order-created",
+        recipientEmail: emailData.customerEmail,
+        orderNumber: order.orderNumber,
+        dedupeKey: `ORDER_PLACED:${order.orderNumber}`,
+        rendered: renderOrderCreatedEmail(emailData),
+      })
+      .catch(() => {});
+    void notificationEngine
+      .enqueueAndSendNow({
+        eventType: "ADMIN_NEW_ORDER",
+        templateName: "admin-new-order",
+        recipientEmail: env.adminNotificationEmail,
+        orderNumber: order.orderNumber,
+        dedupeKey: `ADMIN_NEW_ORDER:${order.orderNumber}`,
+        rendered: renderAdminNewOrderEmail(emailData),
+      })
+      .catch(() => {});
 
     sendSuccess(res, {
       message: "Order created successfully",

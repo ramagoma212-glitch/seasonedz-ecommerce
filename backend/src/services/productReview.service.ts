@@ -12,6 +12,9 @@
 
 import { PaymentStatus, Prisma, ReviewStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { renderAdminNewReviewEmail } from "./email/emailTemplates.js";
+import { env } from "../config/env.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 export class ProductReviewError extends Error {
   statusCode: number;
@@ -185,6 +188,13 @@ export async function submitProductReview(
     },
   });
 
+  // Version 7, Milestone 174B: fire-and-forget, never allowed to affect
+  // whether the review submission itself succeeded — the create() above
+  // has already committed by the time this runs.
+  void notifyAdminNewReview({ reviewId: review.id, customerId, productName: orderItem.productName, rating: review.rating, reviewText: review.reviewText }).catch((error) => {
+    console.warn(`[notifications] failed to notify admin of new review=${review.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+
   return {
     id: review.id,
     productId: review.productId,
@@ -195,6 +205,19 @@ export async function submitProductReview(
     status: review.status,
     createdAt: review.createdAt,
   };
+}
+
+async function notifyAdminNewReview(params: { reviewId: string; customerId: string; productName: string; rating: number; reviewText: string }): Promise<void> {
+  const customer = await prisma.customer.findUnique({ where: { id: params.customerId }, select: { firstName: true, lastName: true } });
+  const customerName = customer ? `${customer.firstName} ${customer.lastName}`.trim() : "A customer";
+
+  await notificationEngine.enqueueAndSendNow({
+    eventType: "ADMIN_NEW_REVIEW",
+    templateName: "admin-new-review",
+    recipientEmail: env.adminNotificationEmail,
+    dedupeKey: `ADMIN_NEW_REVIEW:${params.reviewId}`,
+    rendered: renderAdminNewReviewEmail({ productName: params.productName, customerName, rating: params.rating, reviewText: params.reviewText }),
+  });
 }
 
 export interface PublicReviewOutput {

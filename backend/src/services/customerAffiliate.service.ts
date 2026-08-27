@@ -24,6 +24,9 @@ import { getReferralProgrammeSettings } from "./referralProgrammeSettings.servic
 import { resolveCommissionRate, resolveDiscountRate } from "./referralPricing.service.js";
 import { getAffiliateCommissionTotals, type AffiliateCommissionTotals } from "./referralCommission.service.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
+import { renderAdminNewAffiliateEmail, renderAffiliateApplicationReceivedEmail } from "./email/emailTemplates.js";
+import { env } from "../config/env.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 export class CustomerAffiliateError extends Error {
   statusCode: number;
@@ -136,10 +139,42 @@ export async function applyForAffiliateProgramme(customerId: string): Promise<Af
     throw new CustomerAffiliateError("Customer account not found.", 404);
   }
 
-  return createAffiliate({
+  const affiliate = await createAffiliate({
     customerId,
     name: `${customer.firstName} ${customer.lastName}`.trim(),
     email: customer.email,
     phone: customer.phone,
   });
+
+  // Version 7, Milestone 174B: fire-and-forget, never allowed to affect
+  // whether the application itself succeeded — createAffiliate() above
+  // has already committed by the time either of these is called.
+  // Deliberately only fired from THIS customer-initiated path, not from
+  // createAffiliate() itself, since an admin directly creating an
+  // Affiliate row (the other caller of createAffiliate()) is a
+  // different action with no "your application was received, awaiting
+  // review" framing to send.
+  const affiliateEmailData = { affiliateName: affiliate.name, affiliateEmail: affiliate.email };
+  void notificationEngine
+    .enqueueAndSendNow({
+      eventType: "AFFILIATE_APPLICATION_RECEIVED",
+      templateName: "affiliate-application-received",
+      recipientEmail: affiliate.email,
+      affiliateId: affiliate.id,
+      dedupeKey: `AFFILIATE_APPLICATION_RECEIVED:${affiliate.id}`,
+      rendered: renderAffiliateApplicationReceivedEmail(affiliateEmailData),
+    })
+    .catch(() => {});
+  void notificationEngine
+    .enqueueAndSendNow({
+      eventType: "ADMIN_NEW_AFFILIATE",
+      templateName: "admin-new-affiliate",
+      recipientEmail: env.adminNotificationEmail,
+      affiliateId: affiliate.id,
+      dedupeKey: `ADMIN_NEW_AFFILIATE:${affiliate.id}`,
+      rendered: renderAdminNewAffiliateEmail(affiliateEmailData),
+    })
+    .catch(() => {});
+
+  return affiliate;
 }

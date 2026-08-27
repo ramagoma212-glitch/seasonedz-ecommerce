@@ -11,7 +11,18 @@
 // part of this milestone; a future milestone would add them via
 // Render env, never hardcoded here).
 
-import type { EnquiryEmailData, OrderEmailData, OrderEmailItem, PasswordResetEmailData, RenderedEmail } from "./email.types.js";
+import type {
+  AdminDeliveryExceptionEmailData,
+  AdminNewReviewEmailData,
+  AffiliateEmailData,
+  CommissionEmailData,
+  EnquiryEmailData,
+  OrderEmailData,
+  OrderEmailItem,
+  PasswordResetEmailData,
+  PayoutEmailData,
+  RenderedEmail,
+} from "./email.types.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
 
@@ -367,6 +378,245 @@ Message:
 ${enquiry.message}
 
 Please follow up with this enquiry.`;
+
+  return { subject, body };
+}
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 174B: order lifecycle (processing/cancelled) and
+// courier delivery-stage templates. All routed through
+// notificationEngine.service.ts, never called directly — see that
+// file's own header comment. Reuse OrderEmailData exactly as the
+// existing order-created/payment-confirmed templates above do.
+// ---------------------------------------------------------------------------
+
+export function renderOrderProcessingEmail(order: OrderEmailData): RenderedEmail {
+  const subject = `Order ${order.orderNumber} Is Being Prepared`;
+  const body = `Hi ${order.customerFirstName},
+
+Good news — we've started preparing your Seasonedz Group order ${order.orderNumber}.
+
+${deliveryFulfilmentNote(order)}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderOrderCancelledEmail(order: OrderEmailData): RenderedEmail {
+  const subject = `Order ${order.orderNumber} Has Been Cancelled`;
+  const body = `Hi ${order.customerFirstName},
+
+Your Seasonedz Group order ${order.orderNumber} has been cancelled.
+
+Order Total: ${formatRand(order.total)}
+
+If this wasn't expected, please get in touch and we'll help sort it out.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Version 7, Milestone 173/173A: this is the first genuine courier
+// movement Seasonedz's own automatic sync ever confirms for an order —
+// deliberately doesn't claim a live tracking feed or a specific ETA,
+// matching this project's existing "honest, not overclaiming" delivery
+// wording discipline (see DELIVERY_SETUP.md).
+export function renderCourierCollectedEmail(order: OrderEmailData): RenderedEmail {
+  const subject = `Order ${order.orderNumber} Is On Its Way`;
+  const body = `Hi ${order.customerFirstName},
+
+Your Seasonedz Group order ${order.orderNumber} has been collected by ${formatDeliveryMethodLabel(order.deliveryMethod)} and is on its way to you.
+
+You're welcome to check its progress any time using your order number.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderOutForDeliveryEmail(order: OrderEmailData): RenderedEmail {
+  const subject = `Order ${order.orderNumber} Is Out for Delivery`;
+  const body = `Hi ${order.customerFirstName},
+
+Your Seasonedz Group order ${order.orderNumber} is out for delivery today.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderDeliveredEmail(order: OrderEmailData): RenderedEmail {
+  const subject = `Order ${order.orderNumber} Has Been Delivered`;
+  const body = `Hi ${order.customerFirstName},
+
+Your Seasonedz Group order ${order.orderNumber} has been delivered. We hope you love it!
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Version 7, Milestone 174B: admin-only. Deliberately never sent to the
+// customer directly from here — courierStatusSync.service.ts's own
+// EXCEPTION/RETURNED handling stays conservative toward customers (see
+// notificationEngine.service.ts), so this is the one place that gets
+// the real, raw provider status string for admin follow-up.
+export function renderAdminDeliveryExceptionEmail(data: AdminDeliveryExceptionEmailData): RenderedEmail {
+  const subject = `Delivery Exception on Order ${data.orderNumber}`;
+  const body = `A courier delivery issue was reported for order ${data.orderNumber}.
+
+Courier Guy status: ${data.rawCourierStatus}
+
+Please review this order in the admin dashboard.`;
+
+  return { subject, body };
+}
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 174B: affiliate lifecycle templates.
+// ---------------------------------------------------------------------------
+
+export function renderAffiliateApplicationReceivedEmail(data: AffiliateEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Application Has Been Received";
+  const body = `Hi ${data.affiliateName},
+
+Thank you for applying to the Seasonedz Affiliate Programme. Your application has been received and is awaiting review — we'll be in touch once a decision has been made.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderAdminNewAffiliateEmail(data: AffiliateEmailData): RenderedEmail {
+  const subject = "New Affiliate Application Received";
+  const body = `A new affiliate application has been submitted on Seasonedz Group.
+
+Applicant: ${data.affiliateName} (${data.affiliateEmail})
+
+Please review this application in the admin dashboard.`;
+
+  return { subject, body };
+}
+
+// Version 7, Milestone 174B: never promises earnings — matches
+// affiliateTerms.js's own "No Guarantee of Earnings" section.
+export function renderAffiliateApprovedEmail(data: AffiliateEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Application Has Been Approved";
+  const body = `Hi ${data.affiliateName},
+
+Good news — your Seasonedz Affiliate application has been approved.
+
+Your Referral Code: ${data.referralCode ?? "—"}
+Your Referral Link: ${data.referralLink ?? "—"}
+Your Current Commission Rate: ${data.effectiveCommissionRate ?? "—"}%
+Your Customers' Current Referral Discount: ${data.effectiveDiscountRate ?? "—"}%
+
+Log in to My Account to see your full affiliate portal, including your referral link and commission balance.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderAffiliateRejectedEmail(data: AffiliateEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Application";
+  const body = `Hi ${data.affiliateName},
+
+Thank you for your interest in the Seasonedz Affiliate Programme. After review, your application was not approved at this time.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderAffiliateSuspendedEmail(data: AffiliateEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Account Status";
+  const body = `Hi ${data.affiliateName},
+
+Your Seasonedz Affiliate account has been suspended — new referral activity will not earn further commission while this is in effect. Any commission already earned in good faith before this change is unaffected.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderCommissionApprovedEmail(data: CommissionEmailData): RenderedEmail {
+  const subject = "A Commission Has Been Approved";
+  const body = `Hi ${data.affiliateName},
+
+A commission of ${formatRand(data.commissionAmount)} for order ${data.orderNumber} has been approved and added to your approved balance.
+
+Log in to My Account to see your full commission balance and payout status.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderPayoutRecordedEmail(data: PayoutEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Payout Has Been Recorded";
+  const body = `Hi ${data.affiliateName},
+
+A payout of ${formatRand(data.amountPaid)} has been recorded as paid to you, dated ${data.paidAt.toLocaleDateString("en-ZA", { year: "numeric", month: "long", day: "numeric" })}.
+
+Log in to My Account to see your full payout history.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 174B: admin-only product review alert.
+// ---------------------------------------------------------------------------
+
+export function renderAdminNewReviewEmail(data: AdminNewReviewEmailData): RenderedEmail {
+  const subject = `New Product Review Submitted: ${data.productName}`;
+  const body = `A new product review has been submitted on Seasonedz Group.
+
+Product: ${data.productName}
+Rating: ${data.rating}/5
+From: ${data.customerName}
+
+Review:
+${data.reviewText}
+
+Please review this in the admin dashboard.`;
 
   return { subject, body };
 }

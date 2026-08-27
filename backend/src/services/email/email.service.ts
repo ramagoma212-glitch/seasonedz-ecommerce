@@ -1,59 +1,51 @@
 // Email service (Version 3, Milestone 24 — preparation only; templates
 // and dry-run log format extended in Version 6, Milestone 53; Brevo
 // wired in as a real provider in Version 7, Milestone 117 — still off
-// by default).
+// by default at the time).
+//
+// Version 7, Milestone 174B: every send*Email wrapper that used to live
+// here (sendOrderCreatedEmail, sendPaymentConfirmedEmail, etc.) has
+// been removed — notificationEngine.service.ts is now the one
+// authoritative path for all of those events (brief section 9/14: "no
+// business service should call Brevo directly... one authoritative
+// notification path"). This file now exposes only the low-level
+// primitive that engine calls: deliverRenderedEmail(), which THROWS on
+// a genuine failure (unlike the old dispatch(), which always swallowed
+// internally) — the engine needs to know success/failure to update a
+// Notification row's status, whereas the old wrapper functions wanted
+// failure hidden from their caller entirely.
+//
+// sendPasswordResetEmail() is the one deliberate exception, kept
+// completely unchanged: password-reset stays on this same direct,
+// swallow-on-failure path it has always used, never routed through the
+// Notification table's stored-content model — see
+// notificationEngine.service.ts's own header comment for why (the
+// reset link contains a one-time token that must never be persisted or
+// logged anywhere).
 //
 // No real email is sent by anything in this file unless explicitly
 // turned on:
-//  - EMAIL_ENABLED=false (the default) makes every send*Email function
-//    a safe no-op.
+//  - EMAIL_ENABLED=false (still the default outside production) makes
+//    every send a safe no-op.
 //  - EMAIL_PROVIDER="console" (the default provider) logs only safe
 //    metadata — template name, recipient role, a masked recipient
-//    address, an order number/enquiry id, the subject, and a short,
-//    non-sensitive preview line. It never logs the full rendered
-//    body, a full email address, a raw PayFast payload, or any other
-//    personal detail.
+//    address, a reference, the subject, and a short, non-sensitive
+//    preview line. It never logs the full rendered body, a full email
+//    address, a raw PayFast payload, or any other personal detail.
 //  - EMAIL_PROVIDER="brevo" sends a real transactional email via
-//    brevo.provider.ts's sendViaBrevo() — but a Brevo failure (bad
-//    key, network error, timeout, 4xx/5xx) is always caught here and
-//    logged as a safe warning, never thrown further. Order creation,
-//    enquiry creation, and PayFast ITN processing must all succeed
-//    independently of whether the email actually sent — the same
-//    "safe no-op on failure" guarantee EMAIL_ENABLED=false already
-//    gives when disabled, just extended to cover a real provider
-//    actually failing while enabled.
-//  - Any other EMAIL_PROVIDER value is treated as "not implemented
-//    yet" and logs a warning instead of guessing at a real send.
+//    brevo.provider.ts's sendViaBrevo().
 //
-// See backend/EMAIL_SETUP.md's "Where Emails Will Be Triggered Later"
-// for the hook points this milestone wires up in order.controller.ts,
-// enquiry.controller.ts, and payfast.service.ts.
+// See backend/EMAIL_SETUP.md and VERSION_7_NOTIFICATION_AUDIT_174A.md.
 
 import { env } from "../../config/env.js";
-import {
-  renderAdminNewEnquiryEmail,
-  renderAdminNewOrderEmail,
-  renderEnquiryReceivedEmail,
-  renderOrderCreatedEmail,
-  renderPasswordResetEmail,
-  renderPaymentConfirmedEmail,
-  renderPaymentFailedOrCancelledEmail,
-  renderPaymentPendingEmail,
-} from "./emailTemplates.js";
-import { sendViaBrevo } from "./providers/brevo.provider.js";
-import type {
-  EmailRecipientRole,
-  EmailTemplateName,
-  EnquiryEmailData,
-  OrderEmailData,
-  PasswordResetEmailData,
-  RenderedEmail,
-} from "./email.types.js";
+import { renderPasswordResetEmail } from "./emailTemplates.js";
+import { sendViaBrevo, BrevoSendError } from "./providers/brevo.provider.js";
+import type { EmailRecipientRole, EmailTemplateName, PasswordResetEmailData, RenderedEmail } from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
 // domain's first label, e.g. "jane.doe@example.com" -> "j***@e***.com"
 // — enough to spot-check in logs without ever printing a real address.
-function maskEmail(email: string): string {
+export function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
   if (!local || !domain) return "***";
 
@@ -66,12 +58,11 @@ function maskEmail(email: string): string {
 
 // A short, non-sensitive preview line for the dry-run log — never the
 // full body. Skips the "Hi {name}," greeting line (the only line that
-// carries the customer's name) and, for enquiry templates, never
-// touches the customer's own free-text message; it only ever surfaces
-// generic template wording or an already-non-sensitive reference like
-// an order number, truncated well short of anything resembling a full
-// paragraph.
-function safePreview(body: string): string {
+// carries the customer's name) and never touches a customer's own
+// free-text message; it only ever surfaces generic template wording or
+// an already-non-sensitive reference, truncated well short of anything
+// resembling a full paragraph.
+export function safePreview(body: string): string {
   const MAX_LENGTH = 80;
   const lines = body
     .split("\n")
@@ -82,7 +73,7 @@ function safePreview(body: string): string {
 }
 
 function logConsoleEmail(
-  templateName: EmailTemplateName,
+  templateName: EmailTemplateName | string,
   recipientRole: EmailRecipientRole,
   recipientEmail: string,
   reference: string,
@@ -93,20 +84,29 @@ function logConsoleEmail(
   );
 }
 
-async function dispatch(
-  templateName: EmailTemplateName,
-  recipientRole: EmailRecipientRole,
-  recipientEmail: string | undefined,
-  reference: string,
-  rendered: RenderedEmail,
-  recipientName?: string
-): Promise<void> {
-  if (!env.emailEnabled) return; // safe no-op — the default state
-
-  if (!recipientEmail) {
-    console.warn(`[email] No recipient configured for template "${templateName}" (ref="${reference}") — skipped.`);
-    return;
+export class EmailDeliveryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EmailDeliveryError";
   }
+}
+
+// The one low-level send primitive — throws EmailDeliveryError on a
+// genuine failure (Brevo unreachable/rejected, or an unimplemented
+// provider value), never on the "disabled" or "console" cases, which
+// are deliberate, successful no-ops by design (see this file's own
+// header comment on why the engine treats those as SENT, not FAILED).
+export async function deliverRenderedEmail(params: {
+  templateName: EmailTemplateName | string;
+  recipientRole: EmailRecipientRole;
+  recipientEmail: string;
+  recipientName?: string;
+  reference: string;
+  rendered: RenderedEmail;
+}): Promise<void> {
+  const { templateName, recipientRole, recipientEmail, recipientName, reference, rendered } = params;
+
+  if (!env.emailEnabled) return; // safe no-op — the default state outside production
 
   if (env.emailProvider === "console") {
     logConsoleEmail(templateName, recipientRole, recipientEmail, reference, rendered);
@@ -117,89 +117,56 @@ async function dispatch(
     try {
       await sendViaBrevo({ email: recipientEmail, name: recipientName }, rendered);
     } catch (error) {
-      // Never allowed to reach the caller — order creation, enquiry
-      // creation, and PayFast ITN processing must all succeed
-      // regardless of whether this email actually sent. Never logs
-      // the API key, a header, or the full recipient address/body —
-      // only the safe metadata already used for console mode, plus
-      // the error's own message (BrevoSendError's messages are
-      // themselves already safe — see brevo.provider.ts).
-      console.warn(
-        `[email:brevo] Send failed for template="${templateName}" role="${recipientRole}" to="${maskEmail(recipientEmail)}" ref="${reference}": ${error instanceof Error ? error.message : "Unknown error"}`
-      );
+      // Never logs the API key, a header, or the full recipient
+      // address/body — only the safe metadata already used for console
+      // mode, plus the error's own message (BrevoSendError's messages
+      // are themselves already safe — see brevo.provider.ts).
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.warn(`[email:brevo] Send failed for template="${templateName}" role="${recipientRole}" to="${maskEmail(recipientEmail)}" ref="${reference}": ${message}`);
+      throw error instanceof BrevoSendError ? error : new EmailDeliveryError(message);
     }
     return;
   }
 
-  // No other provider is integrated. A future milestone that adds
-  // Resend/SendGrid/SMTP replaces this branch with a real send, still
-  // behind the same env.emailEnabled gate above.
-  console.warn(
-    `[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "${templateName}".`
-  );
+  // No other provider is integrated.
+  const message = `EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet.`;
+  console.warn(`[email] ${message} No email was sent for template "${templateName}".`);
+  throw new EmailDeliveryError(message);
 }
 
-export async function sendOrderCreatedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch(
-    "order-created",
-    "customer",
-    order.customerEmail,
-    order.orderNumber,
-    renderOrderCreatedEmail(order),
-    `${order.customerFirstName} ${order.customerLastName}`.trim()
-  );
-}
+// Version 7, Milestone 132: kept exactly as before Milestone 174B —
+// same control flow, same swallow-on-failure discipline, same "never
+// touches the raw token" safety. See this file's own header comment
+// for why password reset stays on its own direct path rather than the
+// Notification engine's stored-content model.
+//
+// Version 7, Milestone 174B: the ONE change — now returns whether the
+// send genuinely succeeded (true for the disabled/console/real-success
+// cases, false only on a caught Brevo failure), instead of void. This
+// lets customerAuth.controller.ts record an accurate SENT/FAILED audit
+// row afterward (safe metadata only — see notificationEngine.service.ts's
+// recordPasswordResetAttempt()) without this function's own
+// swallow-on-failure behaviour changing at all — it still never throws.
+export async function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
 
-export async function sendPaymentPendingEmail(order: OrderEmailData): Promise<void> {
-  await dispatch(
-    "payment-pending",
-    "customer",
-    order.customerEmail,
-    order.orderNumber,
-    renderPaymentPendingEmail(order),
-    `${order.customerFirstName} ${order.customerLastName}`.trim()
-  );
-}
+  const rendered = renderPasswordResetEmail(data);
 
-export async function sendPaymentConfirmedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch(
-    "payment-confirmed",
-    "customer",
-    order.customerEmail,
-    order.orderNumber,
-    renderPaymentConfirmedEmail(order),
-    `${order.customerFirstName} ${order.customerLastName}`.trim()
-  );
-}
+  if (env.emailProvider === "console") {
+    logConsoleEmail("password-reset", "customer", data.customerEmail, "password-reset", rendered);
+    return true;
+  }
 
-export async function sendPaymentFailedEmail(order: OrderEmailData): Promise<void> {
-  await dispatch(
-    "payment-failed-or-cancelled",
-    "customer",
-    order.customerEmail,
-    order.orderNumber,
-    renderPaymentFailedOrCancelledEmail(order),
-    `${order.customerFirstName} ${order.customerLastName}`.trim()
-  );
-}
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.customerEmail, name: data.customerFirstName }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="password-reset" role="customer" to="${maskEmail(data.customerEmail)}" ref="password-reset": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
 
-export async function sendEnquiryReceivedEmail(enquiry: EnquiryEmailData): Promise<void> {
-  await dispatch("enquiry-received", "customer", enquiry.email, enquiry.id, renderEnquiryReceivedEmail(enquiry), enquiry.name);
-}
-
-export async function sendAdminNewOrderEmail(order: OrderEmailData): Promise<void> {
-  await dispatch("admin-new-order", "admin", env.adminNotificationEmail, order.orderNumber, renderAdminNewOrderEmail(order));
-}
-
-export async function sendAdminNewEnquiryEmail(enquiry: EnquiryEmailData): Promise<void> {
-  await dispatch("admin-new-enquiry", "admin", env.adminNotificationEmail, enquiry.id, renderAdminNewEnquiryEmail(enquiry));
-}
-
-// Version 7, Milestone 132: "password-reset" as the reference (never
-// the raw token, never an internal customer ID) — dispatch()'s own
-// console-mode logging only ever prints template name, role, masked
-// email and this reference, so this stays exactly as safe as every
-// other send*Email call here.
-export async function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<void> {
-  await dispatch("password-reset", "customer", data.customerEmail, "password-reset", renderPasswordResetEmail(data), data.customerFirstName);
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "password-reset".`);
+  return false;
 }

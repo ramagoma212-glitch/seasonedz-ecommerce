@@ -53,6 +53,7 @@ import {
   uploadDigitalAssetMiddleware,
 } from "../controllers/adminDigitalAsset.controller.js";
 import { approveReviewHandler, listAdminReviewsHandler, rejectReviewHandler } from "../controllers/adminProductReview.controller.js";
+import { getNotificationHandler, listNotificationsHandler } from "../controllers/adminNotification.controller.js";
 
 const router = Router();
 
@@ -113,5 +114,10 @@ router.delete("/products/:id/digital-asset", deleteAdminDigitalAssetHandler);
 router.get("/reviews", listAdminReviewsHandler);
 router.patch("/reviews/:id/approve", approveReviewHandler);
 router.patch("/reviews/:id/reject", rejectReviewHandler);
+// Version 7, Milestone 174B: read-only Notification outbox visibility —
+// see adminNotification.service.ts's own header comment for why this
+// is backend-only this milestone (no admin frontend page yet).
+router.get("/notifications", listNotificationsHandler);
+router.get("/notifications/:id", getNotificationHandler);
 
 export default router;

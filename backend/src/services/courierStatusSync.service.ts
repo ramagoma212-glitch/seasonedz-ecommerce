@@ -29,6 +29,10 @@ import { FulfilmentStatus, OrderStatus, OrderStatusHistorySource, Prisma } from 
 import { prisma } from "../config/prisma.js";
 import { ALLOWED_TRANSITIONS } from "./adminOrderStatus.service.js";
 import { isDigitalOnlyOrder } from "./courierGuy.service.js";
+import { renderAdminDeliveryExceptionEmail, renderCourierCollectedEmail, renderDeliveredEmail, renderOutForDeliveryEmail } from "./email/emailTemplates.js";
+import type { OrderEmailData } from "./email/email.types.js";
+import { env } from "../config/env.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 // The seven stages this backend recognises a courier event as meaning.
 // Deliberately coarser than ShipLogic's own vocabulary (see brief
@@ -202,7 +206,133 @@ async function resolveShipmentByIdentifiers(candidateIdentifiers: string[]) {
 // always respond 200 once the request has passed the secret-path
 // gate (see courierWebhook.controller.ts's own comment on why retry
 // storms are avoided this way).
+// Version 7, Milestone 174B: minimal OrderEmailData mapper for the
+// three customer-facing courier templates (courier-collected/out-for-
+// delivery/delivered) — none of them read `items`, same reasoning as
+// adminOrderStatus.service.ts's own toStatusChangeEmailData(). Always
+// called strictly AFTER applyCourierStatusEventTransactional()'s
+// transaction has committed (brief section 8/39) — a fresh, plain
+// (non-tx) read of the now-genuinely-current order row.
+function toCourierEmailData(order: {
+  orderNumber: string;
+  customerFirstName: string;
+  customerLastName: string;
+  customerEmail: string;
+  customerPhone: string;
+  total: Prisma.Decimal;
+  paymentStatus: string;
+  paymentMethod: string;
+  deliveryMethod: string;
+  deliveryFee: Prisma.Decimal;
+  collectionCity: string | null;
+  deliveryStreetAddress: string | null;
+  deliverySuburb: string | null;
+  deliveryCity: string | null;
+  deliveryProvince: string | null;
+  deliveryPostalCode: string | null;
+  deliveryNotes: string | null;
+}): OrderEmailData {
+  return {
+    orderNumber: order.orderNumber,
+    customerFirstName: order.customerFirstName,
+    customerLastName: order.customerLastName,
+    customerEmail: order.customerEmail,
+    customerPhone: order.customerPhone,
+    total: order.total.toNumber(),
+    paymentStatus: order.paymentStatus,
+    paymentMethod: order.paymentMethod,
+    items: [],
+    deliveryMethod: order.deliveryMethod,
+    deliveryFee: order.deliveryFee.toNumber(),
+    collectionCity: order.collectionCity,
+    deliveryStreetAddress: order.deliveryStreetAddress,
+    deliverySuburb: order.deliverySuburb,
+    deliveryCity: order.deliveryCity,
+    deliveryProvince: order.deliveryProvince,
+    deliveryPostalCode: order.deliveryPostalCode,
+    deliveryNotes: order.deliveryNotes,
+  };
+}
+
+// Version 7, Milestone 174B: fires the one customer notification each
+// meaningful stage transition deserves (brief section 22 — never one
+// per repeated provider scan, which the rank-based idempotency this
+// event already went through upstream naturally guarantees: this is
+// only ever called once a genuine, non-duplicate "applied"/
+// "informational" outcome has already been decided) plus the admin
+// delivery-exception alert for a genuine EXCEPTION or RETURNED stage.
+// Strictly AFTER the transaction has committed — see this file's own
+// header comment on why courierStatusSync never enqueues from inside
+// applyCourierStatusEventTransactional()'s $transaction callback.
+async function notifyCourierStatusChange(outcome: CourierStatusEventOutcome, rawStatus: string | null): Promise<void> {
+  if (outcome.outcome === "informational" && outcome.stage === "EXCEPTION") {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "ADMIN_DELIVERY_EXCEPTION",
+      templateName: "admin-delivery-exception",
+      recipientEmail: env.adminNotificationEmail,
+      orderNumber: outcome.orderNumber,
+      dedupeKey: `ADMIN_DELIVERY_EXCEPTION:${outcome.orderNumber}:${rawStatus ?? "unknown"}`,
+      rendered: renderAdminDeliveryExceptionEmail({ orderNumber: outcome.orderNumber, rawCourierStatus: rawStatus ?? "unknown" }),
+    });
+    return;
+  }
+
+  if (outcome.outcome !== "applied") return;
+
+  const order = await prisma.order.findUnique({ where: { orderNumber: outcome.orderNumber } });
+  if (!order) return;
+  const emailData = toCourierEmailData(order);
+
+  if (outcome.stage === "IN_TRANSIT" && outcome.shippingStatusChanged) {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "COURIER_COLLECTED",
+      templateName: "courier-collected",
+      recipientEmail: emailData.customerEmail,
+      orderNumber: outcome.orderNumber,
+      dedupeKey: `COURIER_COLLECTED:${outcome.orderNumber}`,
+      rendered: renderCourierCollectedEmail(emailData),
+    });
+  } else if (outcome.stage === "OUT_FOR_DELIVERY" && outcome.orderStatusChanged) {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "OUT_FOR_DELIVERY",
+      templateName: "out-for-delivery",
+      recipientEmail: emailData.customerEmail,
+      orderNumber: outcome.orderNumber,
+      dedupeKey: `OUT_FOR_DELIVERY:${outcome.orderNumber}`,
+      rendered: renderOutForDeliveryEmail(emailData),
+    });
+  } else if (outcome.stage === "DELIVERED" && outcome.orderStatusChanged) {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "DELIVERED",
+      templateName: "delivered",
+      recipientEmail: emailData.customerEmail,
+      orderNumber: outcome.orderNumber,
+      dedupeKey: `DELIVERED:${outcome.orderNumber}`,
+      rendered: renderDeliveredEmail(emailData),
+    });
+  } else if (outcome.stage === "RETURNED") {
+    await notificationEngine.enqueueAndSendNow({
+      eventType: "ADMIN_DELIVERY_EXCEPTION",
+      templateName: "admin-delivery-exception",
+      recipientEmail: env.adminNotificationEmail,
+      orderNumber: outcome.orderNumber,
+      dedupeKey: `ADMIN_DELIVERY_EXCEPTION:${outcome.orderNumber}:returned-to-sender`,
+      rendered: renderAdminDeliveryExceptionEmail({ orderNumber: outcome.orderNumber, rawCourierStatus: rawStatus ?? "returned-to-sender" }),
+    });
+  }
+}
+
 export async function applyCourierStatusEvent(input: CourierStatusEventInput): Promise<CourierStatusEventOutcome> {
+  const outcome = await applyCourierStatusEventTransactional(input);
+
+  void notifyCourierStatusChange(outcome, input.rawStatus).catch((error) => {
+    console.warn(`[notifications] failed to notify courier status change: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+
+  return outcome;
+}
+
+async function applyCourierStatusEventTransactional(input: CourierStatusEventInput): Promise<CourierStatusEventOutcome> {
   return prisma.$transaction(async (tx) => {
     const shipment = await resolveShipmentByIdentifiers(input.candidateIdentifiers);
     if (!shipment) {

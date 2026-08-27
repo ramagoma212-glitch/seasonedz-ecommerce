@@ -39,11 +39,12 @@ import { env } from "../config/env.js";
 import { generatePayfastSignature, verifyPayfastSignature } from "../utils/payfastSignature.js";
 import { verifyPayfastSource } from "../utils/payfastSourceVerification.js";
 import { validateWithPayfastServer } from "../utils/payfastServerValidation.js";
-import { sendPaymentConfirmedEmail, sendPaymentFailedEmail } from "./email/email.service.js";
+import { renderPaymentConfirmedEmail, renderPaymentFailedOrCancelledEmail } from "./email/emailTemplates.js";
 import type { OrderEmailData } from "./email/email.types.js";
 import { autoBookCourierForPaidOrder } from "./courierGuy.service.js";
 import { createGuestDownloadToken } from "./digitalDownload.service.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -537,16 +538,24 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         }
       }
 
-      // Version 7, Milestone 117: only reached on a genuinely newly-
-      // resolved COMPLETE (the early-return above already handled the
-      // idempotent duplicate-notification case) — a repeated ITN for
-      // an already-PAID order can never reach this line, so this can
-      // never double-send. Fire-and-forget, same discipline as
-      // order.controller.ts; sendPaymentConfirmedEmail never throws.
-      void sendPaymentConfirmedEmail({
-        ...toPaymentOrderEmailData(order, { hasDigitalItems, guestDownloadUrl }),
-        paymentStatus: PaymentStatus.PAID,
-      }).catch(() => {});
+      // Version 7, Milestone 117, migrated to the Notification engine in
+      // 174B: only reached on a genuinely newly-resolved COMPLETE (the
+      // early-return above already handled the idempotent duplicate-
+      // notification case) — a repeated ITN for an already-PAID order
+      // can never reach this line, so this can never double-send, on
+      // top of the engine's own dedupeKey protection. Fire-and-forget,
+      // same discipline as order.controller.ts.
+      const paidEmailData = { ...toPaymentOrderEmailData(order, { hasDigitalItems, guestDownloadUrl }), paymentStatus: PaymentStatus.PAID };
+      void notificationEngine
+        .enqueueAndSendNow({
+          eventType: "PAYMENT_RECEIVED",
+          templateName: "payment-confirmed",
+          recipientEmail: paidEmailData.customerEmail,
+          orderNumber: order.orderNumber,
+          dedupeKey: `PAYMENT_RECEIVED:${order.orderNumber}`,
+          rendered: renderPaymentConfirmedEmail(paidEmailData),
+        })
+        .catch(() => {});
 
       // Version 7, Milestone 139: automatic Courier Guy booking
       // foundation — same "only reached once, ever, per order" guarantee
@@ -590,13 +599,24 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         data: { paymentStatus: PaymentStatus.FAILED },
       });
 
-      // Version 7, Milestone 117: only reached on a newly-resolved
-      // FAILED (the already-PAID early-return above never reaches
-      // here) — same never-double-send guarantee as COMPLETE above.
-      void sendPaymentFailedEmail({
-        ...toPaymentOrderEmailData(order),
-        paymentStatus: PaymentStatus.FAILED,
-      }).catch(() => {});
+      // Version 7, Milestone 117, migrated to the Notification engine in
+      // 174B: dedupeKey includes providerReference (this specific
+      // PayFast payment attempt's own id), not just the order number —
+      // a genuine repeated ITN for the same attempt is suppressed by
+      // the engine's own uniqueness constraint, while a customer's
+      // separate, later retry (a different PayFast payment id) still
+      // gets its own genuine notification.
+      const failedEmailData = { ...toPaymentOrderEmailData(order), paymentStatus: PaymentStatus.FAILED };
+      void notificationEngine
+        .enqueueAndSendNow({
+          eventType: "PAYMENT_FAILED",
+          templateName: "payment-failed-or-cancelled",
+          recipientEmail: failedEmailData.customerEmail,
+          orderNumber: order.orderNumber,
+          dedupeKey: `PAYMENT_FAILED:${order.orderNumber}:${providerReference || "unknown"}`,
+          rendered: renderPaymentFailedOrCancelledEmail(failedEmailData),
+        })
+        .catch(() => {});
 
       return { message: "Payment marked as FAILED." };
     }
@@ -621,14 +641,21 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         data: { paymentStatus: PaymentStatus.CANCELLED },
       });
 
-      // Version 7, Milestone 117: only reached on a newly-resolved
-      // CANCELLED — same never-double-send guarantee as COMPLETE/
+      // Version 7, Milestone 117, migrated to the Notification engine in
+      // 174B — same dedupeKey-includes-providerReference reasoning as
       // FAILED above. renderPaymentFailedOrCancelledEmail() already
       // handles both statuses' wording via humanizeEnum(paymentStatus).
-      void sendPaymentFailedEmail({
-        ...toPaymentOrderEmailData(order),
-        paymentStatus: PaymentStatus.CANCELLED,
-      }).catch(() => {});
+      const cancelledEmailData = { ...toPaymentOrderEmailData(order), paymentStatus: PaymentStatus.CANCELLED };
+      void notificationEngine
+        .enqueueAndSendNow({
+          eventType: "PAYMENT_FAILED",
+          templateName: "payment-failed-or-cancelled",
+          recipientEmail: cancelledEmailData.customerEmail,
+          orderNumber: order.orderNumber,
+          dedupeKey: `PAYMENT_FAILED:${order.orderNumber}:${providerReference || "unknown"}`,
+          rendered: renderPaymentFailedOrCancelledEmail(cancelledEmailData),
+        })
+        .catch(() => {});
 
       return { message: "Payment marked as CANCELLED." };
     }

@@ -20,6 +20,10 @@ import { Prisma, AffiliateStatus } from "@prisma/client";
 import sanitizeHtml from "sanitize-html";
 import { prisma } from "../config/prisma.js";
 import { isValidEmail, isValidSAPhone } from "../validators/shared.js";
+import { renderAffiliateApprovedEmail, renderAffiliateRejectedEmail, renderAffiliateSuspendedEmail } from "./email/emailTemplates.js";
+import { getReferralProgrammeSettings } from "./referralProgrammeSettings.service.js";
+import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
+import * as notificationEngine from "./notificationEngine.service.js";
 
 export class ReferralAffiliateError extends Error {
   statusCode: number;
@@ -464,6 +468,55 @@ function assertTransition(current: AffiliateStatus, allowed: AffiliateStatus[], 
   }
 }
 
+// Version 7, Milestone 174B: fire-and-forget, same discipline as every
+// other notification call site — never awaited into the caller's
+// response, never allowed to affect whether the status change itself
+// succeeded (it's called strictly after the plain `prisma.affiliate.update()`
+// above has already resolved, so there's no transaction for it to roll
+// back anyway). dedupeKey scoped to the affiliate id + target status —
+// stable across a genuinely repeated identical call (defence in depth;
+// assertTransition() above already makes a true duplicate call
+// impossible in practice, since the second call would find the
+// affiliate no longer in a valid source status).
+function notifyAffiliateStatusChange(affiliate: AffiliateOutput, eventType: "AFFILIATE_APPROVED" | "AFFILIATE_REJECTED" | "AFFILIATE_SUSPENDED"): void {
+  void (async () => {
+    if (eventType === "AFFILIATE_APPROVED") {
+      const settings = await getReferralProgrammeSettings();
+      const effectiveCommissionRate = affiliate.commissionRateOverride ?? settings.defaultCommissionRate;
+      const effectiveDiscountRate = affiliate.discountRateOverride ?? settings.defaultReferralDiscountRate;
+      const referralLink = `${preferredFrontendBaseUrl()}/?ref=${encodeURIComponent(affiliate.referralCode)}`;
+      await notificationEngine.enqueueAndSendNow({
+        eventType,
+        templateName: "affiliate-approved",
+        recipientEmail: affiliate.email,
+        affiliateId: affiliate.id,
+        dedupeKey: `AFFILIATE_APPROVED:${affiliate.id}:${affiliate.updatedAt.toISOString()}`,
+        rendered: renderAffiliateApprovedEmail({ affiliateName: affiliate.name, affiliateEmail: affiliate.email, referralCode: affiliate.referralCode, referralLink, effectiveCommissionRate, effectiveDiscountRate }),
+      });
+    } else if (eventType === "AFFILIATE_REJECTED") {
+      await notificationEngine.enqueueAndSendNow({
+        eventType,
+        templateName: "affiliate-rejected",
+        recipientEmail: affiliate.email,
+        affiliateId: affiliate.id,
+        dedupeKey: `AFFILIATE_REJECTED:${affiliate.id}`,
+        rendered: renderAffiliateRejectedEmail({ affiliateName: affiliate.name, affiliateEmail: affiliate.email }),
+      });
+    } else {
+      await notificationEngine.enqueueAndSendNow({
+        eventType,
+        templateName: "affiliate-suspended",
+        recipientEmail: affiliate.email,
+        affiliateId: affiliate.id,
+        dedupeKey: `AFFILIATE_SUSPENDED:${affiliate.id}:${affiliate.updatedAt.toISOString()}`,
+        rendered: renderAffiliateSuspendedEmail({ affiliateName: affiliate.name, affiliateEmail: affiliate.email }),
+      });
+    }
+  })().catch((error) => {
+    console.warn(`[notifications] failed to notify affiliate status change (${eventType}) for affiliate=${affiliate.id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+  });
+}
+
 export async function approveAffiliate(id: string): Promise<AffiliateOutput> {
   const existing = await prisma.affiliate.findUnique({ where: { id }, select: { status: true } });
   if (!existing) throw new ReferralAffiliateError(`Affiliate not found: ${id}`, 404);
@@ -473,7 +526,9 @@ export async function approveAffiliate(id: string): Promise<AffiliateOutput> {
     where: { id },
     data: { status: AffiliateStatus.ACTIVE, approvedAt: new Date() },
   });
-  return toOutput(updated);
+  const output = toOutput(updated);
+  notifyAffiliateStatusChange(output, "AFFILIATE_APPROVED");
+  return output;
 }
 
 export async function rejectAffiliate(id: string): Promise<AffiliateOutput> {
@@ -482,7 +537,9 @@ export async function rejectAffiliate(id: string): Promise<AffiliateOutput> {
   assertTransition(existing.status, [AffiliateStatus.PENDING], "reject");
 
   const updated = await prisma.affiliate.update({ where: { id }, data: { status: AffiliateStatus.REJECTED } });
-  return toOutput(updated);
+  const output = toOutput(updated);
+  notifyAffiliateStatusChange(output, "AFFILIATE_REJECTED");
+  return output;
 }
 
 // SUSPENDED: not eligible for new referral attribution; historical
@@ -495,7 +552,9 @@ export async function suspendAffiliate(id: string): Promise<AffiliateOutput> {
   assertTransition(existing.status, [AffiliateStatus.ACTIVE], "suspend");
 
   const updated = await prisma.affiliate.update({ where: { id }, data: { status: AffiliateStatus.SUSPENDED } });
-  return toOutput(updated);
+  const output = toOutput(updated);
+  notifyAffiliateStatusChange(output, "AFFILIATE_SUSPENDED");
+  return output;
 }
 
 export async function reactivateAffiliate(id: string): Promise<AffiliateOutput> {

@@ -25,6 +25,24 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// approveAffiliate/rejectAffiliate/suspendAffiliate each fire a
+// fire-and-forget notification (referralAffiliate.service.ts's own
+// notifyAffiliateStatusChange()) that is never awaited by the caller —
+// it keeps running (through prisma.affiliateProgrammeSettings.findFirst
+// for the approved case, then prisma.notification.create/updateMany/
+// findUnique/update) after approveAffiliate()/suspendAffiliate() has
+// already returned. Restoring prisma stubs synchronously right after
+// that await, as this file used to, let that dangling chain fall
+// through to the REAL (production) database mid-flight — confirmed
+// empirically, this leaked real rows into production once already.
+// flushAsync() lets one full microtask queue drain before restoring, so
+// every test that exercises a status-changing path must stub the
+// notification-chain's own prisma calls and await this before
+// restoring them.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const BASE_ROW = {
   id: "aff-1",
   customerId: null,
@@ -289,6 +307,38 @@ test("approve: PENDING -> ACTIVE, sets approvedAt", async () => {
     updateArgs = args.data;
     return { ...BASE_ROW, ...args.data };
   });
+  // AFFILIATE_APPROVED's fire-and-forget notification reads programme
+  // settings, then writes a Notification row — never real production
+  // data here (see flushAsync()'s comment above).
+  const settingsFindFirst = stub(prisma.affiliateProgrammeSettings, "findFirst", async () => ({
+    id: "settings-1",
+    defaultCommissionRate: { toNumber: () => 7 },
+    defaultReferralDiscountRate: { toNumber: () => 5 },
+    attributionWindowDays: 30,
+    commissionValidationDays: 30,
+    minimumPayoutAmount: { toNumber: () => 500 },
+    payoutDayOfMonth: 15,
+    isProgrammeActive: true,
+    updatedByAdminUserId: null,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+  }));
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-1",
+    eventType: "AFFILIATE_APPROVED",
+    templateName: "affiliate-approved",
+    recipientEmail: "jane@example.com",
+    orderNumber: null,
+    affiliateId: "aff-1",
+    productId: null,
+    renderedSubject: "Subject",
+    renderedBody: "Body",
+    attemptCount: 1,
+    maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
 
   const result = await approveAffiliate("aff-1");
   assert.equal(updateArgs.status, "ACTIVE");
@@ -297,6 +347,12 @@ test("approve: PENDING -> ACTIVE, sets approvedAt", async () => {
 
   findUnique.restore();
   update.restore();
+  await flushAsync();
+  settingsFindFirst.restore();
+  notificationCreate.restore();
+  notificationUpdateMany.restore();
+  notificationFindUnique.restore();
+  notificationUpdate.restore();
 });
 
 test("reject: only PENDING can be rejected", async () => {
@@ -324,6 +380,25 @@ test("suspend: an ACTIVE affiliate transitions to SUSPENDED, and the update touc
     updateArgs = args.data;
     return { ...BASE_ROW, ...args.data, status: "SUSPENDED" };
   });
+  // AFFILIATE_SUSPENDED's fire-and-forget notification only ever writes
+  // a Notification row (no settings lookup) — see flushAsync()'s
+  // comment above for why this must be stubbed and flushed.
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-2" }));
+  const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
+    id: "notif-2",
+    eventType: "AFFILIATE_SUSPENDED",
+    templateName: "affiliate-suspended",
+    recipientEmail: "jane@example.com",
+    orderNumber: null,
+    affiliateId: "aff-1",
+    productId: null,
+    renderedSubject: "Subject",
+    renderedBody: "Body",
+    attemptCount: 1,
+    maxAttempts: 3,
+  }));
+  const notificationUpdate = stub(prisma.notification, "update", async () => ({}));
 
   const result = await suspendAffiliate("aff-1");
   assert.deepEqual(Object.keys(updateArgs), ["status"]);
@@ -331,6 +406,11 @@ test("suspend: an ACTIVE affiliate transitions to SUSPENDED, and the update touc
 
   findUnique.restore();
   update.restore();
+  await flushAsync();
+  notificationCreate.restore();
+  notificationUpdateMany.restore();
+  notificationFindUnique.restore();
+  notificationUpdate.restore();
 });
 
 test("reactivate: SUSPENDED -> ACTIVE", async () => {

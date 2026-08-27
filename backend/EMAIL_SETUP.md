@@ -1,12 +1,17 @@
 # Email Setup (Version 3, Milestone 24 — preparation; Version 7,
-# Milestone 117 — Brevo wired in as a real provider, still off by default)
+# Milestone 117 — Brevo wired in as a real provider, still off by default;
+# Version 7, Milestone 174B — delivery now goes through the Notification
+# engine, see NOTIFICATIONS_SETUP.md)
 
 Brevo is now wired in as a real transactional email provider
-(`EMAIL_PROVIDER=brevo`), and all four documented hook points below are
-now genuinely wired up (order creation, PayFast payment resolution,
-enquiry creation). **Real sending still stays off by default** —
+(`EMAIL_PROVIDER=brevo`). **Real sending still stays off by default** —
 `EMAIL_ENABLED=false` — until this is deliberately turned on in Render
-once a real `BREVO_API_KEY` is added there.
+once a real `BREVO_API_KEY` is added there. Since Milestone 174B, no
+business service calls this file's send functions directly — every
+email is enqueued as a `Notification` row first, then delivered through
+this file's `deliverRenderedEmail()`. See **`NOTIFICATIONS_SETUP.md`**
+for the full picture; this file remains the source of truth for the
+Brevo provider mechanics and templates themselves.
 
 ## Environment Variables
 
@@ -147,37 +152,35 @@ calling a `send*Email` function.
 
 ## Where Emails Are Triggered
 
-**Wired up as of Version 7, Milestone 117** — all fire-and-forget
-(`.catch(() => {})`), never awaited into the response, and safe no-ops
-while `EMAIL_ENABLED=false` (the current default everywhere, including
-production):
+**Superseded by the Notification engine as of Version 7, Milestone
+174B.** Every hook point below still fires from the same request
+handlers, at the same moments, but no business service calls
+`email.service.ts` directly any more — each one calls
+`notificationEngine.enqueueAndSendNow(...)` (or, for password reset,
+`sendPasswordResetEmailAndRecord(...)`), which records a `Notification`
+row first and only then attempts delivery through this file's own
+`deliverRenderedEmail()`. See **`backend/NOTIFICATIONS_SETUP.md`** for
+the full architecture (dedup, retries, the recovery/retry processor)
+— this file only still covers the Brevo provider mechanics
+(`EMAIL_ENABLED`/`EMAIL_PROVIDER`/`BREVO_API_KEY`/templates) that the
+engine sits on top of.
 
-- **`backend/src/controllers/order.controller.ts`,
-  `createOrderHandler`**, right after `orderService.createOrder(...)`
-  succeeds: calls `sendOrderCreatedEmail(...)` (to the customer) and
-  `sendAdminNewOrderEmail(...)` (to `ADMIN_NOTIFICATION_EMAIL`).
-- **`backend/src/services/payfast.service.ts`,
-  `processPayfastNotification`** — inside the `"COMPLETE"` case, right
-  after the `Payment`/`Order` are updated to `PAID`/`CONFIRMED`: calls
-  `sendPaymentConfirmedEmail(...)`. Inside the `"FAILED"` and
-  `"CANCELLED"` cases: calls `sendPaymentFailedEmail(...)`. **Only
-  inside the branches representing a *newly* resolved status** — never
-  the early-return idempotency branches (duplicate `COMPLETE` on an
-  already-`PAID` order, or a stale `FAILED`/`CANCELLED` after `PAID`)
-  — so a repeated ITN notification can never cause a duplicate email.
-- **`backend/src/controllers/enquiry.controller.ts`,
-  `createEnquiryHandler`**, right after
-  `enquiryService.createEnquiry(...)` succeeds: calls
-  `sendAdminNewEnquiryEmail(...)` **and** `sendEnquiryReceivedEmail(...)`.
-- **Still not wired** (unchanged from before): `sendPaymentPendingEmail(...)`
-  has no request-handler hook point — nothing in today's codebase runs
-  on a schedule. A future milestone adding a pending-payment follow-up
-  check (cron, manual admin trigger, etc.) would decide where this call
-  goes then, not now.
+The original Milestone 117 hook points (`order.controller.ts`,
+`payfast.service.ts`, `enquiry.controller.ts`) are unchanged in
+substance — still fire-and-forget, still safe no-ops while
+`EMAIL_ENABLED=false`, still only on a genuinely new state transition,
+never a duplicate ITN. `sendPaymentPendingEmail` was removed outright
+(it was never wired to anything before 174B either) rather than
+migrated — see `NOTIFICATIONS_SETUP.md` for why. Several new hook
+points were added in 174B (order status changes, courier delivery
+events, the affiliate programme lifecycle, product reviews) — see
+`NOTIFICATIONS_SETUP.md`'s own event-type table for the complete,
+current list.
 
 Verified entirely with mocked `fetch` (no real Brevo API call, no real
-email sent) — see this milestone's own test suite for coverage of the
-disabled/console/brevo-success/brevo-failure/idempotency cases.
+email sent) — see `notificationEngine.service.test.ts` and this
+repo's other `*.test.ts` files for coverage of the disabled/console/
+brevo-success/brevo-failure/dedup/retry cases.
 
 ## No Secrets in Frontend
 

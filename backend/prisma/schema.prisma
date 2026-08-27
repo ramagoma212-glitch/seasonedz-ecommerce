@@ -1317,3 +1317,137 @@ enum OrderAffiliateCommissionStatus {
   PAID
   REVERSED
 }
+
+// ============================================================================
+// NOTIFICATIONS (Version 7, Milestone 174B)
+// ============================================================================
+
+// Version 7, Milestone 174B: a small, stable, real state machine — same
+// modelling choice as OrderStatus/PaymentStatus/FulfilmentStatus above,
+// unlike eventType/templateName below (see their own comments for why
+// those stay plain strings instead).
+enum NotificationStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+// Version 7, Milestone 174B: only EMAIL is ever actually sent by
+// anything today. IN_APP/WHATSAPP are reserved-for-later values (same
+// pattern as OrderStatusHistorySource.SYSTEM/PAYFAST_ITN before their
+// own milestones wired them up) — adding a Prisma enum value later is
+// an additive, safe migration, so this can grow without redesigning
+// the column type. notificationEngine.service.ts must never accept
+// IN_APP/WHATSAPP as a real send target until a future milestone
+// actually implements them — see that file's own header comment.
+enum NotificationChannel {
+  EMAIL
+  IN_APP
+  WHATSAPP
+}
+
+// Version 7, Milestone 174B: the central outbox for every customer/
+// admin notification this backend sends — see
+// notificationEngine.service.ts for the one service that reads and
+// writes this table. Every existing direct email.service.ts call site
+// (order creation, PayFast ITN, enquiry creation, password reset) was
+// migrated to enqueue through here instead — see that service's own
+// header comment for the full "why."
+//
+// eventType and templateName are deliberately plain String, not Prisma
+// enums, unlike NotificationStatus/NotificationChannel above: this
+// catalogue is expected to keep growing across 174C/174D (review
+// requests, WhatsApp, back-in-stock, ...), and a Prisma enum would
+// require a schema migration for every single new event type — the
+// exact friction EmailTemplateName (email.types.ts, a plain TS union,
+// never a Prisma enum) already avoids for templates today. Validated
+// against a real TypeScript union (NotificationEventType) at the
+// application layer instead — see notificationEngine.service.ts.
+//
+// orderNumber/affiliateId/productId/recipientCustomerId are
+// deliberately plain, unenforced reference fields, not real Prisma
+// relations — this table only ever needs to display "which order/
+// affiliate/product was this about" (an admin-log read), the same
+// "snapshot reference, not a live relation" choice
+// OrderStatusHistory.orderNumberSnapshot already made for the same
+// reason. orderNumber (not an internal id) matches every other call
+// site in this codebase, which only ever has the order's public
+// orderNumber in hand, never its cuid. Adding four real relations here
+// would also mean editing Order/Affiliate/Product/Customer's own
+// relation lists for a table that never needs to join back through
+// them.
+model Notification {
+  id String @id @default(cuid())
+
+  eventType    String
+  channel      NotificationChannel @default(EMAIL)
+  templateName String
+
+  recipientEmail      String?
+  recipientCustomerId String?
+
+  orderNumber String?
+  affiliateId String?
+  productId   String?
+
+  // Deterministic, unique per genuine business event — the sole
+  // duplicate-prevention mechanism (brief section 7): a second attempt
+  // to enqueue the same event hits this constraint and is treated as
+  // "already handled," never a second row. See
+  // notificationEngine.service.ts's enqueue() for the exact conflict
+  // handling.
+  dedupeKey String @unique
+
+  // The exact rendered content, captured once at enqueue time — the
+  // caller (which already has the real Order/Affiliate/etc. in hand at
+  // the moment of the business event) renders it via the existing
+  // emailTemplates.ts functions, exactly as before this milestone. A
+  // retry re-sends this same stored content rather than re-deriving
+  // possibly-different content later, which also means the processor
+  // needs no per-event-type re-fetch logic at all — just "take the
+  // stored subject/body, send it." Both stay null for PASSWORD_RESET
+  // specifically (see notificationEngine.service.ts's own comment) —
+  // the one deliberate exception, so a reset link/token can never end
+  // up persisted here.
+  renderedSubject String?
+  renderedBody    String?
+
+  status NotificationStatus @default(PENDING)
+
+  // When this notification should first be attempted — "now" for every
+  // immediate transactional event today; a future 7-day review-request
+  // job would set this to deliveredAt + 7 days without needing any
+  // schema change (brief section 47). Left untouched by retries — see
+  // nextAttemptAt below for that.
+  scheduledAt DateTime @default(now())
+  // Only ever set after a FAILED attempt with retries remaining — null
+  // until then. Kept separate from scheduledAt so "when was this
+  // originally meant to happen" survives retries unchanged.
+  nextAttemptAt DateTime?
+
+  attemptCount Int @default(0)
+  maxAttempts  Int @default(3)
+  // Never a raw provider response body or a secret — brevo.provider.ts
+  // already only ever throws a safe BrevoSendError message; nothing
+  // here changes that discipline.
+  lastError String?
+
+  sentAt      DateTime?
+  failedAt    DateTime?
+  cancelledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The processor's own due-notification query (PENDING, scheduledAt
+  // <= now) and its retry query (FAILED, nextAttemptAt <= now) each get
+  // their own index rather than one combined index across four columns,
+  // since status is always the equality filter and only one of the two
+  // date columns is ever range-filtered in the same query.
+  @@index([status, scheduledAt])
+  @@index([status, nextAttemptAt])
+  @@index([orderNumber])
+  @@index([affiliateId])
+}
