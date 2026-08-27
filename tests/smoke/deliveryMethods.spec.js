@@ -39,19 +39,31 @@ test.describe("Desktop header More menu", () => {
     await expect(panel).toBeHidden();
   });
 
-  test("More panel contains real internal links to Colouring Books, Creative Supplies, Schools & Churches, About", async ({ page }) => {
+  test("More panel contains real internal links to Colouring Books, Creative Supplies, Schools & Churches, Affiliate Programme, About", async ({ page }) => {
     await page.goto("/");
     await page.locator("#nav-more-trigger").click();
     const panel = page.locator("#nav-more-panel");
 
+    // Version 7, Milestone 175: Affiliate Programme added between
+    // Schools & Churches and About — see components/header.js's own
+    // NAV_LINKS.
     const links = panel.locator("a");
-    await expect(links).toHaveCount(4);
+    await expect(links).toHaveCount(5);
     await expect(panel.locator('a:has-text("Colouring Books")')).toHaveAttribute("href", "/shop");
     // Version 7, Milestone 171I: real /category/:slug page now, not a
     // "/shop?category=" query filter — see categoryPage.js.
     await expect(panel.locator('a:has-text("Creative Supplies")')).toHaveAttribute("href", "/category/markers-and-crayons");
     await expect(panel.locator('a:has-text("Schools & Churches")')).toHaveAttribute("href", "/schools");
+    await expect(panel.locator('a:has-text("Affiliate Programme")')).toHaveAttribute("href", "/account");
     await expect(panel.locator('a:has-text("About")')).toHaveAttribute("href", "/about");
+
+    // Position: Affiliate Programme sits between Schools & Churches and About.
+    const labels = await links.allTextContents();
+    const schoolsIndex = labels.findIndex((label) => label.includes("Schools & Churches"));
+    const affiliateIndex = labels.findIndex((label) => label.includes("Affiliate Programme"));
+    const aboutIndex = labels.findIndex((label) => label.includes("About"));
+    expect(affiliateIndex).toBe(schoolsIndex + 1);
+    expect(aboutIndex).toBe(affiliateIndex + 1);
   });
 
   test("clicking outside the open panel closes it", async ({ page }) => {
@@ -95,10 +107,13 @@ test.describe("Desktop header More menu", () => {
   });
 });
 
-test.describe("Mobile header keeps all 8 links directly visible", () => {
+test.describe("Mobile header keeps all 9 links directly visible", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  test("no More trigger on mobile; all 8 destinations are direct links in the open menu", async ({ page }) => {
+  // Version 7, Milestone 175: Affiliate Programme is now a 9th direct
+  // mobile link (between Schools & Churches and About) — see
+  // components/header.js's own NAV_LINKS.
+  test("no More trigger on mobile; all 9 destinations are direct links in the open menu", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#nav-more-trigger")).toBeHidden();
 
@@ -106,9 +121,24 @@ test.describe("Mobile header keeps all 8 links directly visible", () => {
     const panel = page.locator("#site-header-collapsible");
     await expect(panel).toBeVisible();
 
-    for (const label of ["Home", "Shop", "Colouring Books", "Creative Supplies", "Digital Downloads", "Schools & Churches", "About", "Contact"]) {
+    for (const label of ["Home", "Shop", "Colouring Books", "Creative Supplies", "Digital Downloads", "Schools & Churches", "Affiliate Programme", "About", "Contact"]) {
       await expect(panel.locator(`a.nav-link:has-text("${label}")`)).toBeVisible();
     }
+  });
+
+  test("Affiliate Programme mobile link points at the existing account entry point, positioned between Schools & Churches and About", async ({ page }) => {
+    await page.goto("/");
+    await page.locator(".site-header__mobile-toggle").click();
+    const panel = page.locator("#site-header-collapsible");
+
+    await expect(panel.locator('a.nav-link:has-text("Affiliate Programme")')).toHaveAttribute("href", "/account");
+
+    const labels = await panel.locator(".site-header__nav-list > li > a").allTextContents();
+    const schoolsIndex = labels.findIndex((label) => label.includes("Schools & Churches"));
+    const affiliateIndex = labels.findIndex((label) => label.includes("Affiliate Programme"));
+    const aboutIndex = labels.findIndex((label) => label.includes("About"));
+    expect(affiliateIndex).toBe(schoolsIndex + 1);
+    expect(aboutIndex).toBe(affiliateIndex + 1);
   });
 });
 

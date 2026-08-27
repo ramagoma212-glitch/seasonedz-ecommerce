@@ -48,12 +48,19 @@ const NAV_LINKS = [
   { href: "/category/markers-and-crayons", label: "Creative Supplies", inMore: true },
   { href: "/shop", label: "Digital Downloads", inMore: false },
   { href: "/schools", label: "Schools & Churches", inMore: true },
+  // Version 7, Milestone 175: links to the existing customer-account
+  // entry point (accountPage.js's own Affiliate Programme section) —
+  // never a new page. /account itself already handles both cases: a
+  // logged-out visitor sees the existing login/register toggle, a
+  // logged-in customer sees their real application/portal status
+  // exactly as before, unchanged.
+  { href: "/account", label: "Affiliate Programme", inMore: true },
   { href: "/about", label: "About", inMore: true },
   { href: "/contact", label: "Contact", inMore: false },
 ];
 
 // Version 7, Milestone 168C: the desktop-only "More" dropdown reuses
-// the exact same 4 destinations already marked inMore above (derived,
+// the exact same destinations already marked inMore above (derived,
 // not a second hand-maintained list) — real internal <a href> links,
 // never onclick-only navigation, so they work with Ctrl/Cmd-click,
 // "Open in new tab", and screen readers exactly like every other nav
