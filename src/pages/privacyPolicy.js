@@ -157,6 +157,7 @@ export function renderPrivacyPolicy() {
           <li>View relevant account information.</li>
           <li>Manage orders.</li>
           <li>Maintain account security.</li>
+          <li>Show a record of notifications sent to your account (such as order, delivery and account updates) inside a Notifications area of your account, and let you mark these as read.</li>
         </ul>
         <p>You are responsible for keeping your password and login information secure.</p>
 
@@ -169,15 +170,24 @@ export function renderPrivacyPolicy() {
           <li>Login or session information where applicable.</li>
         </ul>
         <p>Further information is available in our <a href="/cookies-policy">Cookie Policy</a>.</p>
+        <p>If you create an account and are logged in, your wishlist may also be saved on our servers against your account, so it can still be used to let you know if a wishlisted item comes back into stock. Signing in on a device with items already saved in your browser's wishlist merges those items into your account's saved wishlist.</p>
+        <p>If you begin entering your details at checkout (such as your email address and the items in your cart) but do not complete your order, we may save that information for a limited time so we can send you a single reminder email and let you resume your order. This is never a fake order and never affects your payment details in any way. You can opt out of this at any time — see Section 12 below.</p>
 
-        <h2>12. Marketing Communications</h2>
+        <h2>12. Marketing and Optional Communications</h2>
         <p>Seasonedz Group may send marketing communications only where permitted by applicable law.</p>
         <p>Where consent is required for electronic direct marketing, we will request the necessary consent.</p>
         <p>Customers may also receive marketing relating to our own similar products or services where permitted by law and where the required conditions have been met.</p>
         <p>Every electronic marketing communication should provide a reasonable method to stop receiving future marketing.</p>
         <p>You may unsubscribe or object to marketing at any time.</p>
         <p>Contact: <a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a></p>
-        <p>Transactional messages concerning an order, payment, delivery, security issue or customer enquiry are not the same as optional marketing communications.</p>
+        <p>Transactional messages concerning an order, payment, delivery, security issue or customer enquiry are not the same as optional marketing communications, and cannot be opted out of while you continue using our services.</p>
+        <p>If you have a customer account, the following optional communications can each be turned off individually from a Notification Preferences area of your account:</p>
+        <ul>
+          <li>A request to review a product you purchased, sent once after a reasonable delay following delivery (or, for digital products, after purchase), with at most one follow-up reminder.</li>
+          <li>An alert that a product you asked to be notified about, or that is saved on your wishlist, is back in stock.</li>
+          <li>A reminder that you have items waiting in an unfinished checkout, sent at most once per checkout attempt.</li>
+        </ul>
+        <p>We never offer or imply a reward for leaving a positive review, and never ask specifically for a five-star rating.</p>
 
         <h2>13. Newsletter</h2>
         <p>If you subscribe to our newsletter, we may use your email address and relevant preferences to send:</p>

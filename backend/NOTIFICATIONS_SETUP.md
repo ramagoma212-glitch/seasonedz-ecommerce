@@ -128,6 +128,18 @@ genuine-retry-needed case.
 | `ADMIN_NEW_REVIEW` | `productReview.service.ts`, a customer submits a review | admin |
 | `CUSTOMER_ENQUIRY_ACKNOWLEDGEMENT` / `ADMIN_NEW_ENQUIRY` | `enquiry.controller.ts`, enquiry submitted | customer / admin |
 | `PASSWORD_RESET` | `customerAuth.controller.ts`, forgot-password request — recorded only, see above | customer |
+| `PRODUCT_REVIEW_REQUEST` / `PRODUCT_REVIEW_REMINDER` | `productReviewRequest.service.ts` — scheduled `deliveredAt + 7 days` (physical/Collection) or `paidAt + 3 days` (100%-digital); content lazy-rendered at send time, one reminder at `+7 more days` | customer |
+| `STOCK_ALERT` | `stockAlert.service.ts`, a genuine 0 → positive stock transition, one per PENDING subscription | customer |
+| `WISHLIST_STOCK_ALERT` | `wishlist.service.ts`, the same stock transition, one per wishlisted customer (opt-out respected independently of `STOCK_ALERT`) | customer |
+| `ABANDONED_CHECKOUT_REMINDER` | `checkoutIntent.service.ts` — scheduled 2 hours after the first checkout-intent capture for a given checkout, cancelled if the order completes first | customer |
+
+Version 7, Milestone 174C adds the six event types above — all
+customer-facing, all reusing this exact same engine, and all fully
+visible through the same `GET /api/admin/notifications` endpoint
+already documented above (filter by `eventType`/`status` — this is
+also how an admin sees scheduled/sent review requests, stock alerts
+and abandoned-checkout reminders per that milestone's own brief
+section 37; no separate admin summary view was needed).
 
 ### Known, deliberate gaps (not built in 174B)
 
@@ -143,29 +155,47 @@ genuine-retry-needed case.
   courier event to key off, and no other reliable trigger point exists
   today.
 - **`ADMIN_LOW_STOCK`/`ADMIN_OUT_OF_STOCK`/`PAYOUT_ELIGIBLE`**: not
-  built — none of these have a reliable trigger point in the current
-  codebase (no stock-change hook, no scheduled eligibility check).
-  Adding a scheduler for these is future work, not a gap in the engine
-  itself.
+  built. `PAYOUT_ELIGIBLE` still has no reliable trigger point (no
+  scheduled eligibility check exists anywhere in this codebase).
+  `ADMIN_LOW_STOCK`/`ADMIN_OUT_OF_STOCK` are different as of Milestone
+  174C — a genuine stock-change hook now exists (`adminProduct.service.ts`'s
+  `updateProduct()`, added for back-in-stock alerts) and adding these
+  two would be a small, low-risk increment on top of it. Deliberately
+  still deferred rather than added opportunistically: 174C's own brief
+  explicitly scoped these as conditional ("if straightforward...
+  otherwise defer and report"), and the milestone's actual scope
+  (customer-facing review requests, notifications, wishlist, abandoned
+  checkout) was already substantial. Genuinely easy future work, not a
+  gap in the engine.
 - **Registration/verification/login-alert emails**: out of scope for
   174B by design — not part of this milestone's brief.
 
-## What's deliberately not built yet (174C/174D)
+## What's deliberately not built yet (174D)
 
 The engine, schema, and channel enum (`EMAIL`/`IN_APP`/`WHATSAPP`) are
-all designed to support these without a redesign, but none of them are
-built in 174B:
+all designed to support this without a redesign, but it is not built
+yet:
 
-- A customer-facing notification centre (reading `IN_APP` rows).
-- Scheduled 7-day post-delivery review requests (the `scheduledAt`/
-  `nextAttemptAt` split on every row exists specifically so a
-  future-dated enqueue needs no schema change).
 - WhatsApp delivery (`NotificationChannel.WHATSAPP` exists as a value
   today; nothing sends through it).
+
+Milestone 174C already built the customer-facing Notification Centre
+(`/account`, reusing this same table — see `Notification.readAt` in
+schema.prisma) and scheduled review requests — see that milestone's
+own final report for the full detail. One further 174C scope decision
+worth noting here: no notification "bell"/unread-count icon was added
+to the site header — the notification centre lives inside `/account`
+for now (the brief's own explicit escape hatch, section 20), since a
+header-level bell would have meant touching the shared header
+component used on every single page.
 
 ## Admin visibility
 
 `GET /api/admin/notifications` (paginated, filterable by `status` and
 `eventType`) and `GET /api/admin/notifications/:id` (full detail,
-including the exact `renderedSubject`/`renderedBody` sent) — backend
-only as of 174B; a dedicated admin UI page is 174C scope.
+including the exact `renderedSubject`/`renderedBody` sent) — this
+already covers every event type this file documents, 174C's six new
+ones included, satisfying that milestone's own brief section 37
+("admin may see useful non-invasive summaries") without any new
+backend work. Still backend-only — no dedicated admin UI page exists
+for this yet, in 174B or 174C; genuinely deferred, not forgotten.

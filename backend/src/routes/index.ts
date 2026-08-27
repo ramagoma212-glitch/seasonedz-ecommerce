@@ -20,6 +20,7 @@ import adminAffiliateRoutes from "./adminAffiliate.routes.js";
 import adminReferralsRoutes from "./adminReferrals.routes.js";
 import referralsRoutes from "./referrals.routes.js";
 import courierWebhookRoutes from "./courierWebhook.routes.js";
+import checkoutIntentRoutes from "./checkoutIntent.routes.js";
 
 const router = Router();
 
@@ -73,5 +74,8 @@ router.use("/referrals", referralsRoutes);
 // same category as PayFast's own /payments/payfast/notify. See
 // courierWebhook.controller.ts for the full security model.
 router.use("/webhooks", courierWebhookRoutes);
+// Version 7, Milestone 174C: abandoned checkout recovery — public,
+// unauthenticated. See checkoutIntent.routes.ts's own header comment.
+router.use("/checkout-intent", checkoutIntentRoutes);
 
 export default router;

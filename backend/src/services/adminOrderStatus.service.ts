@@ -16,6 +16,7 @@ import { reverseCommissionsForOrder } from "./referralCommission.service.js";
 import { renderOrderCancelledEmail, renderOrderProcessingEmail } from "./email/emailTemplates.js";
 import type { OrderEmailData } from "./email/email.types.js";
 import * as notificationEngine from "./notificationEngine.service.js";
+import { scheduleProductReviewRequestForDeliveredOrder } from "./productReviewRequest.service.js";
 
 // A business-rule failure (order not found, invalid status, disallowed
 // transition, invalid note) — distinct from an unexpected error, so
@@ -173,7 +174,24 @@ function toStatusChangeEmailData(order: {
 // status could reach PROCESSING again is not possible, but this stays
 // correct regardless of how many times a given status is genuinely
 // re-entered over an order's lifetime).
-async function notifyOrderStatusChange(orderNumber: string, newStatus: OrderStatus, historyRowId: string): Promise<void> {
+async function notifyOrderStatusChange(orderNumber: string, newStatus: OrderStatus, historyRowId: string, historyCreatedAt: Date): Promise<void> {
+  if (newStatus === OrderStatus.DELIVERED) {
+    // Version 7, Milestone 174C, brief section 6: this is the ONLY
+    // completion signal Customer Collection orders have today (no
+    // dedicated COLLECTED status exists — see
+    // scheduleProductReviewRequestForDeliveredOrder()'s own comment for
+    // the full "documented limitation"), and it's also reachable as a
+    // manual override for a courier order — either way, no separate
+    // "your order was delivered" email is sent from here (courier
+    // deliveries already get one from courierStatusSync.service.ts;
+    // adding a second, admin-triggered one would be new, unrequested
+    // scope) — only the review-request scheduling.
+    void scheduleProductReviewRequestForDeliveredOrder(orderNumber, historyCreatedAt).catch((error) => {
+      console.warn(`[notifications] failed to schedule review request for order=${orderNumber}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    });
+    return;
+  }
+
   if (newStatus !== OrderStatus.PROCESSING && newStatus !== OrderStatus.CANCELLED) return;
 
   const order = await prisma.order.findUnique({ where: { orderNumber } });
@@ -278,7 +296,7 @@ export async function updateOrderStatus(
   // committed — see notifyOrderStatusChange()'s own comment. Never
   // awaited-into-failure: a notification problem must not turn a
   // genuinely successful status change into an error response.
-  void notifyOrderStatusChange(orderNumber, result.result.status, result.historyRowId).catch((error) => {
+  void notifyOrderStatusChange(orderNumber, result.result.status, result.historyRowId, result.result.latestStatusHistory.createdAt).catch((error) => {
     console.warn(`[notifications] failed to notify order status change for ${orderNumber}: ${error instanceof Error ? error.message : "Unknown error"}`);
   });
 

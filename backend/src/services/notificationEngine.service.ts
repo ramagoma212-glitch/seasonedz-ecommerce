@@ -77,7 +77,43 @@ export type NotificationEventType =
   // Never enqueued via enqueueAndSendNow() — recorded only via
   // recordPasswordResetAttempt(). Included here so the type is
   // documented in one place and admin log filtering can still show it.
-  | "PASSWORD_RESET";
+  | "PASSWORD_RESET"
+  // Version 7, Milestone 174C: always scheduled via scheduleNotification()
+  // below, never sent immediately — see productReviewRequest.service.ts.
+  // Content is deliberately NOT rendered at schedule time (see
+  // attemptSend()'s own lazy-render branch): which products are still
+  // unreviewed can only be known at the moment this is actually due,
+  // not seven days earlier when it was scheduled.
+  | "PRODUCT_REVIEW_REQUEST"
+  | "PRODUCT_REVIEW_REMINDER"
+  | "STOCK_ALERT"
+  | "WISHLIST_STOCK_ALERT"
+  | "ABANDONED_CHECKOUT_REMINDER";
+
+// Version 7, Milestone 174C: a lazy-render outcome — either genuine
+// content to send, or "cancel" when the renderer determines, at the
+// moment of actually sending, that there is nothing left worth saying
+// (e.g. every product on a review-request row has since been
+// reviewed). Dynamically imported inside lazyRender() below (not a
+// top-level import) purely to avoid a circular module dependency —
+// productReviewRequest.service.ts itself imports scheduleNotification/
+// cancelPendingNotificationByDedupeKey from this same file.
+export type LazyRenderOutcome = { kind: "send"; rendered: RenderedEmail } | { kind: "cancel"; reason: string };
+type LazyRenderableRow = { id: string; dedupeKey: string; orderNumber: string | null; recipientCustomerId: string | null };
+
+const REVIEW_LAZY_RENDER_EVENT_TYPES = new Set<string>(["PRODUCT_REVIEW_REQUEST", "PRODUCT_REVIEW_REMINDER"]);
+
+async function lazyRender(row: LazyRenderableRow & { eventType: string }): Promise<LazyRenderOutcome | undefined> {
+  if (REVIEW_LAZY_RENDER_EVENT_TYPES.has(row.eventType)) {
+    const { renderProductReviewRequestContent } = await import("./productReviewRequest.service.js");
+    return renderProductReviewRequestContent(row);
+  }
+  if (row.eventType === "ABANDONED_CHECKOUT_REMINDER") {
+    const { renderAbandonedCheckoutReminderContent } = await import("./checkoutIntent.service.js");
+    return renderAbandonedCheckoutReminderContent(row);
+  }
+  return undefined;
+}
 
 // Bounded retry (brief section 41) — attempt 1 is the immediate send;
 // attempts 2 and 3 are the processor's retries, spaced out rather than
@@ -149,6 +185,79 @@ export async function enqueueAndSendNow(input: EnqueueNotificationInput): Promis
   }
 }
 
+// Version 7, Milestone 174C: for a notification that must NOT be sent
+// now — a review request, a stock alert re-check, an abandoned-
+// checkout reminder — all genuinely future-dated. Unlike
+// enqueueAndSendNow(), this never calls attemptSend(); the row simply
+// sits PENDING until the processor's own due-notification query
+// (scheduledAt <= now) picks it up. `rendered` is deliberately
+// optional here (unlike EnqueueNotificationInput) — see
+// attemptSend()'s own lazy-render branch below for why a review
+// request's content can only be safely rendered once, at the moment
+// it's actually about to send.
+export interface ScheduleNotificationInput {
+  eventType: Exclude<NotificationEventType, "PASSWORD_RESET">;
+  templateName: EmailTemplateName;
+  recipientEmail: string | undefined;
+  recipientCustomerId?: string;
+  orderNumber?: string;
+  affiliateId?: string;
+  productId?: string;
+  dedupeKey: string;
+  scheduledAt: Date;
+  rendered?: RenderedEmail;
+}
+
+// Never throws — same discipline as enqueueAndSendNow(). Returns
+// silently (including on a duplicate dedupeKey) since callers never
+// need the created row's id; they only need "this will be attempted
+// later."
+export async function scheduleNotification(input: ScheduleNotificationInput): Promise<void> {
+  try {
+    await prisma.notification.create({
+      data: {
+        eventType: input.eventType,
+        templateName: input.templateName,
+        recipientEmail: input.recipientEmail,
+        recipientCustomerId: input.recipientCustomerId,
+        orderNumber: input.orderNumber,
+        affiliateId: input.affiliateId,
+        productId: input.productId,
+        dedupeKey: input.dedupeKey,
+        scheduledAt: input.scheduledAt,
+        renderedSubject: input.rendered?.subject,
+        renderedBody: input.rendered?.body,
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      console.log(`[notifications] duplicate suppressed for dedupeKey="${input.dedupeKey}"`);
+      return;
+    }
+    console.warn(`[notifications] failed to schedule eventType="${input.eventType}" dedupeKey="${input.dedupeKey}": ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
+// Version 7, Milestone 174C: suppresses a still-PENDING scheduled
+// notification that has become moot before it was ever due — e.g. a
+// review-request row for an order that gets fully reviewed, or a
+// wishlist alert for a product removed from the wishlist again before
+// restock. Deliberately narrow: only ever touches a row that is still
+// PENDING (never one already PROCESSING/SENT/FAILED — those have
+// either already gone out or are being handled by the normal retry
+// path), and CANCELLED is a genuinely distinct, expected outcome, not
+// a failure.
+export async function cancelPendingNotificationByDedupeKey(dedupeKey: string): Promise<void> {
+  try {
+    await prisma.notification.updateMany({
+      where: { dedupeKey, status: NotificationStatus.PENDING },
+      data: { status: NotificationStatus.CANCELLED, cancelledAt: new Date() },
+    });
+  } catch (error) {
+    console.warn(`[notifications] failed to cancel dedupeKey="${dedupeKey}": ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
 // Shared by both the immediate-send path above and the processor
 // (notificationProcessor.service.ts). Atomically claims the row
 // (PENDING/FAILED -> PROCESSING) before doing anything else, so two
@@ -184,15 +293,44 @@ export async function attemptSend(notificationId: string): Promise<void> {
     return;
   }
 
-  if (!row.renderedSubject || !row.renderedBody) {
-    // Should never happen outside PASSWORD_RESET, which never reaches
-    // this function (see recordPasswordResetAttempt()) — defensive
-    // only.
-    await prisma.notification.update({
-      where: { id: row.id },
-      data: { status: NotificationStatus.FAILED, failedAt: new Date(), lastError: "No rendered content stored for this notification.", attemptCount: row.maxAttempts },
-    });
-    return;
+  let renderedSubject = row.renderedSubject;
+  let renderedBody = row.renderedBody;
+
+  if (!renderedSubject || !renderedBody) {
+    const outcome = await lazyRender(row);
+    if (outcome) {
+      // Version 7, Milestone 174C: content for a handful of event types
+      // (review requests, chiefly) can only be safely produced at the
+      // moment of actually sending — see ScheduleNotificationInput's
+      // own header comment for why. The renderer re-derives everything
+      // fresh (e.g. which products are still genuinely unreviewed) and
+      // either returns something to send, or "cancel" if nothing is
+      // left worth saying.
+      if (outcome.kind === "cancel") {
+        await prisma.notification.update({
+          where: { id: row.id },
+          data: { status: NotificationStatus.CANCELLED, cancelledAt: new Date(), lastError: outcome.reason },
+        });
+        return;
+      }
+      renderedSubject = outcome.rendered.subject;
+      renderedBody = outcome.rendered.body;
+      // Persisted immediately (before the send attempt below) so the
+      // row's own audit trail always reflects exactly what was about
+      // to be sent, even if delivery itself then fails and retries —
+      // a retry must never re-run the lazy renderer and risk producing
+      // different content the second time around.
+      await prisma.notification.update({ where: { id: row.id }, data: { renderedSubject, renderedBody } });
+    } else {
+      // Should never happen outside PASSWORD_RESET, which never
+      // reaches this function (see recordPasswordResetAttempt()) —
+      // defensive only.
+      await prisma.notification.update({
+        where: { id: row.id },
+        data: { status: NotificationStatus.FAILED, failedAt: new Date(), lastError: "No rendered content stored for this notification.", attemptCount: row.maxAttempts },
+      });
+      return;
+    }
   }
 
   try {
@@ -201,7 +339,7 @@ export async function attemptSend(notificationId: string): Promise<void> {
       recipientRole,
       recipientEmail: row.recipientEmail,
       reference: row.orderNumber ?? row.affiliateId ?? row.productId ?? row.id,
-      rendered: { subject: row.renderedSubject, body: row.renderedBody },
+      rendered: { subject: renderedSubject, body: renderedBody },
     });
     await prisma.notification.update({
       where: { id: row.id },

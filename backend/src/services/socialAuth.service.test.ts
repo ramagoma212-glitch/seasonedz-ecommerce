@@ -235,6 +235,17 @@ test("Apple not repeating the name on a later login never overwrites the custome
 
 test("an authenticated customer can securely link a new provider identity", async () => {
   stub(prisma.authAccount, "findUnique", async () => null);
+  // Array-style transaction (prisma.$transaction([...])): the array
+  // elements are built by calling prisma.authAccount.create()/
+  // prisma.customer.update() BEFORE $transaction() itself ever runs —
+  // both must be stubbed too, or the real (unstubbed) calls reach the
+  // actual database. This test previously only stubbed $transaction
+  // itself (which just echoes back whatever array it's given, never
+  // inspecting how it was built) and silently made two real writes to
+  // production on every run — caught by Milestone 174C's new
+  // testDbGuard.ts.
+  stub(prisma.authAccount, "create", async () => ({ id: "auth-1" }));
+  stub(prisma.customer, "update", async () => ({ id: "customer-1" }));
   const transactionCall = stub(prisma, "$transaction", async (operations: unknown[]) => operations);
 
   await linkProviderToCustomer("customer-1", identity({ provider: "FACEBOOK", providerUserId: "fb-sub-1" }));

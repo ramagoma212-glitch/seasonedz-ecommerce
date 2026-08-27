@@ -12,6 +12,8 @@
 import { Prisma, ProductStatus, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { sanitizeDescriptionHtml, countVisibleCharacters } from "../utils/descriptionSanitizer.js";
+import { notifyStockAlertSubscribersForProduct } from "./stockAlert.service.js";
+import { notifyWishlistStockAlertsForProduct } from "./wishlist.service.js";
 
 export class AdminProductError extends Error {
   statusCode: number;
@@ -616,7 +618,7 @@ const ALLOWED_UPDATE_FIELDS = [
 ] as const;
 
 export async function updateProduct(id: string, rawInput: unknown): Promise<AdminProductDetail> {
-  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true, productType: true, status: true } });
+  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true, productType: true, status: true, stockQuantity: true } });
   if (!existing) {
     throw new AdminProductError(`Product not found: ${id}`, 404);
   }
@@ -686,6 +688,22 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
     data,
     include: adminProductDetailInclude,
   });
+
+  // Version 7, Milestone 174C, brief section 24: fires strictly after
+  // the write above has committed, only on a genuine 0 -> positive
+  // transition (never merely "stock is currently positive," which
+  // would re-fire on every unrelated edit to an already-in-stock
+  // product). Fire-and-forget — a stock-alert failure must never
+  // affect the product update this function is already committed to
+  // returning successfully.
+  if (existing.stockQuantity === 0 && updated.stockQuantity > 0) {
+    void notifyStockAlertSubscribersForProduct(id).catch((error) => {
+      console.warn(`[notifications] failed to notify stock-alert subscribers for product=${id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    });
+    void notifyWishlistStockAlertsForProduct(id).catch((error) => {
+      console.warn(`[notifications] failed to notify wishlist stock alerts for product=${id}: ${error instanceof Error ? error.message : "Unknown error"}`);
+    });
+  }
 
   return toAdminProductDetail(updated);
 }

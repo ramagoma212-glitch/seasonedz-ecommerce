@@ -33,6 +33,7 @@ import { renderAdminDeliveryExceptionEmail, renderCourierCollectedEmail, renderD
 import type { OrderEmailData } from "./email/email.types.js";
 import { env } from "../config/env.js";
 import * as notificationEngine from "./notificationEngine.service.js";
+import { scheduleProductReviewRequestForDeliveredOrder } from "./productReviewRequest.service.js";
 
 // The seven stages this backend recognises a courier event as meaning.
 // Deliberately coarser than ShipLogic's own vocabulary (see brief
@@ -309,6 +310,20 @@ async function notifyCourierStatusChange(outcome: CourierStatusEventOutcome, raw
       orderNumber: outcome.orderNumber,
       dedupeKey: `DELIVERED:${outcome.orderNumber}`,
       rendered: renderDeliveredEmail(emailData),
+    });
+
+    // Version 7, Milestone 174C, brief section 5: the authoritative
+    // signal is this DELIVERED OrderStatusHistory row's own createdAt
+    // — never Order.updatedAt — re-read fresh rather than assumed to
+    // be "now", since this async notify step can genuinely run a
+    // little after the transaction that created it actually committed.
+    const deliveredHistoryRow = await prisma.orderStatusHistory.findFirst({
+      where: { orderId: order.id, newStatus: OrderStatus.DELIVERED },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+    void scheduleProductReviewRequestForDeliveredOrder(outcome.orderNumber, deliveredHistoryRow?.createdAt ?? new Date()).catch((error) => {
+      console.warn(`[notifications] failed to schedule review request for order=${outcome.orderNumber}: ${error instanceof Error ? error.message : "Unknown error"}`);
     });
   } else if (outcome.stage === "RETURNED") {
     await notificationEngine.enqueueAndSendNow({

@@ -27,19 +27,41 @@ function orderRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// Version 7, Milestone 174C: confirmManualPayment() now fires
+// scheduleProductReviewRequestForDigitalOrder() fire-and-forget after
+// its own transaction commits (never inside it) — a dangling async
+// chain that keeps running (through prisma.order.findUnique again,
+// and — for a real digital order with a customerId — prisma.
+// notificationPreference.findUnique/prisma.notification.create too)
+// after confirmManualPayment() itself has already returned. Restoring
+// stubs synchronously right after would risk exactly the same leak
+// this project's own testDbGuard.ts now exists to catch — see that
+// file's own TESTING_SAFETY.md for the full incident this pattern
+// guards against. flushAsync() lets one full microtask queue drain
+// before restoring.
+function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 function wireStubs(order: ReturnType<typeof orderRow>, updateManyCount = 1) {
   const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const findUnique = stub(prisma.order, "findUnique", async () => order);
   const updateMany = stub(prisma.payment, "updateMany", async () => ({ count: updateManyCount }));
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
+  const preferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
+  const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
   return {
     updateMany,
     orderUpdate,
-    restore: () => {
+    notificationCreate,
+    restore: async () => {
+      await flushAsync();
       transactionStub.restore();
       findUnique.restore();
       updateMany.restore();
       orderUpdate.restore();
+      preferenceFindUnique.restore();
+      notificationCreate.restore();
     },
   };
 }
@@ -58,7 +80,7 @@ test("Bank Transfer can be confirmed by admin: sets PAID, paidAt, and syncs Orde
   // Order.status itself is never touched by this action.
   assert.ok(!("status" in stubs.orderUpdate.fn.mock.calls[0]!.arguments[0].data));
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("PayFast orders cannot use the manual confirmation path", async () => {
@@ -70,7 +92,7 @@ test("PayFast orders cannot use the manual confirmation path", async () => {
   );
   assert.equal(stubs.updateMany.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("Cash on Delivery can be confirmed once the order is Delivered", async () => {
@@ -79,7 +101,7 @@ test("Cash on Delivery can be confirmed once the order is Delivered", async () =
   const result = await confirmManualPayment("SZ-TEST-1", ADMIN);
   assert.equal(result.paymentStatus, "PAID");
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("Cash on Delivery is rejected before the order is Delivered — cash cannot have been received yet", async () => {
@@ -91,7 +113,7 @@ test("Cash on Delivery is rejected before the order is Delivered — cash cannot
   );
   assert.equal(stubs.updateMany.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("an already-PAID order is rejected", async () => {
@@ -103,7 +125,7 @@ test("an already-PAID order is rejected", async () => {
   );
   assert.equal(stubs.updateMany.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("a cancelled order is rejected", async () => {
@@ -115,7 +137,7 @@ test("a cancelled order is rejected", async () => {
   );
   assert.equal(stubs.updateMany.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("a refunded order is rejected", async () => {
@@ -126,7 +148,7 @@ test("a refunded order is rejected", async () => {
     (error: unknown) => error instanceof ManualPaymentConfirmationError && /cancelled or refunded/i.test(error.message)
   );
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("an order not found is rejected with 404", async () => {
@@ -153,7 +175,7 @@ test("double submission is safe: a concurrent confirmation makes updateMany affe
   // itself didn't actually happen.
   assert.equal(stubs.orderUpdate.fn.mock.callCount(), 0);
 
-  stubs.restore();
+  await stubs.restore();
 });
 
 test("the confirmed amount is always the existing authoritative Payment.amount — there is no field for an admin-typed replacement", async () => {
@@ -162,5 +184,19 @@ test("the confirmed amount is always the existing authoritative Payment.amount �
   const result = await confirmManualPayment("SZ-TEST-1", ADMIN);
   assert.equal(result.amount, 1234.56);
 
-  stubs.restore();
+  await stubs.restore();
+});
+
+test("confirming a 100%-digital Bank Transfer order for a logged-in customer also schedules a product review request", async () => {
+  const stubs = wireStubs(orderRow({ customerId: "cust-1", customerEmail: "thandiwe@example.com", items: [{ productType: "DIGITAL" }] }));
+
+  await confirmManualPayment("SZ-TEST-1", ADMIN);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(stubs.notificationCreate.fn.mock.callCount(), 1);
+  const data = stubs.notificationCreate.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(data.eventType, "PRODUCT_REVIEW_REQUEST");
+  assert.equal(data.dedupeKey, "PRODUCT_REVIEW_REQUEST:SZ-TEST-1");
+
+  await stubs.restore();
 });

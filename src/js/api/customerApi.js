@@ -97,3 +97,77 @@ export function getMyAffiliatePortal() {
 export function applyForAffiliateProgramme() {
   return customerRequest("/customers/affiliate/apply", { method: "POST" });
 }
+
+// Version 7, Milestone 174C: the Customer Notification Centre. All
+// four require the caller to already be logged in — the backend
+// always scopes every read/write to req.customerUser.id, never a
+// notification id alone (see customerNotification.service.ts's own
+// header comment for the IDOR protection this relies on).
+export function getMyNotifications(page = 1, limit = 20) {
+  return customerRequest(`/customers/notifications?page=${page}&limit=${limit}`, { method: "GET" });
+}
+
+export function getMyNotification(id) {
+  return customerRequest(`/customers/notifications/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function markNotificationRead(id) {
+  return customerRequest(`/customers/notifications/${encodeURIComponent(id)}/read`, { method: "PATCH" });
+}
+
+export function markAllNotificationsRead() {
+  return customerRequest("/customers/notifications/read-all", { method: "PATCH" });
+}
+
+// Version 7, Milestone 174C: engagement preferences.
+export function getMyNotificationPreferences() {
+  return customerRequest("/customers/notification-preferences", { method: "GET" });
+}
+
+export function updateMyNotificationPreferences(preferences) {
+  return customerRequest("/customers/notification-preferences", {
+    method: "PATCH",
+    body: JSON.stringify(preferences),
+  });
+}
+
+// Version 7, Milestone 174C: back-in-stock — logged-in only, see
+// stockAlert.service.ts's own header comment for why. `productSlug`
+// (not the internal database id) — same convention as product.id
+// throughout this whole frontend (src/js/api/mappers.js).
+export function subscribeToStockAlert(productSlug) {
+  return customerRequest("/customers/stock-alerts", { method: "POST", body: JSON.stringify({ productSlug }) });
+}
+
+// Version 7, Milestone 174C: server-backed wishlist — the guest,
+// Local-Storage-only wishlist (js/wishlist.js) is untouched; these
+// four calls are only ever made once a customer is logged in.
+export function getMyWishlist() {
+  return customerRequest("/customers/wishlist", { method: "GET" });
+}
+
+export function addToServerWishlist(productSlug) {
+  return customerRequest("/customers/wishlist", { method: "POST", body: JSON.stringify({ productSlug }) });
+}
+
+export function removeFromServerWishlist(productSlug) {
+  return customerRequest(`/customers/wishlist/${encodeURIComponent(productSlug)}`, { method: "DELETE" });
+}
+
+export function mergeGuestWishlist(productSlugs) {
+  return customerRequest("/customers/wishlist/merge", { method: "POST", body: JSON.stringify({ productSlugs }) });
+}
+
+// Version 7, Milestone 174C: abandoned checkout recovery — public,
+// unauthenticated (a guest checkout is the primary case). Reuses this
+// same customerRequest() wrapper purely for its fetch/error-handling
+// convenience — credentials:"include" is harmless here too, since the
+// backend route (optionalCustomerAuth) only ever reads a session
+// cookie if one happens to be present, never requires it.
+export function captureCheckoutIntent(email, items) {
+  return customerRequest("/checkout-intent", { method: "POST", body: JSON.stringify({ email, items }) });
+}
+
+export function recoverCheckoutIntent(token) {
+  return customerRequest(`/checkout-intent/recover/${encodeURIComponent(token)}`, { method: "GET" });
+}

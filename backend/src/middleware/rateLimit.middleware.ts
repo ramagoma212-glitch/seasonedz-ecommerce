@@ -209,3 +209,27 @@ export const referralCaptureRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Version 7, Milestone 174C: back-in-stock subscribe — authenticated,
+// but still a write, and worth its own tighter counter separate from
+// the general per-customer-route budget.
+export const stockAlertSubscribeRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Version 7, Milestone 174C: abandoned-checkout intent capture — the
+// one genuinely unauthenticated write endpoint this milestone adds
+// (brief section 49), called as the customer types their checkout
+// email, so it needs real (if generous) protection against being
+// hammered.
+export const checkoutIntentRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

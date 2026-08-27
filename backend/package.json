@@ -13,7 +13,7 @@
     "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "cross-env TEST_DB_ACKNOWLEDGE_SHARED_PRODUCTION=true tsx --test src/**/*.test.ts",
     "seed": "tsx prisma/seed.ts",
     "db:sync-product-content": "tsx prisma/scripts/update-product-content.ts",
     "admin:setup": "tsx prisma/scripts/setupAdminUser.ts",
@@ -46,6 +46,7 @@
     "@types/multer": "^2.2.0",
     "@types/node": "^20.14.15",
     "@types/sanitize-html": "^2.16.1",
+    "cross-env": "^10.1.0",
     "prisma": "^5.19.0",
     "tsx": "^4.16.5",
     "typescript": "^5.5.4"

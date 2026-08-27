@@ -3,12 +3,38 @@
 // including right after a quantity/remove/clear action re-renders it
 // in place (see rerenderCurrentRoute in js/app.js).
 
-import { getCartSummary, getUnavailableCartItems } from "../js/cart.js";
+import { getCartSummary, getUnavailableCartItems, addToCart } from "../js/cart.js";
 import { renderCartItem } from "../components/cartItem.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
+import { recoverCheckoutIntent } from "../js/api/customerApi.js";
+
+// Version 7, Milestone 174C, brief section 35: /cart?recover=<token>
+// (the abandoned-checkout reminder email's own link) merges the
+// recovered product references into this browser's own Local Storage
+// cart, then falls through to the page's normal render — never trusts
+// a price from the recovery response (it doesn't return one at all;
+// see checkoutIntent.service.ts's own getRecoverableCartByToken()),
+// so every price/stock fact is re-derived live exactly like any other
+// cart item. Best-effort: an invalid/expired token, or a network
+// failure, just means nothing gets merged — never a broken page.
+async function mergeRecoveredCartIfPresent() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("recover");
+  if (!token) return;
+
+  try {
+    const response = await recoverCheckoutIntent(token);
+    const items = response?.data?.items || [];
+    for (const item of items) {
+      addToCart({ productId: item.productSlug, slug: item.productSlug, name: item.productName, price: item.price, image: item.image, productType: "PHYSICAL" }, item.quantity);
+    }
+  } catch {
+    // Invalid/expired token — nothing to merge, cart page renders normally.
+  }
+}
 
 // Version 7, Milestone 168C: the cart page used to show a
 // representative delivery-fee estimate (Courier Guy Door to Door)

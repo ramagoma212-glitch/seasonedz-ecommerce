@@ -52,7 +52,13 @@ function wireStubs(shipment: ReturnType<typeof shipmentRow> | null) {
   const shippingUpdate = stub(prisma.shipping, "update", async () => ({}));
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
   const historyCreate = stub(prisma.orderStatusHistory, "create", async () => ({}));
-  const orderFindUnique = stub(prisma.order, "findUnique", async () => (shipment ? { ...shipment.order, customerFirstName: "Thandiwe", customerLastName: "Nkosi", customerEmail: "thandiwe@example.com", customerPhone: "0821234567", total: { toNumber: () => 500 }, paymentStatus: "PAID", paymentMethod: "PAYFAST", deliveryFee: { toNumber: () => 100 }, collectionCity: null, deliveryStreetAddress: "1 Real Street", deliverySuburb: "Sandton", deliveryCity: "Johannesburg", deliveryProvince: "Gauteng", deliveryPostalCode: "2196", deliveryNotes: null } : null));
+  // Version 7, Milestone 174C: notifyCourierStatusChange()'s own
+  // DELIVERED branch re-reads the authoritative history row's own
+  // createdAt (brief section 5 — never Order.updatedAt) before
+  // scheduling a product review request.
+  const historyFindFirst = stub(prisma.orderStatusHistory, "findFirst", async () => ({ createdAt: new Date("2026-08-01T10:00:00.000Z") }));
+  const preferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
+  const orderFindUnique = stub(prisma.order, "findUnique", async () => (shipment ? { ...shipment.order, customerId: "cust-1", customerFirstName: "Thandiwe", customerLastName: "Nkosi", customerEmail: "thandiwe@example.com", customerPhone: "0821234567", total: { toNumber: () => 500 }, paymentStatus: "PAID", paymentMethod: "PAYFAST", deliveryFee: { toNumber: () => 100 }, collectionCity: null, deliveryStreetAddress: "1 Real Street", deliverySuburb: "Sandton", deliveryCity: "Johannesburg", deliveryProvince: "Gauteng", deliveryPostalCode: "2196", deliveryNotes: null } : null));
   const notificationCreate = stub(prisma.notification, "create", async (args: { data: Record<string, unknown> }) => ({ id: "notif-1", ...args.data }));
   const notificationUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
   const notificationFindUnique = stub(prisma.notification, "findUnique", async () => ({
@@ -78,6 +84,8 @@ function wireStubs(shipment: ReturnType<typeof shipmentRow> | null) {
       shippingUpdate.restore();
       orderUpdate.restore();
       historyCreate.restore();
+      historyFindFirst.restore();
+      preferenceFindUnique.restore();
       orderFindUnique.restore();
       notificationCreate.restore();
       notificationUpdateMany.restore();
@@ -243,6 +251,19 @@ test("delivered: single event from PROCESSING jumps directly to DELIVERED in one
     assert.equal(historyArgs.oldStatus, "PROCESSING");
     assert.equal(historyArgs.newStatus, "DELIVERED");
     assert.equal(stubs.shippingUpdate.fn.mock.calls[0]!.arguments[0].data.status, "DELIVERED");
+
+    // Version 7, Milestone 174C: a genuine DELIVERED transition also
+    // schedules a product review request, 7 days after the
+    // authoritative OrderStatusHistory row's own createdAt — fired
+    // from within the same fire-and-forget notify chain as the
+    // DELIVERED email, so it needs the same microtask flush as every
+    // other assertion in this file that touches that chain.
+    await flushAsync();
+    const calls = stubs.notificationCreate.fn.mock.calls.map((call) => call.arguments[0].data);
+    const reviewRequest = calls.find((data: Record<string, unknown>) => data.eventType === "PRODUCT_REVIEW_REQUEST");
+    assert.ok(reviewRequest, "a review request was scheduled");
+    assert.equal(reviewRequest.dedupeKey, "PRODUCT_REVIEW_REQUEST:SZ-2026-0001");
+    assert.equal(new Date(reviewRequest.scheduledAt as string).toISOString(), new Date(Date.UTC(2026, 7, 8, 10, 0, 0)).toISOString());
   } finally {
     await stubs.restore();
   }

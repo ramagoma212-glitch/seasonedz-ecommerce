@@ -84,6 +84,10 @@ function wireStubs(order: ReturnType<typeof orderRow>) {
     eventType: "ORDER_PROCESSING",
   }));
   const restoreNotificationUpdate = stub(prisma.notification, "update", async () => ({}));
+  // Version 7, Milestone 174C: a DELIVERED transition's own review-
+  // request scheduling checks this — harmless no-op for every other
+  // status.
+  const restorePreferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
   return {
     update,
     historyCreate,
@@ -98,6 +102,7 @@ function wireStubs(order: ReturnType<typeof orderRow>) {
       restoreNotificationCreate();
       restoreNotificationUpdateMany();
       restoreNotificationFindUnique();
+      restorePreferenceFindUnique();
       restoreNotificationUpdate();
     },
   };
@@ -191,6 +196,26 @@ test("a status change that isn't PROCESSING or CANCELLED (e.g. CONFIRMED) never 
     await updateOrderStatus("SZ-2026-0001", "CONFIRMED", undefined, ADMIN);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(stubs.notificationCreate.mock.callCount(), 0);
+  } finally {
+    await stubs.restore();
+  }
+});
+
+// Version 7, Milestone 174C: a manual admin DELIVERED transition —
+// the only completion signal Customer Collection orders have today —
+// never fires a duplicate customer email (courier deliveries already
+// get one from courierStatusSync.service.ts), but does schedule a
+// product review request 7 days out.
+test("DELIVERED transition (e.g. Customer Collection) never sends a duplicate delivery email, but does schedule a review request", async () => {
+  const stubs = wireStubs(orderRow({ status: "OUT_FOR_DELIVERY", customerId: "cust-1", deliveryMethod: "COLLECTION", collectionCity: "Pretoria" }));
+  try {
+    await updateOrderStatus("SZ-2026-0001", "DELIVERED", undefined, ADMIN);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(stubs.notificationCreate.mock.callCount(), 1, "only the scheduled review request, never a delivery email");
+    const data = stubs.notificationCreate.mock.calls[0]!.arguments[0].data;
+    assert.equal(data.eventType, "PRODUCT_REVIEW_REQUEST");
+    assert.equal(data.dedupeKey, "PRODUCT_REVIEW_REQUEST:SZ-2026-0001");
+    assert.equal(data.status, undefined, "defaults to PENDING — never sent immediately");
   } finally {
     await stubs.restore();
   }

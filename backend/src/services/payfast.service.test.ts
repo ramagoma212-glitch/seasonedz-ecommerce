@@ -151,6 +151,41 @@ test("COMPLETE on a fresh order marks it PAID and enqueues exactly one PAYMENT_R
   restorePayfastConfig();
 });
 
+test("COMPLETE on a 100%-digital order for a logged-in customer also schedules a product review request 3 days out", async () => {
+  configurePayfastForTest();
+  const digitalOrder = orderRow({ customerId: "cust-1", items: [{ productType: "DIGITAL" }] });
+  const findUnique = stub(prisma.order, "findUnique", async () => digitalOrder);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => Promise.all(ops));
+  const paymentUpdate = stub(prisma.payment, "update", async () => ({}));
+  const orderUpdate = stub(prisma.order, "update", async () => ({}));
+  const preferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
+  const notifications = stubNotificationChain("payment-confirmed", "thandiwe@example.com");
+
+  const body = signedNotifyBody({
+    m_payment_id: "SZ-2026-0001",
+    payment_status: "COMPLETE",
+    amount_gross: "918.00",
+    merchant_id: "test-merchant-id",
+    pf_payment_id: "pf-123",
+  });
+
+  await processPayfastNotification(body, FAKE_REQ);
+  await flushAsync();
+
+  const calls = notifications.create.fn.mock.calls.map((call) => (call.arguments[0] as { data: Record<string, unknown> }).data);
+  const reviewRequest = calls.find((data) => data.eventType === "PRODUCT_REVIEW_REQUEST");
+  assert.ok(reviewRequest, "a review request was scheduled for the 100%-digital order");
+  assert.equal(reviewRequest!.dedupeKey, "PRODUCT_REVIEW_REQUEST:SZ-2026-0001");
+
+  findUnique.restore();
+  transactionStub.restore();
+  paymentUpdate.restore();
+  orderUpdate.restore();
+  preferenceFindUnique.restore();
+  await notifications.restore();
+  restorePayfastConfig();
+});
+
 test("a duplicate COMPLETE ITN on an already-PAID order is acknowledged idempotently — never a second notification", async () => {
   configurePayfastForTest();
   const findUnique = stub(prisma.order, "findUnique", async () => orderRow({ paymentStatus: PaymentStatus.PAID }));

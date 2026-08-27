@@ -7,6 +7,7 @@ import { renderAdminNewOrderEmail, renderOrderCreatedEmail } from "../services/e
 import type { OrderEmailData } from "../services/email/email.types.js";
 import { env } from "../config/env.js";
 import * as notificationEngine from "../services/notificationEngine.service.js";
+import { markCheckoutIntentRecovered } from "../services/checkoutIntent.service.js";
 
 // Version 7, Milestone 117: maps the full, already-safe OrderOutput
 // shape onto the small, independent OrderEmailData shape the email
@@ -87,6 +88,13 @@ export async function createOrderHandler(req: Request, res: Response, next: Next
         rendered: renderAdminNewOrderEmail(emailData),
       })
       .catch(() => {});
+
+    // Version 7, Milestone 174C, brief section 34: a completed order
+    // must never be followed by a "still interested?" reminder for the
+    // same checkout. Fire-and-forget, same discipline as the two
+    // notification calls above — a failure here must never affect this
+    // response.
+    void markCheckoutIntentRecovered(emailData.customerEmail).catch(() => {});
 
     sendSuccess(res, {
       message: "Order created successfully",

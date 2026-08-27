@@ -225,6 +225,11 @@ model Product {
   downloadEnabled  Boolean       @default(true)
   digitalAsset     DigitalAsset?
 
+  // Version 7, Milestone 174C: customer engagement — see each model's
+  // own header comment.
+  stockAlertSubscriptions StockAlertSubscription[]
+  wishlistItems           WishlistItem[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -346,6 +351,12 @@ model Customer {
   // or one, never more (Affiliate.customerId is @unique): one Customer
   // can never be linked to two affiliate records.
   affiliate           Affiliate?
+  // Version 7, Milestone 174C: customer engagement — see each model's
+  // own header comment.
+  stockAlertSubscriptions StockAlertSubscription[]
+  wishlistItems           WishlistItem[]
+  checkoutIntents         CheckoutIntent[]
+  notificationPreference  NotificationPreference?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1438,6 +1449,18 @@ model Notification {
   failedAt    DateTime?
   cancelledAt DateTime?
 
+  // Version 7, Milestone 174C: the Customer Notification Centre's own
+  // read/unread state (brief section 19). Reuses this same row rather
+  // than a separate table — see section 17's own "same Notification
+  // row can represent both email and account notification" decision:
+  // channel stays a statement of delivery mechanism (how it was sent),
+  // never a gate on whether it's visible in the centre. Only rows with
+  // a real recipientCustomerId are ever shown there at all (an
+  // admin-only or guest row has no "my notifications" to belong to).
+  // Null = unread; the exact moment a customer marks it read is stored,
+  // never a boolean, so "unread since" is always answerable later.
+  readAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1450,4 +1473,160 @@ model Notification {
   @@index([status, nextAttemptAt])
   @@index([orderNumber])
   @@index([affiliateId])
+  // Version 7, Milestone 174C: the notification centre's own primary
+  // query — "this customer's own notifications, newest first."
+  @@index([recipientCustomerId, createdAt])
+}
+
+// ============================================================================
+// CUSTOMER ENGAGEMENT (Version 7, Milestone 174C)
+// ============================================================================
+
+enum StockAlertStatus {
+  PENDING
+  NOTIFIED
+  CANCELLED
+}
+
+// One row per (product, customer) "notify me" request — brief sections
+// 23-26. Deliberately logged-in-only (no guest email variant): the
+// brief itself says to "prefer logged-in account first if guest
+// architecture creates unnecessary privacy complexity," and a guest
+// variant would need its own unsubscribe-token/abuse-prevention layer
+// for no real V1 benefit. Not @@unique on (productId, customerId) —
+// section 24 requires "re-subscribe later works" once a PENDING
+// subscription has already been consumed (NOTIFIED), so a customer
+// legitimately accumulates more than one row over time for the same
+// product; the application layer (not a DB constraint) is what
+// prevents a second *PENDING* row for the same pair — see
+// stockAlert.service.ts's own header comment.
+model StockAlertSubscription {
+  id String @id @default(cuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  status     StockAlertStatus @default(PENDING)
+  notifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId, status])
+  @@index([customerId])
+}
+
+// Server-backed wishlist for a logged-in Customer — brief sections
+// 26-29. The guest, Local-Storage-only wishlist (src/js/wishlist.js)
+// is completely unchanged; this table only ever exists for the
+// server-sync layer that activates on login (merge) and lets a
+// wishlisted product's own back-in-stock transition reach the
+// customer even when their browser/Local Storage isn't the one
+// noticing it. Deliberately just `productId` — never a snapshotted
+// name/price/image (unlike Order/OrderItem's own historical
+// snapshots), since a wishlist always reflects the product's current,
+// live state, not a purchase.
+model WishlistItem {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // One product can only be wishlisted once per customer — the
+  // database-enforced anti-duplicate rule the login-merge logic relies
+  // on (a duplicate merge attempt is simply absorbed, never a second
+  // row), same discipline as ProductReview's own
+  // @@unique([productId, customerId]).
+  @@unique([customerId, productId])
+  @@index([productId])
+}
+
+enum CheckoutIntentStatus {
+  ACTIVE
+  RECOVERED
+  REMINDED
+  EXPIRED
+}
+
+// The minimum safe "who was checking out, and what were they looking
+// at" record needed to send ONE abandoned-checkout reminder — brief
+// sections 30-36. Never a fake Order: no payment/stock/order-number
+// side effect exists anywhere in this table's own lifecycle.
+// cartSnapshot deliberately stores only product references/quantities
+// (never a price) — section 35's own "never trust saved old prices"
+// rule; the recovery flow always re-reads the live Product row at
+// recovery time.
+//
+// recoveryToken is stored in plain, opaque form — deliberately NOT
+// hashed, unlike Customer.passwordResetTokenHash/CustomerSession.
+// tokenHash/GuestDownloadToken.tokenHash. Those all gate something
+// sensitive (account access, a paid digital file) and are always
+// consumed at most a short time after being issued, so the raw value
+// only ever needs to exist transiently in one email. This token's
+// whole purpose is the opposite: it must still be usable when the
+// reminder email is actually rendered, up to 2+ hours after capture
+// (via the Notification engine's own lazy-render path — see
+// productReviewRequest.service.ts's header comment for the identical
+// "content produced at send time, not schedule time" pattern) — a
+// one-way hash cannot be reversed back into a usable link at that
+// point. The blast radius of this token leaking is low and bounded:
+// it only ever lets someone pre-fill a cart with product references
+// and an email address already visible in this same row — no payment
+// detail, no account access, and every price/stock fact is still
+// re-verified live at actual checkout regardless (brief section 35).
+model CheckoutIntent {
+  id String @id @default(cuid())
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  email      String
+
+  // { items: [{ productId, slug, quantity }], deliveryMethod? } — see
+  // checkoutIntent.service.ts's own CheckoutIntentCartSnapshot type for
+  // the authoritative shape. Json (not a separate table) since this is
+  // a short-lived capture, never queried by its own contents.
+  cartSnapshot Json
+
+  recoveryToken String @unique
+
+  status     CheckoutIntentStatus @default(ACTIVE)
+  remindedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+}
+
+// One row per Customer, created lazily (only once they change
+// something away from the default) — brief sections 21-22. Absence of
+// a row means every engagement category is still at its default
+// (opted in / not opted out); see notificationPreference.service.ts.
+// Essential/transactional categories (orders, payments, delivery,
+// security, affiliate status, commission/payout) deliberately have NO
+// column here at all — there is structurally nothing to opt out of,
+// matching brief section 21's "do not allow an opt-out that would
+// prevent required operational communication."
+model NotificationPreference {
+  id String @id @default(cuid())
+
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  reviewRequestsOptOut    Boolean @default(false)
+  stockAlertsOptOut       Boolean @default(false)
+  wishlistAlertsOptOut    Boolean @default(false)
+  abandonedCheckoutOptOut Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

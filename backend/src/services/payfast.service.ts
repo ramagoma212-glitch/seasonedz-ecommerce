@@ -45,6 +45,7 @@ import { autoBookCourierForPaidOrder } from "./courierGuy.service.js";
 import { createGuestDownloadToken } from "./digitalDownload.service.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 import * as notificationEngine from "./notificationEngine.service.js";
+import { scheduleProductReviewRequestForDigitalOrder } from "./productReviewRequest.service.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -556,6 +557,13 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
           rendered: renderPaymentConfirmedEmail(paidEmailData),
         })
         .catch(() => {});
+
+      // Version 7, Milestone 174C: only ever actually schedules
+      // anything for a 100%-digital order (the function's own internal
+      // check) — a mixed order's review request always waits for
+      // delivery instead. See productReviewRequest.service.ts's own
+      // header comment for the full "dedupe carefully" reasoning.
+      void scheduleProductReviewRequestForDigitalOrder(order.orderNumber, new Date()).catch(() => {});
 
       // Version 7, Milestone 139: automatic Courier Guy booking
       // foundation — same "only reached once, ever, per order" guarantee

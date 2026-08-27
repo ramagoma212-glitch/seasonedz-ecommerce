@@ -13,7 +13,13 @@
 // matched by email; a customer looking for one is pointed at the
 // existing public /track-order page instead.
 
-import { getCurrentCustomer, getCustomerOrders, getMyAffiliatePortal } from "../js/api/customerApi.js";
+import {
+  getCurrentCustomer,
+  getCustomerOrders,
+  getMyAffiliatePortal,
+  getMyNotifications,
+  getMyNotificationPreferences,
+} from "../js/api/customerApi.js";
 import { getAuthProviders, getConnectedAccounts, getOAuthStartUrl } from "../js/api/socialAuthApi.js";
 import { renderSocialAuthButtons, SOCIAL_AUTH_PROVIDER_LABELS } from "../components/socialAuthButtons.js";
 import { ApiError } from "../js/apiClient.js";
@@ -176,6 +182,94 @@ function renderOrderCard(order) {
       <div class="order-confirmation__actions">
         <a class="btn btn--secondary" href="/account/orders/${encodeURIComponent(order.orderNumber)}">View Details</a>
       </div>
+    </div>
+  `;
+}
+
+// Version 7, Milestone 174C: the Customer Notification Centre — brief
+// section 16. Deliberately inside /account, no separate bell/route —
+// see this milestone's own final report for why the bell (section 20)
+// was deferred. Best-effort, same "a fetch failure never breaks the
+// whole account page" discipline as My Orders above.
+function renderNotificationCard(notification) {
+  const unreadClass = notification.readAt ? "" : " account-notification--unread";
+  return `
+    <div class="order-confirmation__card account-notification${unreadClass}" data-notification-id="${escapeHtml(notification.id)}">
+      <div class="account-order-card__header">
+        <p>${escapeHtml(notification.subject || humanizeEnum(notification.eventType))}</p>
+        ${notification.readAt ? "" : '<span class="badge">New</span>'}
+      </div>
+      <div class="order-confirmation__row"><span>Date</span><span>${formatDate(notification.createdAt)}</span></div>
+      ${notification.readAt ? "" : `<button type="button" class="btn btn--secondary account-notification__action" data-action="mark-notification-read" data-notification-id="${escapeHtml(notification.id)}">Mark as read</button>`}
+    </div>
+  `;
+}
+
+function renderNotificationsEmptyState() {
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div><strong>No notifications yet.</strong><p>Updates about your orders, delivery and account will appear here.</p></div>
+    </div>
+  `;
+}
+
+async function renderNotificationsSection() {
+  let notifications = [];
+  let unreadCount = 0;
+  try {
+    const response = await getMyNotifications(1, 20);
+    notifications = response?.data?.notifications || [];
+    unreadCount = response?.data?.unreadCount || 0;
+  } catch {
+    notifications = [];
+  }
+
+  return `
+    <div class="account-notifications" data-notifications-section>
+      <h2 class="checkout-section__label">Notifications${unreadCount > 0 ? ` <span class="badge">${unreadCount} new</span>` : ""}</h2>
+      ${unreadCount > 0 ? '<button type="button" class="btn btn--secondary account-notification__action" data-action="mark-all-notifications-read">Mark all as read</button>' : ""}
+      ${notifications.length ? `<div class="account-notifications__list">${notifications.map(renderNotificationCard).join("")}</div>` : renderNotificationsEmptyState()}
+    </div>
+  `;
+}
+
+// Version 7, Milestone 174C: engagement preferences — brief section
+// 21-22. Essential/transactional notifications have no toggle here at
+// all (structurally impossible to opt out of, matching the backend's
+// own design) — only the four genuinely optional categories.
+const PREFERENCE_FIELDS = [
+  { key: "reviewRequestsOptOut", label: "Product review requests" },
+  { key: "stockAlertsOptOut", label: "Back-in-stock alerts" },
+  { key: "wishlistAlertsOptOut", label: "Wishlist back-in-stock alerts" },
+  { key: "abandonedCheckoutOptOut", label: "Abandoned checkout reminders" },
+];
+
+async function renderNotificationPreferencesSection() {
+  let preferences = { reviewRequestsOptOut: false, stockAlertsOptOut: false, wishlistAlertsOptOut: false, abandonedCheckoutOptOut: false };
+  try {
+    const response = await getMyNotificationPreferences();
+    preferences = response?.data || preferences;
+  } catch {
+    // Best-effort — the form still renders with safe (opted-in) defaults.
+  }
+
+  return `
+    <div class="account-preferences">
+      <h2 class="checkout-section__label">Notification Preferences</h2>
+      <p>Order, payment, delivery and account notifications are always sent — they can't be turned off here. You can opt out of the following:</p>
+      <form id="notification-preferences-form" data-notification-preferences-form>
+        ${PREFERENCE_FIELDS.map(
+          (field) => `
+          <label class="account-preferences__field">
+            <input type="checkbox" name="${field.key}" ${preferences[field.key] ? "" : "checked"} />
+            <span>${escapeHtml(field.label)}</span>
+          </label>
+        `
+        ).join("")}
+        <button type="submit" class="btn btn--secondary">Save Preferences</button>
+        <p class="form-banner" data-preferences-banner hidden></p>
+      </form>
     </div>
   `;
 }
@@ -451,6 +545,10 @@ async function renderLoggedInView(customer) {
       ${await renderAffiliateProgrammeSection()}
 
       ${await renderMyOrdersSection()}
+
+      ${await renderNotificationsSection()}
+
+      ${await renderNotificationPreferencesSection()}
 
       <button type="button" id="customer-logout-button" class="btn btn--secondary">Logout</button>
     </section>

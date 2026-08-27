@@ -35,7 +35,13 @@ export type EmailTemplateName =
   | "affiliate-suspended"
   | "commission-approved"
   | "payout-recorded"
-  | "admin-new-review";
+  | "admin-new-review"
+  // Version 7, Milestone 174C.
+  | "product-review-request"
+  | "product-review-reminder"
+  | "stock-alert"
+  | "wishlist-stock-alert"
+  | "abandoned-checkout-reminder";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -169,4 +175,36 @@ export interface AdminNewReviewEmailData {
   customerName: string;
   rating: number;
   reviewText: string;
+}
+
+// Version 7, Milestone 174C: shared shape for both the initial review
+// request and its one reminder — see productReviewRequest.service.ts.
+// `products` only ever lists products still genuinely unreviewed at
+// the moment this was rendered (never the full original purchase
+// list) — see that file's own "already reviewed" re-check.
+// reviewUrl always points at the customer's own order detail page
+// (/account/orders/:orderNumber, where the existing review prompt
+// already lives), never a generic Shop page and never a per-product
+// URL carrying any customer identity — see that file's own comment.
+export interface ProductReviewRequestEmailData {
+  customerFirstName: string;
+  orderNumber: string;
+  products: { productName: string }[];
+  reviewUrl: string;
+  isReminder: boolean;
+}
+
+// Version 7, Milestone 174C.
+export interface StockAlertEmailData {
+  customerFirstName: string;
+  productName: string;
+  productUrl: string;
+}
+
+// Version 7, Milestone 174C: deliberately narrow — see
+// checkoutIntent.service.ts's own comment on why no price/discount/
+// urgency claim is ever included.
+export interface AbandonedCheckoutEmailData {
+  customerFirstName: string | null;
+  recoveryUrl: string;
 }

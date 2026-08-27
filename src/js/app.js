@@ -22,7 +22,7 @@ import {
   getCart,
   getCartItemCount,
 } from "./cart.js";
-import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount } from "./wishlist.js";
+import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import {
   validateCheckoutForm,
   validateCustomerLoginForm,
@@ -38,7 +38,24 @@ import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
-import { registerCustomer, loginCustomer, logoutCustomer, forgotPassword, resetPassword, requestCustomerDownload, submitProductReview, applyForAffiliateProgramme } from "./api/customerApi.js";
+import {
+  registerCustomer,
+  loginCustomer,
+  logoutCustomer,
+  forgotPassword,
+  resetPassword,
+  requestCustomerDownload,
+  submitProductReview,
+  applyForAffiliateProgramme,
+  markNotificationRead,
+  markAllNotificationsRead,
+  updateMyNotificationPreferences,
+  subscribeToStockAlert,
+  addToServerWishlist,
+  removeFromServerWishlist,
+  mergeGuestWishlist,
+  captureCheckoutIntent,
+} from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
 import {
@@ -355,6 +372,8 @@ function setupProductActions() {
       handleAddToCart(actionEl);
     } else if (action === "toggle-wishlist") {
       handleToggleWishlist(actionEl);
+    } else if (action === "notify-when-in-stock") {
+      handleNotifyWhenInStock(actionEl);
     } else if (action === "cart-increase") {
       increaseCartQuantity(actionEl.dataset.lineId);
       rerenderCurrentRoute();
@@ -639,6 +658,45 @@ function handleToggleWishlist(buttonEl) {
   patchWishlistButton(buttonEl, isActive);
   updateHeaderCounters();
   showToast(isActive ? `${product.name} added to wishlist.` : `${product.name} removed from wishlist.`);
+
+  // Version 7, Milestone 174C: best-effort server sync — the guest,
+  // Local-Storage wishlist above is the source of truth either way, so
+  // a failure here (401 for a guest, or any network error) is silently
+  // ignored rather than shown to the visitor. See wishlist.service.ts's
+  // own header comment.
+  const syncCall = isActive ? addToServerWishlist(product.productId) : removeFromServerWishlist(product.productId);
+  syncCall.catch(() => {});
+}
+
+// Version 7, Milestone 174C: back-in-stock — logged-in only (see
+// stockAlert.service.ts's own header comment). A 401 here means the
+// visitor isn't logged in; shown as a clear, actionable message rather
+// than a generic error, since "please log in" is genuinely the fix.
+async function handleNotifyWhenInStock(buttonEl) {
+  const productId = buttonEl.dataset.productId;
+  const banner = document.querySelector("[data-stock-alert-banner]");
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  buttonEl.disabled = true;
+
+  try {
+    await subscribeToStockAlert(productId);
+    buttonEl.textContent = "We'll Email You";
+    if (banner) {
+      banner.className = "form-banner form-banner--success";
+      banner.textContent = "You're on the list — we'll email you as soon as this is back in stock.";
+      banner.hidden = false;
+    }
+  } catch (error) {
+    buttonEl.disabled = false;
+    if (banner) {
+      banner.className = "form-banner form-banner--error";
+      banner.textContent = error instanceof ApiError && error.status === 401 ? "Please log in to get a back-in-stock alert." : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
 }
 
 // Updates a wishlist button's visual state in place. Product cards use
@@ -714,6 +772,29 @@ function setupCheckoutForm() {
     clearFieldError(form, "deliveryMethod");
     updateCheckoutDeliveryMethodUI(form, event.target.value);
   });
+
+  // Version 7, Milestone 174C, brief section 31: captures a checkout-
+  // recovery intent once the customer has typed a plausible email and
+  // has real items in cart — debounced so this never fires on every
+  // keystroke. Deliberately silent either way (success or failure);
+  // see checkoutIntent.controller.ts's own comment for why this must
+  // never surface an error banner mid-checkout.
+  let checkoutIntentTimer = null;
+  document.addEventListener("blur", (event) => {
+    const form = event.target.closest("#checkout-form");
+    if (!form || event.target.name !== "email") return;
+
+    const email = event.target.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+
+    const items = getCart().map((item) => ({ productSlug: item.slug, quantity: item.quantity }));
+    if (items.length === 0) return;
+
+    clearTimeout(checkoutIntentTimer);
+    checkoutIntentTimer = setTimeout(() => {
+      captureCheckoutIntent(email, items).catch(() => {});
+    }, 800);
+  }, true);
 }
 
 // Version 7, Milestone 168C: switching delivery method toggles the
@@ -1387,6 +1468,19 @@ function setupCustomerAccountForms() {
       form.hidden = !nowExpanded;
       reviewToggle.setAttribute("aria-expanded", String(nowExpanded));
       reviewToggle.textContent = nowExpanded ? "Cancel" : "Write a Review";
+      return;
+    }
+
+    // Version 7, Milestone 174C: the Customer Notification Centre.
+    const markReadButton = event.target.closest('[data-action="mark-notification-read"]');
+    if (markReadButton) {
+      handleMarkNotificationRead(markReadButton);
+      return;
+    }
+
+    const markAllReadButton = event.target.closest('[data-action="mark-all-notifications-read"]');
+    if (markAllReadButton) {
+      handleMarkAllNotificationsRead(markAllReadButton);
     }
   });
 
@@ -1423,8 +1517,79 @@ function setupCustomerAccountForms() {
     if (reviewForm) {
       event.preventDefault();
       handleProductReviewSubmit(reviewForm);
+      return;
+    }
+
+    const preferencesForm = event.target.closest("[data-notification-preferences-form]");
+    if (preferencesForm) {
+      event.preventDefault();
+      handleNotificationPreferencesSubmit(preferencesForm);
     }
   });
+}
+
+// Version 7, Milestone 174C: the Customer Notification Centre — mark
+// one notification read, or all of them. Both re-render the account
+// page so the unread badge/list stay accurate; a failure is silently
+// swallowed (never worth interrupting the page for) since the worst
+// outcome is just "still shows as unread," not a lost action.
+async function handleMarkNotificationRead(button) {
+  const id = button.dataset.notificationId;
+  if (!id) return;
+  button.disabled = true;
+  try {
+    await markNotificationRead(id);
+    rerenderCurrentRoute();
+  } catch {
+    button.disabled = false;
+  }
+}
+
+async function handleMarkAllNotificationsRead(button) {
+  button.disabled = true;
+  try {
+    await markAllNotificationsRead();
+    rerenderCurrentRoute();
+  } catch {
+    button.disabled = false;
+  }
+}
+
+// Version 7, Milestone 174C: engagement preferences — see
+// accountPage.js's own PREFERENCE_FIELDS for the checkbox meaning
+// (checked = "I want to receive this", i.e. the inverse of each
+// backend *OptOut boolean).
+async function handleNotificationPreferencesSubmit(form) {
+  const banner = form.querySelector("[data-preferences-banner]");
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  const formData = new FormData(form);
+  const preferences = {
+    reviewRequestsOptOut: !formData.has("reviewRequestsOptOut"),
+    stockAlertsOptOut: !formData.has("stockAlertsOptOut"),
+    wishlistAlertsOptOut: !formData.has("wishlistAlertsOptOut"),
+    abandonedCheckoutOptOut: !formData.has("abandonedCheckoutOptOut"),
+  };
+
+  try {
+    await updateMyNotificationPreferences(preferences);
+    if (banner) {
+      banner.textContent = "Preferences saved.";
+      banner.hidden = false;
+    }
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 // Version 7, Milestone 171C: submits a genuine product review for one
@@ -1545,6 +1710,16 @@ async function handleCustomerLoginSubmit(form) {
 
   try {
     await loginCustomer(data.email, data.password);
+    // Version 7, Milestone 174C, brief section 27: merges this
+    // browser's guest wishlist into the account's server-side one —
+    // best-effort, never blocks/fails the login itself. The guest
+    // Local-Storage wishlist is left untouched afterwards (still the
+    // source of truth for this page's own display) — see
+    // wishlist.service.ts's own header comment.
+    const guestProductIds = getWishlist().map((item) => item.productId);
+    if (guestProductIds.length > 0) {
+      mergeGuestWishlist(guestProductIds).catch(() => {});
+    }
     rerenderCurrentRoute();
   } catch (error) {
     // Deliberately the same generic message regardless of the real

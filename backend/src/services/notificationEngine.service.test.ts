@@ -388,3 +388,89 @@ test("recordPasswordResetAttempt: a database error is swallowed, never thrown to
     restoreCreate();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 174C: attemptSend()'s lazy-render dispatch — a
+// PRODUCT_REVIEW_REQUEST/PRODUCT_REVIEW_REMINDER row is created with
+// no renderedSubject/renderedBody at all (see
+// notificationEngine.service.ts's own ScheduleNotificationInput
+// comment); this is what actually produces content, at the moment of
+// sending. productReviewRequest.service.ts's own render logic is fully
+// covered in its own test file — these two tests only prove the
+// dispatch/cancel/persist wiring inside attemptSend() itself.
+// ---------------------------------------------------------------------------
+
+function lazyReviewRequestRow(overrides: Record<string, unknown> = {}) {
+  return notificationRow({
+    eventType: "PRODUCT_REVIEW_REQUEST",
+    templateName: "product-review-request",
+    recipientCustomerId: "cust-1",
+    renderedSubject: null,
+    renderedBody: null,
+    ...overrides,
+  });
+}
+
+test("attemptSend: a PRODUCT_REVIEW_REQUEST row whose lazy render cancels (nothing left to review) is marked CANCELLED, never FAILED, and never sends an email", async () => {
+  const restoreEmail = withEmailDisabled();
+  const restoreUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const restoreFindUnique = stub(prisma.notification, "findUnique", async () => lazyReviewRequestRow());
+  const update = mock.fn(async (_args: { data: Record<string, unknown> }) => ({}));
+  const restoreUpdate = stub(prisma.notification, "update", update);
+  // The real lazy renderer's own dependencies — every product on this
+  // order already reviewed, so it resolves "cancel".
+  const restorePref = stub(prisma.notificationPreference, "findUnique", async () => null);
+  const restoreOrder = stub(prisma.order, "findUnique", async () => ({ paymentStatus: "PAID", items: [{ productId: "prod-1", productName: "ABC Colouring Book" }] }));
+  const restoreCustomer = stub(prisma.customer, "findUnique", async () => ({ firstName: "Thandiwe" }));
+  const restoreReviews = stub(prisma.productReview, "findMany", async () => [{ productId: "prod-1" }]);
+
+  try {
+    await attemptSend("notif-1");
+    const finalUpdateCall = update.mock.calls[update.mock.calls.length - 1]!.arguments[0];
+    assert.equal(finalUpdateCall.data.status, "CANCELLED");
+    assert.ok(finalUpdateCall.data.cancelledAt instanceof Date);
+    assert.match(String(finalUpdateCall.data.lastError), /already been reviewed/);
+  } finally {
+    restoreEmail();
+    restoreUpdateMany();
+    restoreFindUnique();
+    restoreUpdate();
+    restorePref();
+    restoreOrder();
+    restoreCustomer();
+    restoreReviews();
+  }
+});
+
+test("attemptSend: a PRODUCT_REVIEW_REQUEST row whose lazy render produces content persists it and sends normally", async () => {
+  const restoreEmail = withEmailDisabled();
+  const restoreUpdateMany = stub(prisma.notification, "updateMany", async () => ({ count: 1 }));
+  const restoreFindUnique = stub(prisma.notification, "findUnique", async () => lazyReviewRequestRow());
+  const update = mock.fn(async (_args: { data: Record<string, unknown> }) => ({}));
+  const restoreUpdate = stub(prisma.notification, "update", update);
+  const restorePref = stub(prisma.notificationPreference, "findUnique", async () => null);
+  const restoreOrder = stub(prisma.order, "findUnique", async () => ({ paymentStatus: "PAID", items: [{ productId: "prod-1", productName: "ABC Colouring Book" }] }));
+  const restoreCustomer = stub(prisma.customer, "findUnique", async () => ({ firstName: "Thandiwe" }));
+  const restoreReviews = stub(prisma.productReview, "findMany", async () => []);
+  const restoreCreate = stub(prisma.notification, "create", async () => ({ id: "reminder-1" })); // the reminder scheduleNotification() call
+
+  try {
+    await attemptSend("notif-1");
+    const contentUpdateCall = update.mock.calls.find((call) => typeof call.arguments[0].data.renderedSubject === "string");
+    assert.ok(contentUpdateCall, "the rendered content was persisted before the send attempt");
+    assert.match(String(contentUpdateCall!.arguments[0].data.renderedBody), /ABC Colouring Book/);
+
+    const finalUpdateCall = update.mock.calls[update.mock.calls.length - 1]!.arguments[0];
+    assert.equal(finalUpdateCall.data.status, "SENT");
+  } finally {
+    restoreEmail();
+    restoreUpdateMany();
+    restoreFindUnique();
+    restoreUpdate();
+    restorePref();
+    restoreOrder();
+    restoreCustomer();
+    restoreReviews();
+    restoreCreate();
+  }
+});

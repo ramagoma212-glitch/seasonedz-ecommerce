@@ -12,6 +12,7 @@
 // Render env, never hardcoded here).
 
 import type {
+  AbandonedCheckoutEmailData,
   AdminDeliveryExceptionEmailData,
   AdminNewReviewEmailData,
   AffiliateEmailData,
@@ -21,7 +22,9 @@ import type {
   OrderEmailItem,
   PasswordResetEmailData,
   PayoutEmailData,
+  ProductReviewRequestEmailData,
   RenderedEmail,
+  StockAlertEmailData,
 } from "./email.types.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
@@ -617,6 +620,98 @@ Review:
 ${data.reviewText}
 
 Please review this in the admin dashboard.`;
+
+  return { subject, body };
+}
+
+// ---------------------------------------------------------------------------
+// Version 7, Milestone 174C: customer engagement templates.
+// ---------------------------------------------------------------------------
+
+// The same, already-live Google Business review link confirmed during
+// the 174A audit — never a second/new Google integration, and never
+// presented as if it were a verified Seasonedz product review (see
+// this function's own body copy, which keeps the two clearly
+// separate).
+const GOOGLE_REVIEW_URL = "https://g.page/r/CVDIjAAjMaL7EAI/review";
+
+// Deliberately neutral wording throughout — never asks for a specific
+// star rating, never offers or implies a reward for a positive review
+// (brief section 12/51).
+export function renderProductReviewRequestEmail(data: ProductReviewRequestEmailData): RenderedEmail {
+  const productLines = data.products.map((product) => `- ${product.productName}`).join("\n");
+
+  const subject = data.isReminder ? `A Quick Reminder — How Was Your Seasonedz Order ${data.orderNumber}?` : `How Are You Enjoying Your Seasonedz Order ${data.orderNumber}?`;
+
+  const intro = data.isReminder
+    ? `We wrote to you a little while ago about your recent Seasonedz Group order ${data.orderNumber} — if you haven't had a chance yet, we'd still love to hear your thoughts on:`
+    : `Thank you for your recent Seasonedz Group order ${data.orderNumber}. We hope you and your family are enjoying it! We'd love to hear your thoughts on:`;
+
+  const body = `Hi ${data.customerFirstName},
+
+${intro}
+
+${productLines}
+
+You can leave a review from your order page: ${data.reviewUrl}
+
+Enjoyed your overall experience with Seasonedz Group? We'd also really appreciate a review on Google:
+${GOOGLE_REVIEW_URL}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderStockAlertEmail(data: StockAlertEmailData): RenderedEmail {
+  const subject = `Back in Stock: ${data.productName}`;
+  const body = `Hi ${data.customerFirstName},
+
+Good news — ${data.productName} is back in stock on Seasonedz Group.
+
+View it here: ${data.productUrl}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+export function renderWishlistStockAlertEmail(data: StockAlertEmailData): RenderedEmail {
+  const subject = `A Wishlist Item Is Back in Stock: ${data.productName}`;
+  const body = `Hi ${data.customerFirstName},
+
+${data.productName}, saved on your Seasonedz Group wishlist, is back in stock.
+
+View it here: ${data.productUrl}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Never invents scarcity, a discount, or an expiry — brief section 33.
+export function renderAbandonedCheckoutReminderEmail(data: AbandonedCheckoutEmailData): RenderedEmail {
+  const subject = "Still Interested in Your Seasonedz Order?";
+  const greeting = data.customerFirstName ? `Hi ${data.customerFirstName},` : "Hi,";
+  const body = `${greeting}
+
+We noticed you didn't quite finish checking out on Seasonedz Group. Your cart is still waiting for you if you'd like to complete your order:
+
+${data.recoveryUrl}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
 
   return { subject, body };
 }

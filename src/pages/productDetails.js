@@ -445,6 +445,16 @@ export async function renderProductDetails({ slug } = {}) {
             `
             }
           </div>
+          ${
+            outOfStock && product.productType !== "DIGITAL"
+              ? `
+          <button type="button" class="btn btn--secondary btn--block" data-action="notify-when-in-stock" data-product-id="${product.id}">
+            Notify Me When Available
+          </button>
+          <p class="form-banner" data-stock-alert-banner hidden></p>
+          `
+              : ""
+          }
 
           <button
             type="button"

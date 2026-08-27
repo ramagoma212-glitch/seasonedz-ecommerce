@@ -20,6 +20,15 @@ import {
   submitProductReviewHandler,
 } from "../controllers/productReview.controller.js";
 import { applyForAffiliateProgrammeHandler, getMyAffiliatePortalHandler } from "../controllers/customerAffiliate.controller.js";
+import {
+  listMyNotificationsHandler,
+  getMyNotificationHandler,
+  markMyNotificationReadHandler,
+  markAllMyNotificationsReadHandler,
+} from "../controllers/customerNotification.controller.js";
+import { getMyNotificationPreferencesHandler, updateMyNotificationPreferencesHandler } from "../controllers/notificationPreference.controller.js";
+import { subscribeToStockAlertHandler } from "../controllers/stockAlert.controller.js";
+import { listMyWishlistHandler, addToMyWishlistHandler, removeFromMyWishlistHandler, mergeMyWishlistHandler } from "../controllers/wishlist.controller.js";
 import { requireCustomerAuth } from "../middleware/requireCustomerAuth.middleware.js";
 import {
   customerForgotPasswordRateLimiter,
@@ -28,6 +37,7 @@ import {
   customerResetPasswordRateLimiter,
   productReviewCreationRateLimiter,
   customerAffiliateApplyRateLimiter,
+  stockAlertSubscribeRateLimiter,
 } from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
@@ -70,5 +80,37 @@ router.post("/reviews", requireCustomerAuth, productReviewCreationRateLimiter, s
 // (customerAffiliate.service.ts), never from anything the client sends.
 router.get("/affiliate", requireCustomerAuth, getMyAffiliatePortalHandler);
 router.post("/affiliate/apply", requireCustomerAuth, customerAffiliateApplyRateLimiter, applyForAffiliateProgrammeHandler);
+
+// Version 7, Milestone 174C: the Customer Notification Centre — see
+// customerNotification.service.ts's own header comment. "/notifications/read-all"
+// is registered before "/notifications/:id" so Express never matches
+// the literal "read-all" segment against the wildcard :id route, same
+// ordering discipline adminDashboard.routes.ts's own comment already
+// documents for "/products/low-stock" vs "/products/:id".
+router.get("/notifications", requireCustomerAuth, listMyNotificationsHandler);
+router.patch("/notifications/read-all", requireCustomerAuth, markAllMyNotificationsReadHandler);
+router.get("/notifications/:id", requireCustomerAuth, getMyNotificationHandler);
+router.patch("/notifications/:id/read", requireCustomerAuth, markMyNotificationReadHandler);
+
+// Version 7, Milestone 174C: engagement preferences (review requests,
+// stock/wishlist alerts, abandoned checkout) — see
+// notificationPreference.service.ts's own header comment. Essential/
+// transactional notifications have no opt-out and therefore no
+// endpoint here at all.
+router.get("/notification-preferences", requireCustomerAuth, getMyNotificationPreferencesHandler);
+router.patch("/notification-preferences", requireCustomerAuth, updateMyNotificationPreferencesHandler);
+
+// Version 7, Milestone 174C: back-in-stock — see stockAlert.service.ts's
+// own header comment for why this is logged-in-only.
+router.post("/stock-alerts", requireCustomerAuth, stockAlertSubscribeRateLimiter, subscribeToStockAlertHandler);
+
+// Version 7, Milestone 174C: server-backed wishlist — see
+// wishlist.service.ts's own header comment. "/wishlist/merge" is
+// registered before "/wishlist/:productId" so Express never matches
+// the literal "merge" segment against the wildcard :productId route.
+router.get("/wishlist", requireCustomerAuth, listMyWishlistHandler);
+router.post("/wishlist", requireCustomerAuth, addToMyWishlistHandler);
+router.post("/wishlist/merge", requireCustomerAuth, mergeMyWishlistHandler);
+router.delete("/wishlist/:productSlug", requireCustomerAuth, removeFromMyWishlistHandler);
 
 export default router;

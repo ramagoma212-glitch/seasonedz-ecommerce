@@ -47,6 +47,7 @@
 import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SafeAdminProfile } from "./adminAuth.service.js";
+import { scheduleProductReviewRequestForDigitalOrder } from "./productReviewRequest.service.js";
 
 export class ManualPaymentConfirmationError extends Error {
   statusCode: number;
@@ -89,7 +90,7 @@ export interface ManualPaymentConfirmationResult {
 // the affected count comes back 0 and the whole transaction is rolled
 // back with a clear error, never a duplicate/overwritten confirmation.
 export async function confirmManualPayment(orderNumber: string, admin: SafeAdminProfile): Promise<ManualPaymentConfirmationResult> {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { orderNumber },
       include: { payment: true },
@@ -166,4 +167,20 @@ export async function confirmManualPayment(orderNumber: string, admin: SafeAdmin
       amount: (order.payment.amount as Prisma.Decimal).toNumber(),
     };
   });
+
+  // Version 7, Milestone 174C: strictly after the transaction above has
+  // committed, same discipline as every other post-commit notification
+  // hook in this codebase. Only ever actually schedules anything for a
+  // 100%-digital order (the function's own internal check) — see
+  // productReviewRequest.service.ts's own header comment. A Cash on
+  // Delivery digital order is a real (if unusual) combination this
+  // still handles correctly: the gate above already requires the order
+  // to be DELIVERED before COD payment can be confirmed at all, but
+  // "delivered" and "digital" are independent facts — this call only
+  // ever fires the digital-payment-based schedule, never a duplicate
+  // of the delivery-based one, since a genuinely mixed order is always
+  // rejected by the function's own hasPhysicalItems check.
+  void scheduleProductReviewRequestForDigitalOrder(result.orderNumber, result.paidAt).catch(() => {});
+
+  return result;
 }
