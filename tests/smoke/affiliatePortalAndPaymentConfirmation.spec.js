@@ -32,6 +32,15 @@ function mockAffiliatePortal(page, data) {
   });
 }
 
+// Version 7, Milestone 176: a PENDING affiliate now also fetches its
+// linked application status (accountPage.js's renderPendingAffiliatePortal()).
+function mockAffiliateApplication(page, data) {
+  return page.route("**/api/customers/affiliate/application", (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    return route.fulfill({ status: 200, contentType: "application/json", body: envelope(data) });
+  });
+}
+
 const ACTIVE_AFFILIATE = {
   hasAffiliate: true,
   affiliate: {
@@ -48,26 +57,47 @@ const ACTIVE_AFFILIATE = {
 };
 
 test.describe("Affiliate portal — account page states", () => {
-  test("no linked affiliate: shows an Apply CTA, never fabricated affiliate data", async ({ page }) => {
+  test("no linked affiliate: links to the new application page, never fabricated affiliate data", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await mockAffiliatePortal(page, { hasAffiliate: false, affiliate: null });
 
     await page.goto("/account");
     const section = page.locator(".account-affiliate");
     await expect(section).toBeVisible();
-    await expect(section.locator('[data-action="apply-for-affiliate"]')).toBeVisible();
+    await expect(section.locator('a[href="/account/affiliate-application"]')).toBeVisible();
     await expect(section).not.toContainText("Referral Code");
   });
 
-  test("PENDING affiliate: shows awaiting-approval status, no referral link or promotion tools", async ({ page }) => {
+  // Version 7, Milestone 176: a PENDING affiliate WITH a genuine
+  // UNDER_REVIEW application shows the real "awaiting review" status —
+  // see the next test for the legacy-pending (no application yet) case.
+  test("PENDING affiliate with an UNDER_REVIEW application: shows awaiting-approval status, no referral link or promotion tools", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await mockAffiliatePortal(page, { hasAffiliate: true, affiliate: { ...ACTIVE_AFFILIATE.affiliate, status: "PENDING" } });
+    await mockAffiliateApplication(page, { hasApplication: true, application: { status: "UNDER_REVIEW" } });
 
     await page.goto("/account");
     const section = page.locator(".account-affiliate");
     await expect(section).toContainText("Pending");
     await expect(section).toContainText("awaiting review");
     await expect(section.locator("#affiliateReferralLink")).toHaveCount(0);
+  });
+
+  // Version 7, Milestone 176, brief section 51: a legacy PENDING
+  // affiliate (created by the pre-176 simple "Apply" button, or a
+  // customer who has started but not yet submitted the new application)
+  // is prompted to complete the application, exactly matching the
+  // brief's own required wording — never left on a dead-end "awaiting
+  // review" message for an application that doesn't actually exist yet.
+  test("PENDING affiliate with no application yet: prompts to complete the application", async ({ page }) => {
+    await mockLoggedInCustomer(page);
+    await mockAffiliatePortal(page, { hasAffiliate: true, affiliate: { ...ACTIVE_AFFILIATE.affiliate, status: "PENDING" } });
+    await mockAffiliateApplication(page, { hasApplication: false, application: null });
+
+    await page.goto("/account");
+    const section = page.locator(".account-affiliate");
+    await expect(section).toContainText("Complete your Affiliate Programme application");
+    await expect(section.locator('a[href="/account/affiliate-application"]')).toBeVisible();
   });
 
   test("ACTIVE affiliate: shows real referral code/link, effective rates, and commission totals", async ({ page }) => {
@@ -132,37 +162,29 @@ test.describe("Affiliate portal — account page states", () => {
   });
 });
 
+// Version 7, Milestone 176: the old single-click "Apply" flow (POST
+// /customers/affiliate/apply) is no longer reachable from the account
+// page — applying now means completing the full application form at
+// its own dedicated page. See affiliateApplication.spec.js for the
+// application page's own form/upload/submit coverage.
 test.describe("Affiliate application flow", () => {
-  test("applying calls the apply endpoint and refreshes the portal", async ({ page }) => {
-    await mockLoggedInCustomer(page);
-    let applyCalled = false;
-    let firstLoad = true;
-    await page.route("**/api/customers/affiliate", (route) => {
-      const data = firstLoad ? { hasAffiliate: false, affiliate: null } : { hasAffiliate: true, affiliate: { ...ACTIVE_AFFILIATE.affiliate, status: "PENDING" } };
-      firstLoad = false;
-      return route.fulfill({ status: 200, contentType: "application/json", body: envelope(data) });
-    });
-    await page.route("**/api/customers/affiliate/apply", (route) => {
-      applyCalled = true;
-      return route.fulfill({ status: 201, contentType: "application/json", body: envelope({ id: "aff-new", status: "PENDING" }) });
-    });
-
-    await page.goto("/account");
-    await page.locator('[data-action="apply-for-affiliate"]').click();
-    await expect.poll(() => applyCalled).toBe(true);
-    await expect(page.locator(".account-affiliate")).toContainText("Pending");
-  });
-
-  test("a duplicate-application error from the backend is shown, never silently swallowed", async ({ page }) => {
+  test("Apply to Become an Affiliate navigates to the application page, never immediately creates an affiliate", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await mockAffiliatePortal(page, { hasAffiliate: false, affiliate: null });
-    await page.route("**/api/customers/affiliate/apply", (route) =>
-      route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ success: false, message: "This customer is already linked to another affiliate." }) })
-    );
+    let applyEndpointCalled = false;
+    await page.route("**/api/customers/affiliate/apply", (route) => {
+      applyEndpointCalled = true;
+      return route.fulfill({ status: 201, contentType: "application/json", body: envelope({ id: "aff-new", status: "PENDING" }) });
+    });
+    await page.route("**/api/customers/affiliate/application", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ hasApplication: true, application: { id: "app-1", status: "DRAFT", documents: [], applicantType: "INDIVIDUAL" } }) });
+    });
 
     await page.goto("/account");
-    await page.locator('[data-action="apply-for-affiliate"]').click();
-    await expect(page.locator("[data-affiliate-apply-banner]")).toContainText("already linked");
+    await page.locator('.account-affiliate a[href="/account/affiliate-application"]').click();
+    await expect(page).toHaveURL(/\/account\/affiliate-application$/);
+    expect(applyEndpointCalled).toBe(false);
   });
 });
 

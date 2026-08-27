@@ -41,7 +41,10 @@ export type EmailTemplateName =
   | "product-review-reminder"
   | "stock-alert"
   | "wishlist-stock-alert"
-  | "abandoned-checkout-reminder";
+  | "abandoned-checkout-reminder"
+  // Version 7, Milestone 176.
+  | "affiliate-application-submitted"
+  | "affiliate-application-action-required";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -207,4 +210,18 @@ export interface StockAlertEmailData {
 export interface AbandonedCheckoutEmailData {
   customerFirstName: string | null;
   recoveryUrl: string;
+}
+
+// Version 7, Milestone 176: affiliate application/verification. Never
+// includes a document, an ID/passport/bank-account number, or any
+// extracted document text — brief section 42's own explicit list of
+// what an affiliate-application email must never contain.
+export interface AffiliateApplicationSubmittedEmailData {
+  applicantFirstName: string;
+}
+
+export interface AffiliateApplicationActionRequiredEmailData {
+  applicantFirstName: string;
+  reason: string;
+  applicationUrl: string;
 }

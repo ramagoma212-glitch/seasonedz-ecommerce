@@ -18,6 +18,7 @@ import newsletterRoutes from "./newsletter.routes.js";
 import socialAuthRoutes from "./socialAuth.routes.js";
 import adminAffiliateRoutes from "./adminAffiliate.routes.js";
 import adminReferralsRoutes from "./adminReferrals.routes.js";
+import adminAffiliateApplicationsRoutes from "./adminAffiliateApplications.routes.js";
 import referralsRoutes from "./referrals.routes.js";
 import courierWebhookRoutes from "./courierWebhook.routes.js";
 import checkoutIntentRoutes from "./checkoutIntent.routes.js";
@@ -63,6 +64,11 @@ router.use("/admin/affiliate", adminAffiliateRoutes);
 // requireAdminAuth applied at the router level, see
 // adminReferrals.routes.ts's own header comment.
 router.use("/admin/referrals", adminReferralsRoutes);
+// Version 7, Milestone 176: affiliate application/document review —
+// upgrades ONLY the onboarding process; the existing /admin/referrals
+// Affiliate management above is completely unchanged. Fully separate
+// router/path, same requireAdminAuth-at-the-router-level discipline.
+router.use("/admin/affiliate-applications", adminAffiliateApplicationsRoutes);
 // Version 7, Milestone 172B.4: public, unauthenticated referral
 // capture/preview — the live checkout-facing counterpart to the
 // admin-only /admin/referrals above. See referrals.routes.ts's own

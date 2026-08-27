@@ -88,7 +88,15 @@ export type NotificationEventType =
   | "PRODUCT_REVIEW_REMINDER"
   | "STOCK_ALERT"
   | "WISHLIST_STOCK_ALERT"
-  | "ABANDONED_CHECKOUT_REMINDER";
+  | "ABANDONED_CHECKOUT_REMINDER"
+  // Version 7, Milestone 176: affiliate application/verification.
+  // Approval/rejection reuse the EXISTING "AFFILIATE_APPROVED"/
+  // "AFFILIATE_REJECTED" events above unchanged — approveAffiliate()/
+  // rejectAffiliate() (referralAffiliate.service.ts) are called as-is
+  // by the new application admin actions, so those two notifications
+  // already fire correctly with zero new event types needed for them.
+  | "AFFILIATE_APPLICATION_SUBMITTED"
+  | "AFFILIATE_APPLICATION_ACTION_REQUIRED";
 
 // Version 7, Milestone 174C: a lazy-render outcome — either genuine
 // content to send, or "cancel" when the renderer determines, at the

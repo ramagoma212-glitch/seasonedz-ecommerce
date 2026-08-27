@@ -233,3 +233,28 @@ export const checkoutIntentRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Version 7, Milestone 176: affiliate application form saves/submit —
+// authenticated, generous enough for a genuine multi-section form with
+// several "Save" points, tighter than the general backstop since it's
+// still a write.
+export const affiliateApplicationFormRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Version 7, Milestone 176: affiliate document upload/replace — its own
+// tighter counter, separate from the form-save limiter above, since a
+// file upload is a heavier operation (storage write + synchronous
+// classification) that a scripted abuse attempt could otherwise repeat
+// far faster than a genuine applicant ever would (brief section 47).
+export const affiliateDocumentUploadRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

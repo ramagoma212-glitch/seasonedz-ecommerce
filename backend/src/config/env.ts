@@ -374,6 +374,30 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
   );
 }
 
+// Affiliate application verification documents (Version 7, Milestone 176)
+// — a THIRD, entirely separate private bucket, same "own bucket per
+// distinct sensitivity class" discipline as digital-products above.
+// Reuses the same supabaseUrl/supabaseServiceRoleKey (same Supabase
+// project) — never the public product-images bucket, never the
+// digital-products bucket (a purchased file and an applicant's ID
+// document have nothing to do with each other). Not eagerly required at
+// startup, same "not configured" pattern as digital downloads — see
+// services/affiliateDocumentStorage.service.ts.
+const affiliateVerificationDocumentsBucket = getEnv("AFFILIATE_VERIFICATION_DOCUMENTS_BUCKET", "affiliate-verification-documents");
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "[affiliate-verification] SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY are not set — " +
+      "affiliate application document upload is not configured. Every other route is " +
+      "unaffected; only the affiliate document upload/replace/view routes will respond " +
+      "with a clear configuration error until both are set. " +
+      `The private bucket "${affiliateVerificationDocumentsBucket}" must also be created ` +
+      "manually in the Supabase dashboard (Storage) with public access OFF — this backend " +
+      "never creates a bucket itself. See backend/AFFILIATE_VERIFICATION_SETUP.md."
+  );
+}
+
 // Courier Guy (Version 7, Milestone 108 — admin-only RATE QUOTE only).
 // See backend/src/services/courierGuy.service.ts's own header comment:
 // nothing in this codebase ever calls a booking/shipment-creation
@@ -768,6 +792,9 @@ export const env = {
   // supabaseServiceRoleKey; digitalProductsBucket is its own, separate,
   // private bucket name.
   digitalProductsBucket,
+  // Affiliate application document verification — see the block above.
+  // Its own, separate, private bucket name.
+  affiliateVerificationDocumentsBucket,
   // Courier Guy — see the block above. courierGuyApiKey is undefined
   // unless explicitly set; never logged anywhere.
   courierGuyEnabled,

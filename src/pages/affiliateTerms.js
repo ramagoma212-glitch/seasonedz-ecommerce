@@ -17,7 +17,7 @@ export function renderAffiliateTerms() {
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Affiliate Programme Terms</h1>
-      <p class="stub-page__text">Last updated: 26 August 2026</p>
+      <p class="stub-page__text">Last updated: 27 August 2026</p>
 
       <div class="info-page__body policy-page">
         <p>
@@ -39,12 +39,28 @@ export function renderAffiliateTerms() {
           guaranteed.</p>
 
         <h2>3. Becoming an Affiliate</h2>
-        <p>To apply, you must have a Seasonedz Group customer account. Your application uses the
-          name, email address and phone number already on that account. Applying creates a Pending
-          application; it does not grant any active referral link until Seasonedz Group approves it.</p>
-        <p>Seasonedz Group may reject an application, or suspend or reject an existing affiliate, at
-          its own reasonable discretion — for example where information provided is inaccurate, or
-          where we reasonably suspect abuse of the programme.</p>
+        <p>To apply, you must have a Seasonedz Group customer account. Applying means completing our
+          Affiliate Programme application, which asks for genuine personal, contact and residential
+          details, an identity document (South African ID or passport) and one proof-of-residence
+          document, along with some information about how you plan to promote Seasonedz. Applying
+          creates a Pending application; it does not grant any active referral link until Seasonedz
+          Group approves it.</p>
+        <p>The information and documents you provide must be accurate and genuinely belong to you (or,
+          for a business applicant, the business you are authorised to represent). Seasonedz Group may
+          run automated checks on submitted documents to help review your application (for example,
+          confirming a document appears to be the type you said it was, and that names or addresses
+          appear consistent). These checks assist our review — they do not themselves approve or
+          verify your identity with any government or banking authority, and they never replace a
+          genuine, manual decision by an authorised Seasonedz Group team member. If a document needs
+          to be corrected or replaced, we will let you know what's needed rather than rejecting your
+          whole application outright.</p>
+        <p>Seasonedz Group may reject an application, request corrected information or documents, or
+          suspend or reject an existing affiliate, at its own reasonable discretion — for example where
+          information or documents provided are inaccurate, false, or misleading, or where we
+          reasonably suspect abuse of the programme. Approval always remains a discretionary decision
+          made by an authorised Seasonedz Group admin; it is never automatic, even where every
+          automated check passes. Please keep your contact and residential details up to date if they
+          change after approval.</p>
 
         <h2>4. Your Referral Link and Discount Rate</h2>
         <p>Once approved, you receive a personal referral code and link. A customer who places a

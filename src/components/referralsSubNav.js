@@ -9,6 +9,10 @@
 const SUB_NAV_LINKS = [
   { key: "overview", href: "/admin/referrals", label: "Overview" },
   { key: "affiliates", href: "/admin/referrals/affiliates", label: "Affiliates" },
+  // Version 7, Milestone 176: affiliate application/document review —
+  // a separate area from the plain Affiliate list above (which still
+  // shows every real affiliate row, application-backed or not).
+  { key: "applications", href: "/admin/referrals/applications", label: "Applications" },
   // Version 7, Milestone 172B.5: the real commission lifecycle and
   // payout views.
   { key: "commissions", href: "/admin/referrals/commissions", label: "Commissions" },

@@ -15,6 +15,8 @@ import type {
   AbandonedCheckoutEmailData,
   AdminDeliveryExceptionEmailData,
   AdminNewReviewEmailData,
+  AffiliateApplicationActionRequiredEmailData,
+  AffiliateApplicationSubmittedEmailData,
   AffiliateEmailData,
   CommissionEmailData,
   EnquiryEmailData,
@@ -729,6 +731,51 @@ We noticed you didn't quite finish checking out on Seasonedz Group. Your cart is
 ${data.recoveryUrl}
 
 ${preferencesLink()}
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Version 7, Milestone 176: application submitted — a distinct, richer
+// notification from the old, simple "AFFILIATE_APPLICATION_RECEIVED"
+// email above (still used only by the legacy simple-apply code path if
+// it's ever reached — see affiliateApplication.service.ts). Never
+// mentions document content, classification results, or any
+// identity/bank detail (brief section 42).
+export function renderAffiliateApplicationSubmittedEmail(data: AffiliateApplicationSubmittedEmailData): RenderedEmail {
+  const subject = "Your Seasonedz Affiliate Application Has Been Submitted";
+  const body = `Hi ${data.applicantFirstName},
+
+Thank you for completing your Seasonedz Affiliate Programme application. We've received your details and documents and they're now awaiting review by our team.
+
+We'll be in touch once a decision has been made — no further action is needed from you right now.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Never includes the specific document content or full identity/bank
+// numbers — only the same short, safe reason an admin sees themselves
+// (brief section 42/43).
+export function renderAffiliateApplicationActionRequiredEmail(data: AffiliateApplicationActionRequiredEmailData): RenderedEmail {
+  const subject = "Action Needed on Your Seasonedz Affiliate Application";
+  const body = `Hi ${data.applicantFirstName},
+
+We've reviewed your Seasonedz Affiliate Programme application and need you to correct or replace something before we can continue:
+
+${data.reason}
+
+Please sign in and update your application here:
+
+${data.applicationUrl}
 
 ${CONTACT_LINE}
 

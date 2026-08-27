@@ -16,7 +16,7 @@ export function renderPrivacyPolicy() {
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Privacy Policy</h1>
-      <p class="stub-page__text">Last updated: 24 August 2026</p>
+      <p class="stub-page__text">Last updated: 27 August 2026</p>
 
       <div class="info-page__body policy-page">
         <p>Seasonedz Group respects your privacy and is committed to protecting your personal information.</p>
@@ -203,7 +203,7 @@ export function renderPrivacyPolicy() {
         <h2>14. Affiliate Programme</h2>
         <p>Seasonedz Group operates its own Affiliate Programme, allowing customers and other supporters to apply to refer new customers in exchange for a commission. If you apply to become an affiliate, we process:</p>
         <ul>
-          <li>Your name, email address and phone number, taken from your existing Seasonedz Group account.</li>
+          <li>Your name, email address and phone number, taken from your existing Seasonedz Group account where possible.</li>
           <li>Your affiliate application status.</li>
           <li>Your referral code and referral activity.</li>
           <li>Commission and payout records connected to orders you refer.</li>
@@ -212,6 +212,21 @@ export function renderPrivacyPolicy() {
         <p>When an order is genuinely referred and completed, we associate it with the relevant affiliate's account for the purpose of calculating and recording their commission. An affiliate can see limited information about orders referred through their own link (such as the order reference, date and commission amount) but never a referred customer's password, full delivery address, or unnecessary contact details.</p>
         <p>Affiliate payout records (amounts owed, approved, and paid) are kept for the same reasons, and for the same periods, as our other financial and accounting records — see section 19 below.</p>
         <p>Full programme rules are set out in our <a href="/affiliate-terms">Affiliate Programme Terms</a>.</p>
+
+        <h3>14.1 Affiliate Application &amp; Identity Verification</h3>
+        <p>Joining the Affiliate Programme requires completing a fuller application, which asks for additional personal information used only for genuine onboarding and verification purposes:</p>
+        <ul>
+          <li>Your legal first, middle and surname, date of birth and nationality.</li>
+          <li>An identity document number (South African ID or passport number).</li>
+          <li>Your contact details (email, mobile and, optionally, WhatsApp number) and residential address.</li>
+          <li>If applying as a business, your business name, registration number and website.</li>
+          <li>Information about how you plan to promote Seasonedz (e.g. website or social media links) and why you'd like to join.</li>
+          <li>A copy of an identity document (South African ID or passport) and one proof-of-residence document (for example a bank statement or municipal account/letter).</li>
+        </ul>
+        <p>We collect identity and residential documents solely to help our team verify that an application is genuine before granting access to referral links and commission. When a document is uploaded, our systems run automated checks that attempt to confirm the document appears to be the type you selected (for example, that a document uploaded as a bank statement genuinely looks like one) and that names or addresses in the document appear broadly consistent with what you entered. These automated checks assist our review only — they do not verify your identity with Home Affairs, a bank, or any other authority, and they never themselves approve an application. Every application is only ever approved or rejected by an authorised Seasonedz Group team member.</p>
+        <p>Identity and proof-of-residence documents are stored in a private file storage area that is never publicly accessible. They can only be viewed by you (for your own application) or by an authorised Seasonedz Group admin reviewing your application, each time via a fresh, short-lived access link generated at the moment it's needed — we never publish a permanent link to any document. We do not extract or store banking details such as account numbers, balances or transaction history from a bank statement; only the minimum information needed to help confirm the document type and that it appears to belong to you.</p>
+        <p>If part of your application needs correcting (for example, a document that didn't upload clearly), we'll tell you what's needed so you can fix and resubmit just that part, without losing the rest of your application.</p>
+        <p>Identity and document information is retained for as long as reasonably needed to support your application, your ongoing affiliate relationship (if approved), or a genuine dispute/compliance need if not approved, and is not kept indefinitely without purpose. We have not yet finalised a fixed retention period for rejected or withdrawn applications' documents; this Policy will be updated once one is set.</p>
 
         <h2>15. Cookies and Similar Technologies</h2>
         <p>Seasonedz Group may use cookies and similar browser technologies to support:</p>

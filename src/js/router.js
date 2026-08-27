@@ -74,6 +74,7 @@ import { renderAccount } from "../pages/accountPage.js";
 import { renderAccountOrderDetail } from "../pages/accountOrderDetail.js";
 import { renderForgotPassword } from "../pages/forgotPasswordPage.js";
 import { renderResetPassword } from "../pages/resetPasswordPage.js";
+import { renderAffiliateApplicationPage } from "../pages/affiliateApplicationPage.js";
 import { renderGuestDownloadPage } from "../pages/guestDownloadPage.js";
 import { renderAbout } from "../pages/about.js";
 import { renderContact } from "../pages/contact.js";
@@ -104,6 +105,8 @@ import { renderAdminAffiliateProductCreate, renderAdminAffiliateProductEdit } fr
 import { renderAdminReferralsOverview } from "../pages/adminReferralsOverview.js";
 import { renderAdminReferralAffiliates } from "../pages/adminReferralAffiliates.js";
 import { renderAdminReferralAffiliateCreate, renderAdminReferralAffiliateEdit } from "../pages/adminReferralAffiliateForm.js";
+import { renderAdminAffiliateApplications } from "../pages/adminAffiliateApplications.js";
+import { renderAdminAffiliateApplicationDetail } from "../pages/adminAffiliateApplicationDetail.js";
 import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
 import { renderAdminReferralCommissions } from "../pages/adminReferralCommissions.js";
 import { renderAdminReferralCommissionDetail } from "../pages/adminReferralCommissionDetail.js";
@@ -203,6 +206,10 @@ const routeDefs = [
   // convention already covers it without any extra pattern segment.
   { pattern: "/account/forgot-password", render: renderForgotPassword, title: "Forgot Password", noindex: true },
   { pattern: "/account/reset-password", render: renderResetPassword, title: "Reset Password", noindex: true },
+  // Version 7, Milestone 176: affiliate application/document
+  // verification — logged-in only (the page itself shows a sign-in
+  // prompt on a 401, same discipline as accountOrderDetail.js).
+  { pattern: "/account/affiliate-application", render: renderAffiliateApplicationPage, title: "Affiliate Programme Application", noindex: true },
   // Version 7, Milestone 152: guest secure-token digital download
   // access — reached only via a one-time emailed link (see
   // guestDownloadPage.js's own comment). noindex like every other
@@ -349,6 +356,8 @@ const routeDefs = [
   { pattern: "/admin/referrals/affiliates/new", render: renderAdminReferralAffiliateCreate, title: "Add Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates/:id/edit", render: renderAdminReferralAffiliateEdit, title: "Edit Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates", render: renderAdminReferralAffiliates, title: "Referral Affiliates", noindex: true },
+  { pattern: "/admin/referrals/applications/:id", render: renderAdminAffiliateApplicationDetail, title: "Affiliate Application", noindex: true },
+  { pattern: "/admin/referrals/applications", render: renderAdminAffiliateApplications, title: "Affiliate Applications", noindex: true },
   // Version 7, Milestone 172B.5: commission lifecycle + payout. "/:id"
   // before the bare list, same ordering discipline as every other
   // admin list/:id-wildcard pair in this file.

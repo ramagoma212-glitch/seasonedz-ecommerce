@@ -21,6 +21,14 @@ import {
 } from "../controllers/productReview.controller.js";
 import { applyForAffiliateProgrammeHandler, getMyAffiliatePortalHandler } from "../controllers/customerAffiliate.controller.js";
 import {
+  getMyApplicationHandler,
+  getMyDocumentSignedUrlHandler,
+  submitMyApplicationHandler,
+  updateMyApplicationHandler,
+  uploadAffiliateDocumentMiddleware,
+  uploadMyDocumentHandler,
+} from "../controllers/affiliateApplication.controller.js";
+import {
   listMyNotificationsHandler,
   getMyNotificationHandler,
   markMyNotificationReadHandler,
@@ -38,6 +46,8 @@ import {
   productReviewCreationRateLimiter,
   customerAffiliateApplyRateLimiter,
   stockAlertSubscribeRateLimiter,
+  affiliateApplicationFormRateLimiter,
+  affiliateDocumentUploadRateLimiter,
 } from "../middleware/rateLimit.middleware.js";
 
 const router = Router();
@@ -80,6 +90,16 @@ router.post("/reviews", requireCustomerAuth, productReviewCreationRateLimiter, s
 // (customerAffiliate.service.ts), never from anything the client sends.
 router.get("/affiliate", requireCustomerAuth, getMyAffiliatePortalHandler);
 router.post("/affiliate/apply", requireCustomerAuth, customerAffiliateApplyRateLimiter, applyForAffiliateProgrammeHandler);
+
+// Version 7, Milestone 176: affiliate application/verification — same
+// customer session, identity always derived from req.customerUser.id
+// (affiliateApplication.service.ts's own requireOwnedApplication()),
+// never from a client-supplied application id (brief section 48).
+router.get("/affiliate/application", requireCustomerAuth, getMyApplicationHandler);
+router.patch("/affiliate/application", requireCustomerAuth, affiliateApplicationFormRateLimiter, updateMyApplicationHandler);
+router.post("/affiliate/application/submit", requireCustomerAuth, affiliateApplicationFormRateLimiter, submitMyApplicationHandler);
+router.post("/affiliate/application/documents", requireCustomerAuth, affiliateDocumentUploadRateLimiter, uploadAffiliateDocumentMiddleware, uploadMyDocumentHandler);
+router.get("/affiliate/application/documents/:documentId/signed-url", requireCustomerAuth, getMyDocumentSignedUrlHandler);
 
 // Version 7, Milestone 174C: the Customer Notification Centre — see
 // customerNotification.service.ts's own header comment. "/notifications/read-all"

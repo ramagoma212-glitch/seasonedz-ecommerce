@@ -332,31 +332,35 @@ model Customer {
   // See socialAuth.service.ts.
   profileImageUrl String?
 
-  orders              Order[]
-  addresses           Address[]
-  sessions            CustomerSession[]
+  orders                  Order[]
+  addresses               Address[]
+  sessions                CustomerSession[]
   // Version 7, Milestone 152: best-effort admin-view linkage only — see
   // DigitalDownloadLog's own comment for why real entitlement checks
   // never rely on this relation.
-  digitalDownloadLogs DigitalDownloadLog[]
+  digitalDownloadLogs     DigitalDownloadLog[]
   // Version 7, Milestone 171C: genuine, verified-purchase product
   // reviews this customer has submitted — see ProductReview.
-  productReviews      ProductReview[]
+  productReviews          ProductReview[]
   // Version 7, Milestone 171F: connected social sign-in identities —
   // see AuthAccount below. A customer may have zero (password-only),
   // one, or several (one per provider, never two of the same provider).
-  authAccounts        AuthAccount[]
+  authAccounts            AuthAccount[]
   // Version 7, Milestone 172B.3: optional link to Seasonedz's own
   // affiliate/referral programme — see Affiliate's own comment. Zero
   // or one, never more (Affiliate.customerId is @unique): one Customer
   // can never be linked to two affiliate records.
-  affiliate           Affiliate?
+  affiliate               Affiliate?
   // Version 7, Milestone 174C: customer engagement — see each model's
   // own header comment.
   stockAlertSubscriptions StockAlertSubscription[]
   wishlistItems           WishlistItem[]
   checkoutIntents         CheckoutIntent[]
   notificationPreference  NotificationPreference?
+  // Version 7, Milestone 176: at most one in-progress/completed
+  // affiliate application per customer — see AffiliateApplication's own
+  // header comment.
+  affiliateApplication    AffiliateApplication?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -880,6 +884,11 @@ model AdminUser {
   // relation is still an array from this side since Prisma requires
   // the reverse of a to-one relation to be declared as one.
   affiliateProgrammeSettingsUpdates AffiliateProgrammeSettings[]
+  // Version 7, Milestone 176: audit trail entries this admin generated
+  // reviewing an affiliate application — SetNull (not Cascade), same
+  // "deleting an admin must never delete the audit history of what they
+  // did" discipline as orderStatusHistory above.
+  affiliateApplicationEvents        AffiliateApplicationEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1190,6 +1199,13 @@ model Affiliate {
   notes      String?
 
   commissions OrderAffiliateCommission[]
+  // Version 7, Milestone 176: the richer application/verification
+  // record behind this row, when one exists. Optional and one-directional
+  // in practice — an Affiliate created the old simple way (before this
+  // milestone, or by an admin directly via "Add Affiliate") may have no
+  // application at all; see AffiliateApplication's own header comment
+  // for how a legacy PENDING affiliate is handled.
+  application AffiliateApplication?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1432,18 +1448,18 @@ model Notification {
   // job would set this to deliveredAt + 7 days without needing any
   // schema change (brief section 47). Left untouched by retries — see
   // nextAttemptAt below for that.
-  scheduledAt DateTime @default(now())
+  scheduledAt   DateTime  @default(now())
   // Only ever set after a FAILED attempt with retries remaining — null
   // until then. Kept separate from scheduledAt so "when was this
   // originally meant to happen" survives retries unchanged.
   nextAttemptAt DateTime?
 
-  attemptCount Int @default(0)
-  maxAttempts  Int @default(3)
+  attemptCount Int     @default(0)
+  maxAttempts  Int     @default(3)
   // Never a raw provider response body or a secret — brevo.provider.ts
   // already only ever throws a safe BrevoSendError message; nothing
   // here changes that discipline.
-  lastError String?
+  lastError    String?
 
   sentAt      DateTime?
   failedAt    DateTime?
@@ -1629,4 +1645,266 @@ model NotificationPreference {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// AFFILIATE APPLICATION & DOCUMENT VERIFICATION (Version 7, Milestone 176)
+// ============================================================================
+//
+// Upgrades ONLY the affiliate onboarding/verification process — nothing
+// here changes Affiliate's own fields, status semantics, or lifecycle
+// (approveAffiliate()/rejectAffiliate() in referralAffiliate.service.ts
+// are reused completely unchanged). The 7%/5%/30-day/R500/monthly rules
+// all live on AffiliateProgrammeSettings/Affiliate exactly as before.
+//
+// One AffiliateApplication per Customer (customerId @unique) — the
+// authoritative record of the richer, document-backed onboarding form.
+// It starts DRAFT the moment a customer opens the application page, and
+// only ever creates/links a real Affiliate row (via the EXISTING
+// createAffiliate()) at genuine submission time — never earlier, so an
+// abandoned draft can never itself create a PENDING affiliate the old
+// simple "Apply" button used to create immediately. See
+// affiliateApplication.service.ts's own header comment for the full
+// state machine and for how a customer with a genuine legacy PENDING
+// Affiliate row (created by the pre-176 simple Apply flow, with no
+// application of its own) is handled — that pre-existing row is linked
+// to, never duplicated, and is never force-migrated or auto-activated.
+enum AffiliateApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACTION_REQUIRED
+  APPROVED
+  REJECTED
+}
+
+enum AffiliateApplicantType {
+  INDIVIDUAL
+  BUSINESS
+}
+
+enum AffiliateIdentityDocumentType {
+  SA_ID
+  PASSPORT
+}
+
+enum AffiliateProofOfResidenceType {
+  BANK_STATEMENT
+  MUNICIPAL_ACCOUNT_OR_LETTER
+  PROOF_OF_RESIDENCE
+}
+
+// Deliberately three outcomes only (brief section 24) — a system that
+// cannot reliably classify a document must say so honestly rather than
+// force a MATCH/MISMATCH guess. Reused identically for the document-type
+// classification itself and for each individual data-matching check
+// (name/address/identity-number) — see AffiliateApplicationDocument
+// below.
+enum AffiliateDocumentMatchResult {
+  MATCH
+  MISMATCH
+  MANUAL_REVIEW
+}
+
+enum AffiliateApplicationEventType {
+  CREATED
+  FIELDS_UPDATED
+  DOCUMENT_UPLOADED
+  DOCUMENT_REPLACED
+  CLASSIFICATION_COMPLETED
+  SUBMITTED
+  ACTION_REQUIRED
+  RESUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum AffiliateApplicationEventActor {
+  CUSTOMER
+  ADMIN
+  SYSTEM
+}
+
+model AffiliateApplication {
+  id String @id @default(cuid())
+
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Set only once, at genuine submission — see this model's own header
+  // comment. onDelete: SetNull (not Cascade) so an application's audit
+  // trail can never vanish just because the linked Affiliate row
+  // somehow did (it never actually does — Affiliate has no hard-delete
+  // path — but the relation is declared defensively regardless).
+  affiliateId String?    @unique
+  affiliate   Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+
+  status AffiliateApplicationStatus @default(DRAFT)
+
+  // ---- Personal details (brief section 6) --------------------------------
+  // Deliberately separate from Customer.firstName/lastName — this is the
+  // applicant's own confirmed LEGAL identity for verification purposes,
+  // pre-filled from the account where safe but never silently assumed to
+  // be identical, and never written back onto Customer itself (brief
+  // section 7: "do not silently overwrite the customer's main account
+  // identity").
+  firstName      String?
+  middleName     String?
+  surname        String?
+  dateOfBirth    DateTime?
+  nationality    String?
+  identityType   AffiliateIdentityDocumentType?
+  // Only one of these two is ever populated, matching identityType —
+  // enforced at the service layer (schema-level "exactly one of A/B"
+  // constraints don't exist in Postgres/Prisma without a check
+  // constraint this migration deliberately avoids adding). Never shown
+  // unmasked in any list view — see affiliateApplication.service.ts's
+  // maskIdentityNumber().
+  idNumber       String?
+  passportNumber String?
+
+  // ---- Contact details (brief section 7) ---------------------------------
+  contactEmail           String?
+  mobileNumber           String?
+  whatsappNumber         String?
+  preferredContactMethod String?
+
+  // ---- Residential details (brief section 8) ------------------------------
+  addressLine1 String?
+  addressLine2 String?
+  suburb       String?
+  city         String?
+  province     String?
+  postalCode   String?
+  country      String?
+
+  // ---- Applicant type (brief section 9) -----------------------------------
+  applicantType              AffiliateApplicantType @default(INDIVIDUAL)
+  businessName               String?
+  businessRegistrationNumber String?
+  businessWebsite            String?
+
+  // ---- Affiliate / promotional information (brief section 10) ------------
+  promotionPlan String?
+  websiteUrl    String?
+  facebookUrl   String?
+  instagramUrl  String?
+  tiktokUrl     String?
+  youtubeUrl    String?
+  otherPlatform String?
+  audienceSize  String?
+  motivation    String?
+
+  // ---- Declarations (brief section 31) ------------------------------------
+  // Never pre-ticked; both must be explicitly true, at the moment of
+  // submission, for status to reach SUBMITTED — see requireDeclarations()
+  // in affiliateApplication.service.ts. termsVersion records which
+  // version of /affiliate-terms was live at the moment of acceptance.
+  infoAccurateConfirmedAt DateTime?
+  termsAcceptedAt         DateTime?
+  termsVersion            String?
+
+  // ---- Review outcome (brief sections 28/36/39) ---------------------------
+  actionRequiredReason String?
+  actionRequiredArea   String?
+
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+
+  documents AffiliateApplicationDocument[]
+  events    AffiliateApplicationEvent[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// One row per uploaded document *version* — a replacement (brief section
+// 40) never overwrites a row in place; it creates a new one and marks
+// the previous row isCurrent: false, so admin-visible history survives
+// (brief section 41) without ever leaving two "current" documents in the
+// same slot. storageBucket/storagePath are internal-only, exactly like
+// DigitalAsset's own storageBucket/storagePath — never selected into any
+// API response; a signed URL is generated fresh, on demand, by the owning
+// customer or an authorised admin only (see
+// affiliateDocumentStorage.service.ts).
+model AffiliateApplicationDocument {
+  id            String               @id @default(cuid())
+  applicationId String
+  application   AffiliateApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  slot                 AffiliateDocumentSlot
+  identityDocumentType AffiliateIdentityDocumentType?
+  proofOfResidenceType AffiliateProofOfResidenceType?
+
+  storageBucket String
+  storagePath   String
+  // Safe display metadata only — a short, sanitised fragment of the
+  // original filename (never the full original name verbatim; see
+  // buildAffiliateDocumentStoragePath() in affiliateDocument.service.ts),
+  // never the storage path itself.
+  fileName      String
+  mimeType      String
+  fileSizeBytes Int
+
+  isCurrent Boolean @default(true)
+
+  // ---- Automated verification results (brief sections 17/24-27) ----------
+  // classification=null means "not yet classified" (should only ever be
+  // momentary — classification runs synchronously right after upload);
+  // MANUAL_REVIEW (never a silent guess) is the honest result whenever
+  // text extraction was unavailable (e.g. a JPG/PNG photo — see
+  // documentTextExtraction.service.ts's own header comment for why this
+  // backend does not attempt OCR) or genuinely inconclusive.
+  classification        AffiliateDocumentMatchResult?
+  // Short, safe, human-readable summary only — e.g. "Bank name and
+  // statement wording detected." NEVER raw extracted text, account
+  // numbers, or balances (brief sections 43/44).
+  classificationReason  String?
+  nameMatchResult       AffiliateDocumentMatchResult?
+  addressMatchResult    AffiliateDocumentMatchResult?
+  idNumberMatchResult   AffiliateDocumentMatchResult?
+  // Best-effort only, proof-of-residence documents only — brief section
+  // 13 explicitly says not to invent a validity-period rule, so this is
+  // captured for admin visibility alone; nothing in this codebase reads
+  // it to reject anything.
+  documentDateExtracted DateTime?
+
+  uploadedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([applicationId, slot, isCurrent])
+}
+
+enum AffiliateDocumentSlot {
+  IDENTITY
+  PROOF_OF_RESIDENCE
+}
+
+// Append-only audit trail (brief section 41) — never updated or deleted,
+// and never stores raw document content/extracted text/full identity
+// numbers, only short safe summaries (same discipline as
+// classificationReason above). actorAdminUserId is SetNull, not Cascade,
+// matching OrderStatusHistory's own "audit history must outlive the
+// admin who generated it" precedent.
+model AffiliateApplicationEvent {
+  id            String               @id @default(cuid())
+  applicationId String
+  application   AffiliateApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  eventType AffiliateApplicationEventType
+  actorType AffiliateApplicationEventActor
+
+  actorAdminUserId String?
+  actorAdminUser   AdminUser? @relation(fields: [actorAdminUserId], references: [id], onDelete: SetNull)
+
+  summary String
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt])
 }

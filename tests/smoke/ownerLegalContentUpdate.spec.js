@@ -16,7 +16,12 @@ const LAST_UPDATED = "Last updated: 24 August 2026";
 
 const LEGAL_PAGES = [
   { path: "/terms", h1: "Terms and Conditions" },
-  { path: "/privacy-policy", h1: "Privacy Policy" },
+  // Version 7, Milestone 176: Privacy Policy's own "Last updated" date
+  // moved to 27 August 2026 — a genuine content update (new section
+  // 14.1, affiliate application/identity verification), not a
+  // regression; every other legal page here is untouched and still
+  // carries the original 24 August 2026 date.
+  { path: "/privacy-policy", h1: "Privacy Policy", lastUpdated: "Last updated: 27 August 2026" },
   { path: "/returns-policy", h1: "Returns, Refunds and Exchanges Policy" },
   { path: "/cookies-policy", h1: "Cookie Policy" },
 ];
@@ -68,12 +73,12 @@ test.describe("Owner About + Legal content update (24 August 2026)", () => {
     await expect(body).toContainText("Opportunity");
   });
 
-  for (const { path, h1 } of LEGAL_PAGES) {
+  for (const { path, h1, lastUpdated } of LEGAL_PAGES) {
     test(`${path} renders successfully with the correct H1 and last updated date`, async ({ page }) => {
       const response = await page.goto(path);
       expect(response?.ok()).toBe(true);
       await expect(page.locator("h1")).toHaveText(h1);
-      await expect(page.locator(".stub-page__text")).toHaveText(LAST_UPDATED);
+      await expect(page.locator(".stub-page__text")).toHaveText(lastUpdated || LAST_UPDATED);
     });
 
     test(`${path} shows the correct registration number, email, phone and secure .co.za website, and no stale .com reference`, async ({ page }) => {

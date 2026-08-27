@@ -55,6 +55,9 @@ import {
   removeFromServerWishlist,
   mergeGuestWishlist,
   captureCheckoutIntent,
+  updateMyAffiliateApplication,
+  submitMyAffiliateApplication,
+  uploadMyAffiliateDocument,
 } from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
@@ -94,6 +97,13 @@ import {
   reverseAdminReferralCommission,
   payAdminAffiliateCommissions,
 } from "./api/adminReferralsApi.js";
+import {
+  requestAdminAffiliateApplicationCorrection,
+  approveAdminAffiliateApplication,
+  rejectAdminAffiliateApplication,
+  revealAdminAffiliateApplicationIdentityNumber,
+  getAdminAffiliateApplicationDocumentSignedUrl,
+} from "./api/adminAffiliateApplicationsApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
 import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
@@ -134,6 +144,7 @@ function mountApp() {
   setupNewsletterForm();
   setupEnquiryForms();
   setupCustomerAccountForms();
+  setupAffiliateApplicationForm();
   setupPasswordVisibilityToggles();
   setupAdminLoginForm();
   setupAdminOrderStatusForm();
@@ -151,6 +162,7 @@ function mountApp() {
   setupAdminReferralAffiliateFilterForm();
   setupAdminReferralAffiliateForm();
   setupAdminReferralAffiliateActions();
+  setupAdminAffiliateApplicationActions();
   setupAdminReferralSettingsForm();
   setupAdminCommissionFilterForm();
   setupAdminCommissionActions();
@@ -1888,6 +1900,162 @@ async function handleApplyForAffiliate(button) {
   }
 }
 
+// Version 7, Milestone 176: affiliate application/document
+// verification — one long form (not a wizard, see
+// affiliateApplicationPage.js's own header comment), one delegated
+// listener set covering save-draft/submit/document-upload/the two
+// conditional-field toggles (identity type, applicant type).
+const AFFILIATE_APPLICATION_TEXT_FIELD_IDS = [
+  "firstName", "middleName", "surname", "dateOfBirth", "nationality", "idNumber", "passportNumber",
+  "contactEmail", "mobileNumber", "whatsappNumber", "preferredContactMethod",
+  "addressLine1", "addressLine2", "suburb", "city", "province", "postalCode", "country",
+  "businessName", "businessRegistrationNumber", "businessWebsite",
+  "promotionPlan", "websiteUrl", "facebookUrl", "instagramUrl", "tiktokUrl", "youtubeUrl", "otherPlatform", "audienceSize", "motivation",
+];
+
+function collectAffiliateApplicationFormValues(form) {
+  const values = {};
+  for (const id of AFFILIATE_APPLICATION_TEXT_FIELD_IDS) {
+    const field = form.querySelector(`#${id}`);
+    if (field) values[id] = field.value.trim() || null;
+  }
+  const identityType = form.querySelector("#identityType");
+  if (identityType) values.identityType = identityType.value || null;
+  const applicantType = form.querySelector("#applicantType");
+  if (applicantType) values.applicantType = applicantType.value || null;
+  const infoAccurateConfirmed = form.querySelector("#infoAccurateConfirmed");
+  if (infoAccurateConfirmed) values.infoAccurateConfirmed = infoAccurateConfirmed.checked;
+  const termsAccepted = form.querySelector("#termsAccepted");
+  if (termsAccepted) values.termsAccepted = termsAccepted.checked;
+  return values;
+}
+
+function showAffiliateApplicationBanner(message, isSuccess = false) {
+  const errorBanner = document.querySelector("[data-affiliate-application-banner]");
+  const successBanner = document.querySelector("[data-affiliate-application-success]");
+  if (errorBanner) {
+    errorBanner.hidden = isSuccess;
+    errorBanner.textContent = isSuccess ? "" : message;
+  }
+  if (successBanner) {
+    successBanner.hidden = !isSuccess;
+    successBanner.textContent = isSuccess ? message : "";
+  }
+}
+
+async function handleSaveAffiliateApplicationDraft(button) {
+  const form = document.getElementById("affiliate-application-form");
+  if (!form) return;
+  button.disabled = true;
+
+  try {
+    await updateMyAffiliateApplication(collectAffiliateApplicationFormValues(form));
+    showAffiliateApplicationBanner("Draft saved.", true);
+  } catch (error) {
+    showAffiliateApplicationBanner(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function handleSubmitAffiliateApplication(form) {
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    // Save every current field first — submit itself only validates
+    // what's already stored server-side, it never reads the form body.
+    await updateMyAffiliateApplication(collectAffiliateApplicationFormValues(form));
+    await submitMyAffiliateApplication();
+    rerenderCurrentRoute();
+  } catch (error) {
+    showAffiliateApplicationBanner(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleUploadAffiliateDocument(button) {
+  const slot = button.dataset.slot;
+  const fileInput = document.querySelector(`[data-document-file-input][data-slot="${slot}"]`);
+  const typeSelect = document.querySelector(`[data-document-type-select][data-slot="${slot}"]`);
+  const banner = document.querySelector(`[data-document-upload-banner="${slot}"]`);
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const file = fileInput?.files?.[0];
+  if (!file) {
+    if (banner) {
+      banner.textContent = "Please choose a file first.";
+      banner.hidden = false;
+    }
+    return;
+  }
+  if (!typeSelect?.value) {
+    if (banner) {
+      banner.textContent = "Please select a document type first.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    await uploadMyAffiliateDocument({
+      file,
+      slot,
+      identityDocumentType: slot === "IDENTITY" ? typeSelect.value : undefined,
+      proofOfResidenceType: slot === "PROOF_OF_RESIDENCE" ? typeSelect.value : undefined,
+    });
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAffiliateApplicationForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#affiliate-application-form");
+    if (!form) return;
+    event.preventDefault();
+    handleSubmitAffiliateApplication(form);
+  });
+
+  document.addEventListener("click", (event) => {
+    const saveDraftButton = event.target.closest('[data-action="save-affiliate-application-draft"]');
+    if (saveDraftButton) {
+      handleSaveAffiliateApplicationDraft(saveDraftButton);
+      return;
+    }
+    const uploadButton = event.target.closest('[data-action="upload-affiliate-document"]');
+    if (uploadButton) {
+      handleUploadAffiliateDocument(uploadButton);
+    }
+  });
+
+  // Conditional fields — never hidden fields that still submit stale
+  // values, since collectAffiliateApplicationFormValues() reads every
+  // field's current DOM value regardless of visibility; hiding is pure
+  // UX, the backend is the real authority on what's required.
+  document.addEventListener("change", (event) => {
+    if (event.target.id === "identityType") {
+      const idField = document.querySelector("[data-id-number-field]");
+      const passportField = document.querySelector("[data-passport-number-field]");
+      if (idField) idField.hidden = event.target.value !== "SA_ID";
+      if (passportField) passportField.hidden = event.target.value !== "PASSPORT";
+    }
+    if (event.target.id === "applicantType") {
+      const businessFields = document.querySelector("[data-business-fields]");
+      if (businessFields) businessFields.hidden = event.target.value !== "BUSINESS";
+    }
+  });
+}
+
 // Admin order status update (Version 7, Milestone 64). Delegated
 // listeners so the controls keep working no matter how many times the
 // order detail page re-renders (each status change triggers a
@@ -3037,6 +3205,119 @@ async function handleAdminReferralAffiliateAction(button, apiCall, verb) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
+  }
+}
+
+// Version 7, Milestone 176: admin affiliate application review actions
+// — approve/reject/request-correction (each reuses the existing
+// referral-affiliate lifecycle server-side, see
+// adminAffiliateApplication.service.ts), reveal the masked identity
+// number, and view a document via a fresh signed URL. Every decision
+// button lives on the detail page only, so there's no "row" to disable
+// buttons within — the whole decision card is disabled instead.
+function setupAdminAffiliateApplicationActions() {
+  document.addEventListener("click", (event) => {
+    const approveButton = event.target.closest('[data-action="approve-affiliate-application"]');
+    if (approveButton) {
+      handleAdminAffiliateApplicationDecision(approveButton, () => approveAdminAffiliateApplication(approveButton.dataset.applicationId), "approved");
+      return;
+    }
+
+    const rejectButton = event.target.closest('[data-action="reject-affiliate-application"]');
+    if (rejectButton) {
+      const reason = document.getElementById("decisionReason")?.value.trim() || "";
+      if (!reason) {
+        showAdminAffiliateApplicationDecisionError("A reason is required to reject an application.");
+        return;
+      }
+      handleAdminAffiliateApplicationDecision(rejectButton, () => rejectAdminAffiliateApplication(rejectButton.dataset.applicationId, reason), "rejected");
+      return;
+    }
+
+    const correctionButton = event.target.closest('[data-action="request-affiliate-application-correction"]');
+    if (correctionButton) {
+      const reason = document.getElementById("decisionReason")?.value.trim() || "";
+      const area = document.getElementById("correctionArea")?.value || "OTHER";
+      if (!reason) {
+        showAdminAffiliateApplicationDecisionError("A reason is required to request a correction.");
+        return;
+      }
+      handleAdminAffiliateApplicationDecision(correctionButton, () => requestAdminAffiliateApplicationCorrection(correctionButton.dataset.applicationId, { reason, area }), "sent back for correction");
+      return;
+    }
+
+    const revealButton = event.target.closest('[data-action="reveal-identity-number"]');
+    if (revealButton) {
+      handleRevealAffiliateIdentityNumber(revealButton);
+      return;
+    }
+
+    const viewDocButton = event.target.closest('[data-action="view-affiliate-document"]');
+    if (viewDocButton) {
+      handleViewAffiliateDocument(viewDocButton);
+    }
+  });
+}
+
+function showAdminAffiliateApplicationDecisionError(message) {
+  const banner = document.querySelector("[data-affiliate-application-decision-banner]");
+  if (banner) {
+    banner.textContent = message;
+    banner.hidden = false;
+  }
+}
+
+async function handleAdminAffiliateApplicationDecision(button, apiCall, verb) {
+  const card = button.closest(".order-confirmation__card");
+  const banner = document.querySelector("[data-affiliate-application-decision-banner]");
+  const buttons = card?.querySelectorAll("button") || [];
+
+  buttons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall();
+    setPendingAdminMessage(`Application ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    buttons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleRevealAffiliateIdentityNumber(button) {
+  button.disabled = true;
+  try {
+    const response = await revealAdminAffiliateApplicationIdentityNumber(button.dataset.applicationId);
+    const valueEl = document.querySelector("[data-identity-number-value]");
+    if (valueEl) valueEl.textContent = response.data.identityNumber || "—";
+    button.remove();
+  } catch (error) {
+    button.disabled = false;
+    window.alert(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
+  }
+}
+
+// Opens the document in a new tab via a freshly-generated, short-lived
+// signed URL — never a stored/cached link (brief section 35).
+async function handleViewAffiliateDocument(button) {
+  const banner = document.querySelector("[data-affiliate-document-view-banner]");
+  if (banner) banner.hidden = true;
+  button.disabled = true;
+
+  try {
+    const response = await getAdminAffiliateApplicationDocumentSignedUrl(button.dataset.applicationId, button.dataset.documentId);
+    window.open(response.data.signedUrl, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  } finally {
+    button.disabled = false;
   }
 }
 

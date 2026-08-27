@@ -17,6 +17,7 @@ import {
   getCurrentCustomer,
   getCustomerOrders,
   getMyAffiliatePortal,
+  getMyAffiliateApplication,
   getMyNotifications,
   getMyNotificationPreferences,
 } from "../js/api/customerApi.js";
@@ -463,7 +464,32 @@ function renderActiveAffiliatePortal(affiliate) {
   `;
 }
 
-function renderPendingAffiliatePortal() {
+// Version 7, Milestone 176: a PENDING Affiliate now always has a real
+// AffiliateApplication behind it (either genuinely completed, or a
+// legacy row created by the pre-176 simple "Apply" button and still
+// incomplete — brief section 51). Best-effort, same discipline as
+// renderConnectedAccountsSection() above — a failed application lookup
+// falls back to the old generic "awaiting review" message rather than
+// breaking the page.
+async function renderPendingAffiliatePortal() {
+  let applicationStatus = null;
+  try {
+    const response = await getMyAffiliateApplication();
+    applicationStatus = response?.data?.application?.status || null;
+  } catch {
+    applicationStatus = null;
+  }
+
+  if (applicationStatus === null || applicationStatus === "DRAFT" || applicationStatus === "ACTION_REQUIRED") {
+    return `
+      <div class="order-confirmation__row"><span>Status</span><span class="badge">Pending</span></div>
+      <p class="admin-product-form__hint">
+        ${applicationStatus === "ACTION_REQUIRED" ? "We need a bit more information before we can review your application." : "Complete your Affiliate Programme application to be reviewed."}
+      </p>
+      <a class="btn btn--primary btn--sm" href="/account/affiliate-application">Complete your Affiliate Programme application</a>
+    `;
+  }
+
   return `
     <div class="order-confirmation__row"><span>Status</span><span class="badge">Pending</span></div>
     <p class="admin-product-form__hint">Your application to join the Seasonedz Affiliate Programme is awaiting review. We'll approve genuine applications as soon as we can — no referral tools are active yet.</p>
@@ -485,14 +511,21 @@ function renderRejectedAffiliatePortal() {
   `;
 }
 
+// Version 7, Milestone 176: the old single-click "Apply" action
+// (customerAffiliate.controller.ts's applyForAffiliateProgrammeHandler)
+// is no longer used from here — applying now means completing the full
+// application/verification form, which is also the only place a real
+// Affiliate row gets created (at genuine submission, not on first
+// click). The underlying old endpoint is left in place untouched
+// (harmless, unreachable dead code path) rather than removed, since
+// removing it is outside this milestone's scope.
 function renderNoAffiliateSection() {
   return `
     <p class="admin-product-form__hint">
       Earn a commission for every genuine sale you refer to Seasonedz Group, and give your friends a discount too.
-      Read the <a href="/affiliate-terms">Affiliate Programme Terms</a>, then apply below.
+      Read the <a href="/affiliate-terms">Affiliate Programme Terms</a>, then start your application below.
     </p>
-    <div class="form-banner form-banner--error" data-affiliate-apply-banner hidden></div>
-    <button type="button" class="btn btn--primary" data-action="apply-for-affiliate">Apply to Become an Affiliate</button>
+    <a class="btn btn--primary" href="/account/affiliate-application">Apply to Become an Affiliate</a>
   `;
 }
 
@@ -515,7 +548,7 @@ async function renderAffiliateProgrammeSection() {
   } else if (affiliate.status === "ACTIVE") {
     body = renderActiveAffiliatePortal(affiliate);
   } else if (affiliate.status === "PENDING") {
-    body = renderPendingAffiliatePortal();
+    body = await renderPendingAffiliatePortal();
   } else if (affiliate.status === "SUSPENDED") {
     body = renderSuspendedAffiliatePortal(affiliate);
   } else {

@@ -14,11 +14,19 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000
 export async function customerRequest(path, options = {}) {
   let response;
 
+  // Version 7, Milestone 176: a FormData body (affiliate verification
+  // document upload) must never get a manual Content-Type — the browser
+  // only sets the correct "multipart/form-data; boundary=..." header
+  // itself when Content-Type is left unset. Same fix already applied to
+  // adminApiClient.js's own adminRequest() for product image upload.
+  const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+  const headers = isFormData ? { ...(options.headers || {}) } : { "Content-Type": "application/json", ...(options.headers || {}) };
+
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       credentials: "include",
       ...options,
-      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+      headers,
     });
   } catch (error) {
     console.warn(`[Seasonedz] Could not reach the backend API at ${API_BASE_URL}${path}.`, error);

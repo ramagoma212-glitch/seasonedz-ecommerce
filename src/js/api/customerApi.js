@@ -98,6 +98,38 @@ export function applyForAffiliateProgramme() {
   return customerRequest("/customers/affiliate/apply", { method: "POST" });
 }
 
+// Version 7, Milestone 176: affiliate application/document verification
+// — same customer session, identity always derived server-side from
+// the session cookie, never from anything sent here.
+export function getMyAffiliateApplication() {
+  return customerRequest("/customers/affiliate/application", { method: "GET" });
+}
+
+export function updateMyAffiliateApplication(fields) {
+  return customerRequest("/customers/affiliate/application", { method: "PATCH", body: JSON.stringify(fields) });
+}
+
+export function submitMyAffiliateApplication() {
+  return customerRequest("/customers/affiliate/application/submit", { method: "POST" });
+}
+
+// `file` is a real File/Blob from an <input type="file">. FormData is
+// used (never JSON.stringify) so the browser sets the correct
+// multipart Content-Type itself — see customerApiClient.js's own
+// isFormData handling.
+export function uploadMyAffiliateDocument({ file, slot, identityDocumentType, proofOfResidenceType }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("slot", slot);
+  if (identityDocumentType) formData.append("identityDocumentType", identityDocumentType);
+  if (proofOfResidenceType) formData.append("proofOfResidenceType", proofOfResidenceType);
+  return customerRequest("/customers/affiliate/application/documents", { method: "POST", body: formData });
+}
+
+export function getMyAffiliateDocumentSignedUrl(documentId) {
+  return customerRequest(`/customers/affiliate/application/documents/${encodeURIComponent(documentId)}/signed-url`, { method: "GET" });
+}
+
 // Version 7, Milestone 174C: the Customer Notification Centre. All
 // four require the caller to already be logged in — the backend
 // always scopes every read/write to req.customerUser.id, never a
