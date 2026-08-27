@@ -26,6 +26,7 @@ import type {
   RenderedEmail,
   StockAlertEmailData,
 } from "./email.types.js";
+import { preferredFrontendBaseUrl } from "../../utils/frontendUrl.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
 
@@ -635,6 +636,19 @@ Please review this in the admin dashboard.`;
 // separate).
 const GOOGLE_REVIEW_URL = "https://g.page/r/CVDIjAAjMaL7EAI/review";
 
+// Brief section 43: every optional/engagement email links to where a
+// customer can turn that category off, distinct from a transactional
+// email's own "no unsubscribe" nature. Always the same, real
+// account-notification-preferences page — never the newsletter's own
+// unsubscribe mechanism (brief section 43's own "do not use newsletter
+// unsubscribe architecture unless genuinely shared"). Safe even for an
+// abandoned-checkout reminder that might reach a guest: visiting this
+// link while logged out shows the account page's own existing sign-in
+// prompt, never a broken page.
+function preferencesLink(): string {
+  return `Manage which of these emails you receive: ${preferredFrontendBaseUrl()}/account`;
+}
+
 // Deliberately neutral wording throughout — never asks for a specific
 // star rating, never offers or implies a reward for a positive review
 // (brief section 12/51).
@@ -658,6 +672,8 @@ You can leave a review from your order page: ${data.reviewUrl}
 Enjoyed your overall experience with Seasonedz Group? We'd also really appreciate a review on Google:
 ${GOOGLE_REVIEW_URL}
 
+${preferencesLink()}
+
 ${CONTACT_LINE}
 
 Warm regards,
@@ -674,6 +690,8 @@ Good news — ${data.productName} is back in stock on Seasonedz Group.
 
 View it here: ${data.productUrl}
 
+${preferencesLink()}
+
 ${CONTACT_LINE}
 
 Warm regards,
@@ -689,6 +707,8 @@ export function renderWishlistStockAlertEmail(data: StockAlertEmailData): Render
 ${data.productName}, saved on your Seasonedz Group wishlist, is back in stock.
 
 View it here: ${data.productUrl}
+
+${preferencesLink()}
 
 ${CONTACT_LINE}
 
@@ -707,6 +727,8 @@ export function renderAbandonedCheckoutReminderEmail(data: AbandonedCheckoutEmai
 We noticed you didn't quite finish checking out on Seasonedz Group. Your cart is still waiting for you if you'd like to complete your order:
 
 ${data.recoveryUrl}
+
+${preferencesLink()}
 
 ${CONTACT_LINE}
 
