@@ -279,7 +279,7 @@ export async function approveApplication(id: string, adminUserId: string) {
   const application = await requireApplication(id);
   assertUnderReview(application.status, "approve");
   if (!application.affiliateId) {
-    throw new AdminAffiliateApplicationError("This application has no linked affiliate record — it cannot be approved.", 409);
+    throw new AdminAffiliateApplicationError("This application has no linked affiliate record. It cannot be approved.", 409);
   }
 
   // Reused, unchanged — this is the ONLY place Affiliate.status ever
@@ -302,7 +302,7 @@ export async function rejectApplication(id: string, rawReason: unknown, adminUse
   const application = await requireApplication(id);
   assertUnderReview(application.status, "reject");
   if (!application.affiliateId) {
-    throw new AdminAffiliateApplicationError("This application has no linked affiliate record — it cannot be rejected.", 409);
+    throw new AdminAffiliateApplicationError("This application has no linked affiliate record. It cannot be rejected.", 409);
   }
 
   const reason = typeof rawReason === "string" && rawReason.trim().length > 0 ? stripHtml(rawReason).slice(0, 1000) : null;

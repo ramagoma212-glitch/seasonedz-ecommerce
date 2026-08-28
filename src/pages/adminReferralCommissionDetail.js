@@ -61,7 +61,7 @@ function renderActions(commission) {
       <div class="order-confirmation__card">
         <h3>Actions</h3>
         <div class="form-banner form-banner--error" data-admin-commission-detail-banner hidden></div>
-        <p class="admin-product-form__hint">To mark this commission paid, use the <a href="/admin/referrals/payouts">Payouts</a> page — payment is always grouped by affiliate there.</p>
+        <p class="admin-product-form__hint">To mark this commission paid, use the <a href="/admin/referrals/payouts">Payouts</a> page. Payment is always grouped by affiliate there.</p>
         ${renderReverseForm(commission)}
       </div>
     `;
@@ -74,7 +74,7 @@ function renderActions(commission) {
         <div class="form-banner form-banner--error" data-admin-commission-detail-banner hidden></div>
         ${
           commission.paidButOrderNowNonPayable
-            ? `<div class="form-banner form-banner--error">This order is now CANCELLED/REFUNDED, but this commission is still PAID. This is a clawback case — reversing it below records that the affiliate must be asked to return this payment; it does not move any money automatically.</div>`
+            ? `<div class="form-banner form-banner--error">This order is now CANCELLED or REFUNDED, but this commission is still PAID. This is a clawback case. Reversing it below records that the affiliate must be asked to return this payment. It does not move any money automatically.</div>`
             : ""
         }
         ${renderReverseForm(commission, true)}
@@ -96,7 +96,7 @@ function renderReverseForm(commission, isClawback = false) {
         isClawback
           ? `<label style="display:flex;align-items:center;gap:0.4em;">
                <input type="checkbox" name="confirmClawback" value="true" required />
-               I understand this commission was already paid — reversing it does not recover the money automatically.
+               I understand this commission was already paid. Reversing it does not recover the money automatically.
              </label>`
           : ""
       }

@@ -390,7 +390,7 @@ export async function recordPasswordResetAttempt(params: { customerId: string; c
         status: params.delivered ? NotificationStatus.SENT : NotificationStatus.FAILED,
         sentAt: params.delivered ? now : undefined,
         failedAt: params.delivered ? undefined : now,
-        lastError: params.delivered ? undefined : "Delivery failed — see server logs for the underlying error (never stored here).",
+        lastError: params.delivered ? undefined : "Delivery failed. See server logs for the underlying error (never stored here).",
         attemptCount: 1,
         maxAttempts: 1,
       },

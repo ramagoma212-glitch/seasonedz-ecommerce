@@ -27,8 +27,8 @@ export function renderShippingPolicy() {
           Delivery is available across South Africa. Seasonedz Group is
           a small team, so delivery is currently arranged manually
           rather than through a live, automated courier system. We use
-          The Courier Guy for courier deliveries where applicable —
-          every order is packed, booked and tracked by hand.
+          The Courier Guy for courier deliveries where applicable.
+          Every order is packed, booked and tracked by hand.
         </p>
 
         <h2>Delivery Options and Fees</h2>
@@ -71,7 +71,7 @@ export function renderShippingPolicy() {
           number to see its current processing status. Courier tracking
           details (once your order is dispatched, such as a waybill or
           tracking number) will be shared with you manually by Seasonedz
-          Group directly. This is not live, real-time courier tracking —
+          Group directly. This is not live, real-time courier tracking.
           Seasonedz Group updates it by hand.
         </p>
 

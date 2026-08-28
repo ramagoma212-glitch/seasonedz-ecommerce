@@ -25,7 +25,7 @@
 // would point at a selector that doesn't exist on that page.
 export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected = false } = {}) {
   if (!hasPhysicalItems) {
-    return "No delivery is needed — this order is digital download(s) only.";
+    return "No delivery is needed. This order is digital download(s) only.";
   }
   if (deliveryFee === null) {
     return omitDeliveryUntilSelected
@@ -33,7 +33,7 @@ export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUnt
       : "Select a delivery method below to see your delivery fee.";
   }
   if (deliveryFee === 0) {
-    return "Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
+    return "Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
   }
   return "Spend R600 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.";
 }

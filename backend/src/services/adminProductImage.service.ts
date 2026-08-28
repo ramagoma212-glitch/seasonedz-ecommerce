@@ -268,7 +268,7 @@ export async function updateProductImage(
   if (setPrimary === true) {
     data.isPrimary = true;
   } else if (setPrimary === false) {
-    throw new AdminProductImageError("isPrimary can only be set to true directly — set another image as primary instead.");
+    throw new AdminProductImageError("isPrimary can only be set to true directly. Set another image as primary instead.");
   }
 
   if (Object.keys(data).length === 0) {

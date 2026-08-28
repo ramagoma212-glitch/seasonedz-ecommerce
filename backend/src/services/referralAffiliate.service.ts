@@ -149,7 +149,7 @@ const MAX_CODE_GENERATION_ATTEMPTS = 50;
 async function generateUniqueReferralCode(base: string): Promise<string> {
   const baseCode = slugifyForCodeSuggestion(base).slice(0, MAX_REFERRAL_CODE_LENGTH);
   if (baseCode.length < MIN_REFERRAL_CODE_LENGTH) {
-    throw new ReferralAffiliateError("Could not suggest a referral code from this name — please provide one manually.");
+    throw new ReferralAffiliateError("Could not suggest a referral code from this name. Please provide one manually.");
   }
 
   let candidate = baseCode;
@@ -161,7 +161,7 @@ async function generateUniqueReferralCode(base: string): Promise<string> {
     candidate = `${baseCode.slice(0, MAX_REFERRAL_CODE_LENGTH - suffixText.length)}${suffixText}`;
     suffix += 1;
   }
-  throw new ReferralAffiliateError("Could not generate a unique referral code automatically — please provide one manually.");
+  throw new ReferralAffiliateError("Could not generate a unique referral code automatically. Please provide one manually.");
 }
 
 // Rate validation. 0-50% is a defensible sanity ceiling: comfortably

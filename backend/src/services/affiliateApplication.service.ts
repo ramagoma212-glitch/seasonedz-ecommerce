@@ -582,7 +582,7 @@ export async function submitMyApplication(customerId: string): Promise<Affiliate
   if (isResubmission) {
     await recordEvent(application.id, AffiliateApplicationEventType.RESUBMITTED, "CUSTOMER", null, "Resubmitted for review.");
   }
-  await recordEvent(application.id, AffiliateApplicationEventType.CLASSIFICATION_COMPLETED, "SYSTEM", null, "All required documents already classified at upload time — ready for admin review.");
+  await recordEvent(application.id, AffiliateApplicationEventType.CLASSIFICATION_COMPLETED, "SYSTEM", null, "All required documents were already classified at upload time. Ready for admin review.");
 
   void notificationEngine
     .enqueueAndSendNow({

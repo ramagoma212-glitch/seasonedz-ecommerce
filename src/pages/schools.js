@@ -38,7 +38,7 @@ export function renderSchools() {
           Our <a href="/product/school-starter-colouring-pack">School Starter Colouring Pack</a>
           bundles our most popular colouring books with crayons, ready to
           hand out to a class. It's a simple starting point for classroom
-          use — or browse our full range of
+          use, or browse our full range of
           <a href="/category/bundles">colouring book and marker bundles</a>.
         </p>
 

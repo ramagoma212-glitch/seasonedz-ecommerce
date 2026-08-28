@@ -29,18 +29,18 @@ function renderPersonalDetails(app) {
   return `
     <div class="order-confirmation__card">
       <h3>Personal Details</h3>
-      ${row("Full Name", escapeHtml([app.firstName, app.middleName, app.surname].filter(Boolean).join(" ") || "—"))}
-      ${row("Date of Birth", app.dateOfBirth ? formatDate(app.dateOfBirth) : "—")}
-      ${row("Nationality", escapeHtml(app.nationality || "—"))}
-      ${row("Identity Type", app.identityType ? escapeHtml(humanizeEnum(app.identityType)) : "—")}
+      ${row("Full Name", escapeHtml([app.firstName, app.middleName, app.surname].filter(Boolean).join(" ") || "N/A"))}
+      ${row("Date of Birth", app.dateOfBirth ? formatDate(app.dateOfBirth) : "N/A")}
+      ${row("Nationality", escapeHtml(app.nationality || "N/A"))}
+      ${row("Identity Type", app.identityType ? escapeHtml(humanizeEnum(app.identityType)) : "N/A")}
       ${row(
         "Identity Number",
-        `<span data-identity-number-value>${escapeHtml(app.identityNumberMasked || "—")}</span>
+        `<span data-identity-number-value>${escapeHtml(app.identityNumberMasked || "N/A")}</span>
          ${app.identityNumberMasked ? `<button type="button" class="btn btn--secondary btn--sm" data-action="reveal-identity-number" data-application-id="${escapeHtml(app.id)}">Reveal</button>` : ""}`
       )}
       ${row("Applicant Type", escapeHtml(humanizeEnum(app.applicantType)))}
-      ${app.applicantType === "BUSINESS" ? row("Business Name", escapeHtml(app.businessName || "—")) : ""}
-      ${app.applicantType === "BUSINESS" ? row("Registration Number", escapeHtml(app.businessRegistrationNumber || "—")) : ""}
+      ${app.applicantType === "BUSINESS" ? row("Business Name", escapeHtml(app.businessName || "N/A")) : ""}
+      ${app.applicantType === "BUSINESS" ? row("Registration Number", escapeHtml(app.businessRegistrationNumber || "N/A")) : ""}
       ${app.applicantType === "BUSINESS" && app.businessWebsite ? row("Business Website", `<a href="${escapeHtml(app.businessWebsite)}" target="_blank" rel="noopener noreferrer">${escapeHtml(app.businessWebsite)}</a>`) : ""}
     </div>
   `;
@@ -50,8 +50,8 @@ function renderContactDetails(app) {
   return `
     <div class="order-confirmation__card">
       <h3>Contact Details</h3>
-      ${row("Email", escapeHtml(app.contactEmail || "—"))}
-      ${row("Mobile", escapeHtml(app.mobileNumber || "—"))}
+      ${row("Email", escapeHtml(app.contactEmail || "N/A"))}
+      ${row("Mobile", escapeHtml(app.mobileNumber || "N/A"))}
       ${app.whatsappNumber ? row("WhatsApp", escapeHtml(app.whatsappNumber)) : ""}
       ${app.preferredContactMethod ? row("Preferred Contact", escapeHtml(app.preferredContactMethod)) : ""}
     </div>
@@ -62,10 +62,10 @@ function renderResidentialDetails(app) {
   return `
     <div class="order-confirmation__card">
       <h3>Residential Details</h3>
-      ${row("Address", escapeHtml([app.addressLine1, app.addressLine2].filter(Boolean).join(", ") || "—"))}
-      ${row("Suburb/City", escapeHtml([app.suburb, app.city].filter(Boolean).join(", ") || "—"))}
-      ${row("Province/Postal Code", escapeHtml([app.province, app.postalCode].filter(Boolean).join(", ") || "—"))}
-      ${row("Country", escapeHtml(app.country || "—"))}
+      ${row("Address", escapeHtml([app.addressLine1, app.addressLine2].filter(Boolean).join(", ") || "N/A"))}
+      ${row("Suburb/City", escapeHtml([app.suburb, app.city].filter(Boolean).join(", ") || "N/A"))}
+      ${row("Province/Postal Code", escapeHtml([app.province, app.postalCode].filter(Boolean).join(", ") || "N/A"))}
+      ${row("Country", escapeHtml(app.country || "N/A"))}
     </div>
   `;
 }
@@ -75,8 +75,8 @@ function renderPromotionalInfo(app) {
   return `
     <div class="order-confirmation__card">
       <h3>Affiliate / Promotional Information</h3>
-      ${row("Promotion Plan", escapeHtml(app.promotionPlan || "—"))}
-      ${row("Motivation", escapeHtml(app.motivation || "—"))}
+      ${row("Promotion Plan", escapeHtml(app.promotionPlan || "N/A"))}
+      ${row("Motivation", escapeHtml(app.motivation || "N/A"))}
       ${links.length ? row("Platforms", links.map((k) => `<a href="${escapeHtml(app[k])}" target="_blank" rel="noopener noreferrer">${escapeHtml(app[k])}</a>`).join("<br />")) : ""}
       ${app.otherPlatform ? row("Other Platform", escapeHtml(app.otherPlatform)) : ""}
       ${app.audienceSize ? row("Audience Size", escapeHtml(app.audienceSize)) : ""}

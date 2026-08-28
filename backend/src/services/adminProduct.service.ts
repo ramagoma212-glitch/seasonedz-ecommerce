@@ -156,7 +156,7 @@ async function assertDigitalProductHasFileIfActive(productId: string | null, pro
     // adminDigitalAsset.service.ts) — so creating straight into ACTIVE
     // is never possible for a digital product.
     throw new AdminProductError(
-      "A digital product cannot be created as Active — save it first (Draft), then upload its digital file before activating it."
+      "A digital product cannot be created as Active. Save it first as Draft, then upload its digital file before activating it."
     );
   }
 
@@ -221,7 +221,7 @@ const MAX_SLUG_GENERATION_ATTEMPTS = 50;
 async function generateUniqueSlug(base: string): Promise<string> {
   const baseSlug = slugify(base);
   if (!baseSlug) {
-    throw new AdminProductError("Could not generate a slug from the product name — please provide one manually.");
+    throw new AdminProductError("Could not generate a slug from the product name. Please provide one manually.");
   }
 
   let candidate = baseSlug;
@@ -232,7 +232,7 @@ async function generateUniqueSlug(base: string): Promise<string> {
     candidate = `${baseSlug}-${suffix}`;
     suffix += 1;
   }
-  throw new AdminProductError("Could not generate a unique slug automatically — please provide one manually.");
+  throw new AdminProductError("Could not generate a unique slug automatically. Please provide one manually.");
 }
 
 // ---------------------------------------------------------------------------

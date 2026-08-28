@@ -211,7 +211,7 @@ test.describe("Customer account smoke checks", () => {
 
     await page.goto("/checkout");
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.getByText("Free delivery applied — Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.")).toBeVisible();
+    await expect(page.getByText("Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
 
     // No auth token ever touches localStorage — only the plain cart

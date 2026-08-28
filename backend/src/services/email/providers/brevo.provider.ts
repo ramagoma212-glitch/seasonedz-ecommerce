@@ -37,7 +37,7 @@ export async function sendViaBrevo(to: BrevoRecipient, rendered: RenderedEmail):
   // EMAIL_PROVIDER=brevo — keeps this function safe to call directly
   // in a test without needing to reload env.ts.
   if (!env.brevoApiKey || !env.emailReplyTo || !env.emailFromAddress) {
-    throw new BrevoSendError("Brevo is not fully configured — missing API key, reply-to address, or from address.");
+    throw new BrevoSendError("Brevo is not fully configured. Missing API key, reply-to address, or from address.");
   }
 
   const body = {

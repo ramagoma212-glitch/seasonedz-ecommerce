@@ -63,7 +63,7 @@ function renderActionButtons(commission) {
 
 function renderCommissionsTable(commissions) {
   if (commissions.length === 0) {
-    return `<p class="admin-empty">No commissions match these filters. A commission is only ever created automatically, for a genuinely referred order — never fabricated here.</p>`;
+    return `<p class="admin-empty">No commissions match these filters. A commission is only ever created automatically, for a genuinely referred order. It is never fabricated here.</p>`;
   }
 
   return `

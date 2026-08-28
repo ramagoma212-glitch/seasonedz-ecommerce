@@ -53,7 +53,7 @@ function renderReviewRow(review) {
             <button type="button" class="btn btn--secondary btn--sm" data-action="reject-review" data-review-id="${escapeHtml(review.id)}">Reject</button>
           </div>
         `
-            : "—"
+            : "N/A"
         }
       </td>
     </tr>
@@ -98,7 +98,7 @@ export async function renderAdminReviews({ query } = {}) {
       <section class="container admin-page">
         ${renderAdminNav("reviews")}
         <h1 class="admin-page__title">Product Reviews</h1>
-        <p class="admin-page__subtitle">Approve or reject genuine customer reviews. No review is ever created here — only what a customer already submitted.</p>
+        <p class="admin-page__subtitle">Approve or reject genuine customer reviews. No review is ever created here, only what a customer already submitted.</p>
         ${renderStatusFilterTabs(status)}
         <div class="form-banner" data-admin-reviews-banner hidden></div>
         ${renderReviewsTable(reviews)}

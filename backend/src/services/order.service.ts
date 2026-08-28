@@ -480,7 +480,7 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
       });
 
       if (result.count === 0) {
-        throw new OrderError(`Not enough stock for "${item.productName}" — please review your order and try again.`);
+        throw new OrderError(`Not enough stock for "${item.productName}". Please review your order and try again.`);
       }
     }
 

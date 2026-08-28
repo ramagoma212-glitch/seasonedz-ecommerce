@@ -96,7 +96,7 @@ export function classifyDocumentType(selectedType: AffiliateDocumentTypeKey, ext
   if (!extractedText || extractedText.trim().length < 10) {
     return {
       result: "MANUAL_REVIEW",
-      reason: "Automated text extraction was not available for this file — flagged for manual review.",
+      reason: "Automated text extraction was not available for this file. Flagged for manual review.",
     };
   }
 
@@ -106,7 +106,7 @@ export function classifyDocumentType(selectedType: AffiliateDocumentTypeKey, ext
   const bestOther = scores.filter((s) => s.type !== selectedType).sort((a, b) => b.score - a.score)[0];
 
   if (!selected) {
-    return { result: "MANUAL_REVIEW", reason: "Could not classify this document — flagged for manual review." };
+    return { result: "MANUAL_REVIEW", reason: "Could not classify this document. Flagged for manual review." };
   }
 
   // MATCH: the selected type clears the minimum bar AND is at least as
@@ -114,7 +114,7 @@ export function classifyDocumentType(selectedType: AffiliateDocumentTypeKey, ext
   if (selected.score >= MATCH_THRESHOLD && (!bestOther || selected.score >= bestOther.score)) {
     return {
       result: "MATCH",
-      reason: `Document type confirmed — detected ${selected.matched.join(", ")}.`,
+      reason: `Document type confirmed. Detected ${selected.matched.join(", ")}.`,
     };
   }
 
@@ -127,13 +127,13 @@ export function classifyDocumentType(selectedType: AffiliateDocumentTypeKey, ext
   if (bestOther && bestOther.score >= MATCH_THRESHOLD && bestOther.score - selected.score >= 2) {
     return {
       result: "MISMATCH",
-      reason: `This document does not appear to be ${TYPE_LABELS[selectedType]} — it more closely resembles ${TYPE_LABELS[bestOther.type]}. Please upload the correct document type.`,
+      reason: `This document does not appear to be ${TYPE_LABELS[selectedType]}. It more closely resembles ${TYPE_LABELS[bestOther.type]}. Please upload the correct document type.`,
     };
   }
 
   return {
     result: "MANUAL_REVIEW",
-    reason: "This document could not be confidently classified — flagged for manual review.",
+    reason: "This document could not be confidently classified. Flagged for manual review.",
   };
 }
 

@@ -48,7 +48,7 @@ export interface EnquiryPublicStatusOutput {
 const STATUS_MESSAGES: Record<EnquiryStatus, string> = {
   NEW: "Your enquiry has been received.",
   IN_REVIEW: "Your enquiry is being reviewed by our team.",
-  RESPONDED: "We've responded to your enquiry — please check your email.",
+  RESPONDED: "We've responded to your enquiry. Please check your email.",
   CLOSED: "This enquiry has been closed.",
 };
 

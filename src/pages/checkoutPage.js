@@ -174,7 +174,7 @@ function renderCollectionCityField() {
         ${COLLECTION_CITIES.map((city) => `<option value="${city}">${city}</option>`).join("")}
       </select>
       <span class="form-field__error" data-error-for="collectionCity"></span>
-      <p class="form-field__hint">Collection by arrangement — we'll be in touch to confirm details.</p>
+      <p class="form-field__hint">Collection by arrangement. We'll be in touch to confirm details.</p>
     </div>
   `;
 }
@@ -405,7 +405,7 @@ export async function renderCheckoutPage() {
           <div class="checkout-section">
             <div class="form-grid" data-delivery-address-fields hidden>
               <p class="form-field--full form-field__hint" data-locker-area-note hidden>
-                We don't yet have live locker selection online — tell us your city and province and we'll arrange the nearest Courier Guy locker to you, then confirm it with you before dispatch.
+                We don't yet have live locker selection online. Tell us your city and province and we'll arrange the nearest Courier Guy locker to you, then confirm it with you before dispatch.
               </p>
 
               <div data-address-full-only hidden>

@@ -40,7 +40,7 @@ export async function renderAdminReferralsOverview() {
       <section class="container admin-page">
         ${renderAdminNav("referrals")}
         <h1 class="admin-page__title">Referrals</h1>
-        <p class="admin-page__subtitle">Seasonedz's own affiliate/referral programme — separate from the dormant external recommendations area.</p>
+        <p class="admin-page__subtitle">Seasonedz's own affiliate and referral programme. Separate from the dormant external recommendations area.</p>
         ${renderReferralsSubNav("overview")}
 
         <h2 class="admin-page__section-title">Affiliates</h2>

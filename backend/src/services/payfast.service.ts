@@ -207,7 +207,7 @@ export async function initiatePayfastPayment(orderNumber: string, context?: Payf
     m_payment_id: order.orderNumber,
     amount: order.total.toFixed(2),
     item_name: `Seasonedz Group Order ${order.orderNumber}`,
-    item_description: `${itemCount} item(s) — Seasonedz Group order ${order.orderNumber}`,
+    item_description: `${itemCount} item(s), Seasonedz Group order ${order.orderNumber}`,
   };
 
   const signature = generatePayfastSignature(fields, payfastConfig.passphrase);

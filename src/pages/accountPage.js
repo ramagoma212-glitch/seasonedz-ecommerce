@@ -263,7 +263,7 @@ async function renderNotificationPreferencesSection() {
   return `
     <div class="account-preferences">
       <h2 class="checkout-section__label">Notification Preferences</h2>
-      <p>Order, payment, delivery and account notifications are always sent — they can't be turned off here. You can opt out of the following:</p>
+      <p>Order, payment, delivery and account notifications are always sent. They can't be turned off here. You can opt out of the following:</p>
       <form id="notification-preferences-form" data-notification-preferences-form>
         ${PREFERENCE_FIELDS.map(
           (field) => `
@@ -394,9 +394,9 @@ function renderPayoutStatusMessage(totals, payoutDayOfMonth) {
     return `<p class="admin-product-form__hint">No approved balance yet.</p>`;
   }
   if (totals.isPayoutEligible) {
-    return `<p class="admin-product-form__hint">Your approved balance has reached the minimum payout amount — Seasonedz Group will arrange payment, targeted for the ${payoutDayOfMonth}${daySuffix(payoutDayOfMonth)} of the following month.</p>`;
+    return `<p class="admin-product-form__hint">Your approved balance has reached the minimum payout amount. Seasonedz Group will arrange payment, targeted for the ${payoutDayOfMonth}${daySuffix(payoutDayOfMonth)} of the following month.</p>`;
   }
-  return `<p class="admin-product-form__hint">Your approved balance will carry forward until it reaches the minimum payout amount of R${totals.minimumPayoutAmount.toFixed(2)} — nothing you've earned is ever lost.</p>`;
+  return `<p class="admin-product-form__hint">Your approved balance will carry forward until it reaches the minimum payout amount of R${totals.minimumPayoutAmount.toFixed(2)}. Nothing you've earned is ever lost.</p>`;
 }
 
 function daySuffix(day) {
@@ -458,7 +458,7 @@ function renderActiveAffiliatePortal(affiliate) {
     <h4 class="checkout-section__label">Recent Referred Orders</h4>
     ${renderRecentCommissionsTable(affiliate.recentCommissions)}
     <p class="admin-product-form__hint">
-      When sharing your link, please disclose your affiliate relationship — e.g. "I may earn a commission if you purchase through my Seasonedz referral link."
+      When sharing your link, please disclose your affiliate relationship. For example: "I may earn a commission if you purchase through my Seasonedz referral link."
       See the <a href="/affiliate-terms">Affiliate Programme Terms</a> for full details.
     </p>
   `;
@@ -492,14 +492,14 @@ async function renderPendingAffiliatePortal() {
 
   return `
     <div class="order-confirmation__row"><span>Status</span><span class="badge">Pending</span></div>
-    <p class="admin-product-form__hint">Your application to join the Seasonedz Affiliate Programme is awaiting review. We'll approve genuine applications as soon as we can — no referral tools are active yet.</p>
+    <p class="admin-product-form__hint">Your application to join the Seasonedz Affiliate Programme is awaiting review. We will review your application as soon as possible. Referral tools will become available after your application is approved.</p>
   `;
 }
 
 function renderSuspendedAffiliatePortal(affiliate) {
   return `
     <div class="order-confirmation__row"><span>Status</span><span class="badge">Suspended</span></div>
-    <p class="admin-product-form__hint">Your affiliate account is currently suspended — new referrals are not active. Contact Seasonedz Group if you believe this is a mistake.</p>
+    <p class="admin-product-form__hint">Your affiliate account is currently suspended. New referrals are not active. Contact Seasonedz Group if you believe this is a mistake.</p>
     ${affiliate.recentCommissions.length ? `<h4 class="checkout-section__label">Historical Referred Orders</h4>${renderRecentCommissionsTable(affiliate.recentCommissions)}` : ""}
   `;
 }

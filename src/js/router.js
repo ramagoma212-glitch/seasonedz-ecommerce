@@ -285,7 +285,7 @@ const routeDefs = [
     pattern: "/affiliate-terms",
     render: renderAffiliateTerms,
     title: "Affiliate Programme Terms",
-    description: "The rules of the Seasonedz Affiliate Programme — referral discounts, commission rates, payouts, and affiliate responsibilities.",
+    description: "The rules of the Seasonedz Affiliate Programme, including referral discounts, commission rates, payouts, and affiliate responsibilities.",
   },
   {
     pattern: "/schools",

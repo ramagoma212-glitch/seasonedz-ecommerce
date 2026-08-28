@@ -236,7 +236,7 @@ test.describe("Customer affiliate application page", () => {
     await mockMyApplication(page, null);
 
     await page.goto("/account/affiliate-application");
-    await expect(page.getByText("no application needed")).toBeVisible();
+    await expect(page.getByText("No application is needed")).toBeVisible();
   });
 });
 

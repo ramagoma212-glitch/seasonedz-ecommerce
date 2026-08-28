@@ -211,7 +211,7 @@ export async function uploadOrReplaceDocument(input: UploadDocumentInput) {
         fileSizeBytes: input.size,
         isCurrent: true,
         classification: classification?.typeResult.result ?? null,
-        classificationReason: classification?.typeResult.reason ?? "This document type does not support automated classification — a Seasonedz admin will review it manually.",
+        classificationReason: classification?.typeResult.reason ?? "This document type does not support automated classification. A Seasonedz admin will review it manually.",
         nameMatchResult: classification?.dataMatch.nameMatchResult ?? null,
         addressMatchResult: classification?.dataMatch.addressMatchResult ?? null,
         idNumberMatchResult: classification?.dataMatch.idNumberMatchResult ?? null,
@@ -227,7 +227,7 @@ export async function uploadOrReplaceDocument(input: UploadDocumentInput) {
         applicationId: input.applicationId,
         eventType: existing ? "DOCUMENT_REPLACED" : "DOCUMENT_UPLOADED",
         actorType: "CUSTOMER",
-        summary: `${input.slot === "IDENTITY" ? "Identity document" : "Proof of residence"} ${existing ? "replaced" : "uploaded"} — classification: ${classification?.typeResult.result ?? "manual review"}.`,
+        summary: `${input.slot === "IDENTITY" ? "Identity document" : "Proof of residence"} ${existing ? "replaced" : "uploaded"}. Classification: ${classification?.typeResult.result ?? "manual review"}.`,
       },
     });
 

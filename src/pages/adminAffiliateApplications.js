@@ -60,12 +60,12 @@ function renderApplicationsTable(applications) {
             .map(
               (app) => `
             <tr>
-              <td>${escapeHtml(app.fullName || "—")}</td>
+              <td>${escapeHtml(app.fullName || "N/A")}</td>
               <td>${escapeHtml(app.applicantType)}</td>
-              <td>${escapeHtml(app.email || "—")}</td>
-              <td>${escapeHtml(app.mobile || "—")}</td>
-              <td>${escapeHtml([app.city, app.province].filter(Boolean).join(", ") || "—")}</td>
-              <td>${app.submittedAt ? formatDate(app.submittedAt) : "—"}</td>
+              <td>${escapeHtml(app.email || "N/A")}</td>
+              <td>${escapeHtml(app.mobile || "N/A")}</td>
+              <td>${escapeHtml([app.city, app.province].filter(Boolean).join(", ") || "N/A")}</td>
+              <td>${app.submittedAt ? formatDate(app.submittedAt) : "N/A"}</td>
               <td>${renderStatusBadge(app.status)}</td>
               <td class="admin-table__actions">
                 <a href="/admin/referrals/applications/${encodeURIComponent(app.id)}" class="admin-section__link">Review</a>

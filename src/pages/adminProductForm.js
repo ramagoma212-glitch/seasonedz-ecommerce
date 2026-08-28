@@ -25,10 +25,10 @@ import { escapeHtml } from "../js/search.js";
 import { withBase } from "../js/paths.js";
 
 const STATUS_HELP = {
-  DRAFT: "Draft — not visible publicly.",
-  ACTIVE: "Active — visible publicly.",
-  ARCHIVED: "Archived — hidden but kept for history.",
-  OUT_OF_STOCK: "Out of stock — unavailable, or shown according to current public behaviour.",
+  DRAFT: "Draft: not visible publicly.",
+  ACTIVE: "Active: visible publicly.",
+  ARCHIVED: "Archived: hidden but kept for history.",
+  OUT_OF_STOCK: "Out of stock: unavailable, or shown according to current public behaviour.",
 };
 
 function renderCategoryOptions(categories, selectedId) {
@@ -76,7 +76,7 @@ function renderProductForm(mode, product, categories) {
         </div>
         <div class="admin-readonly-field">
           <span class="form-field__label">SKU</span>
-          <span class="admin-readonly-value">${escapeHtml(product.sku || "—")}</span>
+          <span class="admin-readonly-value">${escapeHtml(product.sku || "N/A")}</span>
         </div>
         <div class="admin-readonly-field">
           <span class="form-field__label">Slug</span>
@@ -89,7 +89,7 @@ function renderProductForm(mode, product, categories) {
           <input type="text" id="productSku" class="form-field__input" required maxlength="100" />
         </div>
         <div class="form-field">
-          <label class="form-field__label" for="productSlug">Slug <span class="form-field__optional">(optional — auto-generated from name if left blank)</span></label>
+          <label class="form-field__label" for="productSlug">Slug <span class="form-field__optional">(optional, auto-generated from name if left blank)</span></label>
           <input type="text" id="productSlug" class="form-field__input" maxlength="200" />
         </div>
       `
@@ -364,7 +364,7 @@ function renderDigitalAssetUploadForm(productId, hasExisting) {
 
       <p class="admin-product-form__hint">
         Allowed files: PDF or ZIP, up to 50 MB. Files are stored privately and are never publicly
-        accessible — customers can only download after payment is confirmed.
+        accessible. Customers can only download after payment is confirmed.
       </p>
 
       <div class="form-banner form-banner--error" data-admin-digital-asset-upload-banner hidden></div>

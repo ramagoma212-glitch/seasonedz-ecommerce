@@ -40,7 +40,7 @@ export async function initiatePayfastPaymentHandler(req: Request, res: Response,
     if (!ORDER_NUMBER_PATTERN.test(orderNumber)) {
       sendError(res, {
         message: "Validation failed",
-        errors: [{ field: "orderNumber", message: 'Order number format is invalid — expected e.g. "SG-2026-A1B2".' }],
+        errors: [{ field: "orderNumber", message: 'Order number format is invalid. Expected format: "SG-2026-A1B2".' }],
         statusCode: 400,
       });
       return;

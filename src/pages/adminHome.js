@@ -133,7 +133,7 @@ function renderLowStockTable(products) {
               (product) => `
             <tr>
               <td>${escapeHtml(product.name)}</td>
-              <td>${escapeHtml(product.sku || "—")}</td>
+              <td>${escapeHtml(product.sku || "N/A")}</td>
               <td>${product.stockQuantity}</td>
               <td>${product.lowStockThreshold}</td>
               <td>${renderStatusBadge(product.status)}</td>

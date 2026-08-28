@@ -41,7 +41,7 @@ export interface OAuthStatePayload {
 }
 
 export class OAuthStateError extends Error {
-  constructor(message = "Your sign-in attempt could not be verified — please try again.") {
+  constructor(message = "Your sign-in attempt could not be verified. Please try again.") {
     super(message);
     this.name = "OAuthStateError";
   }
@@ -131,7 +131,7 @@ export function consumeOAuthState(req: Request, res: Response, provider: AuthPro
   }
 
   if (!Number.isFinite(payload.issuedAt) || Date.now() - payload.issuedAt > OAUTH_STATE_TTL_MS) {
-    throw new OAuthStateError("Your sign-in attempt expired — please try again.");
+    throw new OAuthStateError("Your sign-in attempt expired. Please try again.");
   }
 
   pruneConsumedStates();

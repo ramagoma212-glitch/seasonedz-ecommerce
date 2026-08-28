@@ -43,7 +43,7 @@ const ROWS = [
     id: "returns-exchanges",
     question: "Returns & Exchanges",
     answer: `
-      <p>If an item arrives damaged, faulty or isn't what you ordered, contact us and we'll arrange a replacement or refund. Change-of-mind returns are accepted for unused items in resellable condition — please get in touch first.</p>
+      <p>If an item arrives damaged, faulty or isn't what you ordered, contact us and we'll arrange a replacement or refund. Change-of-mind returns are accepted for unused items in resellable condition. Please get in touch first.</p>
       <p>See our full <a href="/returns-policy">Returns Policy</a> for details on how to start a return.</p>
     `,
   },

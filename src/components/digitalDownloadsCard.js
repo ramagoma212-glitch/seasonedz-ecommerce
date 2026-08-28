@@ -46,7 +46,7 @@ export function renderDigitalDownloadsCard(items, { guestToken } = {}) {
       <div class="account-order-items">
         ${items.map((item) => renderDownloadItem(item, { guestToken })).join("")}
       </div>
-      <p class="admin-product-form__hint">Download links are generated fresh each time and expire shortly after — this keeps your files secure.</p>
+      <p class="admin-product-form__hint">Download links are generated fresh each time and expire shortly after. This keeps your files secure.</p>
     </div>
   `;
 }

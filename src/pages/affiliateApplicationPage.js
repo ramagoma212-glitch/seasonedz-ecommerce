@@ -215,7 +215,7 @@ function renderEditableForm(app) {
       <h3 class="checkout-section__label">Identity Verification</h3>
       <p class="admin-product-form__hint">
         We ask for an identity document and proof of residence to help us verify genuine affiliate applicants. Automated
-        checks may confirm a document's type and that names/addresses appear consistent — this assists our review but
+        checks may confirm a document's type and that names and addresses appear consistent. This assists our review but
         never itself approves your application. Final approval always remains a manual Seasonedz Group decision.
       </p>
       ${renderDocumentSlot({ slot: "IDENTITY", title: "Identity Document", typeFieldId: "identityDocumentType", typeOptions: [{ value: "SA_ID", label: "South African ID" }, { value: "PASSPORT", label: "Passport" }], existingDoc: identityDoc, application: app })}
@@ -280,7 +280,7 @@ function renderRejected() {
 
 function renderNoApplicationNeeded() {
   return `
-    <div class="form-banner form-banner--success">You're already part of the Seasonedz Affiliate Programme — no application needed.</div>
+    <div class="form-banner form-banner--success">You're already part of the Seasonedz Affiliate Programme. No application is needed.</div>
     <div class="order-confirmation__actions"><a class="btn btn--secondary" href="/account">Go to My Account</a></div>
   `;
 }

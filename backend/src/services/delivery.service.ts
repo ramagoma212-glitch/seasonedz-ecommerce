@@ -75,7 +75,7 @@ export function getManualCourierStatus(order: ManualCourierStatusInput): ManualC
 
   const message = hasTrackingInfo
     ? "Courier tracking details have been added by Seasonedz Group for this order."
-    : "Courier tracking isn't available yet for this order — it's prepared and dispatched manually by Seasonedz Group.";
+    : "Courier tracking isn't available yet for this order. It's prepared and dispatched manually by Seasonedz Group.";
 
   return {
     courierIntegrationEnabled: COURIER_INTEGRATION_ENABLED,

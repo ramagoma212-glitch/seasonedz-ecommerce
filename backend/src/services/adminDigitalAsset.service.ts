@@ -292,7 +292,7 @@ export async function deleteDigitalAsset(productId: string): Promise<void> {
 
   if (product.status === "ACTIVE") {
     throw new AdminDigitalAssetError(
-      "This digital product is currently Active and customers may be able to buy it — set it to Draft or Archived before removing its file.",
+      "This digital product is currently Active and customers may be able to buy it. Set it to Draft or Archived before removing its file.",
       409
     );
   }

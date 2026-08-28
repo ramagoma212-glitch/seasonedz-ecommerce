@@ -21,7 +21,7 @@ const MANUAL_REMINDERS: readonly string[] = [
   "Check pending Bank Transfer payments against the bank account.",
   "Confirm delivery details before packing each order.",
   "Pack confirmed orders.",
-  "Book courier manually — no courier API is connected yet.",
+  "Book courier manually. No courier API is connected yet.",
   "Respond to new enquiries.",
 ];
 

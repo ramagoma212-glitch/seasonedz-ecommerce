@@ -107,7 +107,7 @@ function renderItemsTable(items) {
               (item) => `
             <tr>
               <td>${escapeHtml(item.productName)}</td>
-              <td>${escapeHtml(item.sku || "—")}</td>
+              <td>${escapeHtml(item.sku || "N/A")}</td>
               <td>${item.quantity}</td>
               <td>${formatCurrency(item.unitPrice)}</td>
               <td>
@@ -117,7 +117,7 @@ function renderItemsTable(items) {
                   <span class="badge">Wrapped &mdash; ${formatCurrency(item.giftWrapFee)}</span>
                   ${item.giftMessage ? `<p class="admin-table__gift-message">&ldquo;${escapeHtml(item.giftMessage)}&rdquo;</p>` : ""}
                 `
-                    : "—"
+                    : "N/A"
                 }
               </td>
               <td>${formatCurrency(item.lineTotal)}</td>
@@ -210,7 +210,7 @@ function renderShippingUpdateForm(order) {
   return `
     <form class="admin-shipping-form" data-order-number="${escapeHtml(order.orderNumber)}" novalidate>
       <h3>Update Shipping</h3>
-      <p class="admin-status-update__hint">Manual entry only — no courier account is connected yet.</p>
+      <p class="admin-status-update__hint">Manual entry only. No courier account is connected yet.</p>
 
       <div class="form-grid">
         <div class="form-field">
@@ -355,7 +355,7 @@ function renderLastCourierStatusRow(shipping) {
         ${shipping.lastCourierStatusAt ? ` &bull; ${formatDateTime(shipping.lastCourierStatusAt)}` : ""}
       </span>
     </div>
-    ${needsAttention ? `<p class="admin-status-update__payment-note">This status may need admin attention — automatic sync will not change the order or shipping status for it.</p>` : ""}
+    ${needsAttention ? `<p class="admin-status-update__payment-note">This status may need admin attention. Automatic sync will not change the order or shipping status for it.</p>` : ""}
   `;
 }
 
@@ -367,7 +367,7 @@ function renderCourierBookedSummary(order) {
     <h3>Courier Quote</h3>
     <p class="admin-status-update__hint">A courier shipment has already been booked for this order. Booking again is not allowed.</p>
     <div class="admin-status-confirm">
-      <div class="order-confirmation__row"><span>Service</span><span>${escapeHtml(shipping.courierServiceName || "—")}${shipping.courierServiceCode ? ` (${escapeHtml(shipping.courierServiceCode)})` : ""}</span></div>
+      <div class="order-confirmation__row"><span>Service</span><span>${escapeHtml(shipping.courierServiceName || "N/A")}${shipping.courierServiceCode ? ` (${escapeHtml(shipping.courierServiceCode)})` : ""}</span></div>
       ${cost !== null ? `<div class="order-confirmation__row"><span>Courier Cost</span><span>${formatCurrency(cost)}</span></div>` : ""}
       ${shipping.trackingNumber ? `<div class="order-confirmation__row"><span>Tracking Number</span><span>${escapeHtml(shipping.trackingNumber)}</span></div>` : ""}
       ${shipping.courierBookedAt ? `<div class="order-confirmation__row"><span>Booked At</span><span>${formatDateTime(shipping.courierBookedAt)}</span></div>` : ""}
@@ -570,7 +570,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
                 : order.deliveryMethod === "COURIER_LOCKER"
                   ? order.deliveryAddress
                     ? `<p>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)}</p>
-                       <p>No real locker picker yet — arrange and confirm the nearest Courier Guy locker to this area with the customer before dispatch.</p>
+                       <p>No real locker picker yet. Arrange and confirm the nearest Courier Guy locker to this area with the customer before dispatch.</p>
                        ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
                     : `<p>No locker area on file.</p>`
                   : order.deliveryAddress

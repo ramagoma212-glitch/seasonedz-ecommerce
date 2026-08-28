@@ -61,10 +61,10 @@ export async function renderAdminReferralPayouts() {
         <h2 class="admin-page__section-title">Payouts</h2>
         <p class="admin-page__subtitle">
           Payout frequency: <strong>${escapeHtml(overview.payoutFrequency)}</strong>, target payout day: <strong>the ${overview.payoutDayOfMonth}${daySuffix(overview.payoutDayOfMonth)}</strong> of the following month.
-          Minimum payout: <strong>${formatCurrency(overview.minimumPayoutAmount)}</strong>. A balance below this carries forward automatically — nothing earned is ever lost or expired.
+          Minimum payout: <strong>${formatCurrency(overview.minimumPayoutAmount)}</strong>. A balance below this carries forward automatically. Nothing earned is ever lost or expired.
         </p>
         <p class="admin-page__subtitle">
-          Payment to an affiliate happens manually, off-platform (bank transfer, etc.). This page never sends money — it only records that a real payout already happened, once you mark it here.
+          Payment to an affiliate happens manually, off-platform (bank transfer, etc.). This page never sends money. It only records that a real payout already happened, once you mark it here.
         </p>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         <div class="form-banner form-banner--error" data-admin-payout-banner hidden></div>

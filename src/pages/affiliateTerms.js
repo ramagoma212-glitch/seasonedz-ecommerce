@@ -49,13 +49,13 @@ export function renderAffiliateTerms() {
           for a business applicant, the business you are authorised to represent). Seasonedz Group may
           run automated checks on submitted documents to help review your application (for example,
           confirming a document appears to be the type you said it was, and that names or addresses
-          appear consistent). These checks assist our review — they do not themselves approve or
+          appear consistent). These checks assist our review only. They do not themselves approve or
           verify your identity with any government or banking authority, and they never replace a
           genuine, manual decision by an authorised Seasonedz Group team member. If a document needs
           to be corrected or replaced, we will let you know what's needed rather than rejecting your
           whole application outright.</p>
         <p>Seasonedz Group may reject an application, request corrected information or documents, or
-          suspend or reject an existing affiliate, at its own reasonable discretion — for example where
+          suspend or reject an existing affiliate, at its own reasonable discretion, for example where
           information or documents provided are inaccurate, false, or misleading, or where we
           reasonably suspect abuse of the programme. Approval always remains a discretionary decision
           made by an authorised Seasonedz Group admin; it is never automatic, even where every
@@ -66,13 +66,13 @@ export function renderAffiliateTerms() {
         <p>Once approved, you receive a personal referral code and link. A customer who places a
           qualifying order after following your link, within the current attribution window
           (currently 30 days from when the link was followed), receives an automatic discount on
-          their qualifying product subtotal at checkout — currently 5% by default, though Seasonedz
+          their qualifying product subtotal at checkout, currently 5% by default, though Seasonedz
           Group may set a different rate for your account specifically.</p>
         <p>Only the most recently followed valid referral link applies to a given order.</p>
 
         <h2>5. Your Commission Rate</h2>
         <p>You earn a commission on the net qualifying amount of a genuinely referred order (the
-          qualifying product subtotal, after the customer's own referral discount is deducted — never
+          qualifying product subtotal, after the customer's own referral discount is deducted, never
           on delivery fees or gift wrapping). The default commission rate is currently 7%, though
           Seasonedz Group may set a different rate for your account specifically.</p>
 
@@ -90,8 +90,8 @@ export function renderAffiliateTerms() {
 
         <h2>8. Commission Validation Period</h2>
         <p>A commission does not become approved the moment an order is placed, or even the moment it
-          is paid. It must also be genuinely fulfilled (delivered, collected, or — for a digital-only
-          order — paid for) and remain unreversed for a validation period, currently 30 days, before
+          is paid. It must also be genuinely fulfilled (delivered, collected, or, for a digital-only
+          order, paid for) and remain unreversed for a validation period, currently 30 days, before
           Seasonedz Group reviews and approves it.</p>
 
         <h2>9. Reversed Commissions</h2>
@@ -104,9 +104,9 @@ export function renderAffiliateTerms() {
         <h2>10. Payouts</h2>
         <p>Approved commissions are paid out manually by Seasonedz Group, off-platform (for example by
           bank transfer), on a monthly cycle, once your approved unpaid balance reaches the minimum
-          payout amount — currently R500. Seasonedz Group targets paying eligible balances by the
+          payout amount, currently R500. Seasonedz Group targets paying eligible balances by the
           15th of the following month, though this is an operational target, not a guaranteed date.
-          If your approved balance has not yet reached the minimum, it is never lost or expired — it
+          If your approved balance has not yet reached the minimum, it is never lost or expired. It
           simply carries forward to the next cycle.</p>
 
         <h2>11. No Guarantee of Earnings</h2>
@@ -117,7 +117,7 @@ export function renderAffiliateTerms() {
         <h2>12. Honest Promotion and Disclosure</h2>
         <p>You are responsible for promoting your referral link honestly and lawfully. When you share
           your link publicly (for example on social media, a blog, or in a message to others), you
-          must clearly disclose that you may earn a commission — for example, "I may earn a commission
+          must clearly disclose that you may earn a commission, for example: "I may earn a commission
           if you purchase through my Seasonedz referral link." The exact wording is up to you, as long
           as the commercial relationship is clear to the person you're sharing it with.</p>
         <p>You may not misrepresent Seasonedz Group products, pricing, or your relationship with
@@ -126,7 +126,7 @@ export function renderAffiliateTerms() {
 
         <h2>13. Prohibited Abuse and Fraud</h2>
         <p>You may not attempt to generate false, fraudulent, or artificially inflated referrals or
-          commissions — including, but not limited to, referring fake orders, colluding with another
+          commissions, including, but not limited to, referring fake orders, colluding with another
           person to abuse the discount or commission rules, or attempting to tamper with, guess, or
           forge referral attribution data. Seasonedz Group may suspend or reject any affiliate
           account, and withhold or reverse any related commission, where we reasonably suspect this

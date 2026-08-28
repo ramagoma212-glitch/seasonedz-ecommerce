@@ -44,7 +44,7 @@ export async function subscribeToStockAlert(customerId: string, productSlug: str
     throw new StockAlertError(`Product not found: ${productSlug}`, 404);
   }
   if (product.stockQuantity > 0) {
-    throw new StockAlertError("This product is currently in stock — no alert needed.", 409);
+    throw new StockAlertError("This product is currently in stock. No alert needed.", 409);
   }
 
   const existing = await prisma.stockAlertSubscription.findFirst({

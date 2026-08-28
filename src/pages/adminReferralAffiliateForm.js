@@ -154,7 +154,7 @@ export async function renderAdminReferralAffiliateCreate() {
         ${renderReferralsSubNav("affiliates")}
         <a class="admin-back-link" href="/admin/referrals/affiliates">&larr; Back to Affiliates</a>
         <h2 class="admin-page__section-title">Add Affiliate</h2>
-        <p class="admin-page__subtitle">New affiliates always start Pending — approving is a separate step from the Affiliates list.</p>
+        <p class="admin-page__subtitle">New affiliates always start Pending. Approving is a separate step from the Affiliates list.</p>
         ${renderAffiliateForm("create", null)}
       </section>
     `;

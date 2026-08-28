@@ -72,7 +72,7 @@ export function validateAffiliateUrl(raw: unknown): AffiliateUrlValidationResult
   // one check — https is the only value ever accepted, so there is no
   // separate "reject javascript:" branch to individually bypass.
   if (parsed.protocol !== "https:") {
-    return { isValid: false, error: "affiliateUrl must start with https:// — no other protocol is accepted." };
+    return { isValid: false, error: "affiliateUrl must start with https://. No other protocol is accepted." };
   }
 
   const hostname = parsed.hostname.toLowerCase();

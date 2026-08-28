@@ -700,7 +700,7 @@ async function handleNotifyWhenInStock(buttonEl) {
     buttonEl.textContent = "We'll Email You";
     if (banner) {
       banner.className = "form-banner form-banner--success";
-      banner.textContent = "You're on the list — we'll email you as soon as this is back in stock.";
+      banner.textContent = "You're on the list. We'll email you as soon as this is back in stock.";
       banner.hidden = false;
     }
   } catch (error) {
@@ -1876,7 +1876,7 @@ async function handleCopyReferralLink(button) {
     if (input) {
       input.select();
     }
-    window.alert("Could not copy automatically — the link is selected, copy it manually (Ctrl/Cmd+C).");
+    window.alert("Could not copy automatically. The link is selected, copy it manually (Ctrl/Cmd+C).");
   }
 }
 
@@ -2300,7 +2300,7 @@ function renderCourierQuoteOption(option, index) {
   const eta = etaFrom || etaTo ? `<span class="admin-courier-quote-option__eta">ETA: ${etaFrom ?? "?"}${etaTo && etaTo !== etaFrom ? `–${etaTo}` : ""}</span>` : "";
   const code = option.serviceLevelCode ? `<span class="admin-courier-quote-option__code">${escapeHtml(option.serviceLevelCode)}</span>` : "";
   const price = Number(option.price);
-  const priceDisplay = Number.isFinite(price) ? `R${price.toFixed(2)}` : "—";
+  const priceDisplay = Number.isFinite(price) ? `R${price.toFixed(2)}` : "N/A";
 
   // Version 7, Milestone 112: radio, not a plain list item — this is
   // what "quote options must become selectable" means in practice.
@@ -3293,7 +3293,7 @@ async function handleRevealAffiliateIdentityNumber(button) {
   try {
     const response = await revealAdminAffiliateApplicationIdentityNumber(button.dataset.applicationId);
     const valueEl = document.querySelector("[data-identity-number-value]");
-    if (valueEl) valueEl.textContent = response.data.identityNumber || "—";
+    if (valueEl) valueEl.textContent = response.data.identityNumber || "N/A";
     button.remove();
   } catch (error) {
     button.disabled = false;

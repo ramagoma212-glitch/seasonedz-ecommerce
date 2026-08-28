@@ -63,7 +63,7 @@ function humanizeEnum(value: string): string {
 }
 
 function formatItemsList(items: OrderEmailItem[]): string {
-  return items.map((item) => `- ${item.productName} x${item.quantity} — ${formatRand(item.lineTotal)}`).join("\n");
+  return items.map((item) => `- ${item.productName} x${item.quantity}: ${formatRand(item.lineTotal)}`).join("\n");
 }
 
 // Version 7, Milestone 168C: labels for the three owner-approved
@@ -93,7 +93,7 @@ function formatDeliveryMethodLabel(method: string): string {
 // a shorter, unexplained address block.
 function formatDeliveryNote(order: OrderEmailData): string {
   if (order.deliveryMethod === "COLLECTION") {
-    return `Collection location: ${order.collectionCity ?? "to be confirmed"}\nCollection is by arrangement — we'll be in touch to confirm details.`;
+    return `Collection location: ${order.collectionCity ?? "to be confirmed"}\nCollection is by arrangement. We'll be in touch to confirm details.`;
   }
 
   if (order.deliveryMethod === "COURIER_LOCKER") {
@@ -118,9 +118,9 @@ function formatDeliveryNote(order: OrderEmailData): string {
 // Collection orders must never see courier/tracking wording (Part 32).
 function deliveryFulfilmentNote(order: OrderEmailData): string {
   if (order.deliveryMethod === "COLLECTION") {
-    return "Collection is by arrangement — we'll be in touch to confirm collection details once your order is confirmed.";
+    return "Collection is by arrangement. We'll be in touch to confirm collection details once your order is confirmed.";
   }
-  return "Delivery is arranged manually by our small team once your order is confirmed — we'll be in touch with tracking details once it's packed and booked.";
+  return "Delivery is arranged manually by our small team once your order is confirmed. We'll be in touch with tracking details once it's packed and booked.";
 }
 
 // Version 7, Milestone 117: the BANK_TRANSFER line no longer implies
@@ -236,7 +236,7 @@ function digitalItemsNoticeForPaymentConfirmed(order: OrderEmailData): string {
   if (!order.hasDigitalItems) return "";
 
   if (order.guestDownloadUrl) {
-    return `\n\nThis order includes a digital download. You can access it securely here:\n${order.guestDownloadUrl}\n(This link is personal to your order and will expire — please don't share it.)`;
+    return `\n\nThis order includes a digital download. You can access it securely here:\n${order.guestDownloadUrl}\n(This link is personal to your order and will expire. Please don't share it.)`;
   }
 
   return "\n\nThis order includes a digital download. Log in to My Account and open this order to download it.";
@@ -314,7 +314,7 @@ export function renderAdminNewOrderEmail(order: OrderEmailData): RenderedEmail {
   const subject = `New Order Received: ${order.orderNumber}`;
   const bankTransferReminder =
     order.paymentMethod === "BANK_TRANSFER"
-      ? "\n\nThis is a Bank Transfer order — check the business bank account and confirm payment before packing."
+      ? "\n\nThis is a Bank Transfer order. Check the business bank account and confirm payment before packing."
       : "";
   // Version 7, Milestone 152: admin visibility only — never mentions
   // Courier Guy or download-access specifics here, matching this
@@ -362,7 +362,7 @@ We received a request to reset the password for your Seasonedz Group account.
 Reset your password using the link below:
 ${data.resetUrl}
 
-This link expires in 60 minutes. If you didn't request this, you can safely ignore this email — your password won't be changed.
+This link expires in 60 minutes. If you didn't request this, you can safely ignore this email. Your password won't be changed.
 
 ${CONTACT_LINE}
 
@@ -400,7 +400,7 @@ export function renderOrderProcessingEmail(order: OrderEmailData): RenderedEmail
   const subject = `Order ${order.orderNumber} Is Being Prepared`;
   const body = `Hi ${order.customerFirstName},
 
-Good news — we've started preparing your Seasonedz Group order ${order.orderNumber}.
+Good news: we've started preparing your Seasonedz Group order ${order.orderNumber}.
 
 ${deliveryFulfilmentNote(order)}
 
@@ -503,7 +503,7 @@ export function renderAffiliateApplicationReceivedEmail(data: AffiliateEmailData
   const subject = "Your Seasonedz Affiliate Application Has Been Received";
   const body = `Hi ${data.affiliateName},
 
-Thank you for applying to the Seasonedz Affiliate Programme. Your application has been received and is awaiting review — we'll be in touch once a decision has been made.
+Thank you for applying to the Seasonedz Affiliate Programme. Your application has been received and is awaiting review. We'll be in touch once a decision has been made.
 
 ${CONTACT_LINE}
 
@@ -530,12 +530,12 @@ export function renderAffiliateApprovedEmail(data: AffiliateEmailData): Rendered
   const subject = "Your Seasonedz Affiliate Application Has Been Approved";
   const body = `Hi ${data.affiliateName},
 
-Good news — your Seasonedz Affiliate application has been approved.
+Good news: your Seasonedz Affiliate application has been approved.
 
-Your Referral Code: ${data.referralCode ?? "—"}
-Your Referral Link: ${data.referralLink ?? "—"}
-Your Current Commission Rate: ${data.effectiveCommissionRate ?? "—"}%
-Your Customers' Current Referral Discount: ${data.effectiveDiscountRate ?? "—"}%
+Your Referral Code: ${data.referralCode ?? "Not available"}
+Your Referral Link: ${data.referralLink ?? "Not available"}
+Your Current Commission Rate: ${data.effectiveCommissionRate ?? "Not available"}%
+Your Customers' Current Referral Discount: ${data.effectiveDiscountRate ?? "Not available"}%
 
 Log in to My Account to see your full affiliate portal, including your referral link and commission balance.
 
@@ -565,7 +565,7 @@ export function renderAffiliateSuspendedEmail(data: AffiliateEmailData): Rendere
   const subject = "Your Seasonedz Affiliate Account Status";
   const body = `Hi ${data.affiliateName},
 
-Your Seasonedz Affiliate account has been suspended — new referral activity will not earn further commission while this is in effect. Any commission already earned in good faith before this change is unaffected.
+Your Seasonedz Affiliate account has been suspended. New referral activity will not earn further commission while this is in effect. Any commission already earned in good faith before this change is unaffected.
 
 ${CONTACT_LINE}
 
@@ -657,10 +657,10 @@ function preferencesLink(): string {
 export function renderProductReviewRequestEmail(data: ProductReviewRequestEmailData): RenderedEmail {
   const productLines = data.products.map((product) => `- ${product.productName}`).join("\n");
 
-  const subject = data.isReminder ? `A Quick Reminder — How Was Your Seasonedz Order ${data.orderNumber}?` : `How Are You Enjoying Your Seasonedz Order ${data.orderNumber}?`;
+  const subject = data.isReminder ? `A Quick Reminder: How Was Your Seasonedz Order ${data.orderNumber}?` : `How Are You Enjoying Your Seasonedz Order ${data.orderNumber}?`;
 
   const intro = data.isReminder
-    ? `We wrote to you a little while ago about your recent Seasonedz Group order ${data.orderNumber} — if you haven't had a chance yet, we'd still love to hear your thoughts on:`
+    ? `We wrote to you a little while ago about your recent Seasonedz Group order ${data.orderNumber}. If you haven't had a chance yet, we'd still love to hear your thoughts on:`
     : `Thank you for your recent Seasonedz Group order ${data.orderNumber}. We hope you and your family are enjoying it! We'd love to hear your thoughts on:`;
 
   const body = `Hi ${data.customerFirstName},
@@ -688,7 +688,7 @@ export function renderStockAlertEmail(data: StockAlertEmailData): RenderedEmail 
   const subject = `Back in Stock: ${data.productName}`;
   const body = `Hi ${data.customerFirstName},
 
-Good news — ${data.productName} is back in stock on Seasonedz Group.
+Good news: ${data.productName} is back in stock on Seasonedz Group.
 
 View it here: ${data.productUrl}
 
@@ -752,7 +752,7 @@ export function renderAffiliateApplicationSubmittedEmail(data: AffiliateApplicat
 
 Thank you for completing your Seasonedz Affiliate Programme application. We've received your details and documents and they're now awaiting review by our team.
 
-We'll be in touch once a decision has been made — no further action is needed from you right now.
+We'll be in touch once a decision has been made. No further action is needed from you right now.
 
 ${CONTACT_LINE}
 

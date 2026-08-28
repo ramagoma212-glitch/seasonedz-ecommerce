@@ -171,7 +171,7 @@ const MAX_SLUG_GENERATION_ATTEMPTS = 50;
 async function generateUniqueValue(base: string, maxLength: number, checkExists: (candidate: string) => Promise<boolean>): Promise<string> {
   const baseSlug = slugify(base).slice(0, maxLength);
   if (!baseSlug) {
-    throw new AdminAffiliateProductError("Could not generate a URL-safe value from the title — please provide one manually.");
+    throw new AdminAffiliateProductError("Could not generate a URL-safe value from the title. Please provide one manually.");
   }
 
   let candidate = baseSlug;
@@ -182,7 +182,7 @@ async function generateUniqueValue(base: string, maxLength: number, checkExists:
     candidate = `${baseSlug.slice(0, maxLength - suffixText.length)}${suffixText}`;
     suffix += 1;
   }
-  throw new AdminAffiliateProductError("Could not generate a unique value automatically — please provide one manually.");
+  throw new AdminAffiliateProductError("Could not generate a unique value automatically. Please provide one manually.");
 }
 
 function validateExplicitSlugFormat(raw: string, fieldName: string, maxLength: number): string {

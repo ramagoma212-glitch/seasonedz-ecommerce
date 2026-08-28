@@ -98,7 +98,7 @@ function renderDigitalOnlyNotice(order) {
       <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
       <div>
         <strong>This is a digital download order. No courier delivery is required.</strong>
-        <p>Downloads unlock automatically once payment is confirmed — current payment status: ${escapeHtml(humanizeEnum(order.paymentStatus))}.</p>
+        <p>Downloads unlock automatically once payment is confirmed. Current payment status: ${escapeHtml(humanizeEnum(order.paymentStatus))}.</p>
       </div>
     </div>
   `;

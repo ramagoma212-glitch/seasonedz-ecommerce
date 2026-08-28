@@ -450,12 +450,12 @@ export async function reverseCommission(id: string, rawReason: unknown, confirmC
     // inferred from just clicking a generic "reverse" button.
     if (row.status === OrderAffiliateCommissionStatus.PAID && !confirmClawback) {
       throw new CommissionLifecycleError(
-        "This commission has already been paid. Reversing it is a clawback — the affiliate was already sent this money outside the system. Set confirmClawback to proceed.",
+        "This commission has already been paid. Reversing it is a clawback. The affiliate was already sent this money outside the system. Set confirmClawback to proceed.",
         409
       );
     }
 
-    const finalReason = row.status === OrderAffiliateCommissionStatus.PAID ? `[CLAWBACK — already paid] ${reason}` : reason;
+    const finalReason = row.status === OrderAffiliateCommissionStatus.PAID ? `[CLAWBACK: already paid] ${reason}` : reason;
 
     const updated = await tx.orderAffiliateCommission.update({
       where: { id },
@@ -642,7 +642,7 @@ export async function payAffiliateCommissions(affiliateId: string, requestedComm
     const fullBalance = allApproved.reduce((sum, row) => sum.plus(row.commissionAmount), new Prisma.Decimal(0));
     if (fullBalance.lt(minimumPayoutAmount)) {
       throw new CommissionLifecycleError(
-        `This affiliate's approved unpaid balance (R${fullBalance.toFixed(2)}) has not reached the minimum payout threshold (R${minimumPayoutAmount.toFixed(2)}) — carrying forward.`,
+        `This affiliate's approved unpaid balance (R${fullBalance.toFixed(2)}) has not reached the minimum payout threshold (R${minimumPayoutAmount.toFixed(2)}). Carrying forward.`,
         409
       );
     }
@@ -664,7 +664,7 @@ export async function payAffiliateCommissions(affiliateId: string, requestedComm
       // A concurrent request changed one of these rows between the read
       // above and this write — abort the whole transaction rather than
       // risk a partial/duplicate payout.
-      throw new CommissionLifecycleError("Some selected commissions changed status during this request — please refresh and try again.", 409);
+      throw new CommissionLifecycleError("Some selected commissions changed status during this request. Please refresh and try again.", 409);
     }
 
     const totalPaid = targetRows.reduce((sum, row) => sum.plus(row.commissionAmount), new Prisma.Decimal(0));

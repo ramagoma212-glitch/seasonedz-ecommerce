@@ -26,8 +26,8 @@ export const blogPosts = [
     relatedLink: { href: "/category/kids-colouring-books", label: "Shop Kids & Educational Colouring Books" },
     content: [
       "Colouring is often seen as simple play, but it does a lot of quiet work in the background. For young children, holding a crayon or marker and staying inside the lines builds the fine motor control they'll later use for writing.",
-      "Colouring books that pair pictures with letters, numbers or fun facts also give children a gentle way to absorb new information without it feeling like a lesson. That's the idea behind our ABC Colouring Book for Kids with Fun Facts — each page combines a letter, an illustration and a bite-sized fact.",
-      "Beyond the academic side, colouring gives children a calm, screen-free activity that helps them practise patience and focus — skills that carry over into the classroom and beyond.",
+      "Colouring books that pair pictures with letters, numbers or fun facts also give children a gentle way to absorb new information without it feeling like a lesson. That's the idea behind our ABC Colouring Book for Kids with Fun Facts. Each page combines a letter, an illustration and a bite-sized fact.",
+      "Beyond the academic side, colouring gives children a calm, screen-free activity that helps them practise patience and focus, skills that carry over into the classroom and beyond.",
       "As always, choose colouring books and supplies suited to your child's age, and enjoy the process together where you can.",
     ],
   },
@@ -43,7 +43,7 @@ export const blogPosts = [
     content: [
       "Sunday school teachers know that keeping young minds engaged with scripture takes creativity. Colouring pages are a simple, low-prep way to reinforce a Bible story after it's been told.",
       "Our Little Hands Big Faith series pairs simple, warm illustrations with well-loved Old and New Testament stories, giving children something to take home that reminds them of what they learned.",
-      "A few practical tips: introduce the story first, then hand out the matching colouring page while the story is still fresh. Encourage children to talk about the scene as they colour — it often opens up conversation more naturally than a worksheet would.",
+      "A few practical tips: introduce the story first, then hand out the matching colouring page while the story is still fresh. Encourage children to talk about the scene as they colour. This often opens up conversation more naturally than a worksheet would.",
       "Whether you're planning a single lesson or a full term, colouring pages are an easy addition to any Sunday school toolkit.",
     ],
   },
@@ -58,9 +58,9 @@ export const blogPosts = [
     relatedLink: { href: "/category/mindfulness-colouring", label: "Shop Mindfulness Colouring Books" },
     content: [
       "Mindfulness colouring books have grown in popularity as a screen-free way to slow down. The repetitive, focused nature of filling in intricate patterns gives your mind something gentle to settle on.",
-      "Unlike a blank page, a printed pattern removes the pressure to 'be creative' — you simply choose colours and fill in shapes at your own pace. Many people find this genuinely relaxing after a long day.",
+      "Unlike a blank page, a printed pattern removes the pressure to 'be creative'. You simply choose colours and fill in shapes at your own pace. Many people find this genuinely relaxing after a long day.",
       "Our Mindfulness Colouring Book for Adults features nature-inspired patterns and mandalas designed for exactly this kind of unhurried, screen-free unwinding.",
-      "You don't need to be an artist to benefit — just a quiet corner, a cup of tea, and a set of markers or pencils.",
+      "You don't need to be an artist to benefit, just a quiet corner, a cup of tea, and a set of markers or pencils.",
     ],
   },
   {
@@ -73,7 +73,7 @@ export const blogPosts = [
     date: "2026-04-05",
     relatedLink: { href: "/schools", label: "See Schools & Churches Bulk Packs" },
     content: [
-      "Creative activities like colouring give children a break from structured tasks while still keeping them engaged and calm — useful for transitions between lessons or as an early-finisher activity.",
+      "Creative activities like colouring give children a break from structured tasks while still keeping them engaged and calm, useful for transitions between lessons or as an early-finisher activity.",
       "Classroom colouring packs, like our School Starter Colouring Pack, are designed to make this easy: a set of colouring books and crayons ready to hand out without extra prep.",
       "Consider setting up a small 'creative corner' with colouring supplies that children can use during quiet time. It's a simple way to bring a bit of calm and creativity into a busy school day.",
       "If you're planning for a full class or grade, our Schools page has more on bulk packs and how to get in touch for a quote.",
@@ -90,7 +90,7 @@ export const blogPosts = [
     relatedLink: { href: "/category/markers-and-crayons", label: "Shop Markers & Crayons" },
     content: [
       "Not all colouring supplies are created equal, especially for younger children. Chunky, twist-up crayons like our Rotating Wax Crayons are easier for little hands to grip and don't need sharpening.",
-      "For older children who want bolder colour, acrylic markers offer vibrant, richly pigmented lines — our 24-colour set includes both fine and broad tips for different styles of colouring.",
+      "For older children who want bolder colour, acrylic markers offer vibrant, richly pigmented lines. Our 24-colour set includes both fine and broad tips for different styles of colouring.",
       "It's worth matching supplies to the activity: crayons for everyday colouring books, and markers for bigger, bolder projects or mindfulness patterns where colour saturation matters more.",
       "Whatever you choose, always check the recommended age range on the product page before buying.",
     ],

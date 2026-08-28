@@ -35,7 +35,7 @@ function renderEnquiriesTable(enquiries) {
               <td>${escapeHtml(humanizeEnum(enquiry.type))}</td>
               <td>${escapeHtml(enquiry.name)}</td>
               <td>${escapeHtml(enquiry.email)}${enquiry.phone ? `<br>${escapeHtml(enquiry.phone)}` : ""}</td>
-              <td>${enquiry.subjectOrCompany ? escapeHtml(enquiry.subjectOrCompany) : "—"}</td>
+              <td>${enquiry.subjectOrCompany ? escapeHtml(enquiry.subjectOrCompany) : "N/A"}</td>
               <td class="admin-table__message">${escapeHtml(enquiry.messagePreview)}</td>
               <td>${renderStatusBadge(enquiry.status)}</td>
               <td>${formatDate(enquiry.createdAt)}</td>

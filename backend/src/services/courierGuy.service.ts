@@ -339,7 +339,7 @@ export async function getCourierQuote(orderNumber: string, input: GetCourierQuot
   if (!courierGuyConfig.collection.code) missingConfig.push("collection postal code");
 
   if (missingConfig.length > 0) {
-    throw new CourierQuoteError(`Courier Guy is enabled but not fully configured — missing: ${missingConfig.join(", ")}.`, 500);
+    throw new CourierQuoteError(`Courier Guy is enabled but not fully configured. Missing: ${missingConfig.join(", ")}.`, 500);
   }
 
   const order = await prisma.order.findUnique({
@@ -514,7 +514,7 @@ function validateBookingCollectionContact() {
   if (!collectionContact.phone && !collectionContact.email) missing.push("collection contact phone or email");
 
   if (missing.length > 0) {
-    throw new CourierBookingError(`Courier Guy booking is enabled but not fully configured — missing: ${missing.join(", ")}.`, 500);
+    throw new CourierBookingError(`Courier Guy booking is enabled but not fully configured. Missing: ${missing.join(", ")}.`, 500);
   }
 }
 
@@ -531,7 +531,7 @@ function validateDeliveryContact(order: OrderBookingFields) {
 function checkDuplicateBooking(order: OrderBookingFields) {
   const shipping = order.shipping;
   if (shipping && (shipping.trackingNumber || shipping.courierShipmentId || shipping.courierBookedAt)) {
-    throw new CourierBookingError("This order already has a courier booking — booking again is not allowed.", 409);
+    throw new CourierBookingError("This order already has a courier booking. Booking again is not allowed.", 409);
   }
 }
 
@@ -597,7 +597,7 @@ interface MappedBookingResponse {
 function mapBookingResponse(raw: unknown): MappedBookingResponse {
   if (!raw || typeof raw !== "object") {
     throw new CourierBookingError(
-      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying — no booking details were saved.",
+      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying. No booking details were saved.",
       502
     );
   }
@@ -621,7 +621,7 @@ function mapBookingResponse(raw: unknown): MappedBookingResponse {
   // would then block any real retry via the duplicate-booking check.
   if (!shipmentId && !trackingNumber) {
     throw new CourierBookingError(
-      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying — no booking details were saved.",
+      "Courier Guy returned a response this booking feature doesn't recognise. Check the Courier Guy account directly before retrying. No booking details were saved.",
       502
     );
   }
@@ -670,7 +670,7 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
   if (!courierGuyConfig.collection.zone) missingConfig.push("collection zone");
   if (!courierGuyConfig.collection.code) missingConfig.push("collection postal code");
   if (missingConfig.length > 0) {
-    throw new CourierBookingError(`Courier Guy is enabled but not fully configured — missing: ${missingConfig.join(", ")}.`, 500);
+    throw new CourierBookingError(`Courier Guy is enabled but not fully configured. Missing: ${missingConfig.join(", ")}.`, 500);
   }
   validateBookingCollectionContact();
 
@@ -762,7 +762,7 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
       signal: controller.signal,
     });
   } catch {
-    throw new CourierBookingError("Could not reach Courier Guy. Please try again shortly — no booking was created.", 502);
+    throw new CourierBookingError("Could not reach Courier Guy. Please try again shortly. No booking was created.", 502);
   } finally {
     clearTimeout(timeoutId);
   }

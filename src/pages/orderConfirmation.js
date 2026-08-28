@@ -102,7 +102,7 @@ function renderPaymentNotice(order) {
         <div>
           <strong>Payment confirmed.</strong>
           <p>
-            This is a digital download order — no courier delivery is
+            This is a digital download order. No courier delivery is
             required. Log in to My Account to download your file(s), or
             check your email for a secure download link if you checked
             out as a guest.
@@ -181,7 +181,7 @@ function renderBackendOrderConfirmation(order) {
             ${
               order.deliveryMethod === "COLLECTION"
                 ? `<p><strong>Collection location:</strong> ${escapeHtml(order.collectionCity ?? "To be confirmed")}</p>
-                   <p>Collection by arrangement — we'll be in touch to confirm details.</p>`
+                   <p>Collection by arrangement. We'll be in touch to confirm details.</p>`
                 : order.deliveryMethod === "COURIER_LOCKER"
                   ? order.deliveryAddress
                     ? `<p>${escapeHtml(order.deliveryAddress.city)}, ${escapeHtml(order.deliveryAddress.province)}</p>

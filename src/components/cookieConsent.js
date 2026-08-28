@@ -66,19 +66,19 @@ export function renderCookiePreferencesModal(consent) {
           ${renderToggleRow({
             id: "cookie-category-necessary",
             label: "Strictly Necessary",
-            description: "Keeps you signed in, remembers your cart and wishlist, and protects checkout and login. Required for the site to work — can't be disabled.",
+            description: "Keeps you signed in, remembers your cart and wishlist, and protects checkout and login. Required for the site to work. Cannot be disabled.",
             locked: true,
           })}
           ${renderToggleRow({
             id: "cookie-category-analytics",
             label: "Analytics",
-            description: "Would help us understand how the site is used, so we can improve it. Not currently in use on this site — off by default until you say otherwise.",
+            description: "Would help us understand how the site is used, so we can improve it. Not currently in use on this site. Off by default until you say otherwise.",
             checked: consent.analytics,
           })}
           ${renderToggleRow({
             id: "cookie-category-marketing",
             label: "Marketing",
-            description: "Would support advertising or remarketing. Not currently in use on this site — off by default until you say otherwise.",
+            description: "Would support advertising or remarketing. Not currently in use on this site. Off by default until you say otherwise.",
             checked: consent.marketing,
           })}
         </div>

@@ -56,12 +56,12 @@ function renderFlags(product) {
     product.isBestSeller && "Best Seller",
     product.isNewArrival && "New Arrival",
   ].filter(Boolean);
-  return flags.length > 0 ? escapeHtml(flags.join(", ")) : "—";
+  return flags.length > 0 ? escapeHtml(flags.join(", ")) : "N/A";
 }
 
 // Version 7, Milestone 152: secure digital downloads. Physical
 // products show their stock quantity as before; digital products show
-// "—" (stock is meaningless for a file) plus whether a file is
+// "N/A" (stock is meaningless for a file) plus whether a file is
 // attached, with a clear warning if an Active digital product somehow
 // has none (shouldn't happen — adminProduct.service.ts's own
 // validation prevents it — but surfaced here too in case a file was
@@ -104,12 +104,12 @@ function renderProductsTable(products) {
               (product) => `
             <tr>
               <td>${escapeHtml(product.name)}</td>
-              <td>${escapeHtml(product.sku || "—")}</td>
+              <td>${escapeHtml(product.sku || "N/A")}</td>
               <td>${escapeHtml(product.category.name)}</td>
               <td>${renderTypeCell(product)}</td>
               <td>${formatCurrency(product.price)}</td>
-              <td>${product.productType === "DIGITAL" ? "—" : product.stockQuantity}</td>
-              <td>${product.productType === "DIGITAL" ? "—" : product.lowStockThreshold}</td>
+              <td>${product.productType === "DIGITAL" ? "N/A" : product.stockQuantity}</td>
+              <td>${product.productType === "DIGITAL" ? "N/A" : product.lowStockThreshold}</td>
               <td>${renderStatusBadge(product.status)}</td>
               <td>${renderFlags(product)}</td>
               <td>${formatDate(product.updatedAt)}</td>

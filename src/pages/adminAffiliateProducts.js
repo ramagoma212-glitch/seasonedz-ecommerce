@@ -80,7 +80,7 @@ function renderProductsTable(products) {
             <tr data-affiliate-product-row="${escapeHtml(product.id)}">
               <td>${escapeHtml(product.title)}${product.author ? `<span class="admin-table__meta">${escapeHtml(product.author)}</span>` : ""}</td>
               <td>${escapeHtml(product.merchantName)}</td>
-              <td>${escapeHtml(product.affiliateNetwork || "—")}</td>
+              <td>${escapeHtml(product.affiliateNetwork || "N/A")}</td>
               <td>${renderPriceCell(product)}</td>
               <td>${renderFlags(product)}</td>
               <td>${formatDate(product.updatedAt)}</td>
