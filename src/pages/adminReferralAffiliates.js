@@ -78,8 +78,8 @@ function renderAffiliatesTable(affiliates) {
               <td>${escapeHtml(affiliate.name)}</td>
               <td>${escapeHtml(affiliate.email)}</td>
               <td>${escapeHtml(affiliate.referralCode)}</td>
-              <td>${affiliate.commissionRateOverride === null ? "&mdash;" : `${affiliate.commissionRateOverride}%`}</td>
-              <td>${affiliate.discountRateOverride === null ? "&mdash;" : `${affiliate.discountRateOverride}%`}</td>
+              <td>${affiliate.commissionRateOverride === null ? "N/A" : `${affiliate.commissionRateOverride}%`}</td>
+              <td>${affiliate.discountRateOverride === null ? "N/A" : `${affiliate.discountRateOverride}%`}</td>
               <td>${renderStatusBadge(affiliate.status)}</td>
               <td>${formatDate(affiliate.updatedAt)}</td>
               <td class="admin-table__actions">

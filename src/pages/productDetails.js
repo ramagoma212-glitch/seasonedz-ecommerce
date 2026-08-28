@@ -176,7 +176,7 @@ function renderGiftWrapOption() {
           aria-controls="giftMessageField"
           aria-expanded="false"
         />
-        <span>Make it a gift &mdash; add gift wrapping for R${GIFT_WRAP_FEE_PER_ITEM}</span>
+        <span>Make it a gift. Add gift wrapping for R${GIFT_WRAP_FEE_PER_ITEM}</span>
       </label>
       <div class="gift-wrap-message" id="giftMessageField" data-gift-message-field hidden>
         <label class="form-field__label" for="giftMessageInput">Gift message <span class="form-field__optional">(optional)</span></label>

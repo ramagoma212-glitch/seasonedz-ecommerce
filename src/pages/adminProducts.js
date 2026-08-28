@@ -70,9 +70,9 @@ function renderTypeCell(product) {
   if (product.productType !== "DIGITAL") return "Physical";
 
   if (product.digitalFileMissingWarning) {
-    return `Digital &mdash; <span class="admin-badge admin-badge--danger">No file (Active)</span>`;
+    return `Digital: <span class="admin-badge admin-badge--danger">No file (Active)</span>`;
   }
-  return `Digital &mdash; ${product.hasDigitalFile ? '<span class="admin-badge admin-badge--success">File attached</span>' : '<span class="admin-badge">No file</span>'}`;
+  return `Digital: ${product.hasDigitalFile ? '<span class="admin-badge admin-badge--success">File attached</span>' : '<span class="admin-badge">No file</span>'}`;
 }
 
 function renderProductsTable(products) {

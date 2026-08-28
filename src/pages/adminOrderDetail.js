@@ -114,7 +114,7 @@ function renderItemsTable(items) {
                 ${
                   item.isGiftWrapped
                     ? `
-                  <span class="badge">Wrapped &mdash; ${formatCurrency(item.giftWrapFee)}</span>
+                  <span class="badge">Wrapped: ${formatCurrency(item.giftWrapFee)}</span>
                   ${item.giftMessage ? `<p class="admin-table__gift-message">&ldquo;${escapeHtml(item.giftMessage)}&rdquo;</p>` : ""}
                 `
                     : "N/A"
@@ -352,7 +352,7 @@ function renderLastCourierStatusRow(shipping) {
       <span>Latest Courier Guy Status</span>
       <span>
         <span class="admin-badge ${needsAttention ? "admin-badge--danger" : "admin-badge--neutral"}">${escapeHtml(humanizeEnum(shipping.lastCourierStatus.replace(/-/g, "_")))}</span>
-        ${shipping.lastCourierStatusAt ? ` &bull; ${formatDateTime(shipping.lastCourierStatusAt)}` : ""}
+        ${shipping.lastCourierStatusAt ? `, ${formatDateTime(shipping.lastCourierStatusAt)}` : ""}
       </span>
     </div>
     ${needsAttention ? `<p class="admin-status-update__payment-note">This status may need admin attention. Automatic sync will not change the order or shipping status for it.</p>` : ""}
@@ -507,9 +507,9 @@ function renderStatusHistoryTimeline(history) {
             ${renderStatusBadge(entry.newStatus)}
           </div>
           <p class="admin-status-timeline__meta">
-            ${formatDateTime(entry.createdAt)} &bull;
+            ${formatDateTime(entry.createdAt)},
             ${escapeHtml(entry.changedByAdminName || "Unknown admin")}
-            (${escapeHtml(entry.changedByAdminEmail || "no email on record")}) &bull;
+            (${escapeHtml(entry.changedByAdminEmail || "no email on record")}),
             ${escapeHtml(humanizeEnum(entry.source))}
           </p>
           ${entry.note ? `<p class="admin-status-timeline__note">${escapeHtml(entry.note)}</p>` : ""}

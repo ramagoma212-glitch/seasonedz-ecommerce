@@ -43,7 +43,7 @@ function renderCommissionSummary(affiliate) {
     </div>
     <p class="admin-page__subtitle">
       <a href="/admin/referrals/commissions?affiliateId=${encodeURIComponent(affiliate.id)}">View this affiliate's commissions</a>
-      ${totals.isPayoutEligible ? ` &bull; <a href="/admin/referrals/payouts">Go to Payouts</a>` : ""}
+      ${totals.isPayoutEligible ? `. <a href="/admin/referrals/payouts">Go to Payouts</a>` : ""}
     </p>
   `;
 }
@@ -102,7 +102,7 @@ function renderAffiliateForm(mode, affiliate) {
       </div>
 
       <div class="form-field">
-        <label class="form-field__label" for="referralAffiliateCode">Referral Code <span class="form-field__optional">(optional &mdash; auto-generated from name if left blank)</span></label>
+        <label class="form-field__label" for="referralAffiliateCode">Referral Code <span class="form-field__optional">(optional, auto-generated from name if left blank)</span></label>
         <input type="text" id="referralAffiliateCode" class="form-field__input" maxlength="30" value="${escapeHtml(affiliate?.referralCode || "")}" />
         <p class="admin-product-form__hint">
           Public and shareable, e.g. seasonedzgroup.co.za/?ref=CODE (link capture is not live yet). Changing this on an

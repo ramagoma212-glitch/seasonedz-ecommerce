@@ -66,11 +66,11 @@ function renderAffiliateProductForm(mode, product) {
 
       <div class="admin-product-form__row">
         <div class="form-field">
-          <label class="form-field__label" for="affiliateSlug">Slug <span class="form-field__optional">(optional &mdash; auto-generated from title if left blank)</span></label>
+          <label class="form-field__label" for="affiliateSlug">Slug <span class="form-field__optional">(optional, auto-generated from title if left blank)</span></label>
           <input type="text" id="affiliateSlug" class="form-field__input" maxlength="100" value="${escapeHtml(product?.slug || "")}" />
         </div>
         <div class="form-field">
-          <label class="form-field__label" for="affiliateTrackingSlug">Tracking Slug <span class="form-field__optional">(optional &mdash; used later by /go/ links)</span></label>
+          <label class="form-field__label" for="affiliateTrackingSlug">Tracking Slug <span class="form-field__optional">(optional, used later by /go/ links)</span></label>
           <input type="text" id="affiliateTrackingSlug" class="form-field__input" maxlength="80" value="${escapeHtml(product?.trackingSlug || "")}" />
           <p class="admin-product-form__hint">Changing this on an already-shared link will break it. Leave it alone unless you mean to change the link.</p>
         </div>
@@ -87,7 +87,7 @@ function renderAffiliateProductForm(mode, product) {
       </div>
 
       <div class="form-field">
-        <label class="form-field__label" for="affiliateCategory">Category <span class="form-field__optional">(optional, free text &mdash; not linked to the Seasonedz shop categories)</span></label>
+        <label class="form-field__label" for="affiliateCategory">Category <span class="form-field__optional">(optional, free text, not linked to the Seasonedz shop categories)</span></label>
         <input type="text" id="affiliateCategory" class="form-field__input" maxlength="100" value="${escapeHtml(product?.category || "")}" />
       </div>
 
@@ -106,7 +106,7 @@ function renderAffiliateProductForm(mode, product) {
         <label class="form-field__label" for="affiliateUrl">Affiliate URL <span class="form-field__required">*</span></label>
         <input type="url" id="affiliateUrl" class="form-field__input" required maxlength="2000" placeholder="https://..." value="${escapeHtml(product?.affiliateUrl || "")}" />
         <p class="admin-product-form__hint">
-          Must be a real https:// link. This is stored on the server only &mdash; it is never shown directly to site visitors,
+          Must be a real https:// link. This is stored on the server only. It is never shown directly to site visitors,
           and no public redirect uses it yet (that is a later milestone).
         </p>
       </div>
@@ -122,7 +122,7 @@ function renderAffiliateProductForm(mode, product) {
         </div>
       </div>
       <p class="admin-product-form__hint">
-        External merchant prices can change at any time &mdash; Seasonedz never checks or updates this automatically.
+        External merchant prices can change at any time. Seasonedz never checks or updates this automatically.
         Setting a price here also records today as the date it was checked, so the future public page can hide a price
         once it goes stale. Leave price blank if you are not sure it is current.
       </p>
@@ -133,7 +133,7 @@ function renderAffiliateProductForm(mode, product) {
       </div>
 
       <div class="form-field">
-        <label class="form-field__label" for="affiliateRating">Rating <span class="form-field__optional">(optional, 0&ndash;5 &mdash; only enter a genuine rating)</span></label>
+        <label class="form-field__label" for="affiliateRating">Rating <span class="form-field__optional">(optional, 0&ndash;5, only enter a genuine rating)</span></label>
         <input type="number" id="affiliateRating" class="form-field__input" min="0" max="5" step="0.1" value="${product?.rating ?? ""}" />
       </div>
 

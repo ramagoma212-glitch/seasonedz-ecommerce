@@ -43,7 +43,7 @@ function renderFilters(query) {
 }
 
 function renderEligibilityCell(commission) {
-  if (commission.status !== "PENDING") return "&mdash;";
+  if (commission.status !== "PENDING") return "N/A";
   if (commission.eligibility.eligible) {
     return `<span class="admin-badge admin-badge--success">Eligible now</span>`;
   }

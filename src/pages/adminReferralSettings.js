@@ -33,7 +33,7 @@ export async function renderAdminReferralSettings() {
         <h2 class="admin-page__section-title">Programme Settings</h2>
         <p class="admin-page__subtitle">
           Changing a default here only ever applies to <strong>future</strong> qualifying orders. It never alters a
-          historical commission record &mdash; every past commission permanently keeps the exact rates that applied
+          historical commission record. Every past commission permanently keeps the exact rates that applied
           when it was created.
         </p>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}

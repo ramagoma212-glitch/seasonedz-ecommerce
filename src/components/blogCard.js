@@ -26,7 +26,7 @@ export function renderBlogCard(post, { eager = false } = {}) {
         />
       </a>
       <div class="card__body">
-        <p class="blog-card__meta">${post.category} &bull; ${formatBlogDate(post.date)}</p>
+        <p class="blog-card__meta">${post.category}, ${formatBlogDate(post.date)}</p>
         <h3 class="card__title">
           <a href="/blog/${post.slug}">${post.title}</a>
         </h3>

@@ -39,7 +39,7 @@ function renderGroupRow(group, minimumPayoutAmount) {
         ${
           group.isPayoutEligible
             ? `<button type="button" class="btn btn--primary btn--sm" data-action="pay-affiliate-commissions" data-affiliate-id="${escapeHtml(group.affiliateId)}" data-affiliate-name="${escapeHtml(group.affiliateName)}" data-balance="${group.approvedUnpaidBalance}">Mark Paid</button>`
-            : "&mdash;"
+            : "N/A"
         }
       </td>
     </tr>

@@ -95,7 +95,7 @@ function renderDocumentCard(doc, applicationId) {
     <div class="order-confirmation__row">
       <span>${doc.slot === "IDENTITY" ? "Identity Document" : "Proof of Residence"}${doc.isCurrent ? "" : " (superseded)"}</span>
       <span>
-        ${escapeHtml(typeLabel)} &mdash; ${escapeHtml(documentClassificationLabel(doc))}
+        ${escapeHtml(typeLabel)}: ${escapeHtml(documentClassificationLabel(doc))}
         ${doc.isCurrent ? `<button type="button" class="btn btn--secondary btn--sm" data-action="view-affiliate-document" data-application-id="${escapeHtml(applicationId)}" data-document-id="${escapeHtml(doc.id)}">View</button>` : ""}
       </span>
     </div>

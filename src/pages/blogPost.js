@@ -93,7 +93,7 @@ export function renderBlogPost({ slug } = {}) {
       <a class="blog-post__back" href="/blog">&larr; Back to Blog</a>
 
       <article class="blog-post__article">
-        <p class="blog-post__meta">${post.category} &bull; ${formatBlogDate(post.date)}</p>
+        <p class="blog-post__meta">${post.category}, ${formatBlogDate(post.date)}</p>
         <h1 class="blog-post__title">${post.title}</h1>
 
         <img class="blog-post__image" src="${post.image}" alt="${post.title}" />

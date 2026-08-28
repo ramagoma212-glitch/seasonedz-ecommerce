@@ -75,7 +75,7 @@ export async function renderAdminReferralsOverview() {
           ${renderStatCard("Affiliates payout-eligible", overview.payoutEligibleAffiliateCount)}
         </div>
         <p class="admin-page__subtitle">
-          <a href="/admin/referrals/commissions">Review commissions</a> &bull; <a href="/admin/referrals/payouts">Manage payouts</a>.
+          <a href="/admin/referrals/commissions">Review commissions</a>. <a href="/admin/referrals/payouts">Manage payouts</a>.
         </p>
       </section>
     `;

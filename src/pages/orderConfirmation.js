@@ -195,7 +195,7 @@ function renderBackendOrderConfirmation(order) {
                        ${order.deliveryAddress.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryAddress.deliveryNotes)}</p>` : ""}`
                     : ""
             }
-            <p>${escapeHtml(order.customer.email)} &bull; ${escapeHtml(order.customer.phone)}</p>
+            <p>${escapeHtml(order.customer.email)}, ${escapeHtml(order.customer.phone)}</p>
           </div>
 
           <div class="order-confirmation__actions">
@@ -262,7 +262,7 @@ function renderLocalDemoOrderConfirmation(order) {
             <p>${escapeHtml(order.deliveryAddress.suburb)}, ${escapeHtml(order.deliveryAddress.city)}</p>
             <p>${escapeHtml(order.deliveryAddress.province)}, ${escapeHtml(order.deliveryAddress.postalCode)}</p>
             ${order.deliveryNotes ? `<p><strong>Notes:</strong> ${escapeHtml(order.deliveryNotes)}</p>` : ""}
-            <p>${escapeHtml(order.customer.email)} &bull; ${escapeHtml(order.customer.phone)}</p>
+            <p>${escapeHtml(order.customer.email)}, ${escapeHtml(order.customer.phone)}</p>
           </div>
 
           <div class="order-confirmation__actions">

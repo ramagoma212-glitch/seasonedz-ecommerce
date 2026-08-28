@@ -44,14 +44,14 @@ function renderFilters(query) {
 }
 
 function renderPriceCell(product) {
-  if (product.price === null) return "&mdash;";
+  if (product.price === null) return "N/A";
   const checked = product.priceLastCheckedAt ? formatDate(product.priceLastCheckedAt) : "never checked";
   return `${escapeHtml(product.currency)} ${product.price.toFixed(2)}<span class="admin-table__meta">Checked: ${escapeHtml(checked)}</span>`;
 }
 
 function renderFlags(product) {
   const flags = [product.isFeatured && "Featured", !product.isActive && "Inactive"].filter(Boolean);
-  return flags.length > 0 ? escapeHtml(flags.join(", ")) : "&mdash;";
+  return flags.length > 0 ? escapeHtml(flags.join(", ")) : "N/A";
 }
 
 function renderProductsTable(products) {
@@ -147,7 +147,7 @@ export async function renderAdminAffiliateProducts({ query } = {}) {
           <a class="btn btn--primary btn--sm" href="/admin/affiliate/new">Add Affiliate Product</a>
         </div>
         <p class="admin-page__subtitle">
-          ${result.total} affiliate product${result.total === 1 ? "" : "s"} total &mdash; not yet shown anywhere on the public site.
+          ${result.total} affiliate product${result.total === 1 ? "" : "s"} total. Not yet shown anywhere on the public site.
         </p>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         <div class="form-banner form-banner--error" data-admin-affiliate-banner hidden></div>
