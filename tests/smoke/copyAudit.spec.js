@@ -11,18 +11,25 @@ import { test, expect } from "@playwright/test";
 
 const EM_DASH = "—";
 const EN_DASH = "–";
-const BULLET = "•";
-// Version 7, Milestone 177: widened past just em/en dash after this
-// milestone's own audit found real "&bull;" separators between
-// unrelated phrases (blog card meta, order confirmation contact line,
-// admin audit-log timeline). The literal bullet glyph never appears in
-// this codebase's visible text otherwise, since real lists use CSS
-// list-style, not an inline "•" character, so this cannot false-positive
-// on a genuine structured list (brief section 10's carve-out).
+// Version 7, Milestone 177: deliberately dash-only, not bullet-inclusive.
+// An earlier version of this check also flagged a literal bullet
+// character, which found and helped fix several real decorative bullet
+// separator bugs in this codebase's own templates (blog card meta,
+// order confirmation contact line, admin audit-log timeline). But
+// running it against the live site caught a false positive: a real
+// product's own "Perfect for" bulleted list, written as plain-text
+// bullet-prefixed paragraphs, owner-authored product description
+// content, not a template this milestone controls. That is a
+// legitimate structured list per brief section 10's own carve-out,
+// just implemented without real list markup, so a blanket bullet-
+// character ban is not safe against free-form product copy. Dash
+// characters do not carry that same ambiguity, so this check stays
+// narrowed to them; the bullet-separator fixes already made in source
+// stand on their own.
 async function assertNoDecorativeDashes(page, label) {
   const text = await page.locator("body").innerText();
-  const match = text.match(new RegExp(`.{0,40}[${EM_DASH}${EN_DASH}${BULLET}].{0,40}`));
-  expect(match, `${label} contains a decorative dash or bullet in its visible text: ${match?.[0]}`).toBeNull();
+  const match = text.match(new RegExp(`.{0,40}[${EM_DASH}${EN_DASH}].{0,40}`));
+  expect(match, `${label} contains an em/en dash in its visible text: ${match?.[0]}`).toBeNull();
 }
 
 const PUBLIC_PAGES = [
