@@ -230,4 +230,24 @@ test.describe("Copy audit: admin pages", () => {
     await page.goto("/admin/content-studio/audiences");
     await assertNoDecorativeDashes(page, "admin audiences list");
   });
+
+  // Content Studio Phase 3A: the one new admin page this phase adds.
+  test("admin AI context preview page has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/products*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ products: [], total: 0, page: 1, limit: 100, totalPages: 1 }) });
+    });
+    await page.route("**/api/admin/content-studio/pillars*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope([]) });
+    });
+    await page.route("**/api/admin/content-studio/audiences*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope([]) });
+    });
+
+    await page.goto("/admin/content-studio/context-preview");
+    await assertNoDecorativeDashes(page, "admin AI context preview page");
+  });
 });

@@ -38,6 +38,7 @@ import {
   reactivateAudienceHandler,
   updateAudienceHandler,
 } from "../controllers/audience.controller.js";
+import { previewContentContextHandler } from "../controllers/contentContextPreview.controller.js";
 
 const router = Router();
 
@@ -65,5 +66,13 @@ router.post("/audiences", adminOnly, createAudienceHandler);
 router.patch("/audiences/:id", adminOnly, updateAudienceHandler);
 router.patch("/audiences/:id/deactivate", adminOnly, deactivateAudienceHandler);
 router.patch("/audiences/:id/reactivate", adminOnly, reactivateAudienceHandler);
+
+// Content Studio Phase 3A: read-only, no spend — available to any
+// authenticated admin (ADMIN or STAFF), same "read" classification as
+// every GET route above. Never generates anything; only assembles and
+// returns the same structured context a future AI request would
+// receive. See contentContextPreview.controller.ts's own header
+// comment.
+router.post("/context-preview", previewContentContextHandler);
 
 export default router;

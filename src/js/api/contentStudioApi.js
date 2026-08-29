@@ -97,3 +97,11 @@ export function deactivateAdminAudience(id) {
 export function reactivateAdminAudience(id) {
   return adminRequest(`/admin/content-studio/audiences/${encodeURIComponent(id)}/reactivate`, { method: "PATCH" });
 }
+
+// ---- AI Foundation: context preview (Phase 3A) --------------------------
+// Read-only, no spend, never an AI generation — see
+// contentContextPreview.controller.ts's own header comment.
+
+export function previewContentContext(payload) {
+  return adminRequest("/admin/content-studio/context-preview", { method: "POST", body: JSON.stringify(payload) });
+}

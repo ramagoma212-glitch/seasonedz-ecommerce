@@ -1,6 +1,6 @@
-# Content Studio: Architecture (Phase 2, Brand Knowledge Foundation)
+# Content Studio: Architecture (through Phase 3A, AI Foundation)
 
-This document describes only what Phase 2 actually built: the Brand Knowledge Foundation. No AI provider, campaign, generation job, social account or scheduling system exists yet. See `PHASE 2 FINAL REPORT` (delivered to the owner) for the full verification record, and the Phase 1 architecture audit (delivered separately as an Artifact) for the full platform vision.
+This document covers Phase 2 (Brand Knowledge Foundation) and Phase 3A (AI Content Generation Foundation). No AI provider is connected, no AI credential exists, and no paid AI request has ever been made from this codebase. No campaign, generation job, social account or scheduling system exists yet either. See each phase's own FINAL REPORT for its verification record, and the Phase 1 architecture audit (delivered separately as an Artifact) for the full platform vision.
 
 ## Corrections carried forward from the Phase 1 audit
 
@@ -43,16 +43,16 @@ Every entry also carries: `tags` (a Postgres array, the first native array field
 
 `Audience` (`name` unique, `description`, `painPoints`, `motivations`, `preferredContent`, `isActive`) is a marketing audience, never a customer record. The three guidance fields are deliberately plain text, not arrays: unlike `tags` above, nothing queries them individually, and a future AI context builder reads them as prose.
 
-### Seeded pillars (confirmed) and candidates not seeded
+### Seeded pillars
 
-Seeded, with evidence from `src/data/blogPosts.js`'s real published posts: Educational Colouring, Bible Learning, Mindfulness, School Creativity, Product Tips.
+Seven pillars are seeded, each with real evidence, not invented.
 
-**Recommended for future consideration, not seeded.** Real evidence exists for both, but as a business operation rather than an existing content pillar with published posts.
+From Phase 2, evidenced by `src/data/blogPosts.js`'s real published posts: Educational Colouring, Bible Learning, Mindfulness, School Creativity, Product Tips.
 
-- *Schools and Bulk Buying.* `src/pages/schools.js` is a dedicated, real page ("Seasonedz Group for Schools," "Bulk Orders for Schools," "Ready-Made School Packs"), but no blog content yet exists under this angle specifically.
-- *Faith and Church Life.* `schools.js` explicitly lists "Church groups and Sunday school programmes" as a served audience, broader than the existing Bible Learning pillar, which is colouring-book-product-specific.
+Added in Phase 3A (brief section 5's own completeness review): Phase 2 had found evidence for these two but deliberately left them unseeded pending a second look. Both were re-confirmed against `src/pages/schools.js`, a real, currently published page, and added.
 
-An `ADMIN` can activate either through the Content Pillars admin page in minutes, once the owner decides they're wanted. No code change required.
+- *Schools and Bulk Buying.* Evidenced by "Seasonedz Group for Schools," "Bulk Orders for Schools," "Ready-Made School Packs."
+- *Faith and Church Life.* Evidenced by "Church groups and Sunday school programmes," broader than the existing Bible Learning pillar, which is colouring-book-product-specific.
 
 ### Seeded audiences (confirmed)
 
@@ -68,11 +68,11 @@ All seven candidates the Phase 2 brief itself listed were seeded, each verified 
 | Adult Colouring and Mindfulness Customers | About page's adult framing; product category and blog pillar "Mindfulness" |
 | Business and Bulk Buyers | `schools.js`: "Bulk Orders for Schools," "Kids programmes and holiday clubs" |
 
-## Retrieval strategy (the Phase 3 integration point)
+## Retrieval strategy
 
-`brandKnowledge.service.ts` exports `getKnowledgeContext({ productId?, audienceId?, pillarId?, categories? })`, a deterministic, database-only retrieval function. There is no vector database, no embeddings, no AI call, and no assembly into a prompt string, since brief sections 23 and 24 explicitly forbid all of that in this phase. It returns every active entry that is either broadly applicable (no specific product/audience/pillar link, for example a sitewide `WRITING_RULE`) or scoped to whatever was asked about, ordered by `priority` then recency. A companion `getKnowledgeByTags(tags)` supports the same tag-based lookup brief section 23 asked for.
+`brandKnowledge.service.ts` exports `getKnowledgeContext({ productId?, audienceId?, pillarId?, categories? })`, a deterministic, database-only retrieval function. There is no vector database, no embeddings, no AI call, and no assembly into a prompt string. It returns every active entry that is either broadly applicable (no specific product/audience/pillar link, for example a sitewide `WRITING_RULE`) or scoped to whatever was asked about, ordered by `priority` then recency. A companion `getKnowledgeByTags(tags)` supports the same tag-based lookup.
 
-This is the one function Phase 3 is expected to call. Turning its structured output into an actual Claude prompt is explicitly Phase 3's job, not this one's.
+Phase 3A's `contentContext.service.ts` is the actual caller (see below); this function itself is unchanged from Phase 2.
 
 ## Admin permissions
 
@@ -81,3 +81,81 @@ This is the one function Phase 3 is expected to call. Turning its structured out
 ## Test safety (Correction B)
 
 This project has no separate test database. `DATABASE_URL` is the real production database in every environment, test included (see `backend/TESTING_SAFETY.md`). Every Content Studio test stubs the exact Prisma calls it needs, and `config/testDbGuard.ts`'s `installProductionWriteGuard()` blocks any unstubbed mutating call automatically. Each of `brandKnowledge.service.test.ts`, `contentPillar.service.test.ts` and `audience.service.test.ts` includes one deliberately-unstubbed test proving a real `create()` call is blocked rather than silently succeeding. This is what actually verifies the guard covers these new models, not just an assumption that it does.
+
+---
+
+# Phase 3A: AI Content Generation Foundation
+
+Everything below lives in `backend/src/services/ai/`. No database migration was needed for this phase: every piece is a TypeScript interface, a validator, or a service built on data Phase 2 already persists. Nothing here is wired to a real AI provider, and nothing here can spend money, by construction, not just by omission (see "Spending safety boundary" below).
+
+## AIProvider architecture
+
+`ai.types.ts` defines the one interface every business service depends on:
+
+```ts
+interface AIProvider {
+  readonly name: string;
+  generateStructured<T>(request: AIRequest): Promise<AIResult<T>>;
+}
+```
+
+`generateStructured<T>` is the only method. There is no `generateText()`/`chat()` escape hatch that would hand a caller unstructured prose to parse itself. `providers/deterministicAI.provider.ts` is the only implementation Phase 3A ships: `DeterministicAIProvider` returns realistic, grounded fixtures built from the request's own context, always the same output for the same input, with zero API key and zero cost. No Anthropic, Gemini, or OpenAI import exists anywhere in `services/ai/`.
+
+## Structured request and response contracts
+
+`AIRequest` separates `systemInstructions` (trusted, hard-coded policy) from `context` (retrieved data) and `task` (the specific instruction), plus `outputSchema`, `temperaturePolicy` and `metadata`. `AIResult<T>` carries `data`, `provider`, `model`, `usage`, `latencyMs` and a `requestId` for future provenance, unused by anything yet since nothing is persisted.
+
+`services/ai/contracts/` holds one hand-rolled runtime validator per output shape (this project has no schema-validation library installed anywhere, so these follow the same convention as every existing `backend/src/validators` file rather than adding Zod or similar):
+
+- `marketingStrategy.contract.ts`: `MarketingStrategy`, including a length-capped `reasoningSummary` (a business explanation, never a raw model reasoning transcript).
+- `contentIdea.contract.ts`: `ContentIdea` and `ContentHook`. A `productId` is accepted as a plain string here; whether it names a real `Product` is checked one layer up, in `contentContext.service.ts`, which has database access this module deliberately does not.
+- `creativeOutputs.contract.ts`: `PlatformVariant` (a generic per-platform shape, not one hardcoded field per platform), `CaptionPackage`, `VideoScript`/`VideoScriptScene`, and `VisualBrief`.
+- `qualityCheck.contract.ts`: `QualityCheckResult`/`QualityCheckIssue`, the same shape both today's deterministic checks and a future AI-based quality reviewer will return.
+
+Nothing downstream ever reads a field from a provider response before it has passed through one of these validators.
+
+## Context builder
+
+`contentContext.service.ts` exports `buildContentContext({ productId?, audienceId?, pillarId?, purpose, platforms? })`. It combines, in one bounded object:
+
+- Live `Product` facts (name, price, stock, images), read directly from `Product`, never from a `BrandKnowledgeEntry`, preserving the same source-of-truth boundary as Phase 2.
+- `Audience`/`ContentPillar` rows, rejected with a 409 if inactive, 404 if the id doesn't exist.
+- Brand voice knowledge via `getKnowledgeContext()`, grouped by category (writing rules, visual rules, approved/prohibited claims, calls to action, platform rules, brand facts, terminology) and capped at 10 entries per category.
+
+This file imports exactly four Prisma models: `product`, `audience`, `contentPillar`, and (via `brandKnowledge.service.ts`) `brandKnowledgeEntry`. It never imports `customer`, `order`, `address`, `adminSession`, or any other table that could carry personal data or a secret. A test proves this by stubbing those exact delegates to throw if called, not just asserting it in a comment.
+
+## Prompt architecture and injection defence
+
+`promptBuilder.ts`'s `buildAIRequest()` is the only place `systemInstructions` is ever set, always from a single hard-coded constant (`SEASONEDZ_SYSTEM_POLICY`). A `ContentContext`, built from `BrandKnowledgeEntry` bodies, product descriptions, and admin-entered audience/pillar text, is always passed as `context`, never concatenated into that policy string. The policy itself instructs a future real provider to treat anything in `context` as data, never as an overriding command. `promptBuilder.test.ts` proves this holds even when a knowledge entry's body literally contains "Ignore all previous instructions": `systemInstructions` comes back byte-identical regardless.
+
+## Prompt versioning
+
+`promptVersions.ts` holds flat string constants (`CONTENT_STRATEGY_V1`, `CONTENT_IDEA_V1`, `VIDEO_SCRIPT_V1`, `VISUAL_BRIEF_V1`, `CAPTION_V1`, `QUALITY_CHECK_V1`). Nothing is persisted yet, so there is no table tracking which version produced what. Once Phase 3B+ starts writing real generated rows, each one stores the exact version string used, taken from here.
+
+## Quality control
+
+`qualityCheck.service.ts` runs checks with zero AI call: missing CTA, empty caption, missing platform variant, captions blindly copied to every platform, decorative em/en dash, the US spelling "coloring," and a heuristic scan for risky claim phrases ("award-winning," "guaranteed," etc.) not present in the content's own approved claims. These are flagged as a WARNING, never a hard ERROR, since a substring match cannot prove a claim is genuinely unsupported. "Invalid product ID," "inactive audience," and "inactive pillar" are deliberately not re-checked here: `contentContext.service.ts`'s reference validators already reject those before any context (and therefore any generated content) can exist.
+
+`duplicateDetection.util.ts` provides exact and normalised string comparison for captions, hooks and scripts. No embeddings, and nothing checked against real history yet, since no `ContentItem` exists.
+
+## Pipeline architecture
+
+`contentGenerationPipeline.service.ts` exports five independently callable stage functions: `generateStrategy`, `generateIdeas`, `generateScript`, `generateVisualBrief`, `generateCaptions`. Each takes an explicit `AIProvider` parameter; none of them import or construct a specific provider, and there is no orchestrating function that chains them automatically. Regenerating a caption calls `generateCaptions()` alone. It cannot accidentally re-run strategy or script generation, which is what keeps a future regeneration cheap once a real provider bills per call.
+
+## Cost estimation and spending safety
+
+`usageEstimator.service.ts`'s `estimateUsage()` returns a clearly labelled, approximate token/cost estimate. Its own `basis` field states plainly that no real request has been priced. It is a planning figure only, based on the Phase 1 audit's own researched Claude Sonnet pricing as a placeholder, not any active provider's real rate.
+
+`checkGenerationBudget()` is the spending-safety boundary a future paid call is required to pass before executing. In Phase 3A it always returns `{ allowed: false }` with an explicit "not yet enabled" reason, hard-blocked by code, not merely absent. Flipping this on is real provider activation work for a later, separately approved phase.
+
+## Security boundary
+
+Section 21/38's protection is structural: `contentContext.service.ts` only ever queries `Product`, `Audience`, `ContentPillar` and `BrandKnowledgeEntry`. A dedicated test stubs `prisma.customer`, `prisma.order`, `prisma.address`, `prisma.adminSession` and `prisma.affiliateApplicationDocument` to throw if called, then runs a full `buildContentContext()`, proving the exclusion rather than just documenting an intention. A second test serialises the assembled context and asserts it contains no substring resembling an email, password hash, session token, API key, ID number, bank statement, or credit card field.
+
+## Admin context preview
+
+`POST /api/admin/content-studio/context-preview` (`contentContextPreview.controller.ts`) is the one new route this phase adds. It calls `buildContentContext()` and returns the result: never a generation, never a raw prompt, never `SEASONEDZ_SYSTEM_POLICY` itself. Available to any authenticated admin (`ADMIN` or `STAFF`), the same "read" classification as every other GET-shaped route in this router, since it costs nothing and generates nothing. The frontend page (`src/pages/adminContentContextPreview.js`, under Content Studio's "Context Preview" tab) renders the result in labelled sections: Product Facts, Audience, Content Pillar, Writing Rules, Visual Rules, Approved Claims, Prohibited Claims, Calls to Action, Platform Rules.
+
+## Provider activation boundary (Phase 3B)
+
+Everything above is real, tested architecture with nothing to reimplement. Phase 3B's actual scope: implement a real `AIProvider` (almost certainly `ClaudeAIProvider`, per the Phase 1 audit's own research) behind a feature flag, obtain a real Anthropic Console API key (separate from any Claude Max subscription, confirmed in Phase 1 to be billed independently), wire `checkGenerationBudget()` to real, persisted spend tracking, and connect the pipeline stage functions to an actual admin-facing "generate" action. No generation UI, campaign, or spend exists until that phase is separately approved and built.

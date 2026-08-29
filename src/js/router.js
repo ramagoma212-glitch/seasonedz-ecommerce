@@ -119,6 +119,7 @@ import { renderAdminContentPillars } from "../pages/adminContentPillars.js";
 import { renderAdminContentPillarCreate, renderAdminContentPillarEdit } from "../pages/adminContentPillarForm.js";
 import { renderAdminAudiences } from "../pages/adminAudiences.js";
 import { renderAdminAudienceCreate, renderAdminAudienceEdit } from "../pages/adminAudienceForm.js";
+import { renderAdminContentContextPreview } from "../pages/adminContentContextPreview.js";
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -387,6 +388,7 @@ const routeDefs = [
   { pattern: "/admin/content-studio/audiences/new", render: renderAdminAudienceCreate, title: "Add Audience", noindex: true },
   { pattern: "/admin/content-studio/audiences/:id/edit", render: renderAdminAudienceEdit, title: "Edit Audience", noindex: true },
   { pattern: "/admin/content-studio/audiences", render: renderAdminAudiences, title: "Audiences", noindex: true },
+  { pattern: "/admin/content-studio/context-preview", render: renderAdminContentContextPreview, title: "AI Context Preview", noindex: true },
   { pattern: "/admin/content-studio", render: renderAdminBrandKnowledge, title: "Content Studio", noindex: true },
 ];
 

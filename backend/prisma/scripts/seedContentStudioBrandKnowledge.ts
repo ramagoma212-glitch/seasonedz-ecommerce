@@ -32,6 +32,20 @@ const pillarSeeds = [
   { name: "Mindfulness", description: "Colouring as a calming, therapeutic activity for teens and adults.", sortOrder: 2 },
   { name: "School Creativity", description: "Bringing creative, hands-on activities into the classroom.", sortOrder: 3 },
   { name: "Product Tips", description: "Practical guidance on choosing and using Seasonedz products, e.g. markers and crayons.", sortOrder: 4 },
+  // Content Studio Phase 3A, section 5: Phase 2 found evidence for these
+  // two but deliberately left them unseeded pending this review. Both
+  // are confirmed against src/pages/schools.js, a real, currently
+  // published page, not invented for this phase.
+  {
+    name: "Schools and Bulk Buying",
+    description: "Bulk orders, ready-made school packs and wholesale buying for schools and organisations.",
+    sortOrder: 5,
+  },
+  {
+    name: "Faith and Church Life",
+    description: "Faith-based creativity for church groups and Sunday school programmes, broader than Bible colouring books alone.",
+    sortOrder: 6,
+  },
 ];
 
 // ---------------------------------------------------------------------------

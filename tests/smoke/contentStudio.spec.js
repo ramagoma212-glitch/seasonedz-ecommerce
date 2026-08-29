@@ -237,3 +237,100 @@ test.describe("Audiences admin", () => {
     await expect(page.locator("[data-admin-audience-form-banner]")).toContainText("Name is required");
   });
 });
+
+// Content Studio Phase 3A: AI Content Generation Foundation. No
+// generation UI exists anywhere — only the read-only context preview.
+test.describe("AI Context Preview admin", () => {
+  async function mockPreviewPageData(page) {
+    await page.route("**/api/admin/products?*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({ products: [{ id: "prod-1", name: "Bible Colouring Book", slug: "bible-colouring-book", sku: null, status: "ACTIVE", stockQuantity: 5, lowStockThreshold: 2, price: 150, productType: "PHYSICAL", categoryName: null, primaryImageUrl: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }], total: 1, page: 1, limit: 100, totalPages: 1 }),
+      });
+    });
+    await mockPillarsList(page);
+    await mockAudiencesList(page);
+  }
+
+  test("page loads with Product, Audience and Content Pillar selectors, and a Preview Context button, never a Generate button", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockPreviewPageData(page);
+    await page.goto("/admin/content-studio/context-preview");
+
+    await expect(page.locator("#contextPreviewProduct")).toBeVisible();
+    await expect(page.locator("#contextPreviewAudience")).toBeVisible();
+    await expect(page.locator("#contextPreviewPillar")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Preview Context" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /generate/i })).toHaveCount(0);
+  });
+
+  test("submitting the form renders the assembled context in structured sections", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockPreviewPageData(page);
+    await page.route("**/api/admin/content-studio/context-preview", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({
+          purpose: "admin-context-preview",
+          platforms: [],
+          product: { id: "prod-1", name: "Bible Colouring Book", slug: "bible-colouring-book", sku: null, description: null, shortDescription: null, price: 150, stockQuantity: 5, isInStock: true, status: "ACTIVE", images: [] },
+          audience: null,
+          pillar: null,
+          brandVoice: { writingRules: ["Use colouring, not coloring."], visualRules: [], approvedClaims: [], prohibitedClaims: [], callToActionRules: [], platformRules: [], brandFacts: [], terminology: [] },
+        }),
+      });
+    });
+
+    await page.goto("/admin/content-studio/context-preview");
+    await page.locator("#contextPreviewProduct").selectOption("prod-1");
+    await page.getByRole("button", { name: "Preview Context" }).click();
+
+    await expect(page.getByText("Bible Colouring Book (ACTIVE)")).toBeVisible();
+    await expect(page.getByText("Use colouring, not coloring.")).toBeVisible();
+  });
+
+  test("never renders a raw system prompt, an API key, or a secret — only structured business data", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockPreviewPageData(page);
+    await page.route("**/api/admin/content-studio/context-preview", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({
+          purpose: "admin-context-preview",
+          platforms: [],
+          product: null,
+          audience: null,
+          pillar: null,
+          brandVoice: { writingRules: [], visualRules: [], approvedClaims: [], prohibitedClaims: [], callToActionRules: [], platformRules: [], brandFacts: [], terminology: [] },
+        }),
+      });
+    });
+
+    await page.goto("/admin/content-studio/context-preview");
+    await page.getByRole("button", { name: "Preview Context" }).click();
+    await expect(page.locator("[data-admin-context-preview-results]")).toBeVisible();
+
+    const bodyText = await page.locator("body").innerText();
+    assertNoSecretLeak(bodyText);
+  });
+
+  function assertNoSecretLeak(text) {
+    const lower = text.toLowerCase();
+    for (const forbidden of ["api key", "api_key", "sk-ant", "bearer ", "secret", "you are generating marketing content for seasonedz"]) {
+      expect(lower.includes(forbidden), `preview page unexpectedly leaked "${forbidden}"`).toBe(false);
+    }
+  }
+
+  test("unauthenticated visitor is redirected to admin login", async ({ page }) => {
+    await page.route("**/api/admin/auth/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) }));
+    await page.route("**/api/admin/products*", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) }));
+    await page.goto("/admin/content-studio/context-preview");
+    await expect(page).toHaveURL(/\/admin\/login/);
+  });
+});

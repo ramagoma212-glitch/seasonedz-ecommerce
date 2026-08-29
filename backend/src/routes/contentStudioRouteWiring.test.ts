@@ -24,6 +24,9 @@ const READ_ROUTES: Array<[string, string]> = [
   ["get", "/pillars/:id"],
   ["get", "/audiences"],
   ["get", "/audiences/:id"],
+  // Content Studio Phase 3A: read-only, no spend — same classification
+  // as every GET route above, available to STAFF as well as ADMIN.
+  ["post", "/context-preview"],
 ];
 
 const WRITE_ROUTES: Array<[string, string]> = [
@@ -73,14 +76,23 @@ test("no DELETE route exists anywhere in Content Studio — deactivate is the on
   assert.equal(hasDelete, false);
 });
 
-test("no campaign, generation job, social account or scheduling route exists — Phase 2 is Brand Knowledge only", () => {
-  const forbiddenSubstrings = ["campaign", "generation", "social-account", "schedule", "publish"];
+test("no campaign, generation job, social account, scheduling or publishing route exists — Phase 2 was Brand Knowledge only, Phase 3A is architecture only", () => {
+  // Brief section 35's own explicit forbidden-route examples
+  // ("/generate-paid-video", "/publish", "/social-connect") plus the
+  // broader categories they belong to.
+  const forbiddenSubstrings = ["campaign", "generation-job", "generate-", "social-account", "social-connect", "schedule", "publish"];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allPaths = (contentStudioRoutes as AnyRouter).stack.filter((entry: any) => entry.route).map((entry: any) => entry.route.path as string);
 
   for (const path of allPaths) {
     for (const forbidden of forbiddenSubstrings) {
-      assert.ok(!path.toLowerCase().includes(forbidden), `route "${path}" unexpectedly references "${forbidden}" — out of scope for Phase 2`);
+      assert.ok(!path.toLowerCase().includes(forbidden), `route "${path}" unexpectedly references "${forbidden}" — out of scope for this phase`);
     }
   }
+});
+
+test("the only route this phase adds beyond Phase 2 is the read-only context-preview — no /generate, /publish or /social-connect route exists", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allPaths = (contentStudioRoutes as AnyRouter).stack.filter((entry: any) => entry.route).map((entry: any) => entry.route.path as string);
+  assert.ok(allPaths.includes("/context-preview"));
 });

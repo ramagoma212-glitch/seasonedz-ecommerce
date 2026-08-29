@@ -10,6 +10,10 @@ const SUB_NAV_LINKS = [
   { key: "brand-knowledge", href: "/admin/content-studio", label: "Brand Knowledge" },
   { key: "pillars", href: "/admin/content-studio/pillars", label: "Content Pillars" },
   { key: "audiences", href: "/admin/content-studio/audiences", label: "Audiences" },
+  // Phase 3A: a read-only preview of the structured context a future
+  // AI request would receive — never a generation. See
+  // pages/adminContentContextPreview.js's own header comment.
+  { key: "context-preview", href: "/admin/content-studio/context-preview", label: "Context Preview" },
 ];
 
 export function renderContentStudioSubNav(activeKey) {

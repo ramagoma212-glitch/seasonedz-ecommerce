@@ -881,6 +881,22 @@
   margin-bottom: var(--space-xl);
 }
 
+/* Content Studio Phase 3A: AI context preview result sections — same
+   surface/border/radius language as .admin-card above, stacked
+   vertically since each section holds a variable amount of text. */
+.admin-context-preview__section {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.admin-context-preview__section ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: var(--space-lg);
+}
+
 .admin-card {
   display: flex;
   flex-direction: column;

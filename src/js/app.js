@@ -110,7 +110,9 @@ import {
   updateAdminAudience,
   deactivateAdminAudience,
   reactivateAdminAudience,
+  previewContentContext,
 } from "./api/contentStudioApi.js";
+import { renderContextPreviewResult } from "../pages/adminContentContextPreview.js";
 import {
   requestAdminAffiliateApplicationCorrection,
   approveAdminAffiliateApplication,
@@ -193,6 +195,7 @@ function mountApp() {
   setupAdminAudienceFilterForm();
   setupAdminAudienceForm();
   setupAdminAudienceActions();
+  setupAdminContextPreviewForm();
 
   window.addEventListener("popstate", onRouteChange);
   onRouteChange();
@@ -4012,6 +4015,64 @@ async function handleAdminAudienceAction(button, apiCall, verb) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Content Studio Phase 3A: AI context preview. Fetches and renders the
+// structured context assembled by buildContentContext() in place, no
+// page navigation — the same "submit, then render results into a
+// container div" shape a live search page would use. This never calls
+// anything that generates content; previewContentContext() only ever
+// hits the read-only /context-preview endpoint.
+// ---------------------------------------------------------------------------
+
+function setupAdminContextPreviewForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-context-preview-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminContextPreviewSubmit(form);
+  });
+}
+
+async function handleAdminContextPreviewSubmit(form) {
+  const banner = form.querySelector("[data-admin-context-preview-banner]");
+  const resultsContainer = document.querySelector("[data-admin-context-preview-results]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  if (resultsContainer) resultsContainer.innerHTML = "";
+
+  const productId = form.querySelector("#contextPreviewProduct")?.value || undefined;
+  const audienceId = form.querySelector("#contextPreviewAudience")?.value || undefined;
+  const pillarId = form.querySelector("#contextPreviewPillar")?.value || undefined;
+  const platforms = Array.from(form.querySelectorAll('input[name="contextPreviewPlatform"]:checked')).map((input) => input.value);
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const response = await previewContentContext({ productId, audienceId, pillarId, platforms });
+    if (resultsContainer) resultsContainer.innerHTML = renderContextPreviewResult(response.data);
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
