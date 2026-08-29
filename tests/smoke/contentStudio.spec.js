@@ -328,8 +328,15 @@ test.describe("AI Context Preview admin", () => {
   }
 
   test("unauthenticated visitor is redirected to admin login", async ({ page }) => {
+    // renderAdminContentContextPreview() fires three requests in
+    // parallel via Promise.all (products, pillars, audiences) — every
+    // one of them must be mocked with 401, not just one, or an
+    // unmocked request's own network failure can race ahead of the
+    // mocked 401 and produce a "connection error" page instead of the
+    // expected redirect (a real bug this test itself caught once).
     await page.route("**/api/admin/auth/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) }));
     await page.route("**/api/admin/products*", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) }));
+    await page.route("**/api/admin/content-studio/**", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Authentication required." }) }));
     await page.goto("/admin/content-studio/context-preview");
     await expect(page).toHaveURL(/\/admin\/login/);
   });
