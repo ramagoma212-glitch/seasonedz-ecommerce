@@ -98,6 +98,20 @@ import {
   payAdminAffiliateCommissions,
 } from "./api/adminReferralsApi.js";
 import {
+  createAdminBrandKnowledgeEntry,
+  updateAdminBrandKnowledgeEntry,
+  deactivateAdminBrandKnowledgeEntry,
+  reactivateAdminBrandKnowledgeEntry,
+  createAdminContentPillar,
+  updateAdminContentPillar,
+  deactivateAdminContentPillar,
+  reactivateAdminContentPillar,
+  createAdminAudience,
+  updateAdminAudience,
+  deactivateAdminAudience,
+  reactivateAdminAudience,
+} from "./api/contentStudioApi.js";
+import {
   requestAdminAffiliateApplicationCorrection,
   approveAdminAffiliateApplication,
   rejectAdminAffiliateApplication,
@@ -170,6 +184,15 @@ function mountApp() {
   setupAdminPayoutActions();
   setupAdminPaymentConfirmation();
   setupDescriptionEditors();
+  setupAdminBrandKnowledgeFilterForm();
+  setupAdminBrandKnowledgeForm();
+  setupAdminBrandKnowledgeActions();
+  setupAdminContentPillarFilterForm();
+  setupAdminContentPillarForm();
+  setupAdminContentPillarActions();
+  setupAdminAudienceFilterForm();
+  setupAdminAudienceForm();
+  setupAdminAudienceActions();
 
   window.addEventListener("popstate", onRouteChange);
   onRouteChange();
@@ -3569,6 +3592,426 @@ async function handleConfirmManualPayment(button) {
   } catch (error) {
     button.disabled = false;
     window.alert(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Content Studio Phase 2: Brand Knowledge Foundation. Same filter-form /
+// create-or-edit-form / row-action three-part shape as the referral
+// affiliate handlers above, repeated once per entity (Brand Knowledge,
+// Content Pillars, Audiences). No campaign/generation/publishing
+// handler exists anywhere in this file — Phase 2 is Brand Knowledge
+// only.
+// ---------------------------------------------------------------------------
+
+function setupAdminBrandKnowledgeFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-brand-knowledge-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const category = form.querySelector('select[name="category"]')?.value || "";
+    const tag = form.querySelector('input[name="tag"]')?.value.trim() || "";
+    const isActive = form.querySelector('select[name="isActive"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (category) params.set("category", category);
+    if (tag) params.set("tag", tag);
+    if (isActive) params.set("isActive", isActive);
+    params.set("page", "1");
+
+    navigateTo(`/admin/content-studio?${params.toString()}`);
+  });
+}
+
+function readAdminBrandKnowledgeFormValues(form) {
+  const title = form.querySelector("#entryTitle")?.value.trim() || "";
+  const body = form.querySelector("#entryBody")?.value.trim() || "";
+  const category = form.querySelector("#entryCategory")?.value || "";
+  const sourceType = form.querySelector("#entrySourceType")?.value || "";
+  const tagsRaw = form.querySelector("#entryTags")?.value || "";
+  const pillarId = form.querySelector("#entryPillar")?.value || "";
+  const audienceId = form.querySelector("#entryAudience")?.value || "";
+  const relatedProductId = form.querySelector("#entryRelatedProductId")?.value.trim() || "";
+  const sourceReference = form.querySelector("#entrySourceReference")?.value.trim() || "";
+
+  return {
+    title,
+    body,
+    category,
+    sourceType,
+    tags: tagsRaw
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0),
+    pillarId: pillarId || null,
+    audienceId: audienceId || null,
+    relatedProductId: relatedProductId || null,
+    sourceReference: sourceReference || null,
+  };
+}
+
+function validateAdminBrandKnowledgeForm(values) {
+  if (!values.title) return "Title is required.";
+  if (!values.body) return "Body is required.";
+  if (!values.category) return "Category is required.";
+  if (!values.sourceType) return "Source is required.";
+  return null;
+}
+
+function setupAdminBrandKnowledgeForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-brand-knowledge-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminBrandKnowledgeFormSubmit(form);
+  });
+}
+
+async function handleAdminBrandKnowledgeFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-brand-knowledge-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminBrandKnowledgeFormValues(form);
+  const validationError = validateAdminBrandKnowledgeForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminBrandKnowledgeEntry(values);
+      setPendingAdminMessage(`Brand knowledge entry "${response.data.title}" created successfully.`);
+      navigateTo(`/admin/content-studio/brand-knowledge/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const entryId = form.dataset.entryId;
+      await updateAdminBrandKnowledgeEntry(entryId, values);
+      setPendingAdminMessage("Brand knowledge entry updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+const ADMIN_BRAND_KNOWLEDGE_ACTIONS = {
+  "deactivate-entry": { apiCall: deactivateAdminBrandKnowledgeEntry, verb: "deactivated" },
+  "reactivate-entry": { apiCall: reactivateAdminBrandKnowledgeEntry, verb: "reactivated" },
+};
+
+function setupAdminBrandKnowledgeActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const action = ADMIN_BRAND_KNOWLEDGE_ACTIONS[button.dataset.action];
+    if (!action) return;
+    handleAdminBrandKnowledgeAction(button, action.apiCall, action.verb);
+  });
+}
+
+async function handleAdminBrandKnowledgeAction(button, apiCall, verb) {
+  const entryId = button.dataset.entryId;
+  const row = button.closest("[data-entry-row]");
+  const banner = document.querySelector("[data-admin-brand-knowledge-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(entryId);
+    setPendingAdminMessage(`Brand knowledge entry ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminContentPillarFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-content-pillar-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const isActive = form.querySelector('select[name="isActive"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (isActive) params.set("isActive", isActive);
+
+    navigateTo(`/admin/content-studio/pillars?${params.toString()}`);
+  });
+}
+
+function readAdminContentPillarFormValues(form) {
+  const name = form.querySelector("#pillarName")?.value.trim() || "";
+  const description = form.querySelector("#pillarDescription")?.value.trim() || "";
+  const sortOrderRaw = form.querySelector("#pillarSortOrder")?.value;
+
+  return {
+    name,
+    description: description || null,
+    sortOrder: sortOrderRaw ? Number(sortOrderRaw) : 0,
+  };
+}
+
+function setupAdminContentPillarForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-content-pillar-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminContentPillarFormSubmit(form);
+  });
+}
+
+async function handleAdminContentPillarFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-content-pillar-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminContentPillarFormValues(form);
+  if (!values.name) {
+    if (banner) {
+      banner.textContent = "Name is required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminContentPillar(values);
+      setPendingAdminMessage(`Content pillar "${response.data.name}" created successfully.`);
+      navigateTo(`/admin/content-studio/pillars/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const pillarId = form.dataset.pillarId;
+      await updateAdminContentPillar(pillarId, values);
+      setPendingAdminMessage("Content pillar updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+const ADMIN_CONTENT_PILLAR_ACTIONS = {
+  "deactivate-pillar": { apiCall: deactivateAdminContentPillar, verb: "deactivated" },
+  "reactivate-pillar": { apiCall: reactivateAdminContentPillar, verb: "reactivated" },
+};
+
+function setupAdminContentPillarActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const action = ADMIN_CONTENT_PILLAR_ACTIONS[button.dataset.action];
+    if (!action) return;
+    handleAdminContentPillarAction(button, action.apiCall, action.verb);
+  });
+}
+
+async function handleAdminContentPillarAction(button, apiCall, verb) {
+  const pillarId = button.dataset.pillarId;
+  const row = button.closest("[data-pillar-row]");
+  const banner = document.querySelector("[data-admin-content-pillar-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(pillarId);
+    setPendingAdminMessage(`Content pillar ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminAudienceFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-audience-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const isActive = form.querySelector('select[name="isActive"]')?.value || "";
+
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (isActive) params.set("isActive", isActive);
+
+    navigateTo(`/admin/content-studio/audiences?${params.toString()}`);
+  });
+}
+
+function readAdminAudienceFormValues(form) {
+  const name = form.querySelector("#audienceName")?.value.trim() || "";
+  const description = form.querySelector("#audienceDescription")?.value.trim() || "";
+  const painPoints = form.querySelector("#audiencePainPoints")?.value.trim() || "";
+  const motivations = form.querySelector("#audienceMotivations")?.value.trim() || "";
+  const preferredContent = form.querySelector("#audiencePreferredContent")?.value.trim() || "";
+
+  return {
+    name,
+    description: description || null,
+    painPoints: painPoints || null,
+    motivations: motivations || null,
+    preferredContent: preferredContent || null,
+  };
+}
+
+function setupAdminAudienceForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-audience-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminAudienceFormSubmit(form);
+  });
+}
+
+async function handleAdminAudienceFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-audience-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminAudienceFormValues(form);
+  if (!values.name) {
+    if (banner) {
+      banner.textContent = "Name is required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminAudience(values);
+      setPendingAdminMessage(`Audience "${response.data.name}" created successfully.`);
+      navigateTo(`/admin/content-studio/audiences/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const audienceId = form.dataset.audienceId;
+      await updateAdminAudience(audienceId, values);
+      setPendingAdminMessage("Audience updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+const ADMIN_AUDIENCE_ACTIONS = {
+  "deactivate-audience": { apiCall: deactivateAdminAudience, verb: "deactivated" },
+  "reactivate-audience": { apiCall: reactivateAdminAudience, verb: "reactivated" },
+};
+
+function setupAdminAudienceActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-action]");
+    if (!button) return;
+    const action = ADMIN_AUDIENCE_ACTIONS[button.dataset.action];
+    if (!action) return;
+    handleAdminAudienceAction(button, action.apiCall, action.verb);
+  });
+}
+
+async function handleAdminAudienceAction(button, apiCall, verb) {
+  const audienceId = button.dataset.audienceId;
+  const row = button.closest("[data-audience-row]");
+  const banner = document.querySelector("[data-admin-audience-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(audienceId);
+    setPendingAdminMessage(`Audience ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
   }
 }
 

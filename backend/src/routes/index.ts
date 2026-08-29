@@ -22,6 +22,7 @@ import adminAffiliateApplicationsRoutes from "./adminAffiliateApplications.route
 import referralsRoutes from "./referrals.routes.js";
 import courierWebhookRoutes from "./courierWebhook.routes.js";
 import checkoutIntentRoutes from "./checkoutIntent.routes.js";
+import contentStudioRoutes from "./contentStudio.routes.js";
 
 const router = Router();
 
@@ -83,5 +84,10 @@ router.use("/webhooks", courierWebhookRoutes);
 // Version 7, Milestone 174C: abandoned checkout recovery — public,
 // unauthenticated. See checkoutIntent.routes.ts's own header comment.
 router.use("/checkout-intent", checkoutIntentRoutes);
+// Content Studio Phase 2: Brand Knowledge Foundation only — no
+// campaign/generation/publishing route exists anywhere yet. Fully
+// additive; every route above it is completely unaffected. See
+// contentStudio.routes.ts's own header comment.
+router.use("/admin/content-studio", contentStudioRoutes);
 
 export default router;

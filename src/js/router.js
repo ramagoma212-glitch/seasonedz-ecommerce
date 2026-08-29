@@ -111,6 +111,14 @@ import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
 import { renderAdminReferralCommissions } from "../pages/adminReferralCommissions.js";
 import { renderAdminReferralCommissionDetail } from "../pages/adminReferralCommissionDetail.js";
 import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
+// Content Studio Phase 2: Brand Knowledge Foundation only — no
+// campaign/generation/publishing page exists anywhere yet.
+import { renderAdminBrandKnowledge } from "../pages/adminBrandKnowledge.js";
+import { renderAdminBrandKnowledgeCreate, renderAdminBrandKnowledgeEdit } from "../pages/adminBrandKnowledgeForm.js";
+import { renderAdminContentPillars } from "../pages/adminContentPillars.js";
+import { renderAdminContentPillarCreate, renderAdminContentPillarEdit } from "../pages/adminContentPillarForm.js";
+import { renderAdminAudiences } from "../pages/adminAudiences.js";
+import { renderAdminAudienceCreate, renderAdminAudienceEdit } from "../pages/adminAudienceForm.js";
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -366,6 +374,20 @@ const routeDefs = [
   { pattern: "/admin/referrals/payouts", render: renderAdminReferralPayouts, title: "Referral Payouts", noindex: true },
   { pattern: "/admin/referrals/settings", render: renderAdminReferralSettings, title: "Referral Programme Settings", noindex: true },
   { pattern: "/admin/referrals", render: renderAdminReferralsOverview, title: "Referrals", noindex: true },
+
+  // Content Studio Phase 2: Brand Knowledge Foundation only — no
+  // campaign/generation/publishing route exists anywhere yet. Most
+  // specific pattern first, same ordering discipline as every route
+  // group above.
+  { pattern: "/admin/content-studio/brand-knowledge/new", render: renderAdminBrandKnowledgeCreate, title: "Add Brand Knowledge Entry", noindex: true },
+  { pattern: "/admin/content-studio/brand-knowledge/:id/edit", render: renderAdminBrandKnowledgeEdit, title: "Edit Brand Knowledge Entry", noindex: true },
+  { pattern: "/admin/content-studio/pillars/new", render: renderAdminContentPillarCreate, title: "Add Content Pillar", noindex: true },
+  { pattern: "/admin/content-studio/pillars/:id/edit", render: renderAdminContentPillarEdit, title: "Edit Content Pillar", noindex: true },
+  { pattern: "/admin/content-studio/pillars", render: renderAdminContentPillars, title: "Content Pillars", noindex: true },
+  { pattern: "/admin/content-studio/audiences/new", render: renderAdminAudienceCreate, title: "Add Audience", noindex: true },
+  { pattern: "/admin/content-studio/audiences/:id/edit", render: renderAdminAudienceEdit, title: "Edit Audience", noindex: true },
+  { pattern: "/admin/content-studio/audiences", render: renderAdminAudiences, title: "Audiences", noindex: true },
+  { pattern: "/admin/content-studio", render: renderAdminBrandKnowledge, title: "Content Studio", noindex: true },
 ];
 
 // Reads "/product/abc?ref=home" style URLs straight from the address

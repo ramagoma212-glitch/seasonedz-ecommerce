@@ -16,6 +16,7 @@
     "test": "cross-env TEST_DB_ACKNOWLEDGE_SHARED_PRODUCTION=true tsx --test src/**/*.test.ts",
     "seed": "tsx prisma/seed.ts",
     "db:sync-product-content": "tsx prisma/scripts/update-product-content.ts",
+    "seed:content-studio": "tsx prisma/scripts/seedContentStudioBrandKnowledge.ts",
     "admin:setup": "tsx prisma/scripts/setupAdminUser.ts",
     "notifications:process": "tsx prisma/scripts/processNotifications.ts"
   },

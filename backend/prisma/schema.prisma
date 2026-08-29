@@ -230,6 +230,14 @@ model Product {
   stockAlertSubscriptions StockAlertSubscription[]
   wishlistItems           WishlistItem[]
 
+  // Content Studio Phase 2: entries that concern this specific product
+  // (approved positioning, benefits, prohibited claims). Never a
+  // substitute for this row's own price/stock/name — see
+  // BrandKnowledgeEntry's own header comment for the source-of-truth
+  // boundary. SetNull on that side, so removing this relation link
+  // never deletes a knowledge entry.
+  brandKnowledgeEntries BrandKnowledgeEntry[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -889,6 +897,12 @@ model AdminUser {
   // "deleting an admin must never delete the audit history of what they
   // did" discipline as orderStatusHistory above.
   affiliateApplicationEvents        AffiliateApplicationEvent[]
+  // Content Studio Phase 2: same SetNull discipline — deleting an admin
+  // must never delete a knowledge entry or its attribution history.
+  // Two named relations because one AdminUser can be both the creator
+  // and, later, the editor of the same entry.
+  brandKnowledgeEntriesCreated      BrandKnowledgeEntry[]        @relation("BrandKnowledgeEntryCreatedBy")
+  brandKnowledgeEntriesUpdated      BrandKnowledgeEntry[]        @relation("BrandKnowledgeEntryUpdatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1907,4 +1921,169 @@ model AffiliateApplicationEvent {
   createdAt DateTime @default(now())
 
   @@index([applicationId, createdAt])
+}
+
+// ============================================================
+// Content Studio Phase 2: Brand Knowledge Foundation.
+//
+// Nothing below is called by anything yet — no route, no AI provider,
+// no generation job. This is a knowledge layer only, built so a future
+// content-generation service (Phase 3+) can retrieve exactly the
+// business information relevant to one product/audience/pillar rather
+// than depending on one enormous hand-maintained prompt.
+//
+// SOURCE OF TRUTH BOUNDARY (Phase 2 brief section 3): Product remains
+// the sole authority for a product's name, price, stock, SKU, slug,
+// availability and real images. A BrandKnowledgeEntry never stores any
+// of those — it stores marketing guidance ABOUT a product (approved
+// positioning, approved benefits, prohibited claims), optionally linked
+// to one real Product via relatedProductId. A future AI context builder
+// must always read current facts from Product directly and treat an
+// entry here as guidance, never as a transactional fact, however old
+// the entry might get.
+// ============================================================
+
+enum BrandKnowledgeCategory {
+  BRAND_FACT
+  BRAND_VOICE
+  WRITING_RULE
+  VISUAL_RULE
+  PRODUCT_POSITIONING
+  AUDIENCE_INSIGHT
+  APPROVED_CLAIM
+  PROHIBITED_CLAIM
+  TERMINOLOGY
+  CALL_TO_ACTION
+  PLATFORM_RULE
+  SEASONAL_GUIDANCE
+  CAMPAIGN_HISTORY
+}
+
+// Where an entry's information actually came from — kept deliberately
+// separate from category (what KIND of knowledge it is) so a future
+// reader can tell "an owner-approved writing rule" apart from "a
+// suggestion nobody has confirmed yet" without parsing free text.
+// OWNER_APPROVED/WEBSITE/PRODUCT_DATABASE/POLICY/HISTORICAL_CAMPAIGN
+// are all real, already-true sources; INTERNAL_GUIDANCE is this
+// project's own engineering judgement (e.g. the source-of-truth rule
+// above), not owner-authored copy. Nothing in Phase 2 seeds an entry
+// whose source is an AI suggestion — see brief section 30.
+enum BrandKnowledgeSourceType {
+  OWNER_APPROVED
+  WEBSITE
+  PRODUCT_DATABASE
+  POLICY
+  HISTORICAL_CAMPAIGN
+  INTERNAL_GUIDANCE
+}
+
+model BrandKnowledgeEntry {
+  id       String                 @id @default(cuid())
+  category BrandKnowledgeCategory
+  title    String
+  body     String
+
+  // Postgres native array — the first one in this schema. Chosen only
+  // because tag-based retrieval is an explicit, real query requirement
+  // (Phase 2 brief section 23: "request knowledge based on... tags"),
+  // unlike Audience's painPoints/motivations/preferredContent below,
+  // which nothing queries individually and so stay plain text. A GIN
+  // index (below) keeps `tags` filtering a real index lookup, not a
+  // sequential scan.
+  tags String[] @default([])
+
+  isActive Boolean @default(true)
+  // Higher runs first whenever a future retrieval call has to bound how
+  // many entries fit in one AI context. 0 = no particular priority.
+  // Nothing in Phase 2 reads this yet.
+  priority Int     @default(0)
+
+  sourceType      BrandKnowledgeSourceType
+  // Free text pointer to where sourceType's claim can be checked — a
+  // URL, a file path, "owner brief 2026-08-29 section 11", etc. Not
+  // required: an owner-approved rule given verbally has no document to
+  // point at.
+  sourceReference String?
+  // Human confirmation that this entry is still accurate, set only by
+  // an explicit admin action — never by a script or by the AI itself.
+  lastVerifiedAt  DateTime?
+
+  // The one real Product this entry concerns, if any — see this
+  // model's own header comment for why this is guidance about a
+  // product, never a copy of the product's own transactional fields.
+  relatedProductId String?
+  relatedProduct   Product? @relation(fields: [relatedProductId], references: [id], onDelete: SetNull)
+
+  pillarId String?
+  pillar   ContentPillar? @relation(fields: [pillarId], references: [id], onDelete: SetNull)
+
+  audienceId String?
+  audience   Audience? @relation(fields: [audienceId], references: [id], onDelete: SetNull)
+
+  // SetNull, matching OrderStatusHistory/AffiliateApplicationEvent's own
+  // "deleting an admin must never delete the record of what they did"
+  // discipline — a knowledge entry outlives whichever admin wrote it.
+  createdByAdminId String?
+  createdByAdmin   AdminUser? @relation("BrandKnowledgeEntryCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdminId String?
+  updatedByAdmin   AdminUser? @relation("BrandKnowledgeEntryUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, isActive])
+  @@index([isActive])
+  @@index([relatedProductId])
+  @@index([pillarId])
+  @@index([audienceId])
+  @@index([tags], type: Gin)
+}
+
+// A named marketing content category (brief section 14) — database
+// managed on purpose, not hard-coded in frontend JavaScript, so a
+// future admin can add or retire one without a deploy. name is unique
+// to prevent an accidental near-duplicate pillar (brief section 20).
+model ContentPillar {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+  // Manual display ordering only — never used for any ranking/retrieval
+  // logic. 0 for every seeded pillar (brief section 15 seeds pillars as
+  // a flat list, with no stated relative priority between them).
+  sortOrder   Int     @default(0)
+
+  brandKnowledgeEntries BrandKnowledgeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// A marketing audience, not a customer record (brief section 16) — this
+// model must never store an individual's PII, only a named group
+// description used to steer future content generation.
+model Audience {
+  id               String  @id @default(cuid())
+  name             String  @unique
+  description      String?
+  // Deliberately plain text, not arrays — unlike BrandKnowledgeEntry's
+  // tags above (a real, required retrieval query per brief section 23),
+  // nothing queries these three fields individually; a future AI
+  // context builder reads them as prose alongside description, not as
+  // a filterable list. Keeping them as one paragraph each also matches
+  // brief section 16's own "not an overcomplicated audience CRM"
+  // instruction better than three more array columns would.
+  painPoints       String?
+  motivations      String?
+  preferredContent String?
+  isActive         Boolean @default(true)
+
+  brandKnowledgeEntries BrandKnowledgeEntry[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
 }

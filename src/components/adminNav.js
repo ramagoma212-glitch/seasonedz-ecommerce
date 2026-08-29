@@ -36,6 +36,10 @@ const NAV_LINKS = [
   // Settings live under this one flat link, with their own local
   // sub-navigation (components/referralsSubNav.js) once inside it.
   { key: "referrals", href: "/admin/referrals", label: "Referrals" },
+  // Content Studio Phase 2: Brand Knowledge Foundation only — no
+  // campaign/generation/scheduling/publishing feature exists behind
+  // this link yet. See components/contentStudioSubNav.js.
+  { key: "content-studio", href: "/admin/content-studio", label: "Content Studio" },
 ];
 
 export function renderAdminNav(activeKey) {

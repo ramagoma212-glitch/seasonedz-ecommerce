@@ -158,4 +158,76 @@ test.describe("Copy audit: admin pages", () => {
     await page.goto("/admin/products");
     await assertNoDecorativeDashes(page, "admin products list");
   });
+
+  // Content Studio Phase 2: new admin pages this phase adds.
+  test("admin brand knowledge list has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/content-studio/brand-knowledge*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({
+          entries: [
+            {
+              id: "bk-1",
+              category: "WRITING_RULE",
+              title: "Use colouring, not coloring",
+              body: "Always use the SA spelling in customer facing copy.",
+              tags: ["spelling"],
+              isActive: true,
+              priority: 0,
+              sourceType: "OWNER_APPROVED",
+              sourceReference: null,
+              lastVerifiedAt: null,
+              relatedProductId: null,
+              pillarId: null,
+              audienceId: null,
+              createdByAdminId: null,
+              updatedByAdminId: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        }),
+      });
+    });
+
+    await page.goto("/admin/content-studio");
+    await assertNoDecorativeDashes(page, "admin brand knowledge list");
+  });
+
+  test("admin content pillars list has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/content-studio/pillars*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope([{ id: "pillar-1", name: "Educational Colouring", description: "Colouring as a learning tool.", isActive: true, sortOrder: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]),
+      });
+    });
+
+    await page.goto("/admin/content-studio/pillars");
+    await assertNoDecorativeDashes(page, "admin content pillars list");
+  });
+
+  test("admin audiences list has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/content-studio/audiences*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope([{ id: "aud-1", name: "Parents", description: "Parents buying for their own children.", painPoints: null, motivations: null, preferredContent: null, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }]),
+      });
+    });
+
+    await page.goto("/admin/content-studio/audiences");
+    await assertNoDecorativeDashes(page, "admin audiences list");
+  });
 });
