@@ -4,6 +4,7 @@
 
 import { renderEnquiryForm } from "../components/enquiryForm.js";
 import { businessInfo } from "../data/businessInfo.js";
+import { renderIconCircle } from "../components/socialIcons.js";
 
 export function renderContact() {
   return `
@@ -39,46 +40,60 @@ export function renderContact() {
       <div class="contact-layout">
         <div class="contact-details">
           <div class="contact-detail">
-            <span class="contact-detail__icon" aria-hidden="true">&#9993;</span>
+            ${renderIconCircle("email")}
             <div>
               <h3>Email</h3>
               <p><a href="${businessInfo.mailtoUrl}">${businessInfo.email}</a></p>
             </div>
           </div>
           <div class="contact-detail">
-            <span class="contact-detail__icon" aria-hidden="true">&#128241;</span>
+            ${renderIconCircle("whatsapp")}
             <div>
               <h3>WhatsApp</h3>
-              <p><a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">${businessInfo.phoneDisplay}</a></p>
+              <p><a href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Contact Seasonedz Group on WhatsApp (opens in a new tab)">${businessInfo.phoneDisplay}</a></p>
             </div>
           </div>
           <div class="contact-detail">
-            <span class="contact-detail__icon" aria-hidden="true">&#128222;</span>
+            ${renderIconCircle("phone")}
             <div>
               <h3>Phone</h3>
               <p><a href="${businessInfo.telUrl}">${businessInfo.phoneDisplay}</a></p>
             </div>
           </div>
           <div class="contact-detail">
-            <span class="contact-detail__icon" aria-hidden="true">&#128205;</span>
+            ${renderIconCircle("location")}
             <div>
               <h3>Location</h3>
               <p>South Africa</p>
             </div>
           </div>
-          <div class="contact-detail">
-            <span class="contact-detail__icon" aria-hidden="true">&#128247;</span>
-            <div>
-              <h3>Follow Us</h3>
-              <p>
-                <a href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">Facebook</a>,
-                <a href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">Instagram</a>,
-                <a href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">TikTok</a>,
-                <a href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">X</a>,
-                <a href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">LinkedIn</a>
-                and
-                <a href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">Reddit</a>
-              </p>
+          <div class="contact-detail contact-detail--follow-us">
+            <h3>Follow Us</h3>
+            <div class="social-icon-grid social-icon-grid--3col">
+              <a class="social-icon-link" href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">
+                ${renderIconCircle("facebook")}
+                Facebook
+              </a>
+              <a class="social-icon-link" href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">
+                ${renderIconCircle("instagram")}
+                Instagram
+              </a>
+              <a class="social-icon-link" href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">
+                ${renderIconCircle("tiktok")}
+                TikTok
+              </a>
+              <a class="social-icon-link" href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">
+                ${renderIconCircle("x")}
+                X
+              </a>
+              <a class="social-icon-link" href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">
+                ${renderIconCircle("linkedin")}
+                LinkedIn
+              </a>
+              <a class="social-icon-link" href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">
+                ${renderIconCircle("reddit")}
+                Reddit
+              </a>
             </div>
           </div>
         </div>

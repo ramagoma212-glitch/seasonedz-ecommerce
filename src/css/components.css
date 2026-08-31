@@ -2171,12 +2171,6 @@ body.has-cookie-preferences-open {
   align-items: flex-start;
 }
 
-.contact-detail__icon {
-  font-size: var(--font-size-xl);
-  color: var(--color-primary);
-  flex-shrink: 0;
-}
-
 .contact-detail h3 {
   font-size: var(--font-size-base);
   margin-bottom: 2px;
@@ -2190,6 +2184,21 @@ body.has-cookie-preferences-open {
 .contact-detail__note {
   color: var(--color-text-muted);
   font-style: italic;
+}
+
+/* Milestone 178 UI polish add-on: the Follow Us card now holds its own
+   small icon grid (same .social-icon-grid/.social-icon-link markup and
+   styling the footer uses — see components/socialIcons.js) instead of
+   one header icon plus a line of comma-separated links, so it needs a
+   stacked (not side-by-side) layout unlike the other contact-detail
+   cards. */
+.contact-detail--follow-us {
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.contact-detail--follow-us h3 {
+  margin-bottom: 0;
 }
 
 .contact-form {
@@ -2933,5 +2942,25 @@ body.has-cookie-preferences-open {
 
 .expandable-grid__view-more .btn {
   min-height: 44px;
+}
+
+/* Milestone 178 UI polish add-on: the shared circular icon container
+   for the social/contact group — see components/socialIcons.js's own
+   header comment. Used identically in the footer and on the Contact
+   page's Follow Us card, so the two never visually drift apart (brief
+   section 10). Deliberately a fixed size, never scaled per-platform —
+   no icon is ever allowed to look larger than another. */
+.social-icon-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--color-border);
+  background-color: var(--color-bg);
+  color: var(--color-secondary-dark);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 

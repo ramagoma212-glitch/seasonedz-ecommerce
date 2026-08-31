@@ -21,6 +21,7 @@
 // used here (public/images/payment/) are unchanged from 171B.0.2.
 import { withBase } from "../js/paths.js";
 import { businessInfo } from "../data/businessInfo.js";
+import { renderIconCircle } from "./socialIcons.js";
 
 // Split into two rows for the desktop/tablet column layout: major
 // global card/wallet brands first, then South African local payment
@@ -67,46 +68,57 @@ export function renderFooter() {
     <footer class="site-footer">
       <div class="footer-support-strip">
         <div class="container footer-support-strip__inner">
-          <a class="footer-support-strip__item" href="/faq">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#10067;</span>
-            FAQ
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128172;</span>
-            WhatsApp Us
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.mailtoUrl}">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#9993;</span>
-            ${businessInfo.email}
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.telUrl}">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128222;</span>
-            ${businessInfo.phoneDisplay}
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128077;</span>
-            Facebook
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128247;</span>
-            Instagram
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#127925;</span>
-            TikTok
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#10006;</span>
-            X
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128188;</span>
-            LinkedIn
-          </a>
-          <a class="footer-support-strip__item" href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">
-            <span class="footer-support-strip__icon" aria-hidden="true">&#128125;</span>
-            Reddit
-          </a>
+          <div class="footer-support-group">
+            <h3 class="footer-support-group__title">Get In Touch</h3>
+            <div class="social-icon-grid social-icon-grid--2col">
+              <a class="social-icon-link" href="${businessInfo.mailtoUrl}">
+                ${renderIconCircle("email")}
+                ${businessInfo.email}
+              </a>
+              <a class="social-icon-link" href="${businessInfo.telUrl}">
+                ${renderIconCircle("phone")}
+                ${businessInfo.phoneDisplay}
+              </a>
+              <a class="social-icon-link" href="/faq">
+                ${renderIconCircle("faq")}
+                FAQ
+              </a>
+              <a class="social-icon-link" href="${businessInfo.whatsappUrl}" target="_blank" rel="noopener noreferrer" aria-label="Contact Seasonedz Group on WhatsApp (opens in a new tab)">
+                ${renderIconCircle("whatsapp")}
+                WhatsApp Us
+              </a>
+            </div>
+          </div>
+
+          <div class="footer-support-group">
+            <h3 class="footer-support-group__title">Follow Us</h3>
+            <div class="social-icon-grid social-icon-grid--3col">
+              <a class="social-icon-link" href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">
+                ${renderIconCircle("facebook")}
+                Facebook
+              </a>
+              <a class="social-icon-link" href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">
+                ${renderIconCircle("instagram")}
+                Instagram
+              </a>
+              <a class="social-icon-link" href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">
+                ${renderIconCircle("tiktok")}
+                TikTok
+              </a>
+              <a class="social-icon-link" href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">
+                ${renderIconCircle("x")}
+                X
+              </a>
+              <a class="social-icon-link" href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">
+                ${renderIconCircle("linkedin")}
+                LinkedIn
+              </a>
+              <a class="social-icon-link" href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">
+                ${renderIconCircle("reddit")}
+                Reddit
+              </a>
+            </div>
+          </div>
         </div>
       </div>
 

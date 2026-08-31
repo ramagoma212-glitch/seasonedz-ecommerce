@@ -672,7 +672,7 @@
 
   .footer-support-strip__inner {
     justify-content: center;
-    gap: var(--space-md);
+    gap: var(--space-lg);
     padding-block: var(--space-sm);
   }
 
@@ -729,6 +729,39 @@
   .review-prompt__header .btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* Milestone 178 UI polish add-on: the footer's "Follow Us" group
+   (6 short icon labels) drops from 3 to 2 columns from tablet width
+   down. "Get In Touch" drops straight to 1 column at this same tier
+   instead of 2 — unlike Follow Us's short platform names, one of its
+   items is the full email address (seasonedzgroup@outlook.com), which
+   measured a genuine few-pixel horizontal overflow at common 360-390px
+   phone widths when forced into a 2-column row alongside "WhatsApp
+   Us". Confirmed via a direct scrollWidth/clientWidth check, not
+   assumed. */
+@media (max-width: 767px) {
+  .social-icon-grid--3col {
+    grid-template-columns: repeat(2, auto);
+  }
+
+  .social-icon-grid--2col {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+}
+
+/* Milestone 178 UI polish add-on: at the narrowest phone widths
+   (matches the existing 320px "no horizontal overflow" test) both
+   groups drop to a single column — the safest guarantee against
+   text/icon overlap at this width. Declared after the 767px tier
+   above so it correctly wins at these narrower widths. */
+@media (max-width: 359px) {
+  .social-icon-grid--2col,
+  .social-icon-grid--3col {
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 }
 

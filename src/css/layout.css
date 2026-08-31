@@ -134,28 +134,65 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Milestone 178 UI polish add-on: the old single, unbalanced flat row
+   (10 mixed items) is replaced by two clearly labelled, evenly
+   organised groups — "Get In Touch" (a fixed 2-column grid: Email,
+   Phone / FAQ, WhatsApp Us) and "Follow Us" (a 3-column grid on
+   desktop: Facebook, Instagram, TikTok / X, LinkedIn, Reddit — see
+   responsive.css for how the Follow Us grid reflows on narrower
+   screens). Same cream background/border as before. */
 .footer-support-strip__inner {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--space-lg);
-  padding-block: var(--space-xs);
+  align-items: flex-start;
+  gap: var(--space-xl);
+  padding-block: var(--space-md);
 }
 
-.footer-support-strip__item {
+.footer-support-group__title {
+  margin: 0 0 var(--space-sm);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-secondary-dark);
+  text-align: center;
+}
+
+.social-icon-grid {
+  display: grid;
+  gap: var(--space-xs) var(--space-lg);
+}
+
+.social-icon-grid--2col {
+  grid-template-columns: repeat(2, auto);
+}
+
+.social-icon-grid--3col {
+  grid-template-columns: repeat(3, auto);
+}
+
+.social-icon-link {
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
+  white-space: nowrap;
 }
 
-.footer-support-strip__item:hover {
-  color: var(--color-primary);
+/* Milestone 178 UI polish add-on: subtle, professional hover only —
+   no bounce/spin/glow. The circle's border and the text colour both
+   shift together, giving one calm combined cue. */
+.social-icon-link:hover {
+  color: var(--color-secondary-dark);
 }
 
-.footer-support-strip__icon {
-  font-size: var(--font-size-sm);
+.social-icon-link:hover .social-icon-circle {
+  border-color: var(--color-secondary);
+  background-color: var(--color-surface);
 }
 
 /* General + Orders & Support + Account + Payment Methods = exactly 4

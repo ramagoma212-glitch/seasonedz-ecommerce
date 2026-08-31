@@ -31,12 +31,12 @@ test.describe("Footer social links", () => {
   test("Facebook, Instagram, TikTok, X, LinkedIn and Reddit links use the owner confirmed destinations, open in a new tab, and are keyboard reachable", async ({ page }) => {
     await page.goto("/");
 
-    const facebook = page.locator(".footer-support-strip__item", { hasText: "Facebook" });
-    const instagram = page.locator(".footer-support-strip__item", { hasText: "Instagram" });
-    const tiktok = page.locator(".footer-support-strip__item", { hasText: "TikTok" });
-    const x = page.locator(".footer-support-strip__item", { hasText: "X" });
-    const linkedin = page.locator(".footer-support-strip__item", { hasText: "LinkedIn" });
-    const reddit = page.locator(".footer-support-strip__item", { hasText: "Reddit" });
+    const facebook = page.locator(".social-icon-link", { hasText: "Facebook" });
+    const instagram = page.locator(".social-icon-link", { hasText: "Instagram" });
+    const tiktok = page.locator(".social-icon-link", { hasText: "TikTok" });
+    const x = page.locator(".social-icon-link", { hasText: "X" });
+    const linkedin = page.locator(".social-icon-link", { hasText: "LinkedIn" });
+    const reddit = page.locator(".social-icon-link", { hasText: "Reddit" });
 
     await assertExternalLink(page, facebook, EXPECTED.facebook);
     await assertExternalLink(page, instagram, EXPECTED.instagram);
@@ -60,13 +60,13 @@ test.describe("Footer social links", () => {
 
   test("WhatsApp link still uses the confirmed destination, unchanged by this milestone", async ({ page }) => {
     await page.goto("/");
-    const whatsapp = page.locator(".footer-support-strip__item", { hasText: "WhatsApp Us" });
+    const whatsapp = page.locator(".social-icon-link", { hasText: "WhatsApp Us" });
     await assertExternalLink(page, whatsapp, EXPECTED.whatsapp);
   });
 
   test("no placeholder or empty href exists among the footer support strip links", async ({ page }) => {
     await page.goto("/");
-    const hrefs = await page.locator(".footer-support-strip__item").evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+    const hrefs = await page.locator(".social-icon-link").evaluateAll((links) => links.map((link) => link.getAttribute("href")));
     for (const href of hrefs) {
       expect(href, `unexpected placeholder href: ${href}`).not.toBe("#");
       expect(href, `unexpected empty href`).not.toBe("");
@@ -77,7 +77,7 @@ test.describe("Footer social links", () => {
 
   test("no duplicate social destinations in the footer support strip", async ({ page }) => {
     await page.goto("/");
-    const hrefs = await page.locator(".footer-support-strip__item").evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+    const hrefs = await page.locator(".social-icon-link").evaluateAll((links) => links.map((link) => link.getAttribute("href")));
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
@@ -91,12 +91,12 @@ test.describe("Footer social links", () => {
 
   test("footer renders identically on the homepage and a second page (present on every page)", async ({ page }) => {
     await page.goto("/about");
-    await expect(page.locator(".footer-support-strip__item", { hasText: "Facebook" })).toBeVisible();
-    await expect(page.locator(".footer-support-strip__item", { hasText: "Instagram" })).toBeVisible();
-    await expect(page.locator(".footer-support-strip__item", { hasText: "TikTok" })).toBeVisible();
-    await expect(page.locator(".footer-support-strip__item", { hasText: "X" })).toBeVisible();
-    await expect(page.locator(".footer-support-strip__item", { hasText: "LinkedIn" })).toBeVisible();
-    await expect(page.locator(".footer-support-strip__item", { hasText: "Reddit" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "Facebook" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "Instagram" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "TikTok" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "X" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "LinkedIn" })).toBeVisible();
+    await expect(page.locator(".social-icon-link", { hasText: "Reddit" })).toBeVisible();
   });
 });
 
@@ -161,5 +161,111 @@ test.describe("No other social network is presented as a working link", () => {
         expect(href.toLowerCase(), `unexpected social link on ${path}: ${href}`).not.toMatch(/twitter\.com|youtube\.com/);
       }
     }
+  });
+});
+
+// Milestone 178 UI polish add-on: emoji icons replaced with clean
+// vector SVG icons inside a consistent circular container. Covers the
+// icon quality/grid organisation/responsive requirements without
+// touching any URL, aria-label wording, or page structure — those are
+// already covered above/elsewhere and are deliberately unchanged.
+test.describe("Social/contact icon design (Milestone 178 UI polish add-on)", () => {
+  // A conservative Unicode emoji-block regex — covers the ranges the
+  // old icons actually used (Misc Symbols, Dingbats, Transport/Map,
+  // Supplemental Symbols) without flagging ordinary punctuation.
+  const EMOJI_PATTERN = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F000}-\u{1F0FF}]/u;
+
+  test("no emoji characters remain anywhere in the footer support strip", async ({ page }) => {
+    await page.goto("/");
+    const html = await page.locator(".footer-support-strip").innerHTML();
+    expect(html).not.toMatch(EMOJI_PATTERN);
+    // Every icon is a real inline <svg>, not a Unicode glyph.
+    const svgCount = await page.locator(".footer-support-strip svg").count();
+    expect(svgCount).toBe(10); // 4 Get In Touch + 6 Follow Us
+  });
+
+  test("no emoji characters remain anywhere in the Contact page's own icons", async ({ page }) => {
+    await page.goto("/contact");
+    const html = await page.locator(".contact-details").innerHTML();
+    expect(html).not.toMatch(EMOJI_PATTERN);
+    const svgCount = await page.locator(".contact-details svg").count();
+    expect(svgCount).toBe(10); // Email, WhatsApp, Phone, Location + 6 Follow Us
+  });
+
+  test("every icon sits inside the same circular container, same size, wherever it appears", async ({ page }) => {
+    await page.goto("/");
+    const footerSizes = await page.locator(".footer-support-strip .social-icon-circle").evaluateAll((els) => els.map((el) => `${el.clientWidth}x${el.clientHeight}`));
+    expect(new Set(footerSizes).size).toBe(1); // every circle is identically sized
+
+    await page.goto("/contact");
+    const contactSizes = await page.locator(".contact-details .social-icon-circle").evaluateAll((els) => els.map((el) => `${el.clientWidth}x${el.clientHeight}`));
+    expect(new Set(contactSizes).size).toBe(1);
+    // Same design system in both places (brief section 10).
+    expect(contactSizes[0]).toBe(footerSizes[0]);
+  });
+
+  test("Get In Touch is a balanced 2-column grid and Follow Us a 3-column grid at desktop width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Get In Touch" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Follow Us" })).toBeVisible();
+
+    const getInTouchColumns = await page.locator(".social-icon-grid--2col").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+    expect(getInTouchColumns).toBe(2);
+    const followUsColumns = await page.locator(".footer-support-strip .social-icon-grid--3col").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+    expect(followUsColumns).toBe(3);
+  });
+
+  test("Follow Us drops to 2 columns at tablet/mobile width, never overlapping or overflowing", async ({ page }) => {
+    for (const width of [767, 430, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const columns = await page.locator(".footer-support-strip .social-icon-grid--3col").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+      expect(columns, `expected 2 columns at ${width}px`).toBe(2);
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth, `unexpected horizontal overflow at ${width}px`).toBeLessThanOrEqual(clientWidth);
+    }
+  });
+
+  test("no horizontal overflow, icon overlap, or cut-off label across the full responsive range", async ({ page }) => {
+    for (const width of [320, 360, 375, 390, 430, 768, 1024, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(clientWidth);
+    }
+  });
+
+  test("hover applies only a subtle border/colour change, no animation classes", async ({ page }) => {
+    await page.goto("/");
+    const facebook = page.locator(".social-icon-link", { hasText: "Facebook" });
+    await facebook.hover();
+    // No bounce/spin/pulse utility classes exist anywhere in this
+    // project's CSS for this component — confirmed by reading
+    // layout.css's own hover rule, which only ever changes color/
+    // border-color/background-color (a plain style/property check,
+    // not a screenshot, since Playwright can't assert "no animation"
+    // directly).
+    const transitionProperty = await page.locator(".social-icon-circle").first().evaluate((el) => getComputedStyle(el).transitionProperty);
+    expect(transitionProperty).not.toMatch(/transform/);
+  });
+
+  test("keyboard navigation reaches every Follow Us link in order, each a real focusable <a>", async ({ page }) => {
+    await page.goto("/");
+    const facebook = page.locator(".footer-support-strip .social-icon-link", { hasText: "Facebook" });
+    await facebook.focus();
+    await expect(facebook).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(page.locator(".footer-support-strip .social-icon-link", { hasText: "Instagram" })).toBeFocused();
+  });
+
+  test("the X icon's accessible name is not literally 'X (Twitter)'", async ({ page }) => {
+    await page.goto("/");
+    const x = page.locator(".footer-support-strip .social-icon-link[aria-label*='X ']");
+    await expect(x).toHaveAttribute("aria-label", /Visit Seasonedz Group on X \(opens/);
+    const text = await x.innerText();
+    expect(text.trim()).toBe("X");
   });
 });
