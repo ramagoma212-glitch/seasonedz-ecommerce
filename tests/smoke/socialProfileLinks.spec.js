@@ -261,6 +261,38 @@ test.describe("Social/contact icon design (Milestone 178 UI polish add-on)", () 
     await expect(page.locator(".footer-support-strip .social-icon-link", { hasText: "Instagram" })).toBeFocused();
   });
 
+  test("Get In Touch and Follow Us always show the same column count as each other at a given width, so they read as one consistent grid design", async ({ page }) => {
+    for (const width of [1280, 767, 430, 375, 360]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const getInTouchColumns = await page.locator(".social-icon-grid--2col").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+      const followUsColumns = await page.locator(".footer-support-strip .social-icon-grid--3col").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+      // At desktop width Follow Us legitimately has one more column
+      // (3) than Get In Touch (2) — both are still full, deliberate
+      // grids, matching the brief's own desktop spec. Below that, they
+      // must match exactly.
+      if (width >= 768) {
+        expect(getInTouchColumns, `${width}px`).toBe(2);
+        expect(followUsColumns, `${width}px`).toBe(3);
+      } else {
+        expect(getInTouchColumns, `${width}px`).toBe(followUsColumns);
+      }
+    }
+  });
+
+  test("the long real email address wraps inside its own grid cell — never overflows, never gets silently clipped", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
+    await page.goto("/");
+    const emailLink = page.locator(".footer-support-strip .social-icon-link", { hasText: "seasonedzgroup" });
+    await expect(emailLink).toBeVisible();
+    // The full address is still present in the DOM/accessible text —
+    // wrapping is a visual line-break only, never a truncation.
+    await expect(emailLink).toContainText("seasonedzgroup@outlook.com");
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  });
+
   test("the X icon's accessible name is not literally 'X (Twitter)'", async ({ page }) => {
     await page.goto("/");
     const x = page.locator(".footer-support-strip .social-icon-link[aria-label*='X ']");

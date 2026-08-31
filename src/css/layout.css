@@ -166,21 +166,43 @@
   gap: var(--space-xs) var(--space-lg);
 }
 
+/* minmax(0, ...) rather than a plain fraction/auto — without the 0
+   floor, a grid track never shrinks below its content's own intrinsic
+   (unbreakable) width, so one long, unbreakable string (the email
+   address) silently pushes the whole grid wider than its container
+   instead of wrapping inside its own cell. This is the fix for that
+   "grid blowout": every column now shares the row's width evenly and
+   genuinely allows its own text to wrap, so both groups stay a real
+   grid — never one column, never text pushed past the icon's row —
+   at every width down to 320px. */
 .social-icon-grid--2col {
-  grid-template-columns: repeat(2, auto);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .social-icon-grid--3col {
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .social-icon-link {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: var(--space-xs);
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
-  white-space: nowrap;
+  /* Without this, a flex item's default min-width:auto refuses to
+     shrink below its own content's unbroken width — exactly what let
+     the email address push past its grid column instead of wrapping
+     (found via direct screenshot at 414px, not assumed). */
+  min-width: 0;
+}
+
+/* The label is its own real element (not a bare text node) precisely
+   so it can be given permission to shrink/wrap independently of the
+   fixed-size icon circle next to it — a bare text node inside a flex
+   container can't be targeted for this. */
+.social-icon-link__label {
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 /* Milestone 178 UI polish add-on: subtle, professional hover only —

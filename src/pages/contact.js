@@ -72,27 +72,27 @@ export function renderContact() {
             <div class="social-icon-grid social-icon-grid--3col">
               <a class="social-icon-link" href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">
                 ${renderIconCircle("facebook")}
-                Facebook
+                <span class="social-icon-link__label">Facebook</span>
               </a>
               <a class="social-icon-link" href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">
                 ${renderIconCircle("instagram")}
-                Instagram
+                <span class="social-icon-link__label">Instagram</span>
               </a>
               <a class="social-icon-link" href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">
                 ${renderIconCircle("tiktok")}
-                TikTok
+                <span class="social-icon-link__label">TikTok</span>
               </a>
               <a class="social-icon-link" href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">
                 ${renderIconCircle("x")}
-                X
+                <span class="social-icon-link__label">X</span>
               </a>
               <a class="social-icon-link" href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">
                 ${renderIconCircle("linkedin")}
-                LinkedIn
+                <span class="social-icon-link__label">LinkedIn</span>
               </a>
               <a class="social-icon-link" href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">
                 ${renderIconCircle("reddit")}
-                Reddit
+                <span class="social-icon-link__label">Reddit</span>
               </a>
             </div>
           </div>
