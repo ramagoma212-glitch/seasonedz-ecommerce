@@ -420,3 +420,103 @@ test.describe("Cart page: no delivery pre-charge (Milestone 171F)", () => {
     await expect(page.locator(".order-summary__row--total")).toContainText("480.00");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 180, Part A: registered customer R500 free-delivery threshold.
+// "Registered" is mocked purely via GET /api/customers/me — this project
+// has no precedent for driving a real authenticated customer session in
+// Playwright (same discipline adminAffiliate.spec.js's own header
+// comment already established for admin sessions), and this file
+// follows it. Never submits checkout or creates a real order.
+// ---------------------------------------------------------------------------
+
+const MOCK_CUSTOMER = { id: "customer-1", firstName: "Thandiwe", lastName: "Nkosi", email: "thandiwe@example.com", phone: "+27821234567" };
+
+async function mockRegisteredCustomer(page) {
+  await page.route("**/api/customers/me", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { customer: MOCK_CUSTOMER } }) })
+  );
+}
+
+async function mockGuest(page) {
+  await page.route("**/api/customers/me", (route) => route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Not authenticated." }) }));
+}
+
+async function addPriced(page, price) {
+  await mockCatalog(page, [mockProduct({ price, stockQuantity: 5, stockStatus: "In Stock" })]);
+  await page.goto("/shop");
+  await page.locator('[data-action="add-to-cart"]').click();
+}
+
+test.describe("Registered customer delivery benefit — cart page (Milestone 180, Part A)", () => {
+  test("registered customer at R520: Locker/Door both FREE at checkout — below R600 guest threshold, at/above R500 registered one", async ({ page }) => {
+    await mockRegisteredCustomer(page);
+    await addPriced(page, 520);
+    await page.goto("/checkout");
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("FREE")).toBeVisible();
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
+  });
+
+  test("a GUEST at the exact same R520 subtotal is still charged the normal fee — the two thresholds never leak into each other", async ({ page }) => {
+    await mockGuest(page);
+    await addPriced(page, 520);
+    await page.goto("/checkout");
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+  });
+
+  test("registered customer below even R500 (R490) is still charged the normal fee", async ({ page }) => {
+    await mockRegisteredCustomer(page);
+    await addPriced(page, 490);
+    await page.goto("/checkout");
+
+    await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+  });
+
+  test("cart page: registered customer below R500 sees the exact remaining-amount nudge", async ({ page }) => {
+    await mockRegisteredCustomer(page);
+    await addPriced(page, 450);
+    await page.goto("/cart");
+
+    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("You are R50.00 away from free delivery.");
+  });
+
+  test("cart page: registered customer at/above R500 sees the free-delivery-from-R500 message", async ({ page }) => {
+    await mockRegisteredCustomer(page);
+    await addPriced(page, 520);
+    await page.goto("/cart");
+
+    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("Free delivery from R500 on eligible physical products.");
+  });
+
+  test("cart page: guest between R500 and R600 sees the sign-in nudge — the exact zone where registering would already unlock free delivery", async ({ page }) => {
+    await mockGuest(page);
+    await addPriced(page, 550);
+    await page.goto("/cart");
+
+    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("Sign in or create an account to get free delivery from R500 on eligible physical products.");
+  });
+
+  test("cart page: guest already at/above the R600 guest threshold sees no extra nudge — they already have free delivery", async ({ page }) => {
+    await mockGuest(page);
+    await addPriced(page, 650);
+    await page.goto("/cart");
+
+    await expect(page.locator("[data-cart-delivery-prompt]")).toHaveCount(0);
+  });
+
+  test("Customer Collection stays FREE regardless of registered status or subtotal", async ({ page }) => {
+    await mockGuest(page);
+    await addPriced(page, 50);
+    await page.goto("/checkout");
+
+    await page.locator('input[name="deliveryMethod"][value="COLLECTION"]').check();
+    await expect(page.locator(".order-summary__row", { hasText: "Customer Collection" }).getByText("FREE")).toBeVisible();
+  });
+});

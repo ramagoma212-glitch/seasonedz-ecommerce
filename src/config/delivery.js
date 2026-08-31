@@ -17,6 +17,14 @@ export const COURIER_DOOR_FEE = 120;
 export const COLLECTION_FEE = 0;
 export const FREE_DELIVERY_THRESHOLD = 600;
 
+// Milestone 180, Part A: registered (authenticated) customer benefit —
+// mirrors backend/src/config/delivery.ts's REGISTERED_FREE_DELIVERY_THRESHOLD.
+// Display-only here, same as every other constant in this file — the
+// backend independently recalculates and enforces the real fee at
+// order-creation time from the server-verified Customer session, never
+// from anything the frontend claims.
+export const REGISTERED_FREE_DELIVERY_THRESHOLD = 500;
+
 export const DELIVERY_METHODS = [
   { value: "COURIER_LOCKER", label: "Courier Guy Locker to Locker", fee: COURIER_LOCKER_FEE },
   { value: "COURIER_DOOR", label: "Courier Guy Door to Door", fee: COURIER_DOOR_FEE },
@@ -32,9 +40,14 @@ export function getDeliveryMethodLabel(method) {
 // `physicalSubtotal` must be the qualifying subtotal only — physical
 // products' line totals, excluding gift wrapping and excluding any
 // delivery fee itself (see js/cart.js's getCartPhysicalSubtotal()).
-export function calculateDeliveryFee(method, physicalSubtotal, hasPhysicalItems = true) {
+// `isRegisteredCustomer` (Milestone 180, Part A) swaps in the lower
+// R500 threshold — callers derive this from the actual logged-in
+// customer lookup (js/api/customerApi.js's getCurrentCustomer()),
+// never a guess or a stored flag.
+export function calculateDeliveryFee(method, physicalSubtotal, hasPhysicalItems = true, isRegisteredCustomer = false) {
   if (!hasPhysicalItems) return 0;
-  const qualifiesForFree = physicalSubtotal >= FREE_DELIVERY_THRESHOLD;
+  const threshold = isRegisteredCustomer ? REGISTERED_FREE_DELIVERY_THRESHOLD : FREE_DELIVERY_THRESHOLD;
+  const qualifiesForFree = physicalSubtotal >= threshold;
 
   switch (method) {
     case "COLLECTION":

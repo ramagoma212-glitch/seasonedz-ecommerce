@@ -418,11 +418,18 @@ async function resolveReferralForOrder(
 // below are unchanged either way; they're always the snapshot the
 // customer actually typed at checkout, not derived from the account.
 //
-// Version 7, Milestone 168C: `isRegisteredCustomer` and its
-// registered-only free-delivery gate were removed — the owner-approved
-// three-method model applies the same R600 threshold to every
-// customer. See config/delivery.ts's own header comment for the full
-// rule and reasoning.
+// Version 7, Milestone 168C: the old Milestone 131/152B registered-only
+// free-delivery gate was removed — the three-method model applied the
+// same R600 threshold to every customer.
+//
+// Version 7, Milestone 180, Part A: a registered-customer distinction
+// is reintroduced, at a new R500 threshold — `isRegisteredCustomer`
+// below is derived from this exact same already-verified `customerId`
+// parameter (`customerId !== null`), never from anything else. This is
+// the ONLY thing Milestone 180 changes about delivery-fee calculation;
+// everything else about this function (physical-only subtotal, gift
+// wrap/digital exclusion, discount-after-delivery ordering) is
+// unchanged.
 export async function createOrder(input: ValidatedOrderInput, customerId: string | null = null): Promise<OrderOutput> {
   const verifiedItems = await verifyItems(input.items);
 
@@ -445,7 +452,14 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   const physicalSubtotal = verifiedItems
     .filter((item) => item.productType === ProductType.PHYSICAL)
     .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
-  const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems);
+  // Milestone 180, Part A: authentication is authoritative — this is
+  // the exact same customerId already derived upstream from the signed
+  // session cookie (see this function's own header comment), never
+  // from an email, a client-claimed flag, localStorage, or a query
+  // parameter. A guest (customerId null) always gets the ordinary
+  // guest threshold, no exceptions.
+  const isRegisteredCustomer = customerId !== null;
+  const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems, isRegisteredCustomer);
 
   // Version 7, Milestone 172B.4: qualifyingProductSubtotal is `subtotal`
   // itself — the approved V1 rule excludes gift wrap and delivery, and

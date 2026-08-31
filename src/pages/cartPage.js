@@ -5,11 +5,24 @@
 
 import { getCartSummary, getUnavailableCartItems, addToCart } from "../js/cart.js";
 import { renderCartItem } from "../components/cartItem.js";
-import { renderOrderSummary } from "../components/orderSummary.js";
+import { renderOrderSummary, getRegistrationDeliveryPrompt } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
-import { recoverCheckoutIntent } from "../js/api/customerApi.js";
+import { getCurrentCustomer, recoverCheckoutIntent } from "../js/api/customerApi.js";
+
+// Version 7, Milestone 129 (pattern), Milestone 180, Part A: best-effort
+// only — being logged out (or the request failing) is never an error on
+// the cart page, just the ordinary guest state. Never throws. Mirrors
+// checkoutPage.js's own getLoggedInCustomerSafely() exactly.
+async function isRegisteredCustomerSafely() {
+  try {
+    const response = await getCurrentCustomer();
+    return Boolean(response?.data?.customer);
+  } catch {
+    return false;
+  }
+}
 
 // Version 7, Milestone 174C, brief section 35: /cart?recover=<token>
 // (the abandoned-checkout reminder email's own link) merges the
@@ -50,7 +63,11 @@ async function mergeRecoveredCartIfPresent() {
 // from this page entirely rather than showing a "select a method"
 // prompt — this page has no delivery-method selector to point at.
 export async function renderCartPage() {
-  const { items, subtotal, giftWrapTotal, deliveryFee, composition } = getCartSummary();
+  // Version 7, Milestone 180, Part A: resolved once, up front, so both
+  // the delivery-fee estimate below and the registration prompt use
+  // the exact same server-verified fact, never two separate guesses.
+  const isRegisteredCustomer = await isRegisteredCustomerSafely();
+  const { items, subtotal, giftWrapTotal, deliveryFee, physicalSubtotal, composition } = getCartSummary(null, isRegisteredCustomer);
 
   if (!items.length) {
     return `
@@ -84,10 +101,26 @@ export async function renderCartPage() {
     unavailableLineIds = new Set();
   }
 
+  // Version 7, Milestone 180, Part A, section 12: a soft, easy-to-ignore
+  // nudge, never a popup or a requirement — null (nothing rendered) for
+  // a digital-only cart or a guest already getting free delivery under
+  // the ordinary R600 threshold. See orderSummary.js's own comment.
+  const registrationPrompt = getRegistrationDeliveryPrompt({ isRegisteredCustomer, physicalSubtotal, hasPhysicalItems: composition.hasPhysical });
+
   return `
     <section class="container cart-page">
       <h1 class="stub-page__title">Your Cart</h1>
       ${renderCartCompositionNotice(composition)}
+      ${
+        registrationPrompt
+          ? `
+        <div class="demo-notice" data-cart-delivery-prompt>
+          <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+          <div><p>${registrationPrompt}</p></div>
+        </div>
+      `
+          : ""
+      }
 
       <div class="cart-layout">
         <div class="cart-items">
@@ -109,7 +142,7 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical, checkoutBlocked: unavailableLineIds.size > 0, omitDeliveryUntilSelected: true })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical, checkoutBlocked: unavailableLineIds.size > 0, omitDeliveryUntilSelected: true, isRegisteredCustomer })}
       </div>
     </section>
   `;

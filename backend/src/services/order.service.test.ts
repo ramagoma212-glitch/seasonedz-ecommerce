@@ -200,6 +200,70 @@ test("even after passing the initial stock check, the transaction's own atomic d
 });
 
 // ---------------------------------------------------------------------------
+// Registered customer R500 free-delivery threshold (Milestone 180, Part A)
+// ---------------------------------------------------------------------------
+
+function stubSimpleOrderCreation(price: number) {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, price: new Prisma.Decimal(price), stockQuantity: 10 }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) =>
+    fakeOrderRow({ customerId: data.customerId, subtotal: data.subtotal, deliveryFee: data.deliveryFee, total: data.total, items: [fakeOrderItemRow({ lineTotal: data.subtotal, unitPrice: data.subtotal })] })
+  );
+  return {
+    restore: () => {
+      findUnique.restore();
+      transactionStub.restore();
+      updateMany.restore();
+      orderCreate.restore();
+    },
+  };
+}
+
+test("a registered (authenticated) customer at R520 eligible physical subtotal gets FREE delivery — below the R600 guest threshold but at/above the R500 registered one", async () => {
+  const stubs = stubSimpleOrderCreation(520);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), "customer-1");
+
+  assert.equal(order.deliveryFee, 0);
+  stubs.restore();
+});
+
+test("a GUEST at the exact same R520 eligible physical subtotal is still charged the normal Door fee — the two thresholds never leak into each other", async () => {
+  const stubs = stubSimpleOrderCreation(520);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), null);
+
+  assert.equal(order.deliveryFee, 120);
+  stubs.restore();
+});
+
+test("a registered customer below even the lower R500 threshold (R499) is still charged the normal fee", async () => {
+  const stubs = stubSimpleOrderCreation(499);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_LOCKER" }), "customer-1");
+
+  assert.equal(order.deliveryFee, 100);
+  stubs.restore();
+});
+
+test("registered-customer eligibility is derived only from the already-verified customerId parameter — never from anything in the request body itself", async () => {
+  // ValidatedOrderInput (order.validator.ts's own output type) has no
+  // registeredCustomer-shaped field at all to smuggle a claim through in
+  // the first place — this test asserts the actual, load-bearing
+  // property: passing customerId=null behaves as guest even though the
+  // rest of the input is identical to the registered-customer test
+  // above, proving the boolean genuinely comes from the second
+  // parameter alone.
+  const stubs = stubSimpleOrderCreation(520);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), null);
+
+  assert.equal(order.deliveryFee, 120, "customerId null must always mean guest, regardless of anything else in the input");
+  stubs.restore();
+});
+
+// ---------------------------------------------------------------------------
 // Referral discount/commission wiring (Version 7, Milestone 172B.4)
 // ---------------------------------------------------------------------------
 

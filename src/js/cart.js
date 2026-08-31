@@ -229,7 +229,12 @@ export function getCartPhysicalSubtotal(items) {
 // method (a deliberate, already-documented Milestone 168C choice for
 // that page, unchanged by this milestone) rather than relying on this
 // default.
-export function getCartSummary(deliveryMethod = null) {
+// Milestone 180, Part A: `isRegisteredCustomer` is a new, optional 2nd
+// parameter (not a positional change to `deliveryMethod`) — every
+// existing call site that doesn't pass it keeps behaving exactly as
+// before (guest-shaped estimate). Callers derive the real value from
+// an actual logged-in-customer lookup, never a guess.
+export function getCartSummary(deliveryMethod = null, isRegisteredCustomer = false) {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -238,11 +243,11 @@ export function getCartSummary(deliveryMethod = null) {
   const physicalSubtotal = getCartPhysicalSubtotal(items);
   const deliveryFee = composition.hasPhysical
     ? deliveryMethod
-      ? calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical)
+      ? calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical, isRegisteredCustomer)
       : null
     : 0;
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
-  return { items, itemCount, subtotal, giftWrapTotal, physicalSubtotal, deliveryFee, deliveryMethod, total, composition };
+  return { items, itemCount, subtotal, giftWrapTotal, physicalSubtotal, deliveryFee, deliveryMethod, total, composition, isRegisteredCustomer };
 }
 
 export function isInCart(productId) {

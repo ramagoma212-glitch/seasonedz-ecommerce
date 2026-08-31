@@ -132,12 +132,15 @@ function renderAccountNote(customer) {
 // radio group with nothing checked is valid HTML/ARIA and behaves
 // correctly with a screen reader and keyboard; the previous
 // `defaultMethod` parameter (and the auto-selection it caused) is gone.
-function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems) {
+// Version 7, Milestone 180, Part A: `isRegisteredCustomer` swaps in the
+// R500 threshold for each method's displayed fee — see
+// config/delivery.js's own calculateDeliveryFee().
+function renderDeliveryMethods(physicalSubtotal, hasPhysicalItems, isRegisteredCustomer) {
   return `
     <fieldset class="delivery-methods" data-field-group="deliveryMethod">
       <legend class="checkout-section__label">Delivery Method <span class="form-field__required" aria-hidden="true">*</span></legend>
       ${DELIVERY_METHODS.map((method) => {
-        const fee = calculateDeliveryFeeForMethod(method.value, physicalSubtotal, hasPhysicalItems);
+        const fee = calculateDeliveryFeeForMethod(method.value, physicalSubtotal, hasPhysicalItems, isRegisteredCustomer);
         return `
           <label class="delivery-method">
             <input
@@ -329,6 +332,11 @@ export async function renderCheckoutPage() {
   // slow/failed lookup beyond this one awaited call — a guest sees
   // exactly the same page either way, just without prefilled fields.
   const customer = await getLoggedInCustomerSafely();
+  // Version 7, Milestone 180, Part A: derived from this exact same
+  // lookup — never a second, separately-guessable check. A failed/slow
+  // lookup above already resolves `customer` to null, so this
+  // correctly falls back to the guest threshold in that case too.
+  const isRegisteredCustomer = Boolean(customer);
 
   // Version 7, Milestone 171E: no delivery method is assumed anymore —
   // getCartSummary() with no argument returns deliveryFee: null for a
@@ -341,7 +349,7 @@ export async function renderCheckoutPage() {
   // estimate either way; the backend independently recalculates the
   // authoritative fee at order-creation time from verified DB-priced
   // items and the delivery method actually submitted.
-  const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary();
+  const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary(null, isRegisteredCustomer);
 
   // Version 7, Milestone 172B.4: qualifying subtotal for the discount
   // preview is the cart's own `subtotal` — gift wrap/delivery are
@@ -387,6 +395,7 @@ export async function renderCheckoutPage() {
           data-subtotal="${subtotal}"
           data-gift-wrap-total="${giftWrapTotal}"
           data-discount-total="${discountTotal}"
+          data-is-registered-customer="${isRegisteredCustomer}"
         >
           <div class="checkout-section">
             <h2 class="checkout-section__label">Delivery Details</h2>
@@ -399,7 +408,7 @@ export async function renderCheckoutPage() {
           </div>
 
           <div class="checkout-section">
-            ${renderDeliveryMethods(physicalSubtotal, composition.hasPhysical)}
+            ${renderDeliveryMethods(physicalSubtotal, composition.hasPhysical, isRegisteredCustomer)}
           </div>
 
           <div class="checkout-section">
@@ -458,7 +467,7 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block" data-checkout-submit ${hasUnavailableItems ? "disabled" : ""}>Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, discountTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items })}
+        ${renderOrderSummary({ subtotal, giftWrapTotal, discountTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items, isRegisteredCustomer })}
       </div>
     </section>
   `;

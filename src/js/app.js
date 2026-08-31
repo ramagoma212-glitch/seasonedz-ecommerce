@@ -138,7 +138,7 @@ import {
 } from "./api/adminAffiliateApplicationsApi.js";
 import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
 import { humanizeEnum } from "./adminFormat.js";
-import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
+import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
 import { getDeliveryNote } from "../components/orderSummary.js";
 import { escapeHtml } from "./search.js";
 import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
@@ -922,11 +922,16 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   // discount is based on the qualifying product subtotal, which a
   // delivery method choice never affects.
   const discountTotal = parseFloat(form.dataset.discountTotal || "0");
+  // Version 7, Milestone 180, Part A: read straight off the form's own
+  // data attribute (set once at render time from the actual logged-in-
+  // customer lookup — see checkoutPage.js), never re-guessed here.
+  const isRegisteredCustomer = form.dataset.isRegisteredCustomer === "true";
 
   const feeForMethod = (candidateMethod) => {
     if (!hasPhysicalItems) return 0;
     if (candidateMethod !== "COURIER_LOCKER" && candidateMethod !== "COURIER_DOOR") return 0;
-    const qualifiesForFree = physicalSubtotal >= FREE_DELIVERY_THRESHOLD;
+    const threshold = isRegisteredCustomer ? REGISTERED_FREE_DELIVERY_THRESHOLD : FREE_DELIVERY_THRESHOLD;
+    const qualifiesForFree = physicalSubtotal >= threshold;
     if (qualifiesForFree) return 0;
     return candidateMethod === "COURIER_LOCKER" ? COURIER_LOCKER_FEE : COURIER_DOOR_FEE;
   };
@@ -958,7 +963,7 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee - discountTotal).toFixed(2)}`;
 
   const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
-  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems).trim();
+  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, { isRegisteredCustomer }).trim();
 }
 
 function clearFieldError(form, fieldName) {
