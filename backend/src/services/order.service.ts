@@ -8,7 +8,8 @@ import type { ValidatedOrderInput } from "../validators/order.validator.js";
 import { verifyReferralCapture, captureAgeInDays } from "../utils/referralAttributionToken.js";
 import { getReferralProgrammeSettings } from "./referralProgrammeSettings.service.js";
 import { isSelfReferral, type CheckoutIdentity } from "./referralAffiliate.service.js";
-import { calculateReferralPricing, type ReferralPricingResult } from "./referralPricing.service.js";
+import { calculateReferralPricing, roundHalfUpToCents, type ReferralPricingResult } from "./referralPricing.service.js";
+import { calculateProductCommissions, type AffiliateProductSettingSnapshot, type OrderItemForCommission } from "./affiliateProductCommission.service.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
 // insufficient stock, etc.) — distinct from an unexpected error, so
@@ -559,22 +560,89 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
     // the strongest possible guarantee that a self-referral commission
     // can never later become payable by accident, since there is
     // nothing here to approve or pay, not even a zero-value row.
+    //
+    // Milestone 178, Part C: qualifyingProductSubtotal/discountAmount/
+    // netQualifyingAmount/commissionAmount below are now scoped to only
+    // the AFFILIATE-ELIGIBLE lines (per AffiliateProductSetting), not
+    // the whole order — see affiliateProductCommission.service.ts's own
+    // header comment for why showing the whole order's subtotal here
+    // would be misleading once some products in the cart may not be
+    // affiliate-eligible at all. The customer-facing discount
+    // (discountTotal on the order itself, and discountRateApplied here)
+    // is completely unchanged — still the whole-order calculation
+    // above. commissionRateApplied stays the affiliate's own normal
+    // resolved rate (their override, or the programme default) for
+    // continuity/display — the actual per-line rate/amount that may
+    // differ product-by-product lives in the itemised
+    // OrderAffiliateProductCommission rows created alongside it.
     if (referral && !referral.isSelfReferral) {
+      const eligibleProductIds = [...new Set(verifiedItems.map((item) => item.productId))];
+      const productSettings = eligibleProductIds.length > 0 ? await tx.affiliateProductSetting.findMany({ where: { productId: { in: eligibleProductIds } } }) : [];
+      const settingsByProductId = new Map<string, AffiliateProductSettingSnapshot>(
+        productSettings.map((setting) => [
+          setting.productId,
+          {
+            commissionType: setting.commissionType,
+            commissionPercent: setting.commissionPercent,
+            fixedCommissionAmount: setting.fixedCommissionAmount,
+            maximumCommission: setting.maximumCommission,
+            isAffiliateAvailable: setting.isAffiliateAvailable,
+            startsAt: setting.startsAt,
+            endsAt: setting.endsAt,
+          },
+        ])
+      );
+
+      const itemsForCommission: OrderItemForCommission[] = createdOrder.items.map((item) => ({
+        orderItemId: item.id,
+        productId: item.productId,
+        quantity: item.quantity,
+        lineTotal: item.lineTotal,
+      }));
+
+      const productCommissions = calculateProductCommissions(
+        itemsForCommission,
+        settingsByProductId,
+        referral.pricing.commissionRateApplied,
+        referral.pricing.discountRateApplied,
+        createdOrder.createdAt
+      );
+
+      const eligibleDiscountAmount = roundHalfUpToCents(productCommissions.totalEligibleSubtotal.times(referral.pricing.discountRateApplied).dividedBy(100));
+
       await tx.orderAffiliateCommission.create({
         data: {
           orderId: createdOrder.id,
           affiliateId: referral.affiliateId,
           affiliateNameSnapshot: referral.affiliateNameSnapshot,
           affiliateReferralCodeSnapshot: referral.affiliateReferralCodeSnapshot,
-          qualifyingProductSubtotal: subtotal,
+          qualifyingProductSubtotal: productCommissions.totalEligibleSubtotal,
           discountRateApplied: referral.pricing.discountRateApplied,
-          discountAmount: referral.pricing.discountAmount,
-          netQualifyingAmount: referral.pricing.netQualifyingAmount,
+          discountAmount: eligibleDiscountAmount,
+          netQualifyingAmount: productCommissions.totalEligibleSubtotal.minus(eligibleDiscountAmount),
           commissionRateApplied: referral.pricing.commissionRateApplied,
-          commissionAmount: referral.pricing.commissionAmount,
+          commissionAmount: productCommissions.totalCommission,
           status: OrderAffiliateCommissionStatus.PENDING,
         },
       });
+
+      if (productCommissions.lines.length > 0) {
+        await tx.orderAffiliateProductCommission.createMany({
+          data: productCommissions.lines.map((line) => ({
+            orderId: createdOrder.id,
+            orderItemId: line.orderItemId,
+            affiliateId: referral.affiliateId,
+            productId: line.productId,
+            commissionType: line.commissionType,
+            commissionPercent: line.commissionPercent,
+            fixedCommissionAmount: line.fixedCommissionAmount,
+            eligibleProductSubtotal: line.eligibleProductSubtotal,
+            quantity: line.quantity,
+            maximumCommission: line.maximumCommission,
+            calculatedCommission: line.calculatedCommission,
+          })),
+        });
+      }
     }
 
     return createdOrder;

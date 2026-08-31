@@ -85,7 +85,7 @@ export async function submitMyApplicationHandler(req: Request, res: Response, ne
   }
 }
 
-const VALID_SLOTS = new Set(["IDENTITY", "PROOF_OF_RESIDENCE"]);
+const VALID_SLOTS = new Set(["IDENTITY", "PROOF_OF_RESIDENCE", "BANKING_CONFIRMATION_LETTER"]);
 const VALID_IDENTITY_TYPES = new Set(["SA_ID", "PASSPORT"]);
 const VALID_POR_TYPES = new Set(["BANK_STATEMENT", "MUNICIPAL_ACCOUNT_OR_LETTER", "PROOF_OF_RESIDENCE"]);
 
@@ -129,7 +129,7 @@ export async function uploadMyDocumentHandler(req: Request, res: Response, next:
 
     const slot = req.body?.slot;
     if (typeof slot !== "string" || !VALID_SLOTS.has(slot)) {
-      sendError(res, { message: "slot must be IDENTITY or PROOF_OF_RESIDENCE.", statusCode: 400 });
+      sendError(res, { message: "slot must be IDENTITY, PROOF_OF_RESIDENCE or BANKING_CONFIRMATION_LETTER.", statusCode: 400 });
       return;
     }
 
@@ -142,19 +142,22 @@ export async function uploadMyDocumentHandler(req: Request, res: Response, next:
         return;
       }
       identityDocumentType = req.body.identityDocumentType;
-    } else {
+    } else if (slot === "PROOF_OF_RESIDENCE") {
       if (typeof req.body?.proofOfResidenceType !== "string" || !VALID_POR_TYPES.has(req.body.proofOfResidenceType)) {
         sendError(res, { message: "proofOfResidenceType must be BANK_STATEMENT, MUNICIPAL_ACCOUNT_OR_LETTER or PROOF_OF_RESIDENCE.", statusCode: 400 });
         return;
       }
       proofOfResidenceType = req.body.proofOfResidenceType;
     }
+    // BANKING_CONFIRMATION_LETTER has no sub-type selector — the slot
+    // itself is the document type (see documentTypeKeyFor() in
+    // affiliateDocument.service.ts).
 
     const applicationId = await requireMyApplicationId(req.customerUser.id);
 
     const document = await uploadOrReplaceDocument({
       applicationId,
-      slot: slot as "IDENTITY" | "PROOF_OF_RESIDENCE",
+      slot: slot as "IDENTITY" | "PROOF_OF_RESIDENCE" | "BANKING_CONFIRMATION_LETTER",
       identityDocumentType,
       proofOfResidenceType,
       buffer: file.buffer,

@@ -290,20 +290,73 @@ function referralInput(referralAttribution: ValidatedOrderInput["referralAttribu
 // transaction whose tx.order.create/tx.orderAffiliateCommission.create
 // are both spies. Returns the spies plus a restore() that undoes every
 // stub, so each test stays a single call at the end.
-function stubReferralOrderCreation(affiliate: ReturnType<typeof affiliateRow> | null) {
+// Milestone 178, Part C: by default this product IS affiliate-eligible
+// with no per-product override at all (commissionPercent: null) —
+// deliberately reproducing the exact pre-178 flat-rate behaviour, so
+// the referral tests below that assert the R33.25 worked-example
+// commission keep proving that unchanged behaviour, now routed through
+// the new per-product code path instead of the old flat calculation.
+// Milestone 178, Part C: createOrder() now reads createdOrder.items to
+// build the per-product commission breakdown, so these mocks need a
+// fully-shaped OrderItem row (toOrderOutput() itself also dereferences
+// every one of these fields), not the empty array pre-178 tests could
+// get away with.
+function fakeOrderItemRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "order-item-1",
+    productId: "product-1",
+    productSlug: "test-product",
+    productName: "Test Colouring Book",
+    sku: "TCB-1",
+    quantity: 1,
+    unitPrice: new Prisma.Decimal("500.00"),
+    lineTotal: new Prisma.Decimal("500.00"),
+    productType: "PHYSICAL",
+    isGiftWrapped: false,
+    giftMessage: null,
+    giftWrapFeePerUnit: null,
+    ...overrides,
+  };
+}
+
+const ELIGIBLE_PRODUCT_SETTING_ROW = {
+  id: "setting-1",
+  productId: "product-1",
+  commissionType: "PERCENTAGE" as const,
+  commissionPercent: null,
+  fixedCommissionAmount: null,
+  isAffiliateAvailable: true,
+  startsAt: null,
+  endsAt: null,
+  maximumCommission: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+function stubReferralOrderCreation(affiliate: ReturnType<typeof affiliateRow> | null, productSettings: Record<string, unknown>[] = [ELIGIBLE_PRODUCT_SETTING_ROW]) {
   const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, price: new Prisma.Decimal("500.00"), stockQuantity: 10 }));
   const settingsFind = stub(prisma.affiliateProgrammeSettings, "findFirst", async () => SETTINGS_ROW);
   const affiliateFind = stub(prisma.affiliate, "findUnique", async () => affiliate);
   const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
-  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) =>
-    fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total })
-  );
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    // Milestone 178, Part C: createOrder() now reads createdOrder.items
+    // (the real created rows, with real ids) to build the per-product
+    // commission breakdown — this mock returns one realistic item
+    // matching what a real single-line R500 order would produce, so
+    // that code path has something to work with, same as it would
+    // against the real database.
+    const items = [fakeOrderItemRow({ lineTotal: data.subtotal, unitPrice: data.subtotal })];
+    return fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total, items });
+  });
   const commissionCreate = stub(prisma.orderAffiliateCommission, "create", async () => ({}));
+  const productSettingFind = stub(prisma.affiliateProductSetting, "findMany", async () => productSettings);
+  const productCommissionCreateMany = stub(prisma.orderAffiliateProductCommission, "createMany", async () => ({ count: 0 }));
 
   return {
     orderCreate,
     commissionCreate,
+    productCommissionCreateMany,
     restore: () => {
       findUnique.restore();
       settingsFind.restore();
@@ -312,6 +365,8 @@ function stubReferralOrderCreation(affiliate: ReturnType<typeof affiliateRow> | 
       updateMany.restore();
       orderCreate.restore();
       commissionCreate.restore();
+      productSettingFind.restore();
+      productCommissionCreateMany.restore();
     },
   };
 }
@@ -425,9 +480,17 @@ test("the R600 free-delivery threshold is judged against the ORIGINAL pre-discou
   const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
   const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) =>
-    fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, deliveryFee: data.deliveryFee, total: data.total })
+    fakeOrderRow({
+      subtotal: data.subtotal,
+      discountTotal: data.discountTotal,
+      deliveryFee: data.deliveryFee,
+      total: data.total,
+      items: [fakeOrderItemRow({ lineTotal: data.subtotal, unitPrice: data.subtotal })],
+    })
   );
   const commissionCreate = stub(prisma.orderAffiliateCommission, "create", async () => ({}));
+  const productSettingFind = stub(prisma.affiliateProductSetting, "findMany", async () => [ELIGIBLE_PRODUCT_SETTING_ROW]);
+  const productCommissionCreateMany = stub(prisma.orderAffiliateProductCommission, "createMany", async () => ({ count: 0 }));
 
   const referralAttribution = signReferralCapture("alice-1");
   const order = await createOrder(
@@ -457,4 +520,84 @@ test("the R600 free-delivery threshold is judged against the ORIGINAL pre-discou
   updateMany.restore();
   orderCreate.restore();
   commissionCreate.restore();
+  productSettingFind.restore();
+  productCommissionCreateMany.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Per-product affiliate commission (Milestone 178, Part C).
+// ---------------------------------------------------------------------------
+
+test("a referred order for a product with no AffiliateProductSetting row at all still creates the commission row (discount unaffected) but with a zero commissionAmount and no breakdown rows", async () => {
+  const stubs = stubReferralOrderCreation(affiliateRow(), []); // no setting rows returned at all
+  const referralAttribution = signReferralCapture("alice-1");
+
+  const order = await createOrder(referralInput(referralAttribution));
+
+  assert.equal(order.discountTotal, 25, "the customer discount is unconditional — never depends on affiliate product eligibility");
+  assert.equal(stubs.commissionCreate.fn.mock.callCount(), 1);
+  const commissionData = stubs.commissionCreate.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(commissionData.commissionAmount.toString(), "0");
+  assert.equal(commissionData.qualifyingProductSubtotal.toString(), "0");
+  assert.equal(stubs.productCommissionCreateMany.fn.mock.callCount(), 0, "nothing eligible means no breakdown rows at all");
+
+  stubs.restore();
+});
+
+test("a product with a per-product PERCENTAGE override uses that rate instead of the affiliate's own, and writes one matching OrderAffiliateProductCommission row", async () => {
+  const stubs = stubReferralOrderCreation(affiliateRow(), [{ ...ELIGIBLE_PRODUCT_SETTING_ROW, commissionPercent: new Prisma.Decimal("15.00") }]);
+  const referralAttribution = signReferralCapture("alice-1");
+
+  await createOrder(referralInput(referralAttribution));
+
+  const commissionData = stubs.commissionCreate.fn.mock.calls[0]!.arguments[0].data;
+  // R500 * 0.95 = R475 net, 15% = R71.25 — not the affiliate's own 7%.
+  assert.equal(commissionData.commissionAmount.toString(), "71.25");
+
+  assert.equal(stubs.productCommissionCreateMany.fn.mock.callCount(), 1);
+  const rows = stubs.productCommissionCreateMany.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].commissionType, "PERCENTAGE");
+  assert.equal(rows[0].commissionPercent.toString(), "15");
+  assert.equal(rows[0].calculatedCommission.toString(), "71.25");
+  assert.equal(rows[0].orderItemId, "order-item-1");
+  assert.equal(rows[0].productId, "product-1");
+  assert.equal(rows[0].affiliateId, "affiliate-1");
+
+  stubs.restore();
+});
+
+test("a FIXED_AMOUNT product commission is per-unit, capped by maximumCommission, and completely independent of the referral discount rate", async () => {
+  const stubs = stubReferralOrderCreation(affiliateRow(), [
+    { ...ELIGIBLE_PRODUCT_SETTING_ROW, commissionType: "FIXED_AMOUNT", commissionPercent: null, fixedCommissionAmount: new Prisma.Decimal("50.00"), maximumCommission: new Prisma.Decimal("40.00") },
+  ]);
+  const referralAttribution = signReferralCapture("alice-1");
+
+  await createOrder(referralInput(referralAttribution));
+
+  const commissionData = stubs.commissionCreate.fn.mock.calls[0]!.arguments[0].data;
+  // Uncapped would be R50 (1 unit) — capped down to the R40 maximum.
+  assert.equal(commissionData.commissionAmount.toString(), "40");
+
+  const rows = stubs.productCommissionCreateMany.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(rows[0].commissionType, "FIXED_AMOUNT");
+  assert.equal(rows[0].fixedCommissionAmount.toString(), "50");
+  assert.equal(rows[0].commissionPercent, null);
+  assert.equal(rows[0].calculatedCommission.toString(), "40");
+
+  stubs.restore();
+});
+
+test("isAffiliateAvailable:false excludes a product from commission entirely, while the customer discount is unaffected", async () => {
+  const stubs = stubReferralOrderCreation(affiliateRow(), [{ ...ELIGIBLE_PRODUCT_SETTING_ROW, isAffiliateAvailable: false }]);
+  const referralAttribution = signReferralCapture("alice-1");
+
+  const order = await createOrder(referralInput(referralAttribution));
+
+  assert.equal(order.discountTotal, 25);
+  const commissionData = stubs.commissionCreate.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(commissionData.commissionAmount.toString(), "0");
+  assert.equal(stubs.productCommissionCreateMany.fn.mock.callCount(), 0);
+
+  stubs.restore();
 });

@@ -19,7 +19,7 @@
 
 import { addressLikelyMatches, identityNumberLikelyMatches, nameLikelyMatches, normaliseForMatching, type AffiliateMatchResult } from "./affiliateTextMatching.util.js";
 
-export type AffiliateDocumentTypeKey = "SA_ID" | "PASSPORT" | "BANK_STATEMENT" | "MUNICIPAL_ACCOUNT_OR_LETTER";
+export type AffiliateDocumentTypeKey = "SA_ID" | "PASSPORT" | "BANK_STATEMENT" | "MUNICIPAL_ACCOUNT_OR_LETTER" | "BANKING_CONFIRMATION_LETTER";
 
 interface CategoryCheck {
   label: string;
@@ -34,6 +34,22 @@ const BANK_STATEMENT_CATEGORIES: CategoryCheck[] = [
   { label: "account holder wording", test: (t) => /(account holder|account name|account number)/.test(t) },
   { label: "transaction/summary structure", test: (t) => /(transaction|debit|credit|balance brought forward)/.test(t) },
   { label: "bank registration/contact details", test: (t) => /(authorised financial services provider|registered bank|swift|branch code)/.test(t) },
+];
+
+// Milestone 178: replaces IDENTITY/PROOF_OF_RESIDENCE as the only
+// required document for new affiliate applications (brief section
+// 12). Deliberately close to, but distinct from, BANK_STATEMENT_
+// CATEGORIES above — a genuine confirmation letter carries the same
+// bank-issued signals (name, contact/branch details) but is a short
+// confirmation, not a transaction record, so "confirmation/proof of
+// account" wording is its own scored category here rather than reused
+// from the statement category set.
+const BANKING_CONFIRMATION_LETTER_CATEGORIES: CategoryCheck[] = [
+  { label: "a recognised South African bank name", test: (t) => BANK_NAMES.some((name) => t.includes(name)) },
+  { label: "confirmation or proof of account wording", test: (t) => /(confirmation of account|proof of account|account confirmation|bank confirmation|to whom it may concern|letter of confirmation)/.test(t) },
+  { label: "account holder wording", test: (t) => /(account holder|account name|account number)/.test(t) },
+  { label: "account type information", test: (t) => /(current account|savings account|cheque account|transmission account|account type)/.test(t) },
+  { label: "branch or bank contact details", test: (t) => /(branch code|branch name|swift|authorised financial services provider|registered bank)/.test(t) },
 ];
 
 const MUNICIPAL_CATEGORIES: CategoryCheck[] = [
@@ -64,6 +80,7 @@ const CATEGORY_SETS: Record<AffiliateDocumentTypeKey, CategoryCheck[]> = {
   PASSPORT: PASSPORT_CATEGORIES,
   BANK_STATEMENT: BANK_STATEMENT_CATEGORIES,
   MUNICIPAL_ACCOUNT_OR_LETTER: MUNICIPAL_CATEGORIES,
+  BANKING_CONFIRMATION_LETTER: BANKING_CONFIRMATION_LETTER_CATEGORIES,
 };
 
 const TYPE_LABELS: Record<AffiliateDocumentTypeKey, string> = {
@@ -71,6 +88,7 @@ const TYPE_LABELS: Record<AffiliateDocumentTypeKey, string> = {
   PASSPORT: "a passport",
   BANK_STATEMENT: "a bank statement",
   MUNICIPAL_ACCOUNT_OR_LETTER: "a municipal account or letter",
+  BANKING_CONFIRMATION_LETTER: "a banking confirmation letter",
 };
 
 function scoreType(type: AffiliateDocumentTypeKey, normalisedText: string, rawText: string): { score: number; matched: string[] } {

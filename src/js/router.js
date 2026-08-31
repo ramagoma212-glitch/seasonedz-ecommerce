@@ -105,6 +105,8 @@ import { renderAdminAffiliateProductCreate, renderAdminAffiliateProductEdit } fr
 import { renderAdminReferralsOverview } from "../pages/adminReferralsOverview.js";
 import { renderAdminReferralAffiliates } from "../pages/adminReferralAffiliates.js";
 import { renderAdminReferralAffiliateCreate, renderAdminReferralAffiliateEdit } from "../pages/adminReferralAffiliateForm.js";
+import { renderAdminReferralAffiliateProducts } from "../pages/adminReferralAffiliateProducts.js";
+import { renderAdminReferralAffiliateProductCreate, renderAdminReferralAffiliateProductEdit } from "../pages/adminReferralAffiliateProductForm.js";
 import { renderAdminAffiliateApplications } from "../pages/adminAffiliateApplications.js";
 import { renderAdminAffiliateApplicationDetail } from "../pages/adminAffiliateApplicationDetail.js";
 import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
@@ -373,6 +375,12 @@ const routeDefs = [
   { pattern: "/admin/referrals/commissions/:id", render: renderAdminReferralCommissionDetail, title: "Commission Detail", noindex: true },
   { pattern: "/admin/referrals/commissions", render: renderAdminReferralCommissions, title: "Referral Commissions", noindex: true },
   { pattern: "/admin/referrals/payouts", render: renderAdminReferralPayouts, title: "Referral Payouts", noindex: true },
+  // Milestone 178, Part C: per-product commission configuration for
+  // this same internal programme — "/new" before "/:id/edit", same
+  // ordering discipline as every other admin list/:id-wildcard pair.
+  { pattern: "/admin/referrals/affiliate-products/new", render: renderAdminReferralAffiliateProductCreate, title: "Add Affiliate Product", noindex: true },
+  { pattern: "/admin/referrals/affiliate-products/:id/edit", render: renderAdminReferralAffiliateProductEdit, title: "Edit Affiliate Product", noindex: true },
+  { pattern: "/admin/referrals/affiliate-products", render: renderAdminReferralAffiliateProducts, title: "Affiliate Products", noindex: true },
   { pattern: "/admin/referrals/settings", render: renderAdminReferralSettings, title: "Referral Programme Settings", noindex: true },
   { pattern: "/admin/referrals", render: renderAdminReferralsOverview, title: "Referrals", noindex: true },
 

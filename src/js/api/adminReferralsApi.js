@@ -94,6 +94,33 @@ export function getAdminReferralPayoutOverview() {
   return adminRequest("/admin/referrals/payouts", { method: "GET" });
 }
 
+// Milestone 178, Part C: per-product commission configuration —
+// completely separate from /api/admin/affiliate/* (172B's dormant
+// external-merchant AffiliateProduct admin area). Named after the
+// AffiliateProductSetting model itself, deliberately NOT
+// "AdminAffiliateProduct*" — those exact names are already taken by
+// adminAffiliateApi.js's own (unrelated) functions for the dormant
+// system, and app.js needs to import both without collision.
+export function getAdminAffiliateProductSettings(params = {}) {
+  return adminRequest(`/admin/referrals/affiliate-products${buildQuery(params)}`, { method: "GET" });
+}
+
+export function getAdminAffiliateProductSetting(id) {
+  return adminRequest(`/admin/referrals/affiliate-products/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function createAdminAffiliateProductSetting(productId, payload) {
+  return adminRequest("/admin/referrals/affiliate-products", { method: "POST", body: JSON.stringify({ productId, ...payload }) });
+}
+
+export function updateAdminAffiliateProductSetting(id, payload) {
+  return adminRequest(`/admin/referrals/affiliate-products/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(payload) });
+}
+
+export function deleteAdminAffiliateProductSetting(id) {
+  return adminRequest(`/admin/referrals/affiliate-products/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export function payAdminAffiliateCommissions(affiliateId, commissionIds) {
   return adminRequest(`/admin/referrals/payouts/${encodeURIComponent(affiliateId)}/pay`, {
     method: "POST",

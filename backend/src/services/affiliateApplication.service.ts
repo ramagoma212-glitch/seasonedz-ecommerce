@@ -331,7 +331,7 @@ export interface AffiliateApplicationOutput {
 
 export interface AffiliateApplicationDocumentOutput {
   id: string;
-  slot: "IDENTITY" | "PROOF_OF_RESIDENCE";
+  slot: "IDENTITY" | "PROOF_OF_RESIDENCE" | "BANKING_CONFIRMATION_LETTER";
   identityDocumentType: AffiliateIdentityDocumentType | null;
   proofOfResidenceType: string | null;
   fileName: string;
@@ -529,13 +529,23 @@ function requiredFieldsForSubmit(app: ApplicationRow): void {
   requireDeclarations(app);
 }
 
+// Milestone 178: the only document a new (or resubmitting) affiliate
+// application must have on file is a current Banking Confirmation
+// Letter (brief section 12) — IDENTITY/PROOF_OF_RESIDENCE are no
+// longer required here, though historical documents in those slots are
+// left completely alone (never deleted, never re-required). This
+// applies uniformly to every DRAFT/ACTION_REQUIRED application,
+// including ones that predate this milestone (brief section 31): an
+// applicant who already has old IDENTITY/PROOF_OF_RESIDENCE documents
+// but no Banking Confirmation Letter yet is prompted for the new
+// document before they can (re)submit.
 async function requireCurrentDocuments(applicationId: string): Promise<void> {
-  const [identity, proofOfResidence] = await Promise.all([
-    prisma.affiliateApplicationDocument.findFirst({ where: { applicationId, slot: "IDENTITY", isCurrent: true } }),
-    prisma.affiliateApplicationDocument.findFirst({ where: { applicationId, slot: "PROOF_OF_RESIDENCE", isCurrent: true } }),
-  ]);
-  if (!identity) throw new AffiliateApplicationError("Please upload your identity document before submitting.");
-  if (!proofOfResidence) throw new AffiliateApplicationError("Please upload a proof of residence document before submitting.");
+  const bankingConfirmationLetter = await prisma.affiliateApplicationDocument.findFirst({
+    where: { applicationId, slot: "BANKING_CONFIRMATION_LETTER", isCurrent: true },
+  });
+  if (!bankingConfirmationLetter) {
+    throw new AffiliateApplicationError("Please upload a Banking Confirmation Letter before submitting.");
+  }
 }
 
 export async function submitMyApplication(customerId: string): Promise<AffiliateApplicationOutput> {

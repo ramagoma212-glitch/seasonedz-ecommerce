@@ -82,6 +82,10 @@ function classificationBadge(doc) {
 
 function renderDocumentSlot({ slot, title, typeFieldId, typeOptions, existingDoc, application }) {
   const disabled = application.status !== "DRAFT" && application.status !== "ACTION_REQUIRED";
+  // typeFieldId/typeOptions are optional — BANKING_CONFIRMATION_LETTER
+  // has no sub-type choice (the slot itself is the document type), so
+  // it renders straight to the file input with no Document Type select.
+  const hasTypeSelect = Boolean(typeOptions && typeOptions.length > 0);
   return `
     <div class="order-confirmation__card account-affiliate" data-document-slot="${slot}">
       <h4 class="checkout-section__label">${title}</h4>
@@ -97,13 +101,17 @@ function renderDocumentSlot({ slot, title, typeFieldId, typeOptions, existingDoc
       ${
         !disabled
           ? `
-        <div class="form-field">
+        ${
+          hasTypeSelect
+            ? `<div class="form-field">
           <label class="form-field__label" for="${typeFieldId}">Document Type <span class="form-field__required" aria-hidden="true">*</span></label>
           <select id="${typeFieldId}" class="form-field__input" data-document-type-select data-slot="${slot}">
             <option value="">Select&hellip;</option>
             ${typeOptions.map((opt) => `<option value="${opt.value}">${opt.label}</option>`).join("")}
           </select>
-        </div>
+        </div>`
+            : ""
+        }
         <div class="form-field">
           <label class="form-field__label" for="${slot}FileInput">${existingDoc ? "Replace file" : "Choose file"} <span class="form-field__optional">(PDF, JPG or PNG, max 8&nbsp;MB)</span></label>
           <input type="file" id="${slot}FileInput" data-document-file-input data-slot="${slot}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" />
@@ -134,8 +142,7 @@ function renderApplicantTypeFields(app) {
 }
 
 function renderEditableForm(app) {
-  const identityDoc = app.documents.find((d) => d.slot === "IDENTITY");
-  const porDoc = app.documents.find((d) => d.slot === "PROOF_OF_RESIDENCE");
+  const bankingConfirmationLetterDoc = app.documents.find((d) => d.slot === "BANKING_CONFIRMATION_LETTER");
   const isActionRequired = app.status === "ACTION_REQUIRED";
 
   return `
@@ -212,15 +219,12 @@ function renderEditableForm(app) {
       ${renderTextField({ id: "audienceSize", label: "Audience/Follower Size", value: app.audienceSize })}
       ${renderTextArea({ id: "motivation", label: "Why do you want to join the Seasonedz Affiliate Programme?", value: app.motivation, required: true })}
 
-      <h3 class="checkout-section__label">Identity Verification</h3>
+      <h3 class="checkout-section__label">Banking Verification</h3>
       <p class="admin-product-form__hint">
-        We ask for an identity document and proof of residence to help us verify genuine affiliate applicants. Automated
-        checks may confirm a document's type and that names and addresses appear consistent. This assists our review but
-        never itself approves your application. Final approval always remains a manual Seasonedz Group decision.
+        Upload a Banking Confirmation Letter issued by your bank. Seasonedz Group will review this document before your
+        Affiliate Programme application can be approved.
       </p>
-      ${renderDocumentSlot({ slot: "IDENTITY", title: "Identity Document", typeFieldId: "identityDocumentType", typeOptions: [{ value: "SA_ID", label: "South African ID" }, { value: "PASSPORT", label: "Passport" }], existingDoc: identityDoc, application: app })}
-
-      ${renderDocumentSlot({ slot: "PROOF_OF_RESIDENCE", title: "Proof of Residence", typeFieldId: "proofOfResidenceType", typeOptions: [{ value: "BANK_STATEMENT", label: "Bank Statement" }, { value: "MUNICIPAL_ACCOUNT_OR_LETTER", label: "Municipal Account or Municipal Letter" }, { value: "PROOF_OF_RESIDENCE", label: "Other Accepted Proof of Residence" }], existingDoc: porDoc, application: app })}
+      ${renderDocumentSlot({ slot: "BANKING_CONFIRMATION_LETTER", title: "Banking Confirmation Letter", existingDoc: bankingConfirmationLetterDoc, application: app })}
 
       <h3 class="checkout-section__label">Declarations</h3>
       <label class="account-preferences__field">

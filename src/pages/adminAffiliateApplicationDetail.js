@@ -89,13 +89,19 @@ function documentClassificationLabel(doc) {
   return doc.classification ? labels[doc.classification] || doc.classification : "Not yet classified";
 }
 
+function documentSlotLabel(slot) {
+  if (slot === "IDENTITY") return "Identity Document";
+  if (slot === "BANKING_CONFIRMATION_LETTER") return "Banking Confirmation Letter";
+  return "Proof of Residence";
+}
+
 function renderDocumentCard(doc, applicationId) {
-  const typeLabel = doc.slot === "IDENTITY" ? humanizeEnum(doc.identityDocumentType || "") : humanizeEnum(doc.proofOfResidenceType || "");
+  const typeLabel = doc.slot === "IDENTITY" ? humanizeEnum(doc.identityDocumentType || "") : doc.slot === "BANKING_CONFIRMATION_LETTER" ? "" : humanizeEnum(doc.proofOfResidenceType || "");
   return `
     <div class="order-confirmation__row">
-      <span>${doc.slot === "IDENTITY" ? "Identity Document" : "Proof of Residence"}${doc.isCurrent ? "" : " (superseded)"}</span>
+      <span>${documentSlotLabel(doc.slot)}${doc.isCurrent ? "" : " (superseded)"}</span>
       <span>
-        ${escapeHtml(typeLabel)}: ${escapeHtml(documentClassificationLabel(doc))}
+        ${typeLabel ? `${escapeHtml(typeLabel)}: ` : ""}${escapeHtml(documentClassificationLabel(doc))}
         ${doc.isCurrent ? `<button type="button" class="btn btn--secondary btn--sm" data-action="view-affiliate-document" data-application-id="${escapeHtml(applicationId)}" data-document-id="${escapeHtml(doc.id)}">View</button>` : ""}
       </span>
     </div>
@@ -130,8 +136,9 @@ function renderDecisionActions(app) {
         <label class="form-field__label" for="correctionArea">Affected Area <span class="form-field__optional">(for Request Correction)</span></label>
         <select id="correctionArea" class="form-field__input">
           <option value="PERSONAL_DETAILS">Personal Details</option>
-          <option value="IDENTITY_DOCUMENT">Identity Document</option>
-          <option value="PROOF_OF_RESIDENCE">Proof of Residence</option>
+          <option value="BANKING_CONFIRMATION_LETTER">Banking Confirmation Letter</option>
+          <option value="IDENTITY_DOCUMENT">Identity Document (historical)</option>
+          <option value="PROOF_OF_RESIDENCE">Proof of Residence (historical)</option>
           <option value="OTHER">Other</option>
         </select>
       </div>

@@ -11,7 +11,9 @@
 // completely separate table and cookie name from AdminSession.
 
 import { Router } from "express";
+import { UserRole } from "@prisma/client";
 import { requireAdminAuth } from "../middleware/requireAdminAuth.middleware.js";
+import { requireAdminRole } from "../middleware/requireAdminRole.middleware.js";
 import {
   approveAffiliateHandler,
   createAffiliateHandler,
@@ -32,10 +34,22 @@ import {
   payAffiliateCommissionsHandler,
   reverseCommissionHandler,
 } from "../controllers/adminReferralCommission.controller.js";
+import {
+  createAffiliateProductSettingHandler,
+  deleteAffiliateProductSettingHandler,
+  getAffiliateProductSettingHandler,
+  listAffiliateProductSettingsHandler,
+  updateAffiliateProductSettingHandler,
+} from "../controllers/adminAffiliateProductSetting.controller.js";
 
 const router = Router();
 
 router.use(requireAdminAuth);
+
+// Milestone 178, Part C/E: mutations are ADMIN-only; STAFF keeps read
+// access via requireAdminAuth alone — same split Content Studio Phase 2
+// established for Brand Knowledge (see requireAdminRole.middleware.ts).
+const adminOnly = requireAdminRole(UserRole.ADMIN);
 
 router.get("/overview", getReferralsOverviewHandler);
 
@@ -65,5 +79,14 @@ router.patch("/commissions/:id/reverse", reverseCommissionHandler);
 // referralCommission.service.ts's own header comment for why).
 router.get("/payouts", getPayoutOverviewHandler);
 router.post("/payouts/:affiliateId/pay", payAffiliateCommissionsHandler);
+
+// Milestone 178, Part C: per-product commission configuration for
+// Seasonedz's own real products (never the dormant, external-merchant
+// AffiliateProduct model, which stays mounted at /admin/affiliate).
+router.get("/affiliate-products", listAffiliateProductSettingsHandler);
+router.get("/affiliate-products/:id", getAffiliateProductSettingHandler);
+router.post("/affiliate-products", adminOnly, createAffiliateProductSettingHandler);
+router.patch("/affiliate-products/:id", adminOnly, updateAffiliateProductSettingHandler);
+router.delete("/affiliate-products/:id", adminOnly, deleteAffiliateProductSettingHandler);
 
 export default router;

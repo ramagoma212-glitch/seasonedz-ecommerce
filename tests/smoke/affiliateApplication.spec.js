@@ -86,9 +86,16 @@ test.describe("Customer affiliate application page", () => {
 
     await page.goto("/account/affiliate-application");
     await expect(page.locator("#affiliate-application-form")).toBeVisible();
-    for (const heading of ["Personal Details", "Contact Details", "Residential Details", "Applicant Type", "Affiliate Information", "Identity Verification", "Proof of Residence", "Declarations"]) {
+    // Milestone 178: "Identity Verification"/"Proof of Residence" are
+    // gone from the form — replaced by a single "Banking Verification"
+    // section (brief section 12). The ID/passport number TEXT fields
+    // stay (checked separately below), only the old upload
+    // requirement changed.
+    for (const heading of ["Personal Details", "Contact Details", "Residential Details", "Applicant Type", "Affiliate Information", "Banking Verification", "Declarations"]) {
       await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     }
+    await expect(page.getByRole("heading", { name: "Identity Verification" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Proof of Residence" })).toHaveCount(0);
     // Pre-filled from the account, per brief section 7.
     await expect(page.locator("#firstName")).toHaveValue("Thandiwe");
     await expect(page.locator("#contactEmail")).toHaveValue("thandiwe@example.com");
@@ -159,17 +166,17 @@ test.describe("Customer affiliate application page", () => {
     let submitCalled = false;
     await page.route("**/api/customers/affiliate/application/submit", (route) => {
       submitCalled = true;
-      return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ success: false, message: "Please upload your identity document before submitting." }) });
+      return route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ success: false, message: "Please upload a Banking Confirmation Letter before submitting." }) });
     });
 
     await page.goto("/account/affiliate-application");
     await page.locator('#affiliate-application-form button[type="submit"]').click();
 
     await expect.poll(() => submitCalled).toBe(true);
-    await expect(page.locator("[data-affiliate-application-banner]")).toContainText("identity document");
+    await expect(page.locator("[data-affiliate-application-banner]")).toContainText("Banking Confirmation Letter");
   });
 
-  test("uploading a document without selecting a document type shows a clear error, never calls the backend", async ({ page }) => {
+  test("uploading a Banking Confirmation Letter without choosing a file shows a clear error, never calls the backend", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await mockMyApplication(page, DRAFT_APPLICATION);
     let uploadCalled = false;
@@ -179,14 +186,13 @@ test.describe("Customer affiliate application page", () => {
     });
 
     await page.goto("/account/affiliate-application");
-    await page.locator('[data-document-file-input][data-slot="IDENTITY"]').setInputFiles({ name: "id.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
-    await page.locator('[data-action="upload-affiliate-document"][data-slot="IDENTITY"]').click();
+    await page.locator('[data-action="upload-affiliate-document"][data-slot="BANKING_CONFIRMATION_LETTER"]').click();
 
-    await expect(page.locator('[data-document-upload-banner="IDENTITY"]')).toContainText("document type");
+    await expect(page.locator('[data-document-upload-banner="BANKING_CONFIRMATION_LETTER"]')).toContainText("choose a file");
     expect(uploadCalled).toBe(false);
   });
 
-  test("a successful document upload sends multipart form data with the file and selected type", async ({ page }) => {
+  test("the Banking Confirmation Letter slot has no Document Type select — a file alone is enough to upload (brief section 12: no sub-type choice for this document)", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await mockMyApplication(page, DRAFT_APPLICATION);
     let uploadRequest = null;
@@ -196,9 +202,10 @@ test.describe("Customer affiliate application page", () => {
     });
 
     await page.goto("/account/affiliate-application");
-    await page.locator("#identityDocumentType").selectOption("SA_ID");
-    await page.locator('[data-document-file-input][data-slot="IDENTITY"]').setInputFiles({ name: "id.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
-    await page.locator('[data-action="upload-affiliate-document"][data-slot="IDENTITY"]').click();
+    await expect(page.locator('[data-document-type-select][data-slot="BANKING_CONFIRMATION_LETTER"]')).toHaveCount(0);
+
+    await page.locator('[data-document-file-input][data-slot="BANKING_CONFIRMATION_LETTER"]').setInputFiles({ name: "letter.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 test") });
+    await page.locator('[data-action="upload-affiliate-document"][data-slot="BANKING_CONFIRMATION_LETTER"]').click();
 
     await expect.poll(() => uploadRequest).not.toBeNull();
     expect(uploadRequest.headers()["content-type"]).toContain("multipart/form-data");
@@ -353,6 +360,19 @@ test.describe("Admin affiliate application review", () => {
     await expect.poll(() => approveCalled).toBe(true);
   });
 
+  test("Approve shows the backend's Banking Confirmation Letter guard error and re-enables the buttons (brief section 29)", async ({ page }) => {
+    await mockDetail(page);
+    await page.route("**/api/admin/affiliate-applications/app-1/approve", (route) =>
+      route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ success: false, message: "This application has no current Banking Confirmation Letter. It cannot be approved." }) })
+    );
+
+    await page.goto("/admin/referrals/applications/app-1");
+    await page.locator('[data-action="approve-affiliate-application"]').click();
+
+    await expect(page.locator("[data-affiliate-application-decision-banner]")).toContainText("Banking Confirmation Letter");
+    await expect(page.locator('[data-action="approve-affiliate-application"]')).toBeEnabled();
+  });
+
   test("Reject without a reason shows an error and never calls the backend", async ({ page }) => {
     await mockDetail(page);
     let rejectCalled = false;
@@ -383,6 +403,47 @@ test.describe("Admin affiliate application review", () => {
     await expect.poll(() => correctionBody).not.toBeNull();
     expect(correctionBody.reason).toContain("clearer ID");
     expect(correctionBody.area).toBe("IDENTITY_DOCUMENT");
+  });
+
+  test("the correction area select offers Banking Confirmation Letter alongside the historical Identity/Proof of Residence areas (brief section 12/60: additive, nothing removed)", async ({ page }) => {
+    await mockDetail(page);
+    await page.goto("/admin/referrals/applications/app-1");
+
+    const values = await page.locator("#correctionArea option").evaluateAll((options) => options.map((o) => o.value));
+    expect(values).toEqual(expect.arrayContaining(["PERSONAL_DETAILS", "BANKING_CONFIRMATION_LETTER", "IDENTITY_DOCUMENT", "PROOF_OF_RESIDENCE", "OTHER"]));
+  });
+
+  test("a Banking Confirmation Letter document shows on the admin detail page with its classification and a working Secure View button, with no stray document-type sub-label", async ({ page }) => {
+    await mockAdminAuth(page);
+    const applicationWithLetter = {
+      ...DETAIL_APPLICATION,
+      documents: [
+        { id: "doc-2", slot: "BANKING_CONFIRMATION_LETTER", identityDocumentType: null, proofOfResidenceType: null, fileName: "letter.pdf", mimeType: "application/pdf", fileSizeBytes: 2000, isCurrent: true, classification: "MATCH", classificationReason: "Document type confirmed. Detected a recognised South African bank name, confirmation or proof of account wording.", nameMatchResult: "MATCH", addressMatchResult: null, idNumberMatchResult: null, uploadedAt: new Date().toISOString() },
+      ],
+    };
+    await page.route("**/api/admin/affiliate-applications/app-1", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ application: applicationWithLetter }) });
+    });
+    await page.route("**/api/admin/affiliate-applications/app-1/events", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ events: [] }) }));
+    let signedUrlCalled = false;
+    await page.route("**/api/admin/affiliate-applications/app-1/documents/doc-2/signed-url", (route) => {
+      signedUrlCalled = true;
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ signedUrl: "https://storage.example.invalid/signed/doc-2?token=abc" }) });
+    });
+
+    await page.goto("/admin/referrals/applications/app-1");
+    const documentsCard = page.locator(".order-confirmation__card", { has: page.getByRole("heading", { name: "Documents" }) });
+    await expect(documentsCard.getByText("Banking Confirmation Letter")).toBeVisible();
+    await expect(documentsCard.getByText("Document type confirmed").first()).toBeVisible();
+    // No leftover "identityDocumentType"/"proofOfResidenceType" label
+    // fragment (both null for this slot) rendered as an empty/odd
+    // prefix before the classification text.
+    const html = await page.content();
+    expect(html).not.toContain(": Document type confirmed");
+
+    await Promise.all([page.waitForEvent("popup"), page.locator('[data-action="view-affiliate-document"]').click()]);
+    await expect.poll(() => signedUrlCalled).toBe(true);
   });
 
   test("View document generates a fresh signed URL and opens it", async ({ page, context }) => {

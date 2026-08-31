@@ -57,3 +57,38 @@ test("no POST /commissions route exists — commissions are only ever produced b
   const hasPostCommissions = (adminReferralsRoutes as AnyRouter).stack.some((entry: any) => entry.route?.path === "/commissions" && entry.route.methods.post);
   assert.equal(hasPostCommissions, false);
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 178, Part C/E: Affiliate Products — read routes reachable by
+// any authenticated admin (ADMIN or STAFF), write routes gated by an
+// extra ADMIN-only middleware layer (requireAdminRole), same split
+// Content Studio Phase 2 established for Brand Knowledge.
+// ---------------------------------------------------------------------------
+
+function findRouteLayer(method: string, path: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (adminReferralsRoutes as AnyRouter).stack.find((entry: any) => entry.route?.path === path && entry.route.methods[method]);
+}
+
+test("Affiliate Products read routes are registered with no extra role-gate middleware — STAFF can read", () => {
+  for (const [method, path] of [
+    ["get", "/affiliate-products"],
+    ["get", "/affiliate-products/:id"],
+  ] as const) {
+    const layer = findRouteLayer(method, path);
+    assert.ok(layer, `expected route ${method.toUpperCase()} ${path} to be registered`);
+    assert.equal(layer.route.stack.length, 1, `expected ${method.toUpperCase()} ${path} to have no role-gate middleware`);
+  }
+});
+
+test("Affiliate Products write routes are registered and gated by an extra ADMIN-only middleware — STAFF is rejected before the controller", () => {
+  for (const [method, path] of [
+    ["post", "/affiliate-products"],
+    ["patch", "/affiliate-products/:id"],
+    ["delete", "/affiliate-products/:id"],
+  ] as const) {
+    const layer = findRouteLayer(method, path);
+    assert.ok(layer, `expected route ${method.toUpperCase()} ${path} to be registered`);
+    assert.equal(layer.route.stack.length, 2, `expected ${method.toUpperCase()} ${path} to be gated by requireAdminRole`);
+  }
+});

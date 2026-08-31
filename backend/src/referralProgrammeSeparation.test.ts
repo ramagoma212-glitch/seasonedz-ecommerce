@@ -67,7 +67,13 @@ test("the new referral programme files never reference 172B's external Affiliate
   ];
   for (const file of referralFiles) {
     const code = stripLineComments(read(file));
-    assert.doesNotMatch(code, /AffiliateProduct|AffiliateClick|\bAffiliateCommission\b/, `${file} must never reference the dormant external-merchant models`);
+    // Word-boundaried (Milestone 178, Part C): the exact dormant model
+    // names only — adminReferrals.routes.ts now legitimately imports
+    // the NEW AffiliateProductSetting admin controller, which shares a
+    // deliberate prefix with (but is not) the dormant AffiliateProduct
+    // model. See directStoreSeparation.test.ts's own comment for the
+    // same reasoning.
+    assert.doesNotMatch(code, /\bAffiliateProduct\b|\bAffiliateClick\b|\bAffiliateCommission\b/, `${file} must never reference the dormant external-merchant models`);
   }
 });
 
@@ -91,7 +97,12 @@ test("order.service.ts and order.validator.ts never reference 172B's dormant ext
     ["order.service.ts", orderService],
     ["order.validator.ts", orderValidator],
   ] as const) {
-    assert.doesNotMatch(contents, /AffiliateProduct|AffiliateClick|\bAffiliateCommission\b/, `${name} must never reference the dormant external-merchant models`);
+    // Word-boundaried (Milestone 178, Part C) — see this file's other
+    // test above for why: order.service.ts now legitimately imports
+    // affiliateProductCommission.service.ts's AffiliateProductSetting-
+    // related types, a deliberately similarly-prefixed but distinct
+    // model from the dormant AffiliateProduct.
+    assert.doesNotMatch(contents, /\bAffiliateProduct\b|\bAffiliateClick\b|\bAffiliateCommission\b/, `${name} must never reference the dormant external-merchant models`);
   }
 });
 

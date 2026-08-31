@@ -17,6 +17,7 @@
     "seed": "tsx prisma/seed.ts",
     "db:sync-product-content": "tsx prisma/scripts/update-product-content.ts",
     "seed:content-studio": "tsx prisma/scripts/seedContentStudioBrandKnowledge.ts",
+    "transition:affiliate-products-178": "tsx prisma/scripts/transitionAffiliateProductEligibility178.ts",
     "admin:setup": "tsx prisma/scripts/setupAdminUser.ts",
     "notifications:process": "tsx prisma/scripts/processNotifications.ts"
   },

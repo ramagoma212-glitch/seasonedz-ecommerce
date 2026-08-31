@@ -68,6 +68,7 @@ import {
   bookAdminCourier,
   createAdminProduct,
   updateAdminProduct,
+  getAdminProducts,
   uploadProductImage,
   updateProductImage,
   deleteProductImage,
@@ -96,7 +97,11 @@ import {
   approveAdminReferralCommission,
   reverseAdminReferralCommission,
   payAdminAffiliateCommissions,
+  createAdminAffiliateProductSetting,
+  updateAdminAffiliateProductSetting,
+  deleteAdminAffiliateProductSetting,
 } from "./api/adminReferralsApi.js";
+import { renderProductSearchResults, renderSelectedProductPreview } from "../pages/adminReferralAffiliateProductForm.js";
 import {
   createAdminBrandKnowledgeEntry,
   updateAdminBrandKnowledgeEntry,
@@ -178,6 +183,9 @@ function mountApp() {
   setupAdminReferralAffiliateFilterForm();
   setupAdminReferralAffiliateForm();
   setupAdminReferralAffiliateActions();
+  setupAdminAffiliateProductSettingFilterForm();
+  setupAdminAffiliateProductSettingForm();
+  setupAdminAffiliateProductSettingActions();
   setupAdminAffiliateApplicationActions();
   setupAdminReferralSettingsForm();
   setupAdminCommissionFilterForm();
@@ -2018,7 +2026,13 @@ async function handleUploadAffiliateDocument(button) {
     }
     return;
   }
-  if (!typeSelect?.value) {
+  // Only IDENTITY (SA ID vs Passport) and PROOF_OF_RESIDENCE (bank
+  // statement vs municipal letter vs other) have a document-type
+  // choice — BANKING_CONFIRMATION_LETTER's slot renders no type select
+  // at all (see renderDocumentSlot() in affiliateApplicationPage.js),
+  // since the slot itself is the document type.
+  const requiresTypeSelect = slot === "IDENTITY" || slot === "PROOF_OF_RESIDENCE";
+  if (requiresTypeSelect && !typeSelect?.value) {
     if (banner) {
       banner.textContent = "Please select a document type first.";
       banner.hidden = false;
@@ -3224,6 +3238,231 @@ async function handleAdminReferralAffiliateAction(button, apiCall, verb) {
   try {
     await apiCall(affiliateId);
     setPendingAdminMessage(`Affiliate ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 178, Part C: Affiliate Products — per-product commission
+// configuration. Deliberately named/wired apart from the OLD dormant
+// AffiliateProduct admin area's own setup* functions above (see
+// adminReferralsApi.js's own header comment on the naming collision
+// this avoided).
+// ---------------------------------------------------------------------------
+
+function setupAdminAffiliateProductSettingFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-affiliate-product-filter-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    const search = form.querySelector('input[name="search"]')?.value.trim() || "";
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    params.set("page", "1");
+    navigateTo(`/admin/referrals/affiliate-products?${params.toString()}`);
+  });
+}
+
+async function handleAffiliateProductCandidateSearch(button) {
+  const container = button.closest("[data-affiliate-product-picker]");
+  const input = container?.querySelector("#affiliateProductSearch");
+  const resultsEl = container?.querySelector("[data-affiliate-product-search-results]");
+  const term = input?.value.trim() || "";
+  if (!resultsEl) return;
+
+  if (!term) {
+    resultsEl.innerHTML = `<p class="admin-product-form__hint">Type a product name or SKU, then search.</p>`;
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const response = await getAdminProducts({ search: term, limit: 10 });
+    resultsEl.innerHTML = renderProductSearchResults(response.data.products);
+  } catch (error) {
+    resultsEl.innerHTML = `<p class="admin-product-form__hint">${error instanceof ApiError ? error.message : "Something went wrong searching products."}</p>`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function handleAffiliateProductCandidateSelect(button) {
+  const form = button.closest("[data-admin-affiliate-product-form]");
+  if (!form) return;
+
+  const productIdField = form.querySelector("#affiliateProductId");
+  if (productIdField) productIdField.value = button.dataset.productId;
+
+  const previewEl = form.querySelector("[data-affiliate-product-selected-preview]");
+  if (previewEl) {
+    previewEl.innerHTML = renderSelectedProductPreview({
+      name: button.dataset.productName,
+      sku: button.dataset.productSku,
+      price: button.dataset.productPrice,
+    });
+  }
+
+  const resultsEl = form.querySelector("[data-affiliate-product-search-results]");
+  if (resultsEl) resultsEl.innerHTML = "";
+  const searchInput = form.querySelector("#affiliateProductSearch");
+  if (searchInput) searchInput.value = "";
+
+  const errorEl = form.querySelector('[data-error-for="affiliateProductId"]');
+  if (errorEl) errorEl.textContent = "";
+}
+
+function toggleAffiliateProductCommissionTypeFields(form) {
+  const type = form.querySelector("#affiliateProductCommissionType")?.value || "PERCENTAGE";
+  const percentField = form.querySelector("[data-affiliate-product-percent-field]");
+  const fixedField = form.querySelector("[data-affiliate-product-fixed-field]");
+  if (percentField) percentField.hidden = type === "FIXED_AMOUNT";
+  if (fixedField) fixedField.hidden = type === "PERCENTAGE";
+}
+
+function readAdminAffiliateProductFormValues(form) {
+  const commissionType = form.querySelector("#affiliateProductCommissionType")?.value || "PERCENTAGE";
+  const percentRaw = form.querySelector("#affiliateProductCommissionPercent")?.value;
+  const fixedRaw = form.querySelector("#affiliateProductFixedAmount")?.value;
+  const maxRaw = form.querySelector("#affiliateProductMaxCommission")?.value;
+  const startsAt = form.querySelector("#affiliateProductStartsAt")?.value || null;
+  const endsAt = form.querySelector("#affiliateProductEndsAt")?.value || null;
+  const isAffiliateAvailable = form.querySelector("#affiliateProductAvailable")?.checked ?? true;
+
+  return {
+    productId: form.querySelector("#affiliateProductId")?.value || null,
+    commissionType,
+    commissionPercent: commissionType === "PERCENTAGE" && percentRaw ? Number(percentRaw) : null,
+    fixedCommissionAmount: commissionType === "FIXED_AMOUNT" && fixedRaw ? Number(fixedRaw) : null,
+    maximumCommission: maxRaw ? Number(maxRaw) : null,
+    startsAt,
+    endsAt,
+    isAffiliateAvailable,
+  };
+}
+
+function validateAdminAffiliateProductForm(values, mode) {
+  if (mode === "create" && !values.productId) return "Please search for and select a product first.";
+  if (values.commissionType === "FIXED_AMOUNT" && (values.fixedCommissionAmount === null || values.fixedCommissionAmount < 0)) {
+    return "A fixed commission amount of 0 or more is required.";
+  }
+  if (values.commissionType === "PERCENTAGE" && values.commissionPercent !== null && (values.commissionPercent < 0 || values.commissionPercent > 100)) {
+    return "Commission % must be between 0 and 100.";
+  }
+  if (values.maximumCommission !== null && values.maximumCommission < 0) return "Maximum commission cannot be negative.";
+  if (values.startsAt && values.endsAt && values.startsAt > values.endsAt) return "The start date must be before the end date.";
+  return null;
+}
+
+async function handleAdminAffiliateProductFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-affiliate-product-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminAffiliateProductFormValues(form);
+  const validationError = validateAdminAffiliateProductForm(values, mode);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const { productId, ...payload } = values;
+      await createAdminAffiliateProductSetting(productId, payload);
+      setPendingAdminMessage("Product added to the Affiliate Programme.");
+    } else {
+      const id = form.dataset.affiliateProductId;
+      const { productId, ...payload } = values;
+      await updateAdminAffiliateProductSetting(id, payload);
+      setPendingAdminMessage("Affiliate product updated.");
+    }
+    navigateTo("/admin/referrals/affiliate-products");
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+function setupAdminAffiliateProductSettingForm() {
+  document.addEventListener("click", (event) => {
+    const searchButton = event.target.closest('[data-action="search-affiliate-product-candidates"]');
+    if (searchButton) {
+      handleAffiliateProductCandidateSearch(searchButton);
+      return;
+    }
+    const selectButton = event.target.closest('[data-action="select-affiliate-product-candidate"]');
+    if (selectButton) {
+      handleAffiliateProductCandidateSelect(selectButton);
+    }
+  });
+
+  document.addEventListener("change", (event) => {
+    const select = event.target.closest("#affiliateProductCommissionType");
+    if (!select) return;
+    const form = select.closest("[data-admin-affiliate-product-form]");
+    if (form) toggleAffiliateProductCommissionTypeFields(form);
+  });
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-affiliate-product-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminAffiliateProductFormSubmit(form);
+  });
+}
+
+function setupAdminAffiliateProductSettingActions() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="remove-affiliate-product"]');
+    if (!button) return;
+    handleRemoveAffiliateProduct(button);
+  });
+}
+
+async function handleRemoveAffiliateProduct(button) {
+  const productName = button.dataset.productName || "this product";
+  const confirmed = window.confirm(`Remove "${productName}" from the Affiliate Programme?\nThis does not affect any historical commission already earned on it.`);
+  if (!confirmed) return;
+
+  const id = button.dataset.affiliateProductId;
+  const row = button.closest("[data-affiliate-product-row]");
+  const banner = document.querySelector("[data-admin-affiliate-product-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await deleteAdminAffiliateProductSetting(id);
+    setPendingAdminMessage("Product removed from the Affiliate Programme.");
     rerenderCurrentRoute();
   } catch (error) {
     rowButtons.forEach((btn) => (btn.disabled = false));

@@ -108,6 +108,41 @@ test("uploadOrReplaceDocument: a first-time upload creates a new current documen
   configured.restore();
 });
 
+// Milestone 178, brief section 12: the only document a new affiliate
+// application requires. Unlike IDENTITY/PROOF_OF_RESIDENCE, it has no
+// sub-type selector field — the slot itself is the document type.
+test("uploadOrReplaceDocument: BANKING_CONFIRMATION_LETTER runs classification with no identityDocumentType/proofOfResidenceType, and its own event summary wording", async () => {
+  const configured = stub(affiliateDocumentStorage, "isAffiliateDocumentStorageConfigured", () => true);
+  const applicationFind = stub(prisma.affiliateApplication, "findUnique", async () => APPLICATION_ROW);
+  const existingFind = stub(prisma.affiliateApplicationDocument, "findFirst", async () => null);
+  const upload = stub(affiliateDocumentStorage, "uploadAffiliateDocument", async () => ({ path: "affiliate-applications/app-1/random.pdf" }));
+  const docCreate = stub(prisma.affiliateApplicationDocument, "create", mock.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: "doc-3", ...data })));
+  const eventCreate = stub(prisma.affiliateApplicationEvent, "create", mock.fn(async () => ({ id: "event-3" })));
+
+  await uploadOrReplaceDocument({
+    applicationId: "app-1",
+    slot: "BANKING_CONFIRMATION_LETTER",
+    buffer: REAL_PDF_BYTES,
+    mimetype: "application/pdf",
+    size: REAL_PDF_BYTES.length,
+    originalName: "banking-letter.pdf",
+  });
+
+  const createData = docCreate.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(createData.slot, "BANKING_CONFIRMATION_LETTER");
+  assert.equal(createData.identityDocumentType, null);
+  assert.equal(createData.proofOfResidenceType, null);
+  assert.notEqual(createData.classification, undefined, "classification still runs — the slot alone resolves a document type key");
+  assert.match(eventCreate.fn.mock.calls[0]!.arguments[0].data.summary, /Banking confirmation letter uploaded/);
+
+  applicationFind.restore();
+  existingFind.restore();
+  upload.restore();
+  docCreate.restore();
+  eventCreate.restore();
+  configured.restore();
+});
+
 test("uploadOrReplaceDocument: replacing an existing document marks the old one isCurrent:false and removes its storage object only after the new row commits (brief section 40)", async () => {
   const configured = stub(affiliateDocumentStorage, "isAffiliateDocumentStorageConfigured", () => true);
   const applicationFind = stub(prisma.affiliateApplication, "findUnique", async () => APPLICATION_ROW);

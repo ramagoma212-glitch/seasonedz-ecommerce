@@ -108,17 +108,23 @@
       @id below) — no restructuring beyond that. `description` brought
       in line with the same target homepage description used in the
       <title>/meta description above, for consistency across every
-      surface describing the same page. Deliberately still no `sameAs`,
-      `email`, or `telephone` — none were present before this milestone,
-      and none are added now; see the milestone's own final report for
-      why (a genuine, owner-verified Google Business Profile URL exists
-      in src/data/businessInfo.js but is a Maps/Business listing, not a
-      social profile, and adding it here wasn't judged to be within this
-      section's "verified social profile" intent — left for the owner
-      to decide in a future milestone rather than added unilaterally).
-      Still zero AggregateRating/Review here or on WebSite — genuine
-      per-product reviews (see ProductReview) remain the only source of
-      any rating markup anywhere on this site.
+      surface describing the same page. At that time this deliberately
+      still had no `sameAs`, `email`, or `telephone` — a genuine, owner-
+      verified Google Business Profile URL existed in
+      src/data/businessInfo.js but was a Maps/Business listing, not a
+      social profile, and adding it wasn't judged to be within this
+      section's "verified social profile" intent; left for the owner to
+      decide in a future milestone rather than added unilaterally.
+
+      Milestone 178 add-on: the owner has now supplied and confirmed
+      Seasonedz Group's actual social profile URLs (src/data/
+      businessInfo.js), so `sameAs` is added here, listing only those
+      genuine profiles. WhatsApp is deliberately excluded — it is a
+      messaging contact channel, not a social profile, so listing it in
+      `sameAs` would be semantically incorrect. Still zero
+      AggregateRating/Review here or on WebSite — genuine per-product
+      reviews (see ProductReview) remain the only source of any rating
+      markup anywhere on this site.
     -->
     <script type="application/ld+json">
       {
@@ -128,7 +134,15 @@
         "name": "Seasonedz Group",
         "url": "https://www.seasonedzgroup.co.za/",
         "description": "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.",
-        "logo": "https://www.seasonedzgroup.co.za/icon-512.png"
+        "logo": "https://www.seasonedzgroup.co.za/icon-512.png",
+        "sameAs": [
+          "https://www.facebook.com/share/1Y8dbJ6YRE/?mibextid=wwXIfr",
+          "https://www.instagram.com/colourwithseasonedz?igsi=MWc0Yzd4em9lMTNlcw%3D%3D&utm_source=qr",
+          "https://www.tiktok.com/@colourwithseasonedz?_r=1&_t=ZS-99K87MH7yHl",
+          "https://x.com/seasonedzgroup?s=11",
+          "https://www.linkedin.com/company/seasonedz-group/",
+          "https://www.reddit.com/u/SeasonedzGroup/s/4YQwVhRT1H"
+        ]
       }
     </script>
 

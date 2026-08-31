@@ -30,6 +30,12 @@ function stripHtml(raw: string): string {
   return sanitizeHtml(raw, { allowedTags: [], allowedAttributes: {} }).trim();
 }
 
+function documentSlotLabel(slot: string): string {
+  if (slot === "IDENTITY") return "identity";
+  if (slot === "BANKING_CONFIRMATION_LETTER") return "banking confirmation letter";
+  return "proof of residence";
+}
+
 // ---------------------------------------------------------------------------
 // List — summary fields only (brief section 33). Never selects
 // idNumber/passportNumber at all, not even masked — masking is for the
@@ -216,7 +222,7 @@ export async function getSignedUrlForAdminDocument(applicationId: string, docume
   if (!document) throw new AdminAffiliateApplicationError("Document not found.", 404);
 
   await prisma.affiliateApplicationEvent.create({
-    data: { applicationId, eventType: "FIELDS_UPDATED", actorType: "ADMIN", actorAdminUserId: adminUserId, summary: `Admin viewed the ${document.slot === "IDENTITY" ? "identity" : "proof of residence"} document.` },
+    data: { applicationId, eventType: "FIELDS_UPDATED", actorType: "ADMIN", actorAdminUserId: adminUserId, summary: `Admin viewed the ${documentSlotLabel(document.slot)} document.` },
   });
 
   return affiliateDocumentStorage.createSignedAffiliateDocumentUrl(document.storagePath, SIGNED_URL_EXPIRY_SECONDS);
@@ -232,7 +238,11 @@ function assertUnderReview(status: AffiliateApplicationStatus, action: string): 
   }
 }
 
-const CORRECTION_AREAS = ["PERSONAL_DETAILS", "IDENTITY_DOCUMENT", "PROOF_OF_RESIDENCE", "OTHER"] as const;
+// IDENTITY_DOCUMENT/PROOF_OF_RESIDENCE stay valid (never removed) so an
+// admin can still request a correction against a historical
+// application's existing documents; BANKING_CONFIRMATION_LETTER is the
+// Milestone 178 area for the document new applications actually submit.
+const CORRECTION_AREAS = ["PERSONAL_DETAILS", "IDENTITY_DOCUMENT", "PROOF_OF_RESIDENCE", "BANKING_CONFIRMATION_LETTER", "OTHER"] as const;
 
 export async function requestCorrection(id: string, rawReason: unknown, rawArea: unknown, adminUserId: string) {
   const application = await requireApplication(id);
@@ -275,12 +285,35 @@ export async function requestCorrection(id: string, rawReason: unknown, rawArea:
   return updated;
 }
 
+// Milestone 178, brief section 29: a defensive guard at the point of
+// approval, distinct from (and in addition to) requireCurrentDocuments()
+// in affiliateApplication.service.ts, which only runs at submission
+// time. Belt and braces — a document uploaded before submission could
+// in principle be superseded, or classified MISMATCH, without blocking
+// submission itself (submission only requires a document to exist in
+// the slot, not that it passed classification), so approval re-checks
+// the CURRENT banking confirmation letter is present and not a
+// confident MISMATCH before the applicant can become an active
+// affiliate.
+async function assertBankingConfirmationLetterReadyForApproval(applicationId: string): Promise<void> {
+  const letter = await prisma.affiliateApplicationDocument.findFirst({
+    where: { applicationId, slot: "BANKING_CONFIRMATION_LETTER", isCurrent: true },
+  });
+  if (!letter) {
+    throw new AdminAffiliateApplicationError("This application has no current Banking Confirmation Letter. It cannot be approved.", 409);
+  }
+  if (letter.classification === "MISMATCH") {
+    throw new AdminAffiliateApplicationError("The current Banking Confirmation Letter was classified as a mismatch and has not been replaced. It cannot be approved.", 409);
+  }
+}
+
 export async function approveApplication(id: string, adminUserId: string) {
   const application = await requireApplication(id);
   assertUnderReview(application.status, "approve");
   if (!application.affiliateId) {
     throw new AdminAffiliateApplicationError("This application has no linked affiliate record. It cannot be approved.", 409);
   }
+  await assertBankingConfirmationLetterReadyForApproval(id);
 
   // Reused, unchanged — this is the ONLY place Affiliate.status ever
   // transitions PENDING -> ACTIVE, exactly as before this milestone.

@@ -29,6 +29,25 @@ export const businessInfo = {
   whatsappUrl: "https://wa.me/27695269941",
   mailtoUrl: "mailto:seasonedzgroup@outlook.com",
   telUrl: "tel:+27695269941",
+  // Milestone 178: owner confirmed official Seasonedz Group social
+  // profile destinations. Every place on the site that links to these
+  // platforms reads from here, so there is exactly one place to update
+  // if a handle ever changes.
+  //
+  // Milestone 178 add-on: the owner supplied corrected Facebook/
+  // Instagram/TikTok destinations (their share-link/QR-tagged forms)
+  // plus three additional confirmed profiles (X, LinkedIn, Reddit),
+  // explicitly overriding the URLs first supplied earlier in this same
+  // milestone. Kept exactly as supplied, including each platform's own
+  // tracking query string, rather than stripped down to a bare profile
+  // URL, per the add-on's "do not shorten or modify unless technically
+  // necessary" instruction.
+  facebookUrl: "https://www.facebook.com/share/1Y8dbJ6YRE/?mibextid=wwXIfr",
+  instagramUrl: "https://www.instagram.com/colourwithseasonedz?igsi=MWc0Yzd4em9lMTNlcw%3D%3D&utm_source=qr",
+  tiktokUrl: "https://www.tiktok.com/@colourwithseasonedz?_r=1&_t=ZS-99K87MH7yHl",
+  xUrl: "https://x.com/seasonedzgroup?s=11",
+  linkedinUrl: "https://www.linkedin.com/company/seasonedz-group/",
+  redditUrl: "https://www.reddit.com/u/SeasonedzGroup/s/4YQwVhRT1H",
   // Version 7, Milestone 150: owner-verified Google links. No genuine
   // review text, rating or customer name has ever been supplied
   // alongside these — only real, working URLs — so the homepage's

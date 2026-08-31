@@ -46,6 +46,21 @@ Date of Issue: 01 Jan 2020  Date of Expiry: 01 Jan 2030
 P<RSASMITH<<JANE<<<<<<<<<<<<<<<<<<<<<<<<<<<
 `;
 
+// Milestone 178: deliberately no "statement"/"transaction"/"debit"/
+// "credit" wording — a confirmation letter is a short letter, not a
+// transaction record, which is exactly the distinction the new
+// BANKING_CONFIRMATION_LETTER category set is designed to notice.
+const SYNTHETIC_BANKING_CONFIRMATION_LETTER = `
+Standard Bank of South Africa Limited, Authorised Financial Services Provider.
+To Whom It May Concern
+This letter serves as confirmation of account details held with us.
+Account Holder: Jane Smith
+Account Number: 1234567890
+Account Type: Cheque Account
+Branch Name: Sunnyside Branch
+Branch Code: 051001
+`;
+
 const SYNTHETIC_INVOICE = `
 Tax Invoice #INV-2026-0042
 Bill To: Jane Smith
@@ -119,6 +134,51 @@ test("classifyDocumentType: no extractable text (e.g. a photo) is honestly MANUA
 test("classifyDocumentType: an unsupported/unreadable document (empty text) is MANUAL_REVIEW", () => {
   const result = classifyDocumentType("SA_ID", "   ");
   assert.equal(result.result, "MANUAL_REVIEW");
+});
+
+// Milestone 178, brief section 12/19: replaces IDENTITY/PROOF_OF_
+// RESIDENCE as the only document a new affiliate application requires.
+test("classifyDocumentType: a genuine-looking banking confirmation letter classifies as MATCH", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_BANKING_CONFIRMATION_LETTER);
+  assert.equal(result.result, "MATCH");
+});
+
+test("classifyDocumentType: an SA ID uploaded when Banking Confirmation Letter was selected is a MISMATCH", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_SA_ID_TEXT);
+  assert.equal(result.result, "MISMATCH");
+  assert.match(result.reason, /does not appear to be a banking confirmation letter/);
+});
+
+test("classifyDocumentType: a passport uploaded when Banking Confirmation Letter was selected is a MISMATCH", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_PASSPORT_TEXT);
+  assert.equal(result.result, "MISMATCH");
+});
+
+test("classifyDocumentType: a municipal letter uploaded when Banking Confirmation Letter was selected is a MISMATCH", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_MUNICIPAL_LETTER);
+  assert.equal(result.result, "MISMATCH");
+});
+
+test("classifyDocumentType: a full bank statement (with transaction history) uploaded when Banking Confirmation Letter was selected is a MISMATCH — a statement and a confirmation letter are different documents", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_BANK_STATEMENT);
+  assert.equal(result.result, "MISMATCH");
+});
+
+test("classifyDocumentType: a genuinely inconclusive document (invoice) is MANUAL_REVIEW, never a false MISMATCH, for Banking Confirmation Letter too", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_INVOICE);
+  assert.equal(result.result, "MANUAL_REVIEW");
+});
+
+test("classifyDocumentType: never claims official bank verification for a Banking Confirmation Letter's own reason text", () => {
+  const result = classifyDocumentType("BANKING_CONFIRMATION_LETTER", SYNTHETIC_BANKING_CONFIRMATION_LETTER);
+  assert.doesNotMatch(result.reason.toLowerCase(), /bank verified|officially verified|verified by the bank/);
+});
+
+test("matchExtractedData: a banking confirmation letter checks name only, never address or id number", () => {
+  const result = matchExtractedData({ fullName: "Jane Smith" }, SYNTHETIC_BANKING_CONFIRMATION_LETTER);
+  assert.equal(result.nameMatchResult, "MATCH");
+  assert.equal(result.addressMatchResult, null);
+  assert.equal(result.idNumberMatchResult, null);
 });
 
 test("matchExtractedData: identity document checks name + id number, never address", () => {

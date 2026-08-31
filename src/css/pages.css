@@ -975,6 +975,46 @@
   border-bottom: none;
 }
 
+/* Milestone 178, Part C: a small live-product thumbnail in the
+   Affiliate Products list and picker — never a stored/copied image,
+   just how the table renders whatever Product.images currently has. */
+.admin-table__thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-alt);
+  vertical-align: middle;
+}
+
+/* Milestone 178, Part C: the Affiliate Product picker's search
+   results — a plain list, matching this admin area's existing
+   "explicit search, no live autocomplete framework" style. */
+.admin-search-results {
+  list-style: none;
+  margin: var(--space-sm) 0 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.admin-search-results__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.admin-search-results__item:last-child {
+  border-bottom: none;
+}
+
 /* Version 7, Milestone 159: a gift message is free-typed customer
    text (up to 150 chars) — the table's own `white-space: nowrap`
    is overridden just for this so it wraps instead of forcing the

@@ -66,6 +66,21 @@ export function renderContact() {
               <p>South Africa</p>
             </div>
           </div>
+          <div class="contact-detail">
+            <span class="contact-detail__icon" aria-hidden="true">&#128247;</span>
+            <div>
+              <h3>Follow Us</h3>
+              <p>
+                <a href="${businessInfo.facebookUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Facebook (opens in a new tab)">Facebook</a>,
+                <a href="${businessInfo.instagramUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Instagram (opens in a new tab)">Instagram</a>,
+                <a href="${businessInfo.tiktokUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on TikTok (opens in a new tab)">TikTok</a>,
+                <a href="${businessInfo.xUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on X (opens in a new tab)">X</a>,
+                <a href="${businessInfo.linkedinUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on LinkedIn (opens in a new tab)">LinkedIn</a>
+                and
+                <a href="${businessInfo.redditUrl}" target="_blank" rel="noopener noreferrer" aria-label="Visit Seasonedz Group on Reddit (opens in a new tab)">Reddit</a>
+              </p>
+            </div>
+          </div>
         </div>
 
         ${renderEnquiryForm({ heading: "Send Us a Message", ctaText: "Send Message", idPrefix: "contact", type: "CONTACT" })}

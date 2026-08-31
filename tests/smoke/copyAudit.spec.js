@@ -144,6 +144,54 @@ test.describe("Copy audit: admin pages", () => {
     await assertNoDecorativeDashes(page, "admin referral affiliates list");
   });
 
+  // Milestone 178, Part C.
+  test("admin referral affiliate products list has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/referrals/affiliate-products*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({
+          items: [
+            {
+              id: "s1",
+              productId: "p1",
+              productName: "Test Colouring Book",
+              productSlug: "test-colouring-book",
+              productSku: "SG-0001",
+              productPrice: 100,
+              productStatus: "ACTIVE",
+              productImageUrl: null,
+              commissionType: "PERCENTAGE",
+              commissionPercent: null,
+              fixedCommissionAmount: null,
+              isAffiliateAvailable: true,
+              startsAt: null,
+              endsAt: null,
+              maximumCommission: null,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 20,
+          totalPages: 1,
+        }),
+      });
+    });
+
+    await page.goto("/admin/referrals/affiliate-products");
+    await assertNoDecorativeDashes(page, "admin referral affiliate products list");
+  });
+
+  test("admin Add Affiliate Product form has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.goto("/admin/referrals/affiliate-products/new");
+    await assertNoDecorativeDashes(page, "admin Add Affiliate Product form");
+  });
+
   test("admin products list has no em/en dash in its rendered body text", async ({ page }) => {
     await mockAdminAuth(page);
     await page.route("**/api/admin/products*", (route) => {

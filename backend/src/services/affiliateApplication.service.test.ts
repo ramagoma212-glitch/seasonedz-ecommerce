@@ -208,14 +208,42 @@ test("submitMyApplication: rejects when declarations are not both confirmed", as
   applicationFind.restore();
 });
 
-test("submitMyApplication: rejects when the identity document has not been uploaded", async () => {
+test("submitMyApplication: rejects when the Banking Confirmation Letter has not been uploaded (brief section 12: the only required document for a new application)", async () => {
   const applicationFind = stub(prisma.affiliateApplication, "findUnique", async () => COMPLETE_DRAFT);
   const docFind = stub(prisma.affiliateApplicationDocument, "findFirst", async () => null);
 
-  await assert.rejects(() => submitMyApplication("cust-1"), AffiliateApplicationError);
+  await assert.rejects(() => submitMyApplication("cust-1"), (error: unknown) => error instanceof AffiliateApplicationError && /Banking Confirmation Letter/.test(error.message));
 
   applicationFind.restore();
   docFind.restore();
+});
+
+test("submitMyApplication: requireCurrentDocuments queries only the BANKING_CONFIRMATION_LETTER slot — never IDENTITY/PROOF_OF_RESIDENCE (brief section 12: no longer required for a new/resubmitting application)", async () => {
+  const applicationFind = stub(prisma.affiliateApplication, "findUnique", async () => COMPLETE_DRAFT);
+  const docFind = stub(prisma.affiliateApplicationDocument, "findFirst", mock.fn(async () => ({ id: "doc-1" })));
+  const affiliateEmailFind = stub(prisma.affiliate, "findUnique", async () => null);
+  const customerFind = stub(prisma.customer, "findUnique", async () => ({ id: "cust-1" }));
+  const affiliateCreate = stub(prisma.affiliate, "create", async ({ data }: { data: Record<string, unknown> }) => ({ id: "new-affiliate-2", ...data, approvedAt: null, createdAt: new Date(), updatedAt: new Date() }));
+  const applicationUpdate = stub(prisma.affiliateApplication, "update", async ({ data }: { data: Record<string, unknown> }) => ({ ...COMPLETE_DRAFT, ...data, updatedAt: new Date() }));
+  const eventCreate = stub(prisma.affiliateApplicationEvent, "create", async () => ({ id: "event-6" }));
+  const documentsFindMany = stub(prisma.affiliateApplicationDocument, "findMany", async () => []);
+  const notifications = stubNotificationChain("jane@example.com", "new-affiliate-2");
+
+  await submitMyApplication("cust-1");
+
+  assert.equal(docFind.fn.mock.callCount(), 1, "exactly one document lookup, not the old two-slot Promise.all");
+  assert.equal(docFind.fn.mock.calls[0]!.arguments[0].where.slot, "BANKING_CONFIRMATION_LETTER");
+
+  applicationFind.restore();
+  docFind.restore();
+  affiliateEmailFind.restore();
+  customerFind.restore();
+  affiliateCreate.restore();
+  applicationUpdate.restore();
+  eventCreate.restore();
+  documentsFindMany.restore();
+  await flushAsync();
+  notifications.restore();
 });
 
 test("submitMyApplication: a genuinely complete application creates the Affiliate exactly once and moves to UNDER_REVIEW", async () => {

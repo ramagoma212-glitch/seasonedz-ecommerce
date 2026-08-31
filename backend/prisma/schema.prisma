@@ -238,6 +238,14 @@ model Product {
   // never deletes a knowledge entry.
   brandKnowledgeEntries BrandKnowledgeEntry[]
 
+  // Milestone 178, Part C: Seasonedz's OWN affiliate/referral programme
+  // commission configuration for this real product — completely
+  // separate from the dormant, external-merchant AffiliateProduct model
+  // above (see AffiliateProductSetting's own header comment). Optional
+  // and one-to-one: most products have no override at all.
+  affiliateProductSetting          AffiliateProductSetting?
+  orderAffiliateProductCommissions OrderAffiliateProductCommission[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -540,6 +548,10 @@ model Order {
   // this milestone ever creates one automatically yet — that's
   // Milestone 172B.4.
   affiliateCommission OrderAffiliateCommission?
+  // Milestone 178, Part C: the per-product commission breakdown behind
+  // affiliateCommission's own aggregate commissionAmount — see
+  // OrderAffiliateProductCommission's own header comment.
+  affiliateProductCommissions OrderAffiliateProductCommission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -608,6 +620,12 @@ model OrderItem {
   // exists here if a customer actually chose to write one; nothing
   // about placing/paying for an order creates a review automatically.
   reviewsForItem ProductReview[]
+
+  // Milestone 178, Part C: at most one immutable commission breakdown
+  // row per line — see OrderAffiliateProductCommission's own header
+  // comment. Only ever set when this line's product was affiliate-
+  // eligible AND the order itself was genuinely referred.
+  affiliateProductCommission OrderAffiliateProductCommission?
 
   createdAt DateTime @default(now())
 
@@ -1213,6 +1231,9 @@ model Affiliate {
   notes      String?
 
   commissions OrderAffiliateCommission[]
+  // Milestone 178, Part C: the per-product breakdown behind each
+  // commissions[] row's own aggregate amount.
+  productCommissions OrderAffiliateProductCommission[]
   // Version 7, Milestone 176: the richer application/verification
   // record behind this row, when one exists. Optional and one-directional
   // in practice — an Affiliate created the old simple way (before this
@@ -1357,6 +1378,126 @@ enum OrderAffiliateCommissionStatus {
   APPROVED
   PAID
   REVERSED
+}
+
+// ============================================================================
+// AFFILIATE PRODUCTS (Milestone 178, Part C) — per-product commission
+// configuration for Seasonedz's OWN affiliate/referral programme above.
+// ============================================================================
+//
+// CRITICAL: this is a completely different concept from the dormant
+// AffiliateProduct model near the top of this file (external merchant
+// recommendations, e.g. an Amazon link) — that model is never touched
+// or repurposed by this milestone. AffiliateProductSetting instead
+// attaches OPTIONAL commission configuration to a genuine Seasonedz
+// Product row: which of the site's own real products earn the
+// affiliate a commission, and at what rate/amount, when referred
+// through the programme above. There is no copy, sync job, or second
+// product catalogue here — every display field (name/price/image/SKU/
+// status) is always read live from Product itself; this table only
+// ever adds the commission policy on top.
+//
+// A row existing here (regardless of isAffiliateAvailable) means an
+// admin has explicitly added this product to the Affiliate Products
+// list — a product with no row at all is not affiliate-eligible. See
+// this milestone's own final report for the one-time transition that
+// seeded a row for every product that was implicitly eligible under
+// the pre-178 flat, whole-order commission model.
+model AffiliateProductSetting {
+  id        String  @id @default(cuid())
+  productId String  @unique
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  commissionType AffiliateProductCommissionType @default(PERCENTAGE)
+  // PERCENTAGE only. Null means "use the affiliate's own resolved rate"
+  // (their commissionRateOverride, or else AffiliateProgrammeSettings'
+  // current default) — the exact same null-means-current-default
+  // convention Affiliate.commissionRateOverride already uses, never a
+  // frozen copy of whatever the default happened to be when this row
+  // was created.
+  commissionPercent Decimal? @db.Decimal(5, 2)
+  // FIXED_AMOUNT only — a flat amount per unit, multiplied by the
+  // ordered quantity at commission-calculation time (see
+  // affiliateProductCommission.service.ts). Never a percentage.
+  fixedCommissionAmount Decimal? @db.Decimal(10, 2)
+
+  // Whether this product currently earns a commission at all — the
+  // admin's on/off switch, independent of the product's own Product.status
+  // (a product can be for sale but temporarily excluded from the
+  // affiliate programme, or vice versa in spirit, though an unpublished
+  // product can't actually be ordered either way).
+  isAffiliateAvailable Boolean @default(true)
+  // Optional promotional window — both null means "no date restriction".
+  // Evaluated against the order's own createdAt at commission-calculation
+  // time, never against "now" at a later read.
+  startsAt DateTime?
+  endsAt   DateTime?
+  // Optional per-order-line cap — applies to BOTH commission types
+  // identically (see affiliateProductCommission.service.ts).
+  maximumCommission Decimal? @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isAffiliateAvailable])
+}
+
+enum AffiliateProductCommissionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// One immutable row per affiliate-eligible OrderItem on a genuinely
+// referred order — the permanent, itemised breakdown behind that
+// order's own OrderAffiliateCommission.commissionAmount (which becomes
+// the SUM of these rows' calculatedCommission, computed once at order-
+// creation time in the same transaction, same as OrderAffiliateCommission
+// itself). Every figure here is a snapshot: commissionPercent/
+// fixedCommissionAmount/maximumCommission are copied from
+// AffiliateProductSetting at the moment of calculation, never re-read
+// live from it afterward — a later change to that product's settings
+// (or its Product.price) must never retroactively alter a historical
+// commission. OrderAffiliateCommission's own lifecycle (PENDING ->
+// APPROVED -> PAID/REVERSED) is untouched by this table — it stays the
+// one row admins actually approve/pay/reverse; these rows are read-only
+// itemised history underneath it.
+model OrderAffiliateProductCommission {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  orderItemId String    @unique
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+
+  affiliateId String
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+
+  // Nullable/SetNull, matching OrderItem.product's own "never break a
+  // historical order if the product is later removed" discipline —
+  // productName/sku for display always come from the linked OrderItem's
+  // own permanent snapshot, never from this relation.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  commissionType          AffiliateProductCommissionType
+  commissionPercent       Decimal? @db.Decimal(5, 2)
+  fixedCommissionAmount   Decimal? @db.Decimal(10, 2)
+  // This line's own qualifying subtotal (unitPrice * quantity, before
+  // the referral discount) — the PERCENTAGE-type basis; irrelevant to
+  // FIXED_AMOUNT but always populated for a complete audit trail.
+  eligibleProductSubtotal Decimal  @db.Decimal(10, 2)
+  quantity                Int
+  maximumCommission       Decimal? @db.Decimal(10, 2)
+  // The final, already-capped figure — this line's own contribution to
+  // OrderAffiliateCommission.commissionAmount.
+  calculatedCommission    Decimal  @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+  @@index([affiliateId])
+  @@index([productId])
 }
 
 // ============================================================================
@@ -1897,6 +2038,12 @@ model AffiliateApplicationDocument {
 enum AffiliateDocumentSlot {
   IDENTITY
   PROOF_OF_RESIDENCE
+  // Milestone 178: the only document required from a NEW affiliate
+  // application. IDENTITY/PROOF_OF_RESIDENCE stay defined (never
+  // dropped) so historical documents on existing applications keep
+  // resolving correctly — see the milestone's own additive-migration
+  // requirement.
+  BANKING_CONFIRMATION_LETTER
 }
 
 // Append-only audit trail (brief section 41) — never updated or deleted,

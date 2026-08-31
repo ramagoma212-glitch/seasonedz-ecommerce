@@ -139,6 +139,7 @@ test("approveApplication: only allowed while UNDER_REVIEW", async () => {
 
 test("approveApplication: reuses the existing approveAffiliate() to move the real Affiliate row PENDING -> ACTIVE", async () => {
   const findUnique = stub(prisma.affiliateApplication, "findUnique", async () => APPLICATION_ROW);
+  const documentFind = stub(prisma.affiliateApplicationDocument, "findFirst", async () => ({ id: "doc-1", classification: "MATCH" }));
   const affiliateFind = stub(prisma.affiliate, "findUnique", async () => ({ status: "PENDING" }));
   const affiliateUpdate = stub(prisma.affiliate, "update", mock.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: "affiliate-1", status: "ACTIVE", ...data, name: "Jane Smith", email: "jane@example.com", phone: null, referralCode: "jane-smith", commissionRateOverride: null, discountRateOverride: null, notes: null, customerId: "cust-1", createdAt: new Date(), updatedAt: new Date() })));
   const applicationUpdate = stub(prisma.affiliateApplication, "update", async ({ data }: { data: Record<string, unknown> }) => ({ ...APPLICATION_ROW, ...data }));
@@ -159,6 +160,7 @@ test("approveApplication: reuses the existing approveAffiliate() to move the rea
   assert.equal(affiliateUpdate.fn.mock.calls[0]!.arguments[0].data.status, "ACTIVE");
 
   findUnique.restore();
+  documentFind.restore();
   affiliateFind.restore();
   affiliateUpdate.restore();
   applicationUpdate.restore();
@@ -170,6 +172,45 @@ test("approveApplication: reuses the existing approveAffiliate() to move the rea
   notificationUpdateMany.restore();
   notificationFindUnique.restore();
   notificationUpdate.restore();
+});
+
+// Milestone 178, brief section 29: a defensive guard distinct from
+// requireCurrentDocuments() (which only runs at submission) — approval
+// itself re-checks the current Banking Confirmation Letter.
+test("approveApplication: rejected when the application has no current Banking Confirmation Letter", async () => {
+  const findUnique = stub(prisma.affiliateApplication, "findUnique", async () => APPLICATION_ROW);
+  const documentFind = stub(prisma.affiliateApplicationDocument, "findFirst", async () => null);
+  const affiliateUpdate = stub(prisma.affiliate, "update", mock.fn(async () => {
+    throw new Error("must never be called — the document guard should block first");
+  }));
+
+  await assert.rejects(
+    () => approveApplication("app-1", "admin-1"),
+    (error: unknown) => error instanceof AdminAffiliateApplicationError && error.statusCode === 409 && /Banking Confirmation Letter/.test(error.message)
+  );
+  assert.equal(affiliateUpdate.fn.mock.callCount(), 0);
+
+  findUnique.restore();
+  documentFind.restore();
+  affiliateUpdate.restore();
+});
+
+test("approveApplication: rejected when the current Banking Confirmation Letter was classified MISMATCH and never replaced", async () => {
+  const findUnique = stub(prisma.affiliateApplication, "findUnique", async () => APPLICATION_ROW);
+  const documentFind = stub(prisma.affiliateApplicationDocument, "findFirst", async () => ({ id: "doc-1", classification: "MISMATCH" }));
+  const affiliateUpdate = stub(prisma.affiliate, "update", mock.fn(async () => {
+    throw new Error("must never be called — the document guard should block first");
+  }));
+
+  await assert.rejects(
+    () => approveApplication("app-1", "admin-1"),
+    (error: unknown) => error instanceof AdminAffiliateApplicationError && error.statusCode === 409 && /mismatch/i.test(error.message)
+  );
+  assert.equal(affiliateUpdate.fn.mock.callCount(), 0);
+
+  findUnique.restore();
+  documentFind.restore();
+  affiliateUpdate.restore();
 });
 
 test("rejectApplication: reuses the existing rejectAffiliate() to move the real Affiliate row PENDING -> REJECTED", async () => {

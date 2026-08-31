@@ -102,6 +102,12 @@ function buildStoragePath(applicationId: string, ext: string): string {
 // filename verbatim (which could itself carry a person's name/id
 // number), matching adminDigitalAsset.service.ts's own
 // safeFileNameFragment() precedent.
+function documentSlotLabel(slot: AffiliateDocumentSlot): string {
+  if (slot === "IDENTITY") return "Identity document";
+  if (slot === "BANKING_CONFIRMATION_LETTER") return "Banking confirmation letter";
+  return "Proof of residence";
+}
+
 function safeDisplayFileName(originalName: string | undefined, ext: string): string {
   const base = (originalName || "document").replace(/\.[^/.]+$/, "");
   const slug = base
@@ -132,10 +138,18 @@ async function runClassification(input: RunClassificationInput) {
   const extractedText = await extractTextFromDocument(input.buffer, input.mimetype);
   const typeResult = classifyDocumentType(input.documentTypeKey, extractedText);
 
+  // Milestone 178: a banking confirmation letter shows the account
+  // holder's name, but not a residential address in the applicant's own
+  // format, nor (usually) a South African ID number — so only the name
+  // is checked for this slot, same discipline as the IDENTITY/PROOF_OF_
+  // RESIDENCE branches only ever checking the fields that document type
+  // actually carries.
   const matchInputs =
     input.slot === "IDENTITY"
       ? { fullName: input.applicantFullName, idOrPassportNumber: input.identityNumber ?? undefined }
-      : { fullName: input.applicantFullName, address: input.address ?? undefined };
+      : input.slot === "BANKING_CONFIRMATION_LETTER"
+        ? { fullName: input.applicantFullName }
+        : { fullName: input.applicantFullName, address: input.address ?? undefined };
   const dataMatch = matchExtractedData(matchInputs, extractedText);
 
   return { typeResult, dataMatch };
@@ -154,6 +168,11 @@ export interface UploadDocumentInput {
 
 function documentTypeKeyFor(slot: AffiliateDocumentSlot, identityDocumentType?: AffiliateIdentityDocumentType, proofOfResidenceType?: AffiliateProofOfResidenceType): AffiliateDocumentTypeKey | null {
   if (slot === "IDENTITY") return identityDocumentType ?? null;
+  // Milestone 178: unlike IDENTITY (SA_ID vs PASSPORT) or PROOF_OF_
+  // RESIDENCE (bank statement vs municipal letter vs other), a banking
+  // confirmation letter has no sub-type choice — the slot itself is the
+  // document type, so no extra selector field was added to the schema.
+  if (slot === "BANKING_CONFIRMATION_LETTER") return "BANKING_CONFIRMATION_LETTER";
   if (proofOfResidenceType === "BANK_STATEMENT") return "BANK_STATEMENT";
   if (proofOfResidenceType === "MUNICIPAL_ACCOUNT_OR_LETTER") return "MUNICIPAL_ACCOUNT_OR_LETTER";
   // "PROOF_OF_RESIDENCE" (the flexible "Other Accepted" category) has no
@@ -227,7 +246,7 @@ export async function uploadOrReplaceDocument(input: UploadDocumentInput) {
         applicationId: input.applicationId,
         eventType: existing ? "DOCUMENT_REPLACED" : "DOCUMENT_UPLOADED",
         actorType: "CUSTOMER",
-        summary: `${input.slot === "IDENTITY" ? "Identity document" : "Proof of residence"} ${existing ? "replaced" : "uploaded"}. Classification: ${classification?.typeResult.result ?? "manual review"}.`,
+        summary: `${documentSlotLabel(input.slot)} ${existing ? "replaced" : "uploaded"}. Classification: ${classification?.typeResult.result ?? "manual review"}.`,
       },
     });
 

@@ -17,6 +17,11 @@ const SUB_NAV_LINKS = [
   // payout views.
   { key: "commissions", href: "/admin/referrals/commissions", label: "Commissions" },
   { key: "payouts", href: "/admin/referrals/payouts", label: "Payouts" },
+  // Milestone 178, Part C: per-product commission configuration for
+  // this same internal programme — deliberately grouped here, not
+  // under /admin/affiliate (the separate, dormant external-merchant
+  // AffiliateProduct area).
+  { key: "affiliate-products", href: "/admin/referrals/affiliate-products", label: "Affiliate Products" },
   { key: "settings", href: "/admin/referrals/settings", label: "Settings" },
 ];
 

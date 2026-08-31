@@ -5,7 +5,7 @@ import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../config/prisma.js";
-import { getMyApplicationHandler, getMyDocumentSignedUrlHandler, updateMyApplicationHandler } from "./affiliateApplication.controller.js";
+import { getMyApplicationHandler, getMyDocumentSignedUrlHandler, updateMyApplicationHandler, uploadMyDocumentHandler } from "./affiliateApplication.controller.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...args: any[]) => any) {
@@ -89,4 +89,48 @@ test("getMyDocumentSignedUrlHandler: a document lookup is always scoped to the c
 
   applicationFind.restore();
   documentFind.restore();
+});
+
+// Milestone 178, brief section 12: the new required document slot.
+const FAKE_FILE = { buffer: Buffer.from("%PDF-1.4 synthetic"), mimetype: "application/pdf", size: 20, originalname: "letter.pdf" };
+
+test("uploadMyDocumentHandler: rejects an unrecognised slot with 400 before any database call", async () => {
+  const applicationFind = stub(prisma.affiliateApplication, "findUnique", mock.fn(async () => null));
+  const res = fakeRes();
+  const next = mock.fn() as unknown as NextFunction;
+
+  await uploadMyDocumentHandler(
+    { customerUser: { id: "cust-1" }, file: FAKE_FILE, body: { slot: "SOMETHING_ELSE" } } as unknown as Request,
+    res as Response,
+    next
+  );
+
+  assert.equal(res.statusCode, 400);
+  assert.equal(applicationFind.fn.mock.callCount(), 0, "an invalid slot must never reach the database");
+
+  applicationFind.restore();
+});
+
+test("uploadMyDocumentHandler: BANKING_CONFIRMATION_LETTER is accepted with no identityDocumentType/proofOfResidenceType required (it has no sub-type selector)", async () => {
+  const applicationFind = stub(prisma.affiliateApplication, "findUnique", mock.fn(async () => ({ id: "app-1", status: "DRAFT" })));
+  const res = fakeRes();
+  const next = mock.fn() as unknown as NextFunction;
+
+  await uploadMyDocumentHandler(
+    { customerUser: { id: "cust-1" }, file: FAKE_FILE, body: { slot: "BANKING_CONFIRMATION_LETTER" } } as unknown as Request,
+    res as Response,
+    next
+  );
+
+  // Storage is unconfigured in this test environment, so the request
+  // cannot succeed end-to-end here (that full flow is covered in
+  // affiliateDocument.service.test.ts) — what this test pins down is
+  // that slot validation itself passed and requireMyApplicationId's own
+  // lookup was reached, proving BANKING_CONFIRMATION_LETTER is not
+  // rejected as an "unrecognised slot" the way it would have been
+  // before this milestone.
+  assert.equal(applicationFind.fn.mock.callCount(), 1);
+  assert.notEqual(res.statusCode, 400);
+
+  applicationFind.restore();
 });
