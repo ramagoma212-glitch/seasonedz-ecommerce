@@ -93,6 +93,11 @@ import { renderBlog } from "../pages/blog.js";
 import { renderBlogPost } from "../pages/blogPost.js";
 import { renderNotFound } from "../pages/notFound.js";
 import { renderAdminLogin } from "../pages/adminLogin.js";
+import { renderAdminForgotPassword } from "../pages/adminForgotPasswordPage.js";
+import { renderAdminResetPassword } from "../pages/adminResetPasswordPage.js";
+import { renderAdminActivateAccount } from "../pages/adminActivateAccount.js";
+import { renderAdminUsers } from "../pages/adminUsers.js";
+import { renderAdminUserInviteForm } from "../pages/adminUserInviteForm.js";
 import { renderAdminHome } from "../pages/adminHome.js";
 import { renderAdminOrders } from "../pages/adminOrders.js";
 import { renderAdminOrderDetail } from "../pages/adminOrderDetail.js";
@@ -333,6 +338,14 @@ const routeDefs = [
   // actual security boundary though; requireAdminAuth (server-side
   // session check) remains that.
   { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login", noindex: true },
+  // Milestone 179, Part D/B: admin forgotten/reset password and
+  // invitation activation — deliberately separate from the customer
+  // equivalents (/account/forgot-password, /account/reset-password),
+  // never reachable through them. reset-password/activate read their
+  // token from the query string, same convention as the customer pages.
+  { pattern: "/admin/forgot-password", render: renderAdminForgotPassword, title: "Admin Forgot Password", noindex: true },
+  { pattern: "/admin/reset-password", render: renderAdminResetPassword, title: "Admin Reset Password", noindex: true },
+  { pattern: "/admin/activate", render: renderAdminActivateAccount, title: "Activate Admin Account", noindex: true },
   { pattern: "/admin", render: renderAdminHome, title: "Admin", noindex: true },
   { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order", noindex: true },
   { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders", noindex: true },
@@ -398,6 +411,12 @@ const routeDefs = [
   { pattern: "/admin/content-studio/audiences", render: renderAdminAudiences, title: "Audiences", noindex: true },
   { pattern: "/admin/content-studio/context-preview", render: renderAdminContentContextPreview, title: "AI Context Preview", noindex: true },
   { pattern: "/admin/content-studio", render: renderAdminBrandKnowledge, title: "Content Studio", noindex: true },
+  // Milestone 179, Part G: admin-user management — ADMIN-only,
+  // backend-enforced (see adminUsers.routes.ts). "/invite" before the
+  // bare list, same ordering discipline as every other admin
+  // list/:id-wildcard pair in this file.
+  { pattern: "/admin/users/invite", render: renderAdminUserInviteForm, title: "Invite Admin User", noindex: true },
+  { pattern: "/admin/users", render: renderAdminUsers, title: "Admin Users", noindex: true },
 ];
 
 // Reads "/product/abc?ref=home" style URLs straight from the address

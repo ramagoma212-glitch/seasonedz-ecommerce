@@ -38,9 +38,17 @@
 // See backend/EMAIL_SETUP.md and VERSION_7_NOTIFICATION_AUDIT_174A.md.
 
 import { env } from "../../config/env.js";
-import { renderPasswordResetEmail } from "./emailTemplates.js";
+import { renderAdminInvitationEmail, renderAdminOtpEmail, renderAdminPasswordResetEmail, renderPasswordResetEmail } from "./emailTemplates.js";
 import { sendViaBrevo, BrevoSendError } from "./providers/brevo.provider.js";
-import type { EmailRecipientRole, EmailTemplateName, PasswordResetEmailData, RenderedEmail } from "./email.types.js";
+import type {
+  AdminInvitationEmailData,
+  AdminOtpEmailData,
+  AdminPasswordResetEmailData,
+  EmailRecipientRole,
+  EmailTemplateName,
+  PasswordResetEmailData,
+  RenderedEmail,
+} from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
 // domain's first label, e.g. "jane.doe@example.com" -> "j***@e***.com"
@@ -168,5 +176,91 @@ export async function sendPasswordResetEmail(data: PasswordResetEmailData): Prom
   }
 
   console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "password-reset".`);
+  return false;
+}
+
+// Milestone 179: same direct, swallow-on-failure path as
+// sendPasswordResetEmail() above, for the exact same reason — the code
+// is a one-time secret that must never be persisted or logged, so it
+// cannot go through notificationEngine.service.ts's stored-content
+// model. Called from adminAuth.controller.ts immediately after
+// adminOtp.service.ts issues a challenge; a Brevo failure here must
+// never block the login response (the admin can always request a
+// resend once cooldown allows).
+export async function sendAdminOtpEmail(data: AdminOtpEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
+
+  const rendered = renderAdminOtpEmail(data);
+
+  if (env.emailProvider === "console") {
+    logConsoleEmail("admin-otp", "admin", data.adminEmail, "admin-otp", rendered);
+    return true;
+  }
+
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.adminEmail, name: data.adminName }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="admin-otp" role="admin" to="${maskEmail(data.adminEmail)}" ref="admin-otp": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
+
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "admin-otp".`);
+  return false;
+}
+
+// Milestone 179: same direct path — the activation link carries a raw,
+// one-time token that must never be persisted or logged.
+export async function sendAdminInvitationEmail(data: AdminInvitationEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
+
+  const rendered = renderAdminInvitationEmail(data);
+
+  if (env.emailProvider === "console") {
+    logConsoleEmail("admin-invitation", "admin", data.inviteeEmail, "admin-invitation", rendered);
+    return true;
+  }
+
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.inviteeEmail, name: data.inviteeName }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="admin-invitation" role="admin" to="${maskEmail(data.inviteeEmail)}" ref="admin-invitation": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
+
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "admin-invitation".`);
+  return false;
+}
+
+// Milestone 179: same direct path — mirrors sendPasswordResetEmail()
+// exactly, kept as its own function so the admin reset flow never
+// shares a code path with the customer one (brief section 20: "never
+// send an admin through the customer login system").
+export async function sendAdminPasswordResetEmail(data: AdminPasswordResetEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
+
+  const rendered = renderAdminPasswordResetEmail(data);
+
+  if (env.emailProvider === "console") {
+    logConsoleEmail("admin-password-reset", "admin", data.adminEmail, "admin-password-reset", rendered);
+    return true;
+  }
+
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.adminEmail, name: data.adminName }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="admin-password-reset" role="admin" to="${maskEmail(data.adminEmail)}" ref="admin-password-reset": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
+
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "admin-password-reset".`);
   return false;
 }

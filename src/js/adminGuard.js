@@ -11,6 +11,16 @@ export function isUnauthenticated(error) {
   return error instanceof ApiError && error.status === 401;
 }
 
+// Milestone 179, Part G: the admin-users management area is ADMIN-only
+// end to end (backend-enforced — see requireAdminRole in
+// adminUsers.routes.ts). A signed-in STAFF member reaching this link is
+// authenticated but not authorised, so this is distinct from
+// isUnauthenticated() above: never redirect to login (they already have
+// a valid session), just explain access is restricted.
+export function isForbidden(error) {
+  return error instanceof ApiError && error.status === 403;
+}
+
 export function isBackendUnavailable(error) {
   return error instanceof ApiUnavailableError;
 }
@@ -23,6 +33,15 @@ export function renderAdminRedirecting() {
   return `
     <section class="stub-page container">
       <p class="stub-page__text">Sign in required. Redirecting...</p>
+    </section>
+  `;
+}
+
+export function renderAdminForbidden() {
+  return `
+    <section class="stub-page container">
+      <h1 class="stub-page__title">Admin</h1>
+      <div class="form-banner form-banner--error">You do not have permission to view this page.</div>
     </section>
   `;
 }

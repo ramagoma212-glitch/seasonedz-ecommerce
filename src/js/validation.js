@@ -178,3 +178,29 @@ export function validateResetPasswordForm(data) {
 
   return { isValid: Object.keys(errors).length === 0, errors };
 }
+
+// Milestone 179: admin password reset/invitation-activation use a
+// stricter 12 character minimum than the customer flow above — matches
+// the backend's own ADMIN_MIN_PASSWORD_LENGTH
+// (adminAuth.service.ts). The reset/invitation token itself is still
+// the real security boundary; this is just the same client-side head
+// start, at the admin-specific length.
+const ADMIN_MIN_PASSWORD_LENGTH = 12;
+
+export function validateAdminSetPasswordForm(data) {
+  const errors = {};
+
+  if (!isRequired(data.password)) {
+    errors.password = "Password is required.";
+  } else if (data.password.length < ADMIN_MIN_PASSWORD_LENGTH) {
+    errors.password = `Password must be at least ${ADMIN_MIN_PASSWORD_LENGTH} characters.`;
+  }
+
+  if (!isRequired(data.confirmPassword)) {
+    errors.confirmPassword = "Please confirm your password.";
+  } else if (data.password !== data.confirmPassword) {
+    errors.confirmPassword = "Passwords do not match.";
+  }
+
+  return { isValid: Object.keys(errors).length === 0, errors };
+}

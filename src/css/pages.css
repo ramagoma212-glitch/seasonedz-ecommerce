@@ -863,6 +863,15 @@
   gap: var(--space-md);
 }
 
+/* Milestone 179: groups Sign Out with the new Log Out All Sessions
+   button — .admin-nav itself already handles positioning this group at
+   the far end via its own justify-content: space-between. */
+.admin-nav__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
 .admin-nav__link {
   font-weight: 600;
   color: var(--color-text-muted);
@@ -1058,6 +1067,18 @@
   display: flex;
   gap: var(--space-xs);
   flex-wrap: wrap;
+}
+
+/* Milestone 179: the OTP step's Resend/Use-a-different-account row on
+   the admin login page — same flex/gap shape as .admin-table__actions
+   above, kept separate since it's centered under a form rather than
+   left-aligned in a table cell. */
+.admin-otp-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
 }
 
 /* Version 7, Milestone 172B: small muted secondary line inside a table

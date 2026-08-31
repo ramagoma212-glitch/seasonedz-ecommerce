@@ -23,6 +23,7 @@ import referralsRoutes from "./referrals.routes.js";
 import courierWebhookRoutes from "./courierWebhook.routes.js";
 import checkoutIntentRoutes from "./checkoutIntent.routes.js";
 import contentStudioRoutes from "./contentStudio.routes.js";
+import adminUsersRoutes from "./adminUsers.routes.js";
 
 const router = Router();
 
@@ -89,5 +90,10 @@ router.use("/checkout-intent", checkoutIntentRoutes);
 // additive; every route above it is completely unaffected. See
 // contentStudio.routes.ts's own header comment.
 router.use("/admin/content-studio", contentStudioRoutes);
+// Milestone 179, Part G: ADMIN-only admin-user management (invite,
+// role change, activate/deactivate) — requireAdminAuth AND
+// requireAdminRole(ADMIN) both applied at the router level, see
+// adminUsers.routes.ts's own header comment.
+router.use("/admin/users", adminUsersRoutes);
 
 export default router;

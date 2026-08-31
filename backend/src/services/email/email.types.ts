@@ -44,7 +44,15 @@ export type EmailTemplateName =
   | "abandoned-checkout-reminder"
   // Version 7, Milestone 176.
   | "affiliate-application-submitted"
-  | "affiliate-application-action-required";
+  | "affiliate-application-action-required"
+  // Milestone 179: admin auth. All three stay on email.service.ts's
+  // direct, swallow-on-failure path (never through
+  // notificationEngine.service.ts) — same reasoning as "password-reset"
+  // above: each one carries a one-time secret (an OTP code, an
+  // activation link, a reset link) that must never be persisted.
+  | "admin-otp"
+  | "admin-invitation"
+  | "admin-password-reset";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -224,4 +232,37 @@ export interface AffiliateApplicationActionRequiredEmailData {
   applicantFirstName: string;
   reason: string;
   applicationUrl: string;
+}
+
+// Milestone 179, brief section 18: the code itself, its expiry, and
+// what to do if this wasn't requested — deliberately never a password
+// or a session token (this interface has no field for either, so a
+// future caller can't accidentally add one without a visible diff).
+export interface AdminOtpEmailData {
+  adminName: string;
+  adminEmail: string;
+  code: string;
+  expiresInMinutes: number;
+}
+
+// Milestone 179, brief section 6: an activation link only — never a
+// generated password. inviterName is optional (a re-issued invitation
+// may not always have a clear "invited by" to show; adminInvitation.service.ts's
+// own reissueAdminInvitation() still records one, but this stays
+// optional here for template flexibility).
+export interface AdminInvitationEmailData {
+  inviteeName: string;
+  inviteeEmail: string;
+  activationUrl: string;
+  role: string;
+  inviterName?: string;
+}
+
+// Milestone 179, brief section 24: mirrors PasswordResetEmailData
+// exactly, deliberately its own type (not a reuse) so the admin and
+// customer reset flows can never accidentally share a template.
+export interface AdminPasswordResetEmailData {
+  adminName: string;
+  adminEmail: string;
+  resetUrl: string;
 }

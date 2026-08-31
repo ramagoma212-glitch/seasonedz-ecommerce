@@ -29,6 +29,7 @@ import {
   validateCustomerRegisterForm,
   validateForgotPasswordForm,
   validateResetPasswordForm,
+  validateAdminSetPasswordForm,
   isValidEmail,
 } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
@@ -37,7 +38,17 @@ import { clearReferralAttribution, markReferralAttributionPendingOrder } from ".
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
-import { adminLogin, adminLogout } from "./api/adminAuthApi.js";
+import {
+  adminLogin,
+  adminLogout,
+  adminVerifyOtp,
+  adminResendOtp,
+  adminLogoutAllSessions,
+  adminForgotPassword,
+  adminResetPassword,
+  activateAdminInvitation,
+} from "./api/adminAuthApi.js";
+import { inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive } from "./api/adminUsersApi.js";
 import {
   registerCustomer,
   loginCustomer,
@@ -168,6 +179,11 @@ function mountApp() {
   setupAffiliateApplicationForm();
   setupPasswordVisibilityToggles();
   setupAdminLoginForm();
+  setupAdminForgotPasswordForm();
+  setupAdminResetPasswordForm();
+  setupAdminActivateAccountForm();
+  setupAdminUserInviteForm();
+  setupAdminUserActions();
   setupAdminOrderStatusForm();
   setupAdminShippingForm();
   setupAdminCourierQuoteForm();
@@ -458,6 +474,8 @@ function setupProductActions() {
       handleRetryPayfast(actionEl);
     } else if (action === "admin-logout") {
       handleAdminLogout();
+    } else if (action === "admin-logout-all") {
+      handleAdminLogoutAllSessions();
     } else if (action === "toggle-mobile-filters") {
       handleToggleMobileFilters(actionEl);
     } else if (action === "toggle-faq") {
@@ -1327,18 +1345,42 @@ async function handleNewsletterSubmit(form) {
   }
 }
 
-// Admin login form (Version 7, Milestone 58 — foundation only). Same
-// delegated-submit shape as the other forms here. On success, the
-// backend has already set the session cookie (credentials: "include",
-// see js/api/adminAuthApi.js) by the time this resolves, so a plain
-// hash navigation to /admin is enough — no token to store here.
+// Admin login form (Version 7, Milestone 58 — foundation only).
+//
+// Milestone 179: now a two-step flow — email/password, then an email
+// OTP code (see adminLogin.js's own header comment for why both steps
+// live in this one page's markup). adminLogin() only ever returns a
+// challengeToken; the backend has NOT created a session yet at that
+// point (brief: "do NOT create the authenticated admin session before
+// OTP succeeds"). Only adminVerifyOtp() succeeding actually sets the
+// session cookie — that's the only point this navigates to /admin.
 function setupAdminLoginForm() {
   document.addEventListener("submit", (event) => {
-    const form = event.target.closest("#admin-login-form");
-    if (!form) return;
+    const passwordForm = event.target.closest("#admin-login-form");
+    if (passwordForm) {
+      event.preventDefault();
+      handleAdminLoginSubmit(passwordForm);
+      return;
+    }
 
-    event.preventDefault();
-    handleAdminLoginSubmit(form);
+    const otpForm = event.target.closest("#admin-otp-form");
+    if (otpForm) {
+      event.preventDefault();
+      handleAdminOtpSubmit(otpForm);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const resendButton = event.target.closest('[data-action="admin-otp-resend"]');
+    if (resendButton) {
+      handleAdminOtpResend(resendButton);
+      return;
+    }
+
+    const backButton = event.target.closest('[data-action="admin-otp-back"]');
+    if (backButton) {
+      handleAdminOtpBack(backButton);
+    }
   });
 }
 
@@ -1364,8 +1406,8 @@ async function handleAdminLoginSubmit(form) {
   if (submitButton) submitButton.disabled = true;
 
   try {
-    await adminLogin(email, password);
-    navigateTo("/admin");
+    const response = await adminLogin(email, password);
+    showAdminOtpStep(form, response.data.challengeToken, response.data.maskedEmail);
   } catch (error) {
     // Deliberately the same generic message regardless of the real
     // cause (wrong email, wrong password, rate limited) — never hints
@@ -1385,6 +1427,172 @@ async function handleAdminLoginSubmit(form) {
   }
 }
 
+// `.checkout-form` sets `display: flex` (see css/pages.css), which
+// beats the browser's default `[hidden] { display: none }` at equal
+// specificity — form.hidden alone would leave a form visually in
+// place, same note as handleCustomerForgotPasswordSubmit elsewhere in
+// this file. Every hide/show of admin-login-form/admin-otp-form below
+// sets the inline style alongside .hidden for exactly this reason.
+function showAdminOtpStep(passwordForm, challengeToken, maskedEmail) {
+  const otpForm = document.getElementById("admin-otp-form");
+  if (!otpForm) return;
+
+  passwordForm.hidden = true;
+  passwordForm.style.display = "none";
+
+  otpForm.dataset.challengeToken = challengeToken;
+  otpForm.hidden = false;
+  otpForm.style.display = "";
+
+  const description = otpForm.querySelector("[data-admin-otp-description]");
+  if (description) description.textContent = `Enter the 6-digit code sent to ${maskedEmail}.`;
+
+  const codeInput = otpForm.querySelector("#adminOtpCode");
+  if (codeInput) {
+    codeInput.value = "";
+    codeInput.focus();
+  }
+
+  const resendButton = otpForm.querySelector('[data-action="admin-otp-resend"]');
+  if (resendButton) startAdminOtpResendCooldown(resendButton);
+}
+
+async function handleAdminOtpSubmit(form) {
+  const code = form.querySelector("#adminOtpCode")?.value.trim() || "";
+  const challengeToken = form.dataset.challengeToken || "";
+  const banner = form.querySelector("[data-admin-otp-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  if (!/^\d{6}$/.test(code)) {
+    if (banner) {
+      banner.textContent = "Enter the 6-digit code from your email.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await adminVerifyOtp(challengeToken, code);
+    navigateTo("/admin");
+  } catch (error) {
+    // Unlike the password step above, the OTP step's own errors
+    // (wrong code, too many attempts, expired) never leak whether an
+    // email exists — that risk is already behind the password step
+    // that got the visitor here — so the backend's specific message is
+    // shown directly rather than flattened to one generic string.
+    const message =
+      error instanceof ApiUnavailableError
+        ? "We could not connect to the admin system right now. Please try again shortly."
+        : error instanceof ApiError
+          ? error.message
+          : "Something went wrong. Please try again.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Cosmetic only — the server is the real enforcement of the 60 second
+// cooldown (adminOtp.service.ts's secondsUntilOtpResendAllowed); this
+// just keeps the button disabled for the same duration so a visitor
+// isn't tempted to click it before the server would accept it anyway.
+function startAdminOtpResendCooldown(button) {
+  const cooldownSeconds = 60;
+  const originalLabel = "Resend Code";
+  let remaining = cooldownSeconds;
+
+  button.disabled = true;
+  button.textContent = `Resend Code (${remaining}s)`;
+
+  const interval = setInterval(() => {
+    remaining -= 1;
+    if (remaining <= 0) {
+      clearInterval(interval);
+      button.textContent = originalLabel;
+      button.disabled = false;
+      return;
+    }
+    button.textContent = `Resend Code (${remaining}s)`;
+  }, 1000);
+}
+
+async function handleAdminOtpResend(button) {
+  const form = button.closest("#admin-otp-form");
+  if (!form) return;
+
+  const challengeToken = form.dataset.challengeToken || "";
+  const banner = form.querySelector("[data-admin-otp-banner]");
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  button.disabled = true;
+
+  try {
+    const response = await adminResendOtp(challengeToken);
+    form.dataset.challengeToken = response.data.challengeToken;
+
+    const description = form.querySelector("[data-admin-otp-description]");
+    if (description) description.textContent = `Enter the 6-digit code sent to ${response.data.maskedEmail}.`;
+
+    startAdminOtpResendCooldown(button);
+  } catch (error) {
+    // A 429 (still within the server's own cooldown) leaves the button
+    // disabled — clicking again immediately would just fail the same
+    // way. Any other error re-enables it so a genuine retry is possible.
+    const isRateLimited = error instanceof ApiError && error.status === 429;
+    if (!isRateLimited) button.disabled = false;
+
+    const message =
+      error instanceof ApiUnavailableError
+        ? "We could not connect to the admin system right now. Please try again shortly."
+        : error instanceof ApiError
+          ? error.message
+          : "Something went wrong. Please try again.";
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  }
+}
+
+function handleAdminOtpBack(button) {
+  const otpForm = button.closest("#admin-otp-form");
+  const passwordForm = document.getElementById("admin-login-form");
+  if (!otpForm || !passwordForm) return;
+
+  otpForm.hidden = true;
+  otpForm.style.display = "none";
+  otpForm.dataset.challengeToken = "";
+
+  const codeInput = otpForm.querySelector("#adminOtpCode");
+  if (codeInput) codeInput.value = "";
+  const otpBanner = otpForm.querySelector("[data-admin-otp-banner]");
+  if (otpBanner) {
+    otpBanner.hidden = true;
+    otpBanner.textContent = "";
+  }
+
+  passwordForm.hidden = false;
+  passwordForm.style.display = "";
+
+  const passwordInput = passwordForm.querySelector("#adminPassword");
+  if (passwordInput) passwordInput.value = "";
+}
+
 // Admin sign out (Version 7, Milestone 58). Clears the session
 // server-side and locally, then returns to the login page regardless
 // of whether the API call succeeded — there is nothing useful to show
@@ -1397,6 +1605,298 @@ async function handleAdminLogout() {
     // Ignored deliberately — see comment above.
   }
   navigateTo("/admin/login");
+}
+
+// Milestone 179, brief section 32: "Log Out All Sessions" self-service
+// action — sensitive (signs this admin out of every device, not just
+// this browser), so it asks for confirmation first, same discipline as
+// every other sensitive admin action in this codebase (window.confirm).
+async function handleAdminLogoutAllSessions() {
+  const confirmed = window.confirm("Sign out of all sessions?\nThis signs you out on every device, not just this one.");
+  if (!confirmed) return;
+
+  try {
+    await adminLogoutAllSessions();
+  } catch {
+    // Ignored deliberately — same reasoning as handleAdminLogout above.
+  }
+  navigateTo("/admin/login");
+}
+
+// Milestone 179: shared form-error/banner helpers scoped to admin
+// forms only — deliberately NOT a shared function with
+// clearAccountFormErrors/showAccountFormErrors/showAccountFormBanner
+// below (those hardcode a selector list of customer-only banner
+// attribute names), so admin forms can never accidentally depend on or
+// be affected by a change made for customer forms, or vice versa.
+function clearAdminFormErrors(form) {
+  form.querySelectorAll(".form-field__error").forEach((el) => (el.textContent = ""));
+  form.querySelectorAll(".has-error").forEach((el) => el.classList.remove("has-error"));
+  form.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+
+  const bannerEl = form.querySelector(
+    "[data-admin-forgot-password-banner], [data-admin-reset-password-banner], [data-admin-activate-account-banner], [data-admin-user-invite-banner]"
+  );
+  if (bannerEl) {
+    bannerEl.textContent = "";
+    bannerEl.hidden = true;
+  }
+}
+
+function showAdminFormErrors(form, errors) {
+  Object.entries(errors).forEach(([field, message]) => {
+    const errorEl = form.querySelector(`[data-error-for="${field}"]`);
+    if (errorEl) errorEl.textContent = message;
+
+    const inputEl = form.querySelector(`[name="${field}"]`);
+    if (inputEl) {
+      inputEl.classList.add("has-error");
+      inputEl.setAttribute("aria-invalid", "true");
+    }
+  });
+}
+
+function showAdminFormBanner(form, message) {
+  const bannerEl = form.querySelector(
+    "[data-admin-forgot-password-banner], [data-admin-reset-password-banner], [data-admin-activate-account-banner], [data-admin-user-invite-banner]"
+  );
+  if (bannerEl) {
+    bannerEl.textContent = message;
+    bannerEl.hidden = false;
+  }
+}
+
+// Milestone 179, Part D: admin forgot password — /admin/forgot-password.
+// Same shape as handleCustomerForgotPasswordSubmit below, on the
+// separate admin-only endpoint (never the customer one).
+function setupAdminForgotPasswordForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#admin-forgot-password-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminForgotPasswordSubmit(form);
+  });
+}
+
+async function handleAdminForgotPasswordSubmit(form) {
+  clearAdminFormErrors(form);
+
+  const email = form.querySelector("#adminForgotPasswordEmail")?.value.trim() || "";
+  const { isValid, errors } = validateForgotPasswordForm({ email });
+  if (!isValid) {
+    showAdminFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await adminForgotPassword(email);
+    form.hidden = true;
+    form.style.display = "none";
+    const successEl = form.closest(".account-page")?.querySelector("[data-admin-forgot-password-success]");
+    if (successEl) successEl.hidden = false;
+  } catch (error) {
+    showAdminFormBanner(form, unavailableOrGenericMessage(error, "We could not process your request right now. Please try again."));
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 179, Part D: admin reset password — /admin/reset-password.
+// The reset token never touches localStorage/sessionStorage — read
+// straight off the form's data-reset-token attribute, same discipline
+// as handleCustomerResetPasswordSubmit below.
+function setupAdminResetPasswordForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#admin-reset-password-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminResetPasswordSubmit(form);
+  });
+}
+
+async function handleAdminResetPasswordSubmit(form) {
+  clearAdminFormErrors(form);
+
+  const data = {
+    password: form.querySelector("#adminResetPasswordNew")?.value || "",
+    confirmPassword: form.querySelector("#adminResetPasswordConfirm")?.value || "",
+  };
+  const { isValid, errors } = validateAdminSetPasswordForm(data);
+  if (!isValid) {
+    showAdminFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const token = form.dataset.resetToken || "";
+    await adminResetPassword(token, data.password, data.confirmPassword);
+    form.hidden = true;
+    form.style.display = "none";
+    const successEl = form.closest(".account-page")?.querySelector("[data-admin-reset-password-success]");
+    if (successEl) successEl.hidden = false;
+  } catch (error) {
+    showAdminFormBanner(form, unavailableOrGenericMessage(error, "This reset link is invalid or has expired."));
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 179, Part B: admin invitation activation — /admin/activate.
+// The activation token never touches localStorage/sessionStorage,
+// same discipline as the reset-password token above.
+function setupAdminActivateAccountForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("#admin-activate-account-form");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminActivateAccountSubmit(form);
+  });
+}
+
+async function handleAdminActivateAccountSubmit(form) {
+  clearAdminFormErrors(form);
+
+  const data = {
+    password: form.querySelector("#adminActivatePassword")?.value || "",
+    confirmPassword: form.querySelector("#adminActivateConfirm")?.value || "",
+  };
+  const { isValid, errors } = validateAdminSetPasswordForm(data);
+  if (!isValid) {
+    showAdminFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const token = form.dataset.activationToken || "";
+    await activateAdminInvitation(token, data.password, data.confirmPassword);
+    form.hidden = true;
+    form.style.display = "none";
+    const successEl = form.closest(".account-page")?.querySelector("[data-admin-activate-account-success]");
+    if (successEl) successEl.hidden = false;
+  } catch (error) {
+    showAdminFormBanner(form, unavailableOrGenericMessage(error, "This invitation link is invalid or has expired."));
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 179, Part B/G: invite a new admin user — /admin/users/invite.
+// ADMIN-only server-side (requireAdminRole); a STAFF session reaching
+// this form gets the backend's own 403 message shown in the banner.
+function setupAdminUserInviteForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-user-invite-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminUserInviteSubmit(form);
+  });
+}
+
+async function handleAdminUserInviteSubmit(form) {
+  clearAdminFormErrors(form);
+
+  const name = form.querySelector("#adminInviteName")?.value.trim() || "";
+  const email = form.querySelector("#adminInviteEmail")?.value.trim() || "";
+  const role = form.querySelector("#adminInviteRole")?.value || "STAFF";
+
+  const errors = {};
+  if (!name) errors.name = "Full name is required.";
+  if (!email) {
+    errors.email = "Email is required.";
+  } else if (!isValidEmail(email)) {
+    errors.email = "Please enter a valid email address.";
+  }
+  if (Object.keys(errors).length > 0) {
+    showAdminFormErrors(form, errors);
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await inviteAdminUser(name, email, role);
+    setPendingAdminMessage(`Invitation sent to ${email}.`);
+    navigateTo("/admin/users");
+  } catch (error) {
+    showAdminFormBanner(form, unavailableOrGenericMessage(error, error instanceof ApiError ? error.message : "Something went wrong. Please try again."));
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 179, Part G: admin-users list actions (resend invitation,
+// activate/deactivate, change role) — same delegated-click,
+// disable-row-then-rerender shape as
+// setupAdminReferralAffiliateActions elsewhere in this file.
+// Deactivating and changing role are both treated as sensitive (brief
+// section 32/39: confirmation required) — resending an invitation or
+// reactivating an already-inactive account is not destructive enough
+// to need one.
+function setupAdminUserActions() {
+  document.addEventListener("click", (event) => {
+    const resendButton = event.target.closest('[data-action="resend-admin-invitation"]');
+    if (resendButton) {
+      handleAdminUserAction(resendButton, () => reissueAdminInvitation(resendButton.dataset.adminId), "Invitation resent.");
+      return;
+    }
+
+    const activateButton = event.target.closest('[data-action="activate-admin-user"]');
+    if (activateButton) {
+      handleAdminUserAction(activateButton, () => setAdminUserActive(activateButton.dataset.adminId, true), "Account activated.");
+      return;
+    }
+
+    const deactivateButton = event.target.closest('[data-action="deactivate-admin-user"]');
+    if (deactivateButton) {
+      const confirmed = window.confirm("Deactivate this admin account?\nThis immediately blocks their login and signs them out of every device.");
+      if (!confirmed) return;
+      handleAdminUserAction(deactivateButton, () => setAdminUserActive(deactivateButton.dataset.adminId, false), "Account deactivated.");
+      return;
+    }
+
+    const roleButton = event.target.closest('[data-action="change-admin-user-role"]');
+    if (roleButton) {
+      const newRole = roleButton.dataset.newRole;
+      const confirmed = window.confirm(`Change this account's role to ${newRole}?`);
+      if (!confirmed) return;
+      handleAdminUserAction(roleButton, () => changeAdminUserRole(roleButton.dataset.adminId, newRole), `Role changed to ${newRole}.`);
+    }
+  });
+}
+
+async function handleAdminUserAction(button, apiCall, successMessage) {
+  const row = button.closest("[data-admin-user-row]");
+  const banner = document.querySelector("[data-admin-users-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall();
+    setPendingAdminMessage(successMessage);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
 }
 
 // Customer account forms (Version 7, Milestone 128) — /account's

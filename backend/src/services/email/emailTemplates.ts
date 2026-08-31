@@ -14,7 +14,10 @@
 import type {
   AbandonedCheckoutEmailData,
   AdminDeliveryExceptionEmailData,
+  AdminInvitationEmailData,
   AdminNewReviewEmailData,
+  AdminOtpEmailData,
+  AdminPasswordResetEmailData,
   AffiliateApplicationActionRequiredEmailData,
   AffiliateApplicationSubmittedEmailData,
   AffiliateEmailData,
@@ -365,6 +368,69 @@ ${data.resetUrl}
 This link expires in 60 minutes. If you didn't request this, you can safely ignore this email. Your password won't be changed.
 
 ${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Milestone 179, brief section 18: subject explicitly names it as an
+// admin verification code, body explains it's for signing in to
+// Seasonedz Admin, states the code and expiry, and what to do if this
+// wasn't requested — never the password, never a session token.
+export function renderAdminOtpEmail(data: AdminOtpEmailData): RenderedEmail {
+  const subject = "Seasonedz Admin Verification Code";
+  const body = `Hi ${data.adminName},
+
+A sign-in to Seasonedz Admin was just requested for your account. Use the verification code below to complete sign-in:
+
+${data.code}
+
+This code expires in ${data.expiresInMinutes} minutes and can only be used once.
+
+If you did not attempt to sign in, you can ignore this email. Your account remains secure and no changes have been made.
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Milestone 179, brief section 6: an activation link only, 24 hour
+// expiry stated plainly — never a generated password.
+export function renderAdminInvitationEmail(data: AdminInvitationEmailData): RenderedEmail {
+  const subject = "You have been invited to Seasonedz Admin";
+  const inviterLine = data.inviterName ? `${data.inviterName} has invited you` : "You have been invited";
+  const body = `Hi ${data.inviteeName},
+
+${inviterLine} to join Seasonedz Admin as ${humanizeEnum(data.role)}.
+
+Set up your account and choose your own password using the link below:
+${data.activationUrl}
+
+This link expires in 24 hours and can only be used once. If you were not expecting this invitation, you can safely ignore this email.
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Milestone 179, brief section 24: mirrors renderPasswordResetEmail
+// above closely, deliberately kept as a separate function so the admin
+// and customer wording can diverge safely (e.g. the 30 minute expiry
+// here vs 60 minutes for customers).
+export function renderAdminPasswordResetEmail(data: AdminPasswordResetEmailData): RenderedEmail {
+  const subject = "Reset your Seasonedz Admin password";
+  const body = `Hi ${data.adminName},
+
+We received a request to reset the password for your Seasonedz Admin account.
+
+Reset your password using the link below:
+${data.resetUrl}
+
+This link expires in 30 minutes and can only be used once. If you didn't request this, you can safely ignore this email. Your password won't be changed, and you don't need to take any action.
 
 Warm regards,
 Seasonedz Group`;

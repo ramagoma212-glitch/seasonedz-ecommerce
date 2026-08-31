@@ -40,6 +40,14 @@ const NAV_LINKS = [
   // campaign/generation/scheduling/publishing feature exists behind
   // this link yet. See components/contentStudioSubNav.js.
   { key: "content-studio", href: "/admin/content-studio", label: "Content Studio" },
+  // Milestone 179, Part G: shown unconditionally, same as every other
+  // link here — this nav has no role-based filtering anywhere (no
+  // precedent exists in this codebase for it), and the area itself is
+  // fully backend-enforced ADMIN-only (requireAdminRole, see
+  // adminUsers.routes.ts). A signed-in STAFF member who clicks this
+  // gets a clear "you do not have permission" page, never a broken one
+  // — see adminGuard.js's renderAdminForbidden().
+  { key: "users", href: "/admin/users", label: "Admin Users" },
 ];
 
 export function renderAdminNav(activeKey) {
@@ -51,7 +59,10 @@ export function renderAdminNav(activeKey) {
             `<a href="${link.href}" class="admin-nav__link${link.key === activeKey ? " admin-nav__link--active" : ""}">${link.label}</a>`
         ).join("")}
       </div>
-      <button type="button" class="btn btn--secondary btn--sm" data-action="admin-logout">Sign Out</button>
+      <div class="admin-nav__actions">
+        <button type="button" class="btn btn--secondary btn--sm" data-action="admin-logout-all">Log Out All Sessions</button>
+        <button type="button" class="btn btn--secondary btn--sm" data-action="admin-logout">Sign Out</button>
+      </div>
     </nav>
   `;
 }

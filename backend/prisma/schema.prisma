@@ -889,15 +889,34 @@ model Enquiry {
 // with real values supplied as environment variables at invocation
 // time, never hardcoded and never run automatically.
 model AdminUser {
-  id           String    @id @default(cuid())
-  name         String
-  email        String    @unique
-  passwordHash String
+  id   String @id @default(cuid())
+  name String
+  email String @unique
+  // Milestone 179: nullable, same "account exists, no usable password
+  // yet" convention Customer.passwordHash already established in this
+  // schema — an invited STAFF account has a real row here (name/email/
+  // role already set by the inviting ADMIN) but no password at all
+  // until they open their activation link and set one themselves (see
+  // AdminInvitation below). Every existing AdminUser row already has a
+  // real hash, so relaxing this to nullable never loses or invalidates
+  // anything for them.
+  passwordHash String?
   role         UserRole  @default(STAFF)
   isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
 
   sessions                          AdminSession[]
+  // Milestone 179: admin authentication security — see each model's
+  // own header comment.
+  otpChallenges       AdminOtpChallenge[]
+  passwordResetTokens AdminPasswordResetToken[]
+  securityEvents      AdminSecurityEvent[]
+  // At most one invitation per account (the one that created it) —
+  // still an optional to-one, not an array, since a row here either
+  // was invited (exactly one AdminInvitation) or was created directly
+  // (the bootstrap script / pre-179 accounts, none).
+  invitation      AdminInvitation?  @relation("AdminInvitationAccount")
+  invitationsSent AdminInvitation[] @relation("AdminInvitationInvitedBy")
   // Version 7, Milestone 62: SetNull (not Cascade) — deleting an admin
   // user must never delete the audit history of what they did. See
   // OrderStatusHistory below and
@@ -945,6 +964,121 @@ model AdminSession {
 
   @@index([adminUserId])
   @@index([expiresAt])
+}
+
+// ============================================================================
+// ADMIN AUTHENTICATION SECURITY (Milestone 179)
+// ============================================================================
+
+// One admin invitation — the secure activation flow that replaces
+// ever emailing a permanent password. An ADMIN creates the AdminUser
+// row (name/email/role set, passwordHash left null, isActive false)
+// and this row alongside it in the same transaction; the invitee's
+// activation link carries only the raw token (never persisted — see
+// AdminSession's own tokenHash comment for the identical "hash a
+// high-entropy secret, never store it raw" discipline applied here).
+// Single use: usedAt is set the moment the account is successfully
+// activated, and the service layer must never accept an already-used
+// or expired token again. A superseding re-invite (owner sends a new
+// link) simply creates a new row — the old one keeps failing its own
+// expiresAt/usedAt check, so there's nothing else to invalidate.
+model AdminInvitation {
+  id          String    @id @default(cuid())
+  adminUserId String    @unique
+  adminUser   AdminUser @relation("AdminInvitationAccount", fields: [adminUserId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+
+  // SetNull, not Cascade — deleting the inviting ADMIN's own account
+  // later must never delete the record of who they invited.
+  invitedByAdminUserId String?
+  invitedByAdminUser   AdminUser? @relation("AdminInvitationInvitedBy", fields: [invitedByAdminUserId], references: [id], onDelete: SetNull)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+// One login's pending email-OTP challenge (brief Part C). Created only
+// after email+password already succeeded — the row existing at all is
+// never itself proof of anything; codeHash must still match and
+// usedAt/expiresAt/attemptCount must still be clean. challengeTokenHash
+// is a SEPARATE high-entropy secret from the 6-digit code: the code
+// alone (mailed to the admin, human-enterable) is guessable in at most
+// 5 tries, so the frontend must ALSO hold the opaque challenge
+// reference this row's own creation returned before a verify attempt
+// can even look this row up — the same "two independent secrets"
+// shape a bearer session token plus a password already has. Never
+// stores the raw code or the raw challenge reference, only their
+// hashes, same discipline as every other token in this file.
+model AdminOtpChallenge {
+  id                 String    @id @default(cuid())
+  adminUserId        String
+  adminUser          AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  challengeTokenHash String    @unique
+  codeHash           String
+  expiresAt          DateTime
+  attemptCount       Int       @default(0)
+  usedAt             DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}
+
+// Admin password-reset — the exact same shape/discipline as Customer's
+// own passwordResetTokenHash/passwordResetExpiresAt flat fields, kept
+// as its own table instead (rather than more flat fields on AdminUser)
+// so a rate-limit/lockout check can look at recent attempts without
+// losing the previous one the moment a new request overwrites it, and
+// so the security audit trail has a real row to point to. Single use:
+// usedAt set the moment the password is actually changed, inside the
+// same transaction that changes it and revokes every AdminSession —
+// see adminAuth.service.ts's resetAdminPasswordWithToken().
+model AdminPasswordResetToken {
+  id          String    @id @default(cuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId])
+  @@index([expiresAt])
+}
+
+// Admin authentication security audit log (brief Part F). eventType is
+// deliberately a plain String, not a Prisma enum — same reasoning as
+// Notification.eventType's own comment: this catalogue is expected to
+// keep growing, and a Prisma enum would need a schema migration for
+// every single new event type. Validated against a real TypeScript
+// union at the application layer instead (see
+// adminSecurityEvent.service.ts). adminUserId is nullable + SetNull:
+// an event about an unknown email or a since-deleted admin still needs
+// to exist as a row (a login attempt against an email that doesn't
+// exist is itself a meaningful security signal), and deleting an
+// AdminUser must never delete the history of what happened to/by it.
+// ipHash is a hash, never a raw IP — this table is a security trail,
+// not an invasive tracking log; userAgent is stored as sent (already a
+// public, non-secret header a browser sends on every request).
+model AdminSecurityEvent {
+  id          String     @id @default(cuid())
+  adminUserId String?
+  adminUser   AdminUser? @relation(fields: [adminUserId], references: [id], onDelete: SetNull)
+  eventType   String
+  // Safe, human-readable context only — e.g. "STAFF login" or
+  // "5 incorrect OTP attempts". Never a password, code, or token, even
+  // in redacted/partial form — see this file's own Part F comment.
+  summary     String?
+  ipHash      String?
+  userAgent   String?
+  createdAt   DateTime   @default(now())
+
+  @@index([adminUserId])
+  @@index([eventType])
+  @@index([createdAt])
 }
 
 // Version 7, Milestone 62: audit trail for order status changes.

@@ -258,3 +258,55 @@ export const affiliateDocumentUploadRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Milestone 179, brief section 15/34: OTP verification is a
+// credential-guessing surface the same shape as adminLoginRateLimiter
+// above (a fixed 6-digit code, even with the per-challenge 5-attempt
+// cap in adminOtp.service.ts, still deserves its own tight per-IP
+// backstop against spraying codes across many login attempts).
+export const adminOtpVerifyRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Milestone 179, brief section 15: resend already enforces its own
+// 60-second-per-account cooldown (adminOtp.service.ts's
+// secondsUntilOtpResendAllowed) — this is a coarser per-IP backstop on
+// top of that, generous enough that a genuine admin waiting out the
+// cooldown a few times never notices it.
+export const adminOtpResendRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Milestone 179, brief section 34 — same tight reasoning as
+// customerForgotPasswordRateLimiter above: the response is always
+// identical regardless of outcome, but repeated calls could still spam
+// a real admin's inbox.
+export const adminForgotPasswordRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Milestone 179 — same generous-backstop reasoning as
+// customerResetPasswordRateLimiter above (a valid call already requires
+// a genuine 32-byte random token). Shared by both the admin
+// reset-password and invitation-activation endpoints, since both accept
+// "a bearer token plus a new password" from an unauthenticated caller
+// and carry the identical risk shape.
+export const adminResetPasswordRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
