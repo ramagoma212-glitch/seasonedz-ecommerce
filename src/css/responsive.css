@@ -739,8 +739,28 @@
    a gridded one. The email address wrapping inside its own cell
    (layout.css's minmax(0, 1fr) columns) is what makes 2 columns safe
    here even at narrow widths — no column ever needs to shrink to 1
-   just to fit it. */
+   just to fit it.
+
+   Found via the owner's own device screenshot: below this width the
+   two groups stack one per line inside the flex-wrap strip, and
+   .footer-support-strip__inner's justify-content:center then centres
+   EACH LINE independently around that line's own (different) content
+   width — so "Get In Touch"'s icon column sat at a different x
+   position than "Follow Us"'s, even though both were individually
+   centred. Stacking as a plain column and giving both groups one
+   shared width fixes this: both grids now start at the same left edge
+   and their columns line up exactly. */
 @media (max-width: 767px) {
+  .footer-support-strip__inner {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .footer-support-group {
+    width: 100%;
+    max-width: 320px;
+  }
+
   .social-icon-grid--2col,
   .social-icon-grid--3col {
     grid-template-columns: repeat(2, minmax(0, 1fr));

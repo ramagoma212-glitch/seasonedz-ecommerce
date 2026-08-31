@@ -280,6 +280,22 @@ test.describe("Social/contact icon design (Milestone 178 UI polish add-on)", () 
     }
   });
 
+  test("Get In Touch and Follow Us icons line up on the same left edge at mobile width — the two groups read as one straight, aligned block", async ({ page }) => {
+    for (const width of [767, 430, 375, 360]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      const emailIconX = await page
+        .locator(".footer-support-strip .social-icon-link", { hasText: "seasonedzgroup" })
+        .locator(".social-icon-circle")
+        .evaluate((el) => el.getBoundingClientRect().x);
+      const facebookIconX = await page
+        .locator(".footer-support-strip .social-icon-link", { hasText: "Facebook" })
+        .locator(".social-icon-circle")
+        .evaluate((el) => el.getBoundingClientRect().x);
+      expect(Math.abs(emailIconX - facebookIconX), `icons misaligned at ${width}px`).toBeLessThan(1);
+    }
+  });
+
   test("the long real email address wraps inside its own grid cell — never overflows, never gets silently clipped", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/");
