@@ -2,6 +2,7 @@ import { Prisma, ProductStatus, ProductType } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import type { SortOption, StockOption } from "../utils/query.js";
 import { sanitizeDescriptionHtml } from "../utils/descriptionSanitizer.js";
+import { isActivePreorder, isActivePreorderDiscountEligible } from "./preorder.service.js";
 
 // Every public product query goes through this include so the shape
 // available to toProductOutput() is always the same.
@@ -202,6 +203,15 @@ export interface ProductOutput {
     version: string | null;
     termsNote: string | null;
   } | null;
+  // Milestone 181, Part J: computed, never a raw admin flag — a customer
+  // (or the storefront's own logic, e.g. isOutOfStockForCart()) must
+  // never see isPreorderEnabled=true for a Product that is merely
+  // scheduled or has already ended. preorderReleaseAt is only ever
+  // populated alongside isPreorder=true, so callers never need to
+  // re-check the two together.
+  isPreorder: boolean;
+  isPreorderDiscountEligible: boolean;
+  preorderReleaseAt: Date | null;
 }
 
 // "PDF"/"ZIP" for the two allowed upload types (adminDigitalAsset.
@@ -238,6 +248,8 @@ function sanitizePublicDescription(description: string | null): string | null {
 // columns — costPrice above all — can never accidentally leak into the
 // API response just because a new field gets added to the Prisma model.
 export function toProductOutput(product: ProductWithRelations): ProductOutput {
+  const preorderNow = new Date();
+  const isPreorder = isActivePreorder(product, product.status, preorderNow);
   return {
     id: product.id,
     name: product.name,
@@ -279,5 +291,8 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
             termsNote: product.digitalTermsNote,
           }
         : null,
+    isPreorder,
+    isPreorderDiscountEligible: isActivePreorderDiscountEligible(product, product.status, preorderNow),
+    preorderReleaseAt: isPreorder ? product.preorderReleaseAt : null,
   };
 }

@@ -31,6 +31,42 @@ const STATUS_HELP = {
   OUT_OF_STOCK: "Out of stock: unavailable, or shown according to current public behaviour.",
 };
 
+// Milestone 181, Part C: label + badge tone for the backend-calculated
+// preorderAdminStatus (adminProduct.service.ts's toAdminProductDetail())
+// — never a manually-maintained field, always recalculated from
+// configuration + current time on every read.
+const PREORDER_STATUS_LABEL = {
+  NORMAL_SALE: "Normal Sale",
+  PREORDER_SCHEDULED: "Preorder Scheduled",
+  PREORDER_ACTIVE: "Preorder Active",
+  PREORDER_ENDED: "Preorder Ended",
+};
+
+const PREORDER_STATUS_BADGE_CLASS = {
+  NORMAL_SALE: "admin-badge--neutral",
+  PREORDER_SCHEDULED: "admin-badge--neutral",
+  PREORDER_ACTIVE: "admin-badge--success",
+  PREORDER_ENDED: "admin-badge--neutral",
+};
+
+// Milestone 181, Part T: a datetime-local input has no timezone of its
+// own — its value is always read/written as the browser's own local
+// wall-clock time. For this admin dashboard (used from South Africa)
+// that local time is SAST, so no separate timezone-conversion library
+// is needed: reading `new Date(inputValue)` on submit and writing
+// `date.getFullYear()/getHours()/...` (all local-time accessors) here
+// both agree on the same wall-clock meaning as the backend's own SAST
+// display (utils/southAfricaTime.ts). Returns "" for no value/an
+// invalid date, so the input simply renders empty rather than showing
+// "Invalid Date".
+function toDatetimeLocalValue(isoString) {
+  if (!isoString) return "";
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function renderCategoryOptions(categories, selectedId) {
   return categories
     .map((category) => `<option value="${category.id}"${category.id === selectedId ? " selected" : ""}>${escapeHtml(category.name)}</option>`)
@@ -167,6 +203,55 @@ function renderProductForm(mode, product, categories) {
         </div>
         <div class="admin-product-form__checkboxes">
           <label><input type="checkbox" id="productDownloadEnabled" ${product?.downloadEnabled !== false ? "checked" : ""} /> Download enabled</label>
+        </div>
+      </div>
+
+      <div class="admin-product-form__section" data-admin-preorder-section>
+        <h3 class="admin-page__section-subtitle">Preorder Settings</h3>
+        ${
+          isEdit && product?.preorderAdminStatus
+            ? `<span class="admin-badge ${PREORDER_STATUS_BADGE_CLASS[product.preorderAdminStatus] || "admin-badge--neutral"}">${PREORDER_STATUS_LABEL[product.preorderAdminStatus] || product.preorderAdminStatus}</span>`
+            : ""
+        }
+
+        <div class="admin-product-form__checkboxes">
+          <label>
+            <input type="checkbox" id="productPreorderEnabled" data-admin-preorder-enabled-toggle ${product?.isPreorderEnabled ? "checked" : ""} />
+            Preorder Enabled
+          </label>
+        </div>
+
+        <div data-admin-preorder-fields ${product?.isPreorderEnabled ? "" : "hidden"}>
+          <div class="admin-product-form__row">
+            <div class="form-field">
+              <label class="form-field__label" for="productPreorderStartAt">Preorder Start Date <span class="form-field__optional">(optional)</span></label>
+              <input type="datetime-local" id="productPreorderStartAt" class="form-field__input" value="${toDatetimeLocalValue(product?.preorderStartAt)}" />
+              <p class="admin-product-form__hint">Leave blank to allow preorder to begin as soon as it is enabled.</p>
+            </div>
+            <div class="form-field">
+              <label class="form-field__label" for="productPreorderEndAt">Preorder End Date <span class="form-field__optional">(optional)</span></label>
+              <input type="datetime-local" id="productPreorderEndAt" class="form-field__input" value="${toDatetimeLocalValue(product?.preorderEndAt)}" />
+              <p class="admin-product-form__hint">Preorder stops automatically after this time. Leave blank to end only at the release date.</p>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-field__label" for="productPreorderReleaseAt">Release Date <span class="form-field__required">*</span></label>
+            <input type="datetime-local" id="productPreorderReleaseAt" class="form-field__input" value="${toDatetimeLocalValue(product?.preorderReleaseAt)}" />
+            <p class="admin-product-form__hint">Required while Preorder Enabled is checked. Enter South African (SAST) time — this is shown to customers as "Available from".</p>
+          </div>
+
+          <div class="admin-product-form__checkboxes">
+            <label>
+              <input type="checkbox" id="productPreorderDiscountEligible" ${product?.isPreorderDiscountEligible ? "checked" : ""} />
+              Eligible for first preorder discount
+            </label>
+          </div>
+          <p class="admin-product-form__hint">
+            When checked, a registered customer's first qualifying preorder order receives the store-wide first-preorder
+            discount automatically. The discount rate itself is set once for the whole store under
+            <a href="/admin/preorder-settings">Preorder Programme Settings</a>, not typed per product.
+          </p>
         </div>
       </div>
 

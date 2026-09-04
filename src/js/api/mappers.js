@@ -50,6 +50,13 @@ export function mapApiProductToFrontendShape(apiProduct) {
     // toProductOutput()) — never a guess at file details.
     productType: apiProduct.productType || "PHYSICAL",
     digitalDownload: apiProduct.digitalDownload || null,
+    // Milestone 181, Part J: computed backend-side (product.service.ts's
+    // toProductOutput()) — never a raw admin flag. isPreorder is only
+    // ever true for a currently-open, explicitly-enabled preorder
+    // window; preorderReleaseAt is only ever populated alongside it.
+    isPreorder: apiProduct.isPreorder || false,
+    isPreorderDiscountEligible: apiProduct.isPreorderDiscountEligible || false,
+    preorderReleaseAt: apiProduct.preorderReleaseAt || null,
   };
 }
 

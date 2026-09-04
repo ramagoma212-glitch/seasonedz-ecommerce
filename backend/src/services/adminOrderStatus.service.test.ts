@@ -88,6 +88,9 @@ function wireStubs(order: ReturnType<typeof orderRow>) {
   // request scheduling checks this — harmless no-op for every other
   // status.
   const restorePreferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
+  // Milestone 181: a CANCELLED/REFUNDED transition releases any preorder
+  // discount redemption tied to this order — harmless no-op otherwise.
+  const restorePreorderRedemptionUpdateMany = stub(prisma.preorderDiscountRedemption, "updateMany", async () => ({ count: 0 }));
   return {
     update,
     historyCreate,
@@ -104,6 +107,7 @@ function wireStubs(order: ReturnType<typeof orderRow>) {
       restoreNotificationFindUnique();
       restorePreferenceFindUnique();
       restoreNotificationUpdate();
+      restorePreorderRedemptionUpdateMany();
     },
   };
 }

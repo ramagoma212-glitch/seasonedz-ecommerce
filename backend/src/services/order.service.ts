@@ -10,6 +10,9 @@ import { getReferralProgrammeSettings } from "./referralProgrammeSettings.servic
 import { isSelfReferral, type CheckoutIdentity } from "./referralAffiliate.service.js";
 import { calculateReferralPricing, roundHalfUpToCents, type ReferralPricingResult } from "./referralPricing.service.js";
 import { calculateProductCommissions, type AffiliateProductSettingSnapshot, type OrderItemForCommission } from "./affiliateProductCommission.service.js";
+import { isActivePreorder, isActivePreorderDiscountEligible } from "./preorder.service.js";
+import { getPreorderProgrammeSettings } from "./preorderProgrammeSettings.service.js";
+import { hasActivePreorderDiscountRedemption, reservePreorderDiscount } from "./preorderDiscountRedemption.service.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
 // insufficient stock, etc.) — distinct from an unexpected error, so
@@ -46,6 +49,14 @@ interface VerifiedItem {
   giftMessage: string | null;
   giftWrapFeePerUnit: Prisma.Decimal | null;
   giftWrapLineTotal: Prisma.Decimal;
+  // Milestone 181, Part B/M: re-derived from the live Product row at
+  // the moment of purchase, never trusted from the request — see
+  // preorder.service.ts's own isActivePreorder(). Snapshotted onto
+  // OrderItem below so a later change to the product's own preorder
+  // configuration never reinterprets this historical line.
+  isActivePreorder: boolean;
+  isPreorderDiscountEligible: boolean;
+  preorderReleaseAt: Date | null;
 }
 
 // Version 7, Milestone 159: a distinct order LINE is a product plus its
@@ -121,11 +132,30 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
     // enforces before it can ever become ACTIVE, re-checked here too
     // since a product's file could in principle be removed after
     // activation (defensive, not expected in normal admin use).
+    // Milestone 181: re-derived from this same already-fetched Product
+    // row (its full scalar set, including the new preorder fields,
+    // comes back from the findUnique above with no extra query) — never
+    // from anything the client claims. `now` is read once per verified
+    // item rather than once per whole call so a very slow request that
+    // straddles a preorder boundary is judged consistently line by
+    // line; in practice this always resolves within the same instant.
+    const preorderNow = new Date();
+    const activePreorder = isActivePreorder(product, product.status, preorderNow);
+    const preorderDiscountEligible = isActivePreorderDiscountEligible(product, product.status, preorderNow);
+
+    // Milestone 181, Part J: an explicitly admin-enabled active preorder
+    // bypasses the ordinary stock gate entirely — real inventory for a
+    // preorder Product is pre-production stock, not fulfilment-ready
+    // stock, so zero (or insufficient) stockQuantity never blocks a
+    // preorder purchase. This is never true for a Product that simply
+    // happens to be out of stock without preorder explicitly enabled —
+    // isActivePreorder() already requires isPreorderEnabled=true plus a
+    // currently-open configured window, never inferred from stock alone.
     if (product.productType === ProductType.DIGITAL) {
       if (!product.digitalAsset || !product.digitalAsset.isActive || !product.downloadEnabled) {
         throw new OrderError(`This digital product is not currently available for download: ${product.name}`);
       }
-    } else {
+    } else if (!activePreorder) {
       if (product.stockQuantity <= 0) {
         throw new OrderError(`Product is out of stock: ${product.name}`);
       }
@@ -146,6 +176,7 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
     const giftWrapFeePerUnit = isGiftWrapped ? new Prisma.Decimal(GIFT_WRAP_FEE_PER_ITEM) : null;
 
     const unitPrice = product.price;
+
     verified.push({
       productId: product.id,
       productName: product.name,
@@ -160,6 +191,9 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       giftMessage,
       giftWrapFeePerUnit,
       giftWrapLineTotal: calculateGiftWrapFee(group.quantity, isGiftWrapped),
+      isActivePreorder: activePreorder,
+      isPreorderDiscountEligible: preorderDiscountEligible,
+      preorderReleaseAt: activePreorder ? product.preorderReleaseAt : null,
     });
   }
 
@@ -192,6 +226,12 @@ export interface OrderItemOutput {
   isGiftWrapped: boolean;
   giftMessage: string | null;
   giftWrapFee: number;
+  // Milestone 181, Part M: immutable snapshot, never re-derived from
+  // today's Product configuration — see OrderItem's own schema comment.
+  isPreorder: boolean;
+  preorderReleaseAt: Date | null;
+  preorderDiscountRate: number | null;
+  preorderDiscountAmount: number | null;
 }
 
 export interface OrderOutput {
@@ -241,6 +281,20 @@ export interface OrderOutput {
     shippedAt: Date | null;
     deliveredAt: Date | null;
   } | null;
+  // Milestone 181, Part K/M: order-level preorder facts, derived once
+  // at creation time from the immutable OrderItem snapshots — see
+  // Order's own schema comment. latestPreorderReleaseAt is the Part K
+  // "ship together" fulfilment-hold date (the LATEST of every preorder
+  // line's own release date), null whenever containsPreorder is false.
+  containsPreorder: boolean;
+  latestPreorderReleaseAt: Date | null;
+  // Milestone 181, Part L: whether the first-registered-customer
+  // preorder discount was actually applied to this order — reflects
+  // what genuinely happened at order-creation time (Part L's own "do
+  // not display the offer as applied if backend has not confirmed
+  // qualification"), never a live re-check of today's customer state.
+  preorderDiscountApplied: boolean;
+  preorderDiscountTotal: number;
   // Version 7, Milestone 157: order composition, derived from `items`
   // on every response — lets every caller (order-confirmation,
   // account order detail, Track Order, admin order detail) branch on
@@ -300,12 +354,20 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       isGiftWrapped: item.isGiftWrapped,
       giftMessage: item.giftMessage,
       giftWrapFee: item.giftWrapFeePerUnit ? item.giftWrapFeePerUnit.times(item.quantity).toNumber() : 0,
+      isPreorder: item.isPreorderAtPurchase,
+      preorderReleaseAt: item.preorderReleaseAtSnapshot,
+      preorderDiscountRate: item.preorderDiscountRateApplied ? item.preorderDiscountRateApplied.toNumber() : null,
+      preorderDiscountAmount: item.preorderDiscountAmountApplied ? item.preorderDiscountAmountApplied.toNumber() : null,
     })),
     subtotal: order.subtotal.toNumber(),
     giftWrapTotal: order.giftWrapTotal.toNumber(),
     deliveryFee: order.deliveryFee.toNumber(),
     discountTotal: order.discountTotal.toNumber(),
     total: order.total.toNumber(),
+    containsPreorder: order.containsPreorder,
+    latestPreorderReleaseAt: order.latestPreorderReleaseAt,
+    preorderDiscountApplied: order.items.some((item) => item.preorderDiscountAmountApplied !== null),
+    preorderDiscountTotal: order.items.reduce((sum, item) => sum + (item.preorderDiscountAmountApplied?.toNumber() ?? 0), 0),
     payment: order.payment
       ? {
           method: order.payment.method,
@@ -401,6 +463,122 @@ async function resolveReferralForOrder(
   };
 }
 
+export interface ResolvedPreorderDiscount {
+  discountPercent: Prisma.Decimal;
+  // Keyed by the SAME index verifiedItems is iterated at elsewhere in
+  // this function — a plain array-index map is safe here because
+  // verifiedItems is never reordered/filtered between this call and the
+  // order-creation transaction below.
+  perLineDiscountAmount: Map<number, Prisma.Decimal>;
+  totalDiscountAmount: Prisma.Decimal;
+}
+
+// Milestone 181, Part E/F: decides whether THIS order receives the
+// first-registered-customer preorder discount, and exactly how much
+// each eligible line gets. Guests never qualify (Part G: "does NOT
+// receive the 10% first registered customer preorder discount") —
+// checked via the exact same already-verified `customerId` parameter
+// createOrder() itself receives, never a client-claimed flag. Returns
+// null whenever the order doesn't qualify at all, so the caller can
+// treat "null" and "no discount" as the same thing throughout.
+//
+// This is a best-effort, PRE-transaction read (matching
+// resolveReferralForOrder()'s own documented "settings/eligibility can
+// change between this read and the transaction committing" acceptance)
+// — it decides what figures get baked into the order about to be
+// created. The actual concurrency guarantee against two simultaneous
+// qualifying checkouts from the same customer is
+// preorderDiscountRedemption.service.ts's reservePreorderDiscount(),
+// called inside the transaction once the order row exists, backed by a
+// database-level partial unique index.
+async function resolvePreorderDiscountForOrder(customerId: string | null, verifiedItems: VerifiedItem[]): Promise<ResolvedPreorderDiscount | null> {
+  if (!customerId) return null;
+
+  const eligibleIndexes = verifiedItems.reduce<number[]>((indexes, item, index) => {
+    if (item.isPreorderDiscountEligible) indexes.push(index);
+    return indexes;
+  }, []);
+  if (eligibleIndexes.length === 0) return null;
+
+  const settings = await getPreorderProgrammeSettings();
+  if (!settings.firstRegisteredPreorderDiscountEnabled) return null;
+
+  const alreadyHasActiveRedemption = await hasActivePreorderDiscountRedemption(prisma, customerId);
+  if (alreadyHasActiveRedemption) return null;
+
+  const discountPercent = new Prisma.Decimal(settings.firstRegisteredPreorderDiscountPercent);
+  const perLineDiscountAmount = new Map<number, Prisma.Decimal>();
+  let totalDiscountAmount = new Prisma.Decimal(0);
+
+  // Part E "MULTIPLE PREORDER PRODUCTS": every eligible line in this
+  // one order receives the benefit, each computed on its own lineTotal
+  // (never on gift wrap or delivery — verifiedItems' own lineTotal
+  // already excludes both, same as every other discount in this file).
+  for (const index of eligibleIndexes) {
+    const lineDiscount = roundHalfUpToCents(verifiedItems[index]!.lineTotal.times(discountPercent).dividedBy(100));
+    perLineDiscountAmount.set(index, lineDiscount);
+    totalDiscountAmount = totalDiscountAmount.plus(lineDiscount);
+  }
+
+  return { discountPercent, perLineDiscountAmount, totalDiscountAmount };
+}
+
+export interface PreorderDiscountPreviewItem {
+  productSlug: string;
+  quantity: number;
+}
+
+export interface PreorderDiscountPreviewResult {
+  qualifies: boolean;
+  discountPercent: number;
+  discountAmount: number;
+  // Milestone 181, Part L: "Non-Qualifying Registered Customer... do
+  // not show misleading '10% will be applied' — use normal preorder
+  // messaging only." This distinguishes "no eligible preorder items in
+  // the cart at all" (alreadyUsed: false, nothing preorder-related to
+  // say) from "would otherwise qualify, but the benefit is already
+  // used" (alreadyUsed: true) — the frontend needs to tell these apart
+  // to show the right message in each case.
+  alreadyUsed: boolean;
+}
+
+// Milestone 181, Part L: a non-binding PREVIEW of the first-registered-
+// customer preorder discount, shown on the cart/checkout order summary
+// before submission — same discipline as this codebase's existing
+// referral discount preview (referralCapture.service.ts's
+// previewReferral(), surfaced to the frontend via
+// checkoutPage.js's getReferralDiscountPreview()): the REAL, binding
+// amount is only ever decided at actual order-creation time
+// (resolvePreorderDiscountForOrder() above, called from inside
+// createOrder()), re-derived from scratch there. This function is read-
+// only — it never reserves anything, so calling it repeatedly (e.g. on
+// every cart page render) is always safe.
+export async function previewPreorderDiscount(customerId: string | null, items: PreorderDiscountPreviewItem[]): Promise<PreorderDiscountPreviewResult> {
+  const settings = await getPreorderProgrammeSettings();
+  const discountPercentNumber = settings.firstRegisteredPreorderDiscountPercent;
+  const notQualifying: PreorderDiscountPreviewResult = { qualifies: false, discountPercent: discountPercentNumber, discountAmount: 0, alreadyUsed: false };
+
+  if (!customerId || !settings.firstRegisteredPreorderDiscountEnabled) return notQualifying;
+
+  const now = new Date();
+  let eligibleLineTotal = new Prisma.Decimal(0);
+  for (const item of items) {
+    if (!item.productSlug || !Number.isFinite(item.quantity) || item.quantity <= 0) continue;
+    const product = await prisma.product.findUnique({ where: { slug: item.productSlug } });
+    if (!product) continue;
+    if (!isActivePreorderDiscountEligible(product, product.status, now)) continue;
+    eligibleLineTotal = eligibleLineTotal.plus(product.price.times(item.quantity));
+  }
+
+  if (eligibleLineTotal.isZero()) return notQualifying;
+
+  const alreadyHasActiveRedemption = await hasActivePreorderDiscountRedemption(prisma, customerId);
+  if (alreadyHasActiveRedemption) return { ...notQualifying, alreadyUsed: true };
+
+  const discountAmount = roundHalfUpToCents(eligibleLineTotal.times(discountPercentNumber).dividedBy(100));
+  return { qualifies: true, discountPercent: discountPercentNumber, discountAmount: discountAmount.toNumber(), alreadyUsed: false };
+}
+
 // Orders are created as PENDING (not CONFIRMED): paymentStatus also
 // starts PENDING, since no real payment has actually been confirmed
 // yet — for BANK_TRANSFER/CASH_ON_DELIVERY there's nothing to
@@ -459,7 +637,40 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   // parameter. A guest (customerId null) always gets the ordinary
   // guest threshold, no exceptions.
   const isRegisteredCustomer = customerId !== null;
+  // Milestone 181, Part I: this reads `physicalSubtotal` exactly as
+  // computed above — the ORIGINAL, pre-any-discount physical subtotal.
+  // The registered-customer R500/guest R600 threshold from Milestone
+  // 180 is completely unaffected by whether a preorder discount later
+  // applies to any line; nothing below this point ever changes
+  // `deliveryFee` again.
   const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems, isRegisteredCustomer);
+
+  // Milestone 181, Part B/M: order-level preorder facts, independent of
+  // discount eligibility — a guest browsing a preorder item still needs
+  // the ship-together fulfilment hold (Part K/R) even though only a
+  // registered customer can ever receive the discount.
+  const preorderItems = verifiedItems.filter((item) => item.isActivePreorder);
+  const containsPreorder = preorderItems.length > 0;
+  const latestPreorderReleaseAt =
+    containsPreorder ? preorderItems.reduce<Date | null>((latest, item) => (!latest || (item.preorderReleaseAt && item.preorderReleaseAt > latest) ? item.preorderReleaseAt : latest), null) : null;
+
+  // Milestone 181, Part H: resolved BEFORE the referral discount below,
+  // since a preorder-discounted line must be excluded from the
+  // referral-eligible subtotal — the customer gets the BETTER of the
+  // two discounts on any one line, never both stacked (brief: "Do not
+  // apply 15%").
+  const preorderDiscount = await resolvePreorderDiscountForOrder(customerId, verifiedItems);
+
+  // Milestone 181, Part H: every line the preorder discount already
+  // covers is removed from the subtotal the referral calculation sees
+  // — calculateReferralPricing() itself is completely unchanged (still
+  // one pure whole-subtotal-percentage function), it's just handed a
+  // smaller subtotal now. A line with neither preorder nor referral
+  // still counts fully; a line with only a referral (no preorder) is
+  // unaffected either way.
+  const referralEligibleSubtotal = preorderDiscount
+    ? verifiedItems.reduce((sum, item, index) => (preorderDiscount.perLineDiscountAmount.has(index) ? sum : sum.plus(item.lineTotal)), new Prisma.Decimal(0))
+    : subtotal;
 
   // Version 7, Milestone 172B.4: qualifyingProductSubtotal is `subtotal`
   // itself — the approved V1 rule excludes gift wrap and delivery, and
@@ -470,8 +681,11 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   // lines up from physicalSubtotal (the ORIGINAL, pre-discount
   // physical-only subtotal), so a referral discount can never retroactively
   // change which delivery-fee tier an order qualifies for.
-  const referral = await resolveReferralForOrder(input.referralAttribution, { customerId, email: input.customer.email }, subtotal);
-  const discountTotal = referral ? referral.pricing.discountAmount : new Prisma.Decimal(0);
+  //
+  // Milestone 181, Part H: `referralEligibleSubtotal` (not `subtotal`)
+  // is the whole-subtotal figure this now sees — see the comment above.
+  const referral = await resolveReferralForOrder(input.referralAttribution, { customerId, email: input.customer.email }, referralEligibleSubtotal);
+  const discountTotal = (preorderDiscount?.totalDiscountAmount ?? new Prisma.Decimal(0)).plus(referral ? referral.pricing.discountAmount : new Prisma.Decimal(0));
   const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
 
   const orderNumber = await generateOrderNumber();
@@ -488,6 +702,15 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
     // there is no finite inventory to decrement or race over.
     for (const item of verifiedItems) {
       if (item.productType === ProductType.DIGITAL) continue;
+
+      // Milestone 181, Part J: an active preorder line was already let
+      // through verifyItems() above with no regard to stockQuantity —
+      // it must never be blocked here either. Preorder inventory isn't
+      // fulfilment-ready stock, so it is deliberately never decremented
+      // by a preorder purchase; normal decrement resumes for a Product
+      // once its preorder period ends and ordinary stock rules apply
+      // again to future orders.
+      if (item.isActivePreorder) continue;
 
       const result = await tx.product.updateMany({
         where: { id: item.productId, stockQuantity: { gte: item.quantity } },
@@ -525,8 +748,10 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         deliveryFee,
         discountTotal,
         total,
+        containsPreorder,
+        latestPreorderReleaseAt,
         items: {
-          create: verifiedItems.map((item) => ({
+          create: verifiedItems.map((item, index) => ({
             productId: item.productId,
             productName: item.productName,
             productSlug: item.productSlug,
@@ -539,6 +764,10 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
             isGiftWrapped: item.isGiftWrapped,
             giftMessage: item.giftMessage,
             giftWrapFeePerUnit: item.giftWrapFeePerUnit,
+            isPreorderAtPurchase: item.isActivePreorder,
+            preorderReleaseAtSnapshot: item.preorderReleaseAt,
+            preorderDiscountRateApplied: preorderDiscount?.perLineDiscountAmount.has(index) ? preorderDiscount.discountPercent : null,
+            preorderDiscountAmountApplied: preorderDiscount?.perLineDiscountAmount.get(index) ?? null,
           })),
         },
         payment: {
@@ -558,6 +787,25 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
       },
       include: orderInclude,
     });
+
+    // Milestone 181, Part F: reserve the customer's one-time benefit
+    // now that the order row exists, inside this same transaction — see
+    // preorderDiscountRedemption.service.ts's own comment for why this
+    // is the actual concurrency guarantee (a database-level partial
+    // unique index), not the best-effort read
+    // resolvePreorderDiscountForOrder() already did above. If a
+    // genuinely concurrent request beat this one to the reservation,
+    // this throws and rolls back the whole transaction — including the
+    // stock decrement and the order itself — rather than ever persist
+    // an order whose discountTotal has no matching reservation.
+    if (preorderDiscount && customerId) {
+      await reservePreorderDiscount(tx, {
+        customerId,
+        orderId: createdOrder.id,
+        discountPercent: preorderDiscount.discountPercent,
+        discountAmount: preorderDiscount.totalDiscountAmount,
+      });
+    }
 
     // Version 7, Milestone 172B.4: exactly one commission row per
     // referred order, created in the SAME transaction as the order
@@ -614,15 +862,40 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         lineTotal: item.lineTotal,
       }));
 
+      // Milestone 181, Part H: any line that actually received the
+      // stronger first-preorder discount (never the referral rate) is
+      // keyed here by its real, now-known OrderItem id — createdOrder.items
+      // is in the same order verifiedItems was, so the array index still
+      // lines up with preorderDiscount's own index-keyed map.
+      const discountRateOverrideByOrderItemId = new Map<string, Prisma.Decimal>();
+      if (preorderDiscount) {
+        createdOrder.items.forEach((item, index) => {
+          if (preorderDiscount.perLineDiscountAmount.has(index)) {
+            discountRateOverrideByOrderItemId.set(item.id, preorderDiscount.discountPercent);
+          }
+        });
+      }
+
       const productCommissions = calculateProductCommissions(
         itemsForCommission,
         settingsByProductId,
         referral.pricing.commissionRateApplied,
         referral.pricing.discountRateApplied,
-        createdOrder.createdAt
+        createdOrder.createdAt,
+        discountRateOverrideByOrderItemId
       );
 
-      const eligibleDiscountAmount = roundHalfUpToCents(productCommissions.totalEligibleSubtotal.times(referral.pricing.discountRateApplied).dividedBy(100));
+      // Milestone 181, Part H: this display figure now reflects each
+      // affiliate-eligible line's OWN actual discount rate (10% for a
+      // preorder-discounted line, the ordinary referral rate for every
+      // other one) — never a single flat-rate recomputation across the
+      // whole eligible subtotal, which would have been wrong the moment
+      // any eligible line's real rate differed from the order's own
+      // referral rate.
+      const eligibleDiscountAmount = productCommissions.lines.reduce((sum, line) => {
+        const rate = discountRateOverrideByOrderItemId.get(line.orderItemId) ?? referral.pricing.discountRateApplied;
+        return sum.plus(roundHalfUpToCents(line.eligibleProductSubtotal.times(rate).dividedBy(100)));
+      }, new Prisma.Decimal(0));
 
       await tx.orderAffiliateCommission.create({
         data: {

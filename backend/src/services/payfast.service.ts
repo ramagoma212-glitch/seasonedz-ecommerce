@@ -46,6 +46,7 @@ import { createGuestDownloadToken } from "./digitalDownload.service.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 import * as notificationEngine from "./notificationEngine.service.js";
 import { scheduleProductReviewRequestForDigitalOrder } from "./productReviewRequest.service.js";
+import { consumePreorderDiscountRedemption } from "./preorderDiscountRedemption.service.js";
 
 // Version 5, Milestone 35: the only logging this module does — deliberately
 // narrow. Allowed: order number, which check ran, its configured mode,
@@ -292,6 +293,8 @@ function toPaymentOrderEmailData(
     deliveryProvince: string | null;
     deliveryPostalCode: string | null;
     deliveryNotes: string | null;
+    containsPreorder: boolean;
+    latestPreorderReleaseAt: Date | null;
   },
   digital?: { hasDigitalItems: boolean; guestDownloadUrl?: string }
 ): OrderEmailData {
@@ -314,6 +317,8 @@ function toPaymentOrderEmailData(
     deliveryProvince: order.deliveryProvince,
     deliveryPostalCode: order.deliveryPostalCode,
     deliveryNotes: order.deliveryNotes,
+    containsPreorder: order.containsPreorder,
+    latestPreorderReleaseAt: order.latestPreorderReleaseAt,
     hasDigitalItems: digital?.hasDigitalItems,
     guestDownloadUrl: digital?.guestDownloadUrl,
   };
@@ -497,8 +502,16 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
         throw new PaymentError("Order payment status does not allow marking as paid.", 400);
       }
 
-      await prisma.$transaction([
-        prisma.payment.update({
+      // Milestone 181, Part F: converted from array-form to callback-
+      // form $transaction (still fully atomic — Prisma treats both
+      // identically) so consumePreorderDiscountRedemption() can run
+      // inside the same transaction as the payment/order update below,
+      // exactly like adminPaymentConfirmation.service.ts's own manual
+      // confirmation does — see that function's own comment for why
+      // Payment.status reaching PAID is the one hook point every
+      // payment method's own transaction shares.
+      await prisma.$transaction(async (tx) => {
+        await tx.payment.update({
           where: { orderId: order.id },
           data: {
             status: PaymentStatus.PAID,
@@ -508,12 +521,13 @@ export async function processPayfastNotification(rawBody: Record<string, unknown
             paidAt: new Date(),
             failureReason: null,
           },
-        }),
-        prisma.order.update({
+        });
+        await tx.order.update({
           where: { id: order.id },
           data: { paymentStatus: PaymentStatus.PAID, status: OrderStatus.CONFIRMED },
-        }),
-      ]);
+        });
+        await consumePreorderDiscountRedemption(tx, order.id);
+      });
 
       // Version 7, Milestone 152: same "only reached once, ever, per
       // order" guarantee as the email/booking calls below — a guest

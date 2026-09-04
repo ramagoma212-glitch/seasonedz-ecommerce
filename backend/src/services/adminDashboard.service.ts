@@ -43,6 +43,10 @@ const orderListSelect = {
   status: true,
   createdAt: true,
   _count: { select: { items: true } },
+  // Milestone 181, Part Q: lets the admin order list flag a preorder
+  // order at a glance, without a second query per row.
+  containsPreorder: true,
+  latestPreorderReleaseAt: true,
 } satisfies Prisma.OrderSelect;
 
 type OrderListRow = Prisma.OrderGetPayload<{ select: typeof orderListSelect }>;
@@ -58,6 +62,8 @@ export interface AdminOrderListItem {
   status: OrderStatus;
   createdAt: Date;
   itemCount: number;
+  containsPreorder: boolean;
+  latestPreorderReleaseAt: Date | null;
 }
 
 function toAdminOrderListItem(order: OrderListRow): AdminOrderListItem {
@@ -72,6 +78,8 @@ function toAdminOrderListItem(order: OrderListRow): AdminOrderListItem {
     status: order.status,
     createdAt: order.createdAt,
     itemCount: order._count.items,
+    containsPreorder: order.containsPreorder,
+    latestPreorderReleaseAt: order.latestPreorderReleaseAt,
   };
 }
 

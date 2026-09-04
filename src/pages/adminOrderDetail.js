@@ -24,6 +24,7 @@ import {
 import { renderAdminNav } from "../components/adminNav.js";
 import { formatCurrency, formatDate, formatDateTime, humanizeEnum, renderStatusBadge } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
+import { preorderAvailabilityText } from "../js/preorder.js";
 
 // Version 7, Milestone 168C: matches the labels used in customer-facing
 // order confirmation/tracking and the backend's own email templates
@@ -99,7 +100,7 @@ function renderItemsTable(items) {
     <div class="admin-table-wrap">
       <table class="admin-table">
         <thead>
-          <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Gift Wrap</th><th>Line Total</th></tr>
+          <tr><th>Product</th><th>SKU</th><th>Qty</th><th>Unit Price</th><th>Gift Wrap</th><th>Preorder</th><th>Line Total</th></tr>
         </thead>
         <tbody>
           ${items
@@ -116,6 +117,17 @@ function renderItemsTable(items) {
                     ? `
                   <span class="badge">Wrapped: ${formatCurrency(item.giftWrapFee)}</span>
                   ${item.giftMessage ? `<p class="admin-table__gift-message">&ldquo;${escapeHtml(item.giftMessage)}&rdquo;</p>` : ""}
+                `
+                    : "N/A"
+                }
+              </td>
+              <td>
+                ${
+                  item.isPreorder
+                    ? `
+                  <span class="badge product-card__badge--preorder">Preorder</span>
+                  <p class="admin-table__gift-message">${preorderAvailabilityText(item.preorderReleaseAt)}</p>
+                  ${item.preorderDiscountAmount ? `<p class="admin-table__gift-message">Discount: -${formatCurrency(item.preorderDiscountAmount)}</p>` : ""}
                 `
                     : "N/A"
                 }
@@ -538,7 +550,19 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
       <section class="container admin-page">
         ${renderAdminNav("orders")}
         <a class="admin-back-link" href="/admin/orders">&larr; Back to Orders</a>
-        <h1 class="admin-page__title">Order ${escapeHtml(order.orderNumber)}</h1>
+        <h1 class="admin-page__title">
+          Order ${escapeHtml(order.orderNumber)}
+          ${order.containsPreorder ? `<span class="badge product-card__badge--preorder admin-orders__preorder-badge">Preorder</span>` : ""}
+        </h1>
+        ${
+          order.containsPreorder
+            ? `
+        <div class="admin-preorder-hold-notice">
+          This order contains a preorder item. ${preorderAvailabilityText(order.latestPreorderReleaseAt)} Do not dispatch or book courier shipment before this date unless explicitly authorised. Courier booking is blocked automatically until the release date.
+        </div>
+        `
+            : ""
+        }
 
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
 
@@ -626,7 +650,12 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           ${renderItemsTable(order.items)}
           <div class="order-confirmation__row"><span>Subtotal</span><span>${formatCurrency(order.subtotal)}</span></div>
           <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "Free" : formatCurrency(order.deliveryFee)}</span></div>
-          ${order.discountTotal ? `<div class="order-confirmation__row"><span>Discount</span><span>-${formatCurrency(order.discountTotal)}</span></div>` : ""}
+          ${order.preorderDiscountTotal ? `<div class="order-confirmation__row"><span>First Preorder Discount</span><span>-${formatCurrency(order.preorderDiscountTotal)}</span></div>` : ""}
+          ${
+            order.discountTotal - (order.preorderDiscountTotal || 0) > 0
+              ? `<div class="order-confirmation__row"><span>Referral Discount</span><span>-${formatCurrency(order.discountTotal - (order.preorderDiscountTotal || 0))}</span></div>`
+              : ""
+          }
           <div class="order-confirmation__row admin-total-row"><span>Total</span><span>${formatCurrency(order.total)}</span></div>
         </div>
 

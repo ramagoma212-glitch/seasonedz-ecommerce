@@ -80,3 +80,18 @@ export function getOrderByNumber(orderNumber) {
 export function getOrderTracking(orderNumber) {
   return apiGet(`/orders/${encodeURIComponent(orderNumber)}/tracking`);
 }
+
+// Milestone 181, Part L: a non-binding preview of the first-registered-
+// customer preorder discount, shown on the cart/checkout order summary
+// before submission — same credentials:"include" discipline as
+// createOrder() above, since the preview must see the logged-in
+// customer's own session to check "has this customer already used the
+// benefit". Read-only: never reserves anything, safe to call on every
+// page render.
+export function previewPreorderDiscount(items) {
+  return apiPost(
+    "/orders/preorder-discount-preview",
+    { items: items.map((item) => ({ productSlug: item.slug, quantity: item.quantity })) },
+    { credentials: "include" }
+  );
+}

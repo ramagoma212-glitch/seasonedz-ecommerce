@@ -10,6 +10,7 @@ import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { getCurrentCustomer, recoverCheckoutIntent } from "../js/api/customerApi.js";
+import { getLatestPreorderReleaseAt, preorderShipTogetherNotice } from "../js/preorder.js";
 
 // Version 7, Milestone 129 (pattern), Milestone 180, Part A: best-effort
 // only — being logged out (or the request failing) is never an error on
@@ -95,11 +96,34 @@ export async function renderCartPage() {
   let liveProductsBySlug = new Map();
   try {
     const { products } = await getCatalog();
-    liveProductsBySlug = new Map(products.map((product) => [product.slug, { stockStatus: product.stockStatus, stockQuantity: product.stockQuantity, productType: product.productType }]));
+    liveProductsBySlug = new Map(
+      products.map((product) => [
+        product.slug,
+        {
+          stockStatus: product.stockStatus,
+          stockQuantity: product.stockQuantity,
+          productType: product.productType,
+          isPreorder: product.isPreorder,
+          preorderReleaseAt: product.preorderReleaseAt,
+        },
+      ])
+    );
     unavailableLineIds = new Set(getUnavailableCartItems(items, liveProductsBySlug).map((item) => item.lineId));
   } catch {
     unavailableLineIds = new Set();
   }
+
+  // Milestone 181, Part K: the LIVE preorder status/release date (never
+  // the cart line's own possibly-stale snapshot — see cart.js's own
+  // comment) decides both each line's badge and the ship-together
+  // notice below. A line whose Product has since left the catalogue
+  // entirely (already flagged unavailable above) simply shows no
+  // preorder badge, which is fine — it's blocking checkout regardless.
+  const preorderDisplayItems = items.map((item) => ({
+    isPreorder: liveProductsBySlug.get(item.slug)?.isPreorder ?? false,
+    preorderReleaseAt: liveProductsBySlug.get(item.slug)?.preorderReleaseAt ?? null,
+  }));
+  const latestPreorderReleaseAt = getLatestPreorderReleaseAt(preorderDisplayItems);
 
   // Version 7, Milestone 180, Part A, section 12: a soft, easy-to-ignore
   // nudge, never a popup or a requirement — null (nothing rendered) for
@@ -111,6 +135,16 @@ export async function renderCartPage() {
     <section class="container cart-page">
       <h1 class="stub-page__title">Your Cart</h1>
       ${renderCartCompositionNotice(composition)}
+      ${
+        latestPreorderReleaseAt
+          ? `
+        <div class="demo-notice" data-cart-preorder-notice>
+          <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+          <div><p>${preorderShipTogetherNotice(latestPreorderReleaseAt)}</p></div>
+        </div>
+      `
+          : ""
+      }
       ${
         registrationPrompt
           ? `
@@ -134,7 +168,14 @@ export async function renderCartPage() {
               renderCartItem(item, {
                 eager: index < 2,
                 unavailable: unavailableLineIds.has(item.lineId),
-                maxQuantity: liveProductsBySlug.get(item.slug)?.stockQuantity ?? Infinity,
+                // Milestone 181, Part J: an active preorder line is never
+                // capped by ordinary stockQuantity — no real quantity
+                // limit feature exists this milestone, so it's simply
+                // unbounded here (the backend independently re-verifies
+                // at order-creation time regardless).
+                maxQuantity: liveProductsBySlug.get(item.slug)?.isPreorder ? Infinity : liveProductsBySlug.get(item.slug)?.stockQuantity ?? Infinity,
+                isPreorder: liveProductsBySlug.get(item.slug)?.isPreorder ?? false,
+                preorderReleaseAt: liveProductsBySlug.get(item.slug)?.preorderReleaseAt ?? null,
               })
             )
             .join("")}

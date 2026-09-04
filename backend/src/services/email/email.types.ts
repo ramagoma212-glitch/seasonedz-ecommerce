@@ -71,6 +71,14 @@ export interface OrderEmailItem {
   productName: string;
   quantity: number;
   lineTotal: number;
+  // Milestone 181, Part O: whether this line was an active preorder at
+  // the moment of purchase, its release date, and the Rand amount the
+  // first-registered-customer discount actually took off it (null when
+  // not applied) — all immutable OrderItem snapshots, never re-derived
+  // from today's Product configuration.
+  isPreorder?: boolean;
+  preorderReleaseAt?: Date | null;
+  preorderDiscountAmount?: number | null;
 }
 
 export interface OrderEmailData {
@@ -112,6 +120,13 @@ export interface OrderEmailData {
   // their account instead of a token link).
   hasDigitalItems?: boolean;
   guestDownloadUrl?: string;
+  // Milestone 181, Part K/O: order-level preorder facts — see
+  // OrderEmailItem above for the per-line snapshot these are derived
+  // from. latestPreorderReleaseAt is the ship-together fulfilment-hold
+  // date (Part K's "use the LATEST release date"); null whenever
+  // containsPreorder is false.
+  containsPreorder?: boolean;
+  latestPreorderReleaseAt?: Date | null;
 }
 
 export interface EnquiryEmailData {

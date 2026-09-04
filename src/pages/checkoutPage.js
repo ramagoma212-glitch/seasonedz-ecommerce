@@ -18,6 +18,8 @@ import { DELIVERY_METHODS, COLLECTION_CITIES, calculateDeliveryFee as calculateD
 import { withBase } from "../js/paths.js";
 import { getStoredReferralAttribution } from "../js/referral.js";
 import { previewReferral } from "../js/api/referralApi.js";
+import { previewPreorderDiscount as previewPreorderDiscountApi } from "../js/api/ordersApi.js";
+import { getLatestPreorderReleaseAt, preorderShipTogetherNotice, preorderAvailabilityText } from "../js/preorder.js";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
 // the request failing) is never an error on the checkout page, just
@@ -55,6 +57,23 @@ async function getReferralDiscountPreview(qualifyingSubtotal) {
     return discountTotal > 0 ? discountTotal : null;
   } catch {
     return null;
+  }
+}
+
+// Milestone 181, Part L: a non-binding PREVIEW of the first-registered-
+// customer preorder discount — same discipline as
+// getReferralDiscountPreview() just above (never trusted as
+// authoritative; the real amount is only ever decided at actual
+// order-creation time). Best-effort: a slow/failed backend call must
+// never block checkout, it just means no preview shows for this page
+// load. Returns a "not qualifying" shape (never throws) on any error,
+// so callers never need their own try/catch.
+async function getPreorderDiscountPreview(items) {
+  try {
+    const response = await previewPreorderDiscountApi(items);
+    return response?.data || { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false };
+  } catch {
+    return { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false };
   }
 }
 
@@ -293,6 +312,50 @@ function renderDemoNotice() {
 // affected product(s) and links back to the cart page (where the item
 // can actually be removed — see cartPage.js's own matching badge) —
 // this page never lets the customer silently proceed past it.
+// Milestone 181, Part K/L: mixed-cart ship-together notice, identical
+// wording to the cart page's own (see cartPage.js) — never hidden after
+// the customer reaches checkout (Part L: "Do not hide preorder status
+// after the Product leaves the Product page").
+function renderPreorderFulfilmentNotice(latestPreorderReleaseAt) {
+  if (!latestPreorderReleaseAt) return "";
+  return `
+    <div class="demo-notice" data-checkout-preorder-notice>
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div><p>${preorderShipTogetherNotice(latestPreorderReleaseAt)}</p></div>
+    </div>
+  `;
+}
+
+// Milestone 181, Part G/L: a guest with an eligible preorder item sees a
+// professional, non-aggressive invitation to sign in. A registered
+// customer who has already used the benefit sees plain preorder
+// messaging only — never a misleading "10% will apply" offer (Part L:
+// "do not show misleading '10% will be applied' — use normal preorder
+// messaging only").
+function renderPreorderDiscountNotice({ customer, hasEligibleItems, preview }) {
+  if (!hasEligibleItems) return "";
+
+  if (!customer) {
+    return `
+      <div class="demo-notice" data-checkout-preorder-discount-notice>
+        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+        <div><p>Create an account or sign in to get ${preview.discountPercent}% off your first qualifying preorder.</p></div>
+      </div>
+    `;
+  }
+
+  if (preview.alreadyUsed) {
+    return `
+      <div class="demo-notice" data-checkout-preorder-discount-notice>
+        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+        <div><p>You have already used your first-preorder discount on a previous order.</p></div>
+      </div>
+    `;
+  }
+
+  return "";
+}
+
 function renderUnavailableItemsNotice(unavailableItems) {
   if (!unavailableItems.length) return "";
 
@@ -351,13 +414,6 @@ export async function renderCheckoutPage() {
   // items and the delivery method actually submitted.
   const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary(null, isRegisteredCustomer);
 
-  // Version 7, Milestone 172B.4: qualifying subtotal for the discount
-  // preview is the cart's own `subtotal` — gift wrap/delivery are
-  // already excluded from it (see js/cart.js's getCartSummary()),
-  // matching the approved V1 rule and the backend's own
-  // qualifyingProductSubtotal exactly.
-  const discountTotal = (await getReferralDiscountPreview(subtotal)) ?? 0;
-
   // Version 7, Milestone 171E: best-effort, same discipline as the
   // logged-in-customer lookup above — a slow/failed catalogue fetch
   // must never block checkout entirely; it just means stale cart items
@@ -365,14 +421,57 @@ export async function renderCheckoutPage() {
   // authoritative stock check at order-creation time still protects
   // the order either way — see order.service.ts's verifyItems()).
   let unavailableItems = [];
+  let latestPreorderReleaseAt = null;
+  let hasEligiblePreorderItems = false;
+  let preorderEligibleSubtotal = 0;
   try {
     const { products } = await getCatalog();
-    const productsBySlug = new Map(products.map((product) => [product.slug, { stockStatus: product.stockStatus, productType: product.productType }]));
+    const productsBySlug = new Map(
+      products.map((product) => [
+        product.slug,
+        {
+          stockStatus: product.stockStatus,
+          productType: product.productType,
+          isPreorder: product.isPreorder,
+          preorderReleaseAt: product.preorderReleaseAt,
+          isPreorderDiscountEligible: product.isPreorderDiscountEligible,
+        },
+      ])
+    );
     unavailableItems = getUnavailableCartItems(items, productsBySlug);
+    // Milestone 181, Part K: the LIVE preorder status/release date
+    // decides the ship-together hold date — never the cart line's own
+    // possibly-stale snapshot (see cart.js's own comment on this).
+    latestPreorderReleaseAt = getLatestPreorderReleaseAt(
+      items.map((item) => ({
+        isPreorder: productsBySlug.get(item.slug)?.isPreorder ?? false,
+        preorderReleaseAt: productsBySlug.get(item.slug)?.preorderReleaseAt ?? null,
+      }))
+    );
+    hasEligiblePreorderItems = items.some((item) => productsBySlug.get(item.slug)?.isPreorderDiscountEligible);
+    preorderEligibleSubtotal = items.reduce(
+      (sum, item) => (productsBySlug.get(item.slug)?.isPreorderDiscountEligible ? sum + item.price * item.quantity : sum),
+      0
+    );
   } catch {
     unavailableItems = [];
   }
   const hasUnavailableItems = unavailableItems.length > 0;
+
+  // Milestone 181, Part L: a non-binding preview — the backend
+  // independently confirms real qualification at order-creation time
+  // regardless (see order.service.ts's resolvePreorderDiscountForOrder()).
+  const preorderPreview = hasEligiblePreorderItems ? await getPreorderDiscountPreview(items) : { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false };
+
+  // Version 7, Milestone 172B.4 / Milestone 181, Part H: qualifying
+  // subtotal for the referral preview is the cart's own `subtotal` —
+  // gift wrap/delivery are already excluded from it (see js/cart.js's
+  // getCartSummary()) — MINUS any line that will actually receive the
+  // stronger preorder discount instead (never both on the same line;
+  // mirrors order.service.ts's own referralEligibleSubtotal exclusion).
+  const referralEligibleSubtotal = preorderPreview.qualifies ? subtotal - preorderEligibleSubtotal : subtotal;
+  const referralDiscountTotal = (await getReferralDiscountPreview(referralEligibleSubtotal)) ?? 0;
+  const discountTotal = referralDiscountTotal + preorderPreview.discountAmount;
 
   return `
     <section class="stub-page container checkout-page">
@@ -383,6 +482,8 @@ export async function renderCheckoutPage() {
 
       ${renderAccountNote(customer)}
       ${renderCartCompositionNotice(composition)}
+      ${renderPreorderFulfilmentNotice(latestPreorderReleaseAt)}
+      ${renderPreorderDiscountNotice({ customer, hasEligibleItems: hasEligiblePreorderItems, preview: preorderPreview })}
       ${renderUnavailableItemsNotice(unavailableItems)}
 
       <div class="checkout-layout">
@@ -467,7 +568,20 @@ export async function renderCheckoutPage() {
           <button type="submit" class="btn btn--primary btn--block" data-checkout-submit ${hasUnavailableItems ? "disabled" : ""}>Place Order</button>
         </form>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, discountTotal, deliveryFee, deliveryMethodLabel: null, hasPhysicalItems: composition.hasPhysical, showCheckoutButton: false, showItems: true, items, isRegisteredCustomer })}
+        ${renderOrderSummary({
+          subtotal,
+          giftWrapTotal,
+          discountTotal,
+          preorderDiscountTotal: preorderPreview.discountAmount,
+          preorderDiscountPercent: preorderPreview.qualifies ? preorderPreview.discountPercent : null,
+          deliveryFee,
+          deliveryMethodLabel: null,
+          hasPhysicalItems: composition.hasPhysical,
+          showCheckoutButton: false,
+          showItems: true,
+          items,
+          isRegisteredCustomer,
+        })}
       </div>
     </section>
   `;

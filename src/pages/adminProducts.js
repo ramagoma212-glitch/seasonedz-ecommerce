@@ -167,7 +167,10 @@ export async function renderAdminProducts({ query } = {}) {
         ${renderAdminNav("products")}
         <div class="admin-section__header">
           <h1 class="admin-page__title">Products</h1>
-          <a class="btn btn--primary btn--sm" href="/admin/products/new">Add Product</a>
+          <div class="admin-section__header-actions">
+            <a class="btn btn--secondary btn--sm" href="/admin/preorder-settings">Preorder Settings</a>
+            <a class="btn btn--primary btn--sm" href="/admin/products/new">Add Product</a>
+          </div>
         </div>
         <p class="admin-page__subtitle">${result.total} product${result.total === 1 ? "" : "s"} total</p>
         ${renderFilters(categories, effectiveQuery)}

@@ -32,6 +32,7 @@ import type {
   StockAlertEmailData,
 } from "./email.types.js";
 import { preferredFrontendBaseUrl } from "../../utils/frontendUrl.js";
+import { formatSastDate } from "../../utils/southAfricaTime.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
 
@@ -65,8 +66,31 @@ function humanizeEnum(value: string): string {
     .join(" ");
 }
 
+// Milestone 181, Part O: identifies each preorder line, its release
+// date (South African time, never a raw UTC timestamp — Part T), and
+// the exact Rand amount the first-preorder discount took off it, if
+// any. Never claims a delivery date — "Available from", matching the
+// customer-facing wording elsewhere (Part S/N).
 function formatItemsList(items: OrderEmailItem[]): string {
-  return items.map((item) => `- ${item.productName} x${item.quantity}: ${formatRand(item.lineTotal)}`).join("\n");
+  return items
+    .map((item) => {
+      const base = `- ${item.productName} x${item.quantity}: ${formatRand(item.lineTotal)}`;
+      if (!item.isPreorder) return base;
+      const releaseNote = item.preorderReleaseAt ? ` Preorder, available from ${formatSastDate(item.preorderReleaseAt)}.` : " Preorder.";
+      const discountNote = item.preorderDiscountAmount ? ` First preorder discount applied: -${formatRand(item.preorderDiscountAmount)}.` : "";
+      return `${base}${releaseNote}${discountNote}`;
+    })
+    .join("\n");
+}
+
+// Milestone 181, Part K/O: the ship-together fulfilment notice — shown
+// only when the order actually contains a preorder item. Never promises
+// delivery ON the release date itself; the release date only ends the
+// fulfilment hold (Part R).
+function preorderFulfilmentNotice(order: OrderEmailData): string {
+  if (!order.containsPreorder) return "";
+  const releaseNote = order.latestPreorderReleaseAt ? ` Available from ${formatSastDate(order.latestPreorderReleaseAt)}.` : "";
+  return `\n\nThis order contains a preorder item.${releaseNote} All physical items in this order will be dispatched together once the preorder item is available.`;
 }
 
 // Version 7, Milestone 168C: labels for the three owner-approved
@@ -192,7 +216,7 @@ ${paymentInstructions(order.paymentMethod)}${digitalItemsNoticeForOrderCreated(o
 Delivery Method: ${formatDeliveryMethodLabel(order.deliveryMethod)} (${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)})
 ${formatDeliveryNote(order)}
 
-${deliveryFulfilmentNote(order)}
+${deliveryFulfilmentNote(order)}${preorderFulfilmentNotice(order)}
 
 Any questions? Reach us directly:
 ${ORDER_CONTACT_BLOCK}
@@ -254,7 +278,7 @@ Good news: your payment for order ${order.orderNumber} has been confirmed. Thank
 Order Total: ${formatRand(order.total)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}
 
-We're now getting your order ready. You're welcome to check its progress any time using your order number.${digitalItemsNoticeForPaymentConfirmed(order)}
+We're now getting your order ready. You're welcome to check its progress any time using your order number.${digitalItemsNoticeForPaymentConfirmed(order)}${preorderFulfilmentNotice(order)}
 
 ${CONTACT_LINE}
 

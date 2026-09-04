@@ -14,6 +14,7 @@ import { prisma } from "../config/prisma.js";
 import { sanitizeDescriptionHtml, countVisibleCharacters } from "../utils/descriptionSanitizer.js";
 import { notifyStockAlertSubscribersForProduct } from "./stockAlert.service.js";
 import { notifyWishlistStockAlertsForProduct } from "./wishlist.service.js";
+import { validatePreorderConfig, derivePreorderAdminStatus, PreorderConfigError, type PreorderAdminStatus } from "./preorder.service.js";
 
 export class AdminProductError extends Error {
   statusCode: number;
@@ -140,6 +141,16 @@ function optionalProductType(raw: unknown): ProductType | undefined {
   return parseProductType(raw);
 }
 
+// Milestone 181, Part C: same "empty means null" convention
+// adminAffiliateProductSetting.service.ts's own parseOptionalDate()
+// already established for startsAt/endsAt on that form.
+function optionalPreorderDate(raw: unknown, fieldLabel: string): Date | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const date = new Date(raw as string);
+  if (Number.isNaN(date.getTime())) throw new AdminProductError(`${fieldLabel} is not a valid date.`);
+  return date;
+}
+
 // A DIGITAL product must have a real, active file attached before it
 // can ever be ACTIVE (visible/purchasable on the storefront) — a
 // customer paying for a digital download that doesn't exist yet is
@@ -260,6 +271,13 @@ const adminProductListSelect = {
   // Version 7, Milestone 152: secure digital downloads.
   productType: true,
   digitalAsset: { select: { id: true, isActive: true } },
+  // Milestone 181, Part C: enough to derive preorderAdminStatus without
+  // a second query — see toAdminProductListItem() below.
+  isPreorderEnabled: true,
+  preorderStartAt: true,
+  preorderEndAt: true,
+  preorderReleaseAt: true,
+  isPreorderDiscountEligible: true,
 } satisfies Prisma.ProductSelect;
 
 type AdminProductListRow = Prisma.ProductGetPayload<{ select: typeof adminProductListSelect }>;
@@ -287,6 +305,12 @@ export interface AdminProductListItem {
   // here too so the admin list itself flags it at a glance if it's
   // somehow ever reached (e.g. a file removed by other means).
   digitalFileMissingWarning: boolean;
+  // Milestone 181, Part C: "Normal Sale" | "Preorder Scheduled" |
+  // "Preorder Active" | "Preorder Ended" — always calculated fresh from
+  // configuration + current server time, never a stored field that
+  // could go stale (see preorder.service.ts's own comment).
+  preorderAdminStatus: PreorderAdminStatus;
+  isPreorderEnabled: boolean;
 }
 
 function toAdminProductListItem(product: AdminProductListRow): AdminProductListItem {
@@ -310,6 +334,8 @@ function toAdminProductListItem(product: AdminProductListRow): AdminProductListI
     productType: product.productType,
     hasDigitalFile,
     digitalFileMissingWarning: product.productType === ProductType.DIGITAL && product.status === ProductStatus.ACTIVE && !hasDigitalFile,
+    preorderAdminStatus: derivePreorderAdminStatus(product),
+    isPreorderEnabled: product.isPreorderEnabled,
   };
 }
 
@@ -415,6 +441,13 @@ export interface AdminProductDetail {
   productType: ProductType;
   digitalTermsNote: string | null;
   downloadEnabled: boolean;
+  // Milestone 181, Part C.
+  isPreorderEnabled: boolean;
+  preorderStartAt: Date | null;
+  preorderEndAt: Date | null;
+  preorderReleaseAt: Date | null;
+  isPreorderDiscountEligible: boolean;
+  preorderAdminStatus: PreorderAdminStatus;
 }
 
 // Version 7, Milestone 146 (second review fix): sanitised again here,
@@ -461,6 +494,12 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
     productType: product.productType,
     digitalTermsNote: product.digitalTermsNote,
     downloadEnabled: product.downloadEnabled,
+    isPreorderEnabled: product.isPreorderEnabled,
+    preorderStartAt: product.preorderStartAt,
+    preorderEndAt: product.preorderEndAt,
+    preorderReleaseAt: product.preorderReleaseAt,
+    isPreorderDiscountEligible: product.isPreorderDiscountEligible,
+    preorderAdminStatus: derivePreorderAdminStatus(product),
   };
 }
 
@@ -501,6 +540,11 @@ export interface AdminProductCreateInput {
   productType?: unknown;
   digitalTermsNote?: unknown;
   downloadEnabled?: unknown;
+  isPreorderEnabled?: unknown;
+  preorderStartAt?: unknown;
+  preorderEndAt?: unknown;
+  preorderReleaseAt?: unknown;
+  isPreorderDiscountEligible?: unknown;
 }
 
 export async function createProduct(rawInput: unknown): Promise<AdminProductDetail> {
@@ -528,8 +572,19 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
   const productType = optionalProductType(input.productType) ?? ProductType.PHYSICAL;
   const digitalTermsNote = optionalTrimmedString(input.digitalTermsNote, "digitalTermsNote", MAX_LONG_TEXT_LENGTH);
   const downloadEnabled = input.downloadEnabled === undefined ? true : Boolean(input.downloadEnabled);
+  const isPreorderEnabled = Boolean(input.isPreorderEnabled);
+  const preorderStartAt = optionalPreorderDate(input.preorderStartAt, "preorderStartAt");
+  const preorderEndAt = optionalPreorderDate(input.preorderEndAt, "preorderEndAt");
+  const preorderReleaseAt = optionalPreorderDate(input.preorderReleaseAt, "preorderReleaseAt");
+  const isPreorderDiscountEligible = Boolean(input.isPreorderDiscountEligible);
 
   await assertDigitalProductHasFileIfActive(null, productType, status);
+  try {
+    validatePreorderConfig({ isPreorderEnabled, preorderStartAt, preorderEndAt, preorderReleaseAt, isPreorderDiscountEligible });
+  } catch (error) {
+    if (error instanceof PreorderConfigError) throw new AdminProductError(error.message, error.statusCode);
+    throw error;
+  }
 
   const category = await prisma.category.findUnique({ where: { id: categoryId }, select: { id: true } });
   if (!category) {
@@ -579,6 +634,11 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
       productType,
       digitalTermsNote,
       downloadEnabled,
+      isPreorderEnabled,
+      preorderStartAt,
+      preorderEndAt,
+      preorderReleaseAt,
+      isPreorderDiscountEligible,
     },
     include: adminProductDetailInclude,
   });
@@ -615,10 +675,28 @@ const ALLOWED_UPDATE_FIELDS = [
   "productType",
   "digitalTermsNote",
   "downloadEnabled",
+  "isPreorderEnabled",
+  "preorderStartAt",
+  "preorderEndAt",
+  "preorderReleaseAt",
+  "isPreorderDiscountEligible",
 ] as const;
 
 export async function updateProduct(id: string, rawInput: unknown): Promise<AdminProductDetail> {
-  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true, productType: true, status: true, stockQuantity: true } });
+  const existing = await prisma.product.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      productType: true,
+      status: true,
+      stockQuantity: true,
+      isPreorderEnabled: true,
+      preorderStartAt: true,
+      preorderEndAt: true,
+      preorderReleaseAt: true,
+      isPreorderDiscountEligible: true,
+    },
+  });
   if (!existing) {
     throw new AdminProductError(`Product not found: ${id}`, 404);
   }
@@ -654,6 +732,29 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
   if ("productType" in input) data.productType = parseProductType(input.productType);
   if ("digitalTermsNote" in input) data.digitalTermsNote = optionalTrimmedString(input.digitalTermsNote, "digitalTermsNote", MAX_LONG_TEXT_LENGTH);
   if ("downloadEnabled" in input) data.downloadEnabled = Boolean(input.downloadEnabled);
+  if ("isPreorderEnabled" in input) data.isPreorderEnabled = Boolean(input.isPreorderEnabled);
+  if ("preorderStartAt" in input) data.preorderStartAt = optionalPreorderDate(input.preorderStartAt, "preorderStartAt");
+  if ("preorderEndAt" in input) data.preorderEndAt = optionalPreorderDate(input.preorderEndAt, "preorderEndAt");
+  if ("preorderReleaseAt" in input) data.preorderReleaseAt = optionalPreorderDate(input.preorderReleaseAt, "preorderReleaseAt");
+  if ("isPreorderDiscountEligible" in input) data.isPreorderDiscountEligible = Boolean(input.isPreorderDiscountEligible);
+
+  // Milestone 181, Part C: same "EFFECTIVE" merged-value discipline as
+  // productType/status below — an update that only touches ONE
+  // preorder field (e.g. just flipping isPreorderEnabled) is still
+  // validated against the row's own existing values for every field it
+  // didn't touch, never just the ones named in this one request.
+  try {
+    validatePreorderConfig({
+      isPreorderEnabled: "isPreorderEnabled" in input ? Boolean(data.isPreorderEnabled) : existing.isPreorderEnabled,
+      preorderStartAt: "preorderStartAt" in input ? (data.preorderStartAt as Date | null) : existing.preorderStartAt,
+      preorderEndAt: "preorderEndAt" in input ? (data.preorderEndAt as Date | null) : existing.preorderEndAt,
+      preorderReleaseAt: "preorderReleaseAt" in input ? (data.preorderReleaseAt as Date | null) : existing.preorderReleaseAt,
+      isPreorderDiscountEligible: "isPreorderDiscountEligible" in input ? Boolean(data.isPreorderDiscountEligible) : existing.isPreorderDiscountEligible,
+    });
+  } catch (error) {
+    if (error instanceof PreorderConfigError) throw new AdminProductError(error.message, error.statusCode);
+    throw error;
+  }
 
   // Version 7, Milestone 152: checked against the EFFECTIVE productType/
   // status this update would result in — either value may come from this

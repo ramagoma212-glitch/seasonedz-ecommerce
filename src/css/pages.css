@@ -445,6 +445,24 @@
   margin-bottom: var(--space-lg);
 }
 
+/* Milestone 181, Part J: plain, professional preorder messaging — no
+   urgency colour, matches .product-details__stock's own font-weight so
+   it reads as an equally-important state, not a downgrade. */
+.product-details__preorder-note {
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+
+.product-details__preorder-offer {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-md);
+  font-size: var(--font-size-sm);
+}
+
 /* Version 7, Milestone 168C: quantity selector + Add to Cart share one
    row on desktop (quantity left, Add to Cart right — the strongest
    visual action stays the orange .btn--primary already used
@@ -939,6 +957,12 @@
   margin-bottom: var(--space-sm);
 }
 
+.admin-section__header-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
 .admin-section__link {
   font-size: var(--font-size-sm);
   font-weight: 600;
@@ -1265,6 +1289,30 @@
   color: var(--color-white);
 }
 
+/* Milestone 181, Part Q: shown next to an order number in Admin Orders
+   so staff can identify a preorder order at a glance, without opening
+   it — see pages/adminOrders.js. */
+.admin-orders__preorder-badge {
+  display: inline-block;
+  margin-left: var(--space-xs);
+  vertical-align: middle;
+}
+
+/* Milestone 181, Part R: a plain, informative hold notice on the admin
+   order detail page — helps staff avoid dispatching a preorder order
+   early (backend independently blocks it regardless, see
+   courierGuy.service.ts's checkPreorderFulfilmentSafety()). Neutral
+   tone, not an error banner. */
+.admin-preorder-hold-notice {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-primary-dark);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
+  font-size: var(--font-size-sm);
+}
+
 /* ---- Admin product management (Version 7, Milestone 67) ------------------------ */
 .admin-product-filters {
   display: flex;
@@ -1316,6 +1364,25 @@
   margin-block: var(--space-md);
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+/* Milestone 181, Part C: a bordered sub-section within the product
+   form (Preorder Settings), same visual language as .admin-product-
+   form__image-note above rather than a new pattern. */
+.admin-product-form__section {
+  background-color: var(--color-bg-alt);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  margin-block: var(--space-md);
+}
+
+.admin-product-form__section .admin-page__section-subtitle {
+  margin-top: 0;
+}
+
+.admin-product-form__section .admin-badge {
+  margin-bottom: var(--space-sm);
 }
 
 .admin-readonly-field {

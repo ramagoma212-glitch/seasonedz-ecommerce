@@ -246,6 +246,30 @@ model Product {
   affiliateProductSetting          AffiliateProductSetting?
   orderAffiliateProductCommissions OrderAffiliateProductCommission[]
 
+  // Milestone 181, Part B: reusable, admin-controlled preorder
+  // configuration. Additive-only — Product remains the sole source of
+  // truth for name/price/images/SKU/stock/description; nothing here
+  // duplicates them into a separate table. `isPreorderEnabled` defaults
+  // false so every existing product's behaviour is completely unchanged
+  // by this migration (Part Y: no automatic production configuration
+  // change). preorderStartAt/preorderEndAt are both optional (Part B);
+  // preorderReleaseAt is required only at the APPLICATION layer when
+  // isPreorderEnabled is true (backend/src/services/preorder.service.ts's
+  // own validation) — kept nullable here since a not-yet-configured
+  // product must still be a valid row. isPreorderDiscountEligible is
+  // independent of isPreorderEnabled itself (Part C: admin ticks it
+  // per product; the programme-level rate lives on
+  // PreorderProgrammeSettings below, never re-typed here). See
+  // preorder.service.ts's derivePreorderStatus() for the single place
+  // "is this product an ACTIVE preorder right now" is actually decided
+  // — never trust a frontend flag, always re-derive from this
+  // configuration plus server time.
+  isPreorderEnabled         Boolean   @default(false)
+  preorderStartAt           DateTime?
+  preorderEndAt             DateTime?
+  preorderReleaseAt         DateTime?
+  isPreorderDiscountEligible Boolean  @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -253,6 +277,7 @@ model Product {
   @@index([status])
   @@index([isFeatured])
   @@index([productType])
+  @@index([isPreorderEnabled])
 }
 
 // Version 7, Milestone 152: the one digital file attached to a DIGITAL
@@ -377,6 +402,11 @@ model Customer {
   // affiliate application per customer — see AffiliateApplication's own
   // header comment.
   affiliateApplication    AffiliateApplication?
+  // Milestone 181, Part F: the customer's own first-preorder-discount
+  // redemption history — see PreorderDiscountRedemption's own header
+  // comment for the full lifecycle. Usually zero or one row; may
+  // accumulate several RELEASED rows over time from abandoned orders.
+  preorderDiscountRedemptions PreorderDiscountRedemption[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -553,12 +583,31 @@ model Order {
   // OrderAffiliateProductCommission's own header comment.
   affiliateProductCommissions OrderAffiliateProductCommission[]
 
+  // Milestone 181, Part M: order-level facts, derived once at order-
+  // creation time from the (then-current) immutable OrderItem snapshots
+  // below — never re-derived later from today's Product configuration,
+  // so a historical order stays understandable even after a product's
+  // preorder settings later change. containsPreorder is true if ANY
+  // line was an active preorder at purchase (used for the ship-together
+  // fulfilment hold, Part K/R, regardless of discount eligibility);
+  // latestPreorderReleaseAt is the LATEST of those lines' own release
+  // dates (Part K's "use the LATEST release date as the fulfilment hold
+  // date" rule) — null whenever containsPreorder is false.
+  containsPreorder        Boolean   @default(false)
+  latestPreorderReleaseAt DateTime?
+
+  // Milestone 181, Part F: at most one redemption row per order — see
+  // PreorderDiscountRedemption's own header comment for the full
+  // reserve/consume/release lifecycle.
+  preorderDiscountRedemption PreorderDiscountRedemption?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([customerEmail])
   @@index([status])
   @@index([createdAt])
+  @@index([containsPreorder])
 }
 
 // A snapshot of one product at the moment it was ordered — see the
@@ -626,6 +675,23 @@ model OrderItem {
   // comment. Only ever set when this line's product was affiliate-
   // eligible AND the order itself was genuinely referred.
   affiliateProductCommission OrderAffiliateProductCommission?
+
+  // Milestone 181, Part M: immutable preorder snapshot — the same
+  // "never depend on the live Product row" philosophy as productType/
+  // giftWrapFeePerUnit above. isPreorderAtPurchase/preorderReleaseAtSnapshot
+  // are set whenever this line's product was an ACTIVE preorder at the
+  // moment of purchase, regardless of whether the 10% discount actually
+  // applied to it; preorderDiscountRateApplied/preorderDiscountAmountApplied
+  // are set only when this specific line actually received the first-
+  // preorder discount (null, not 0, when it didn't — same "never
+  // ambiguous" discipline as giftWrapFeePerUnit). A later change to the
+  // product's own preorder configuration, or to
+  // PreorderProgrammeSettings' rate, must never reinterpret this
+  // historical line.
+  isPreorderAtPurchase          Boolean   @default(false)
+  preorderReleaseAtSnapshot     DateTime?
+  preorderDiscountRateApplied   Decimal?  @db.Decimal(5, 2)
+  preorderDiscountAmountApplied Decimal?  @db.Decimal(10, 2)
 
   createdAt DateTime @default(now())
 
@@ -929,6 +995,9 @@ model AdminUser {
   // relation is still an array from this side since Prisma requires
   // the reverse of a to-one relation to be declared as one.
   affiliateProgrammeSettingsUpdates AffiliateProgrammeSettings[]
+  // Milestone 181, Part D: same singleton-settings audit-trail pattern
+  // as affiliateProgrammeSettingsUpdates above.
+  preorderProgrammeSettingsUpdates PreorderProgrammeSettings[] @relation("PreorderProgrammeSettingsUpdatedBy")
   // Version 7, Milestone 176: audit trail entries this admin generated
   // reviewing an affiliate application — SetNull (not Cascade), same
   // "deleting an admin must never delete the audit history of what they
@@ -1444,6 +1513,107 @@ model AffiliateProgrammeSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// PREORDER SYSTEM (Milestone 181)
+// ============================================================================
+
+// Milestone 181, Part D: the one authoritative, ADMIN-editable source of
+// truth for the first-registered-customer preorder discount rate — same
+// deterministic-singleton pattern as AffiliateProgrammeSettings above
+// (getPreorderProgrammeSettings() creates it with the owner-approved V1
+// defaults on first read if it doesn't exist yet; no generic POST/create
+// route, only GET/PATCH). A Product's own isPreorderDiscountEligible
+// flag (see Product above) says WHETHER a product participates; this
+// row says WHAT RATE applies to every participating product, so the
+// rate is never re-typed per product.
+model PreorderProgrammeSettings {
+  id String @id @default(cuid())
+
+  firstRegisteredPreorderDiscountEnabled Boolean @default(true)
+  firstRegisteredPreorderDiscountPercent Decimal @default(10.00) @db.Decimal(5, 2)
+
+  // Same audit-trail intent as AffiliateProgrammeSettings.updatedByAdminUserId
+  // above — SetNull so deleting an AdminUser can never delete the record
+  // of what they changed.
+  updatedByAdminUserId String?
+  updatedByAdminUser   AdminUser? @relation("PreorderProgrammeSettingsUpdatedBy", fields: [updatedByAdminUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PreorderDiscountRedemptionStatus {
+  RESERVED
+  CONSUMED
+  RELEASED
+}
+
+// Milestone 181, Part F: the order-linked redemption record behind the
+// one-time first-registered-customer preorder discount — deliberately
+// NOT a bare `customer.hasUsedPreorderDiscount` boolean flipped at
+// checkout-open/cart-add time (the brief's own explicit anti-pattern).
+// One row per qualifying Order (orderId unique below); a Customer may
+// accumulate several rows over time (RELEASED ones from abandoned
+// orders, plus at most one currently-active RESERVED-or-CONSUMED one) —
+// see the partial unique index added by hand to this milestone's own
+// migration.sql (Prisma's schema DSL has no way to express "unique only
+// among these two status values", so `@@unique([customerId])` alone
+// would be wrong — it would permanently block a customer who has a
+// RELEASED row from ever reserving again). That partial index
+// (`WHERE status IN ('RESERVED','CONSUMED')`) is the actual concurrency
+// guarantee: two simultaneous checkout attempts for the same customer
+// can never both insert an active row — the second one's INSERT fails
+// at the database level, and order.service.ts's createOrder() rolls
+// its whole transaction back rather than ever persist an order whose
+// discount total has no matching reservation.
+//
+// Lifecycle: RESERVED at order creation (inside the same transaction,
+// see order.service.ts) -> CONSUMED when Payment.status first reaches
+// PAID, whichever payment method caused that (payfast.service.ts's
+// verified COMPLETE ITN, or adminPaymentConfirmation.service.ts's
+// manual Bank Transfer/COD confirmation — both already run inside their
+// own transaction, so consumption is atomic with the payment-status
+// write) -> RELEASED when the order is cancelled by an admin while
+// still RESERVED or CONSUMED (adminOrderStatus.service.ts's
+// updateOrderStatus(), the only currently-reachable terminal state —
+// see that file's own comment on why OrderStatus.REFUNDED has no
+// reachable code path in this backend today). A bare PayFast
+// FAILED/CANCELLED ITN deliberately does NOT release the row: PayFast
+// allows retrying the exact same order (see payfast.service.ts's
+// RETRY_ELIGIBLE_STATUSES), and the order's own discountTotal/OrderItem
+// snapshots were already fixed at creation time — releasing and later
+// needing to silently re-reserve on retry would risk the row drifting
+// out of sync with those already-persisted figures. If a payment is
+// abandoned without ever being retried or explicitly cancelled by an
+// admin, the reservation is left RESERVED — the same "no automatic
+// cleanup for an abandoned order" limitation this codebase already has
+// for the order itself, not something new this milestone introduces.
+model PreorderDiscountRedemption {
+  id String @id @default(cuid())
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  status PreorderDiscountRedemptionStatus @default(RESERVED)
+
+  // Snapshotted at reservation time — a later change to
+  // PreorderProgrammeSettings' own rate must never reinterpret this row.
+  discountPercentSnapshot Decimal @db.Decimal(5, 2)
+  discountAmountSnapshot  Decimal @db.Decimal(10, 2)
+
+  reservedAt DateTime  @default(now())
+  consumedAt DateTime?
+  releasedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([status])
 }
 
 // Version 7, Milestone 172B.3: one row per Order that was genuinely

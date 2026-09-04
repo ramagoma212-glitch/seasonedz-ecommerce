@@ -24,10 +24,13 @@ import courierWebhookRoutes from "./courierWebhook.routes.js";
 import checkoutIntentRoutes from "./checkoutIntent.routes.js";
 import contentStudioRoutes from "./contentStudio.routes.js";
 import adminUsersRoutes from "./adminUsers.routes.js";
+import adminPreorderRoutes from "./adminPreorder.routes.js";
+import preorderRoutes from "./preorder.routes.js";
 
 const router = Router();
 
 router.use("/health", healthRoutes);
+router.use("/preorder", preorderRoutes);
 router.use("/products", productRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/orders", orderRoutes);
@@ -95,5 +98,9 @@ router.use("/admin/content-studio", contentStudioRoutes);
 // requireAdminRole(ADMIN) both applied at the router level, see
 // adminUsers.routes.ts's own header comment.
 router.use("/admin/users", adminUsersRoutes);
+// Milestone 181, Part D: preorder programme settings — GET reachable by
+// any authenticated admin, PATCH ADMIN-only. See
+// adminPreorder.routes.ts's own header comment.
+router.use("/admin/preorder", adminPreorderRoutes);
 
 export default router;

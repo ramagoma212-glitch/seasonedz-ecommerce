@@ -15,6 +15,7 @@ import { ApiError } from "../js/apiClient.js";
 import { getOrderByNumber as getLocalOrderByNumber, PAYMENT_METHODS, getOrderStatusLabel } from "../js/orders.js";
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { escapeHtml } from "../js/search.js";
+import { preorderShipTogetherNotice } from "../js/preorder.js";
 
 function paymentMethodLabel(value) {
   return PAYMENT_METHODS.find((method) => method.value === value)?.label || value;
@@ -145,8 +146,28 @@ function renderPaymentNotice(order) {
   `;
 }
 
+// Milestone 181, Part N: identifies the order as containing preorder
+// items and states the ship-together timing plainly — never a promised
+// delivery date, and never confused with courier delivery timing (see
+// preorder.js's own preorderShipTogetherNotice()).
+function renderPreorderFulfilmentNotice(order) {
+  if (!order.containsPreorder) return "";
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div><p>${preorderShipTogetherNotice(order.latestPreorderReleaseAt)}</p></div>
+    </div>
+  `;
+}
+
 function renderBackendOrderConfirmation(order) {
-  const items = order.items.map((item) => ({ name: item.productName, price: item.unitPrice, quantity: item.quantity }));
+  const items = order.items.map((item) => ({
+    name: item.productName,
+    price: item.unitPrice,
+    quantity: item.quantity,
+    isPreorder: item.isPreorder,
+    preorderReleaseAt: item.preorderReleaseAt,
+  }));
 
   return `
     <section class="container order-confirmation">
@@ -157,6 +178,7 @@ function renderBackendOrderConfirmation(order) {
       </div>
 
       ${renderPaymentNotice(order)}
+      ${renderPreorderFulfilmentNotice(order)}
 
       <div class="order-confirmation__layout">
         <div class="order-confirmation__details">
@@ -208,6 +230,7 @@ function renderBackendOrderConfirmation(order) {
           subtotal: order.subtotal,
           giftWrapTotal: order.giftWrapTotal,
           discountTotal: order.discountTotal,
+          preorderDiscountTotal: order.preorderDiscountTotal,
           deliveryFee: order.deliveryFee,
           deliveryMethodLabel: formatDeliveryMethodLabel(order.deliveryMethod),
           showCheckoutButton: false,

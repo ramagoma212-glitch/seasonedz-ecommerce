@@ -486,6 +486,10 @@ interface OrderBookingFields {
   deliveryProvince: string | null;
   deliveryPostalCode: string | null;
   deliveryCountry: string;
+  // Milestone 181, Part R: the fulfilment-hold date behind
+  // checkPreorderFulfilmentSafety() below — null for an order with no
+  // preorder items at all.
+  latestPreorderReleaseAt: Date | null;
   shipping: {
     trackingNumber: string | null;
     courierShipmentId: string | null;
@@ -552,6 +556,28 @@ function checkPaymentSafety(order: OrderBookingFields, paymentConfirmed: unknown
     throw new CourierBookingError(
       "This order is not marked as paid. Confirm payment has been checked before booking a courier.",
       400
+    );
+  }
+}
+
+// Milestone 181, Part R: "A preorder Order must NOT accidentally create
+// a Courier Guy shipment before the configured latest preorder release
+// date unless an authorised Admin explicitly follows an existing
+// legitimate override process." This backend has no such override
+// process today, so the gate is currently unconditional — backend-
+// enforced here, the single lowest-level function both the admin manual
+// booking action AND the (currently disabled) auto-booking path
+// (autoBookCourierForPaidOrder(), which itself calls
+// bookCourierShipment()) both go through, so this one check protects
+// both without needing two separate hook points. Once the latest
+// release time has passed, this check is simply never true again for
+// that order — no code anywhere flips a manual "preorder ended"
+// switch (Part B's own "AUTOMATIC END").
+function checkPreorderFulfilmentSafety(order: OrderBookingFields, now: Date = new Date()) {
+  if (order.latestPreorderReleaseAt && now < order.latestPreorderReleaseAt) {
+    throw new CourierBookingError(
+      `This order contains a preorder item not yet available until ${order.latestPreorderReleaseAt.toISOString()}. Courier booking is blocked until then.`,
+      409
     );
   }
 }
@@ -691,6 +717,7 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
       deliveryProvince: true,
       deliveryPostalCode: true,
       deliveryCountry: true,
+      latestPreorderReleaseAt: true,
       shipping: {
         select: { trackingNumber: true, courierShipmentId: true, courierBookedAt: true },
       },
@@ -720,6 +747,7 @@ export async function bookCourierShipment(orderNumber: string, input: BookCourie
   const parcel = validateParcel(input.parcel, CourierBookingError);
   const service = parseServiceLevel(input);
   checkPaymentSafety(order, input.paymentConfirmed);
+  checkPreorderFulfilmentSafety(order);
 
   const specialInstructionsCollection =
     typeof input.specialInstructionsCollection === "string" && input.specialInstructionsCollection.trim()

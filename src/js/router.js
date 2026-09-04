@@ -118,6 +118,9 @@ import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
 import { renderAdminReferralCommissions } from "../pages/adminReferralCommissions.js";
 import { renderAdminReferralCommissionDetail } from "../pages/adminReferralCommissionDetail.js";
 import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
+// Milestone 181, Part D: the preorder programme's own settings page —
+// separate from Referrals above, reached from the Products page.
+import { renderAdminPreorderSettings } from "../pages/adminPreorderSettings.js";
 // Content Studio Phase 2: Brand Knowledge Foundation only — no
 // campaign/generation/publishing page exists anywhere yet.
 import { renderAdminBrandKnowledge } from "../pages/adminBrandKnowledge.js";
@@ -361,6 +364,7 @@ const routeDefs = [
   { pattern: "/admin/products/new", render: renderAdminProductCreate, title: "Add Product", noindex: true },
   { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product", noindex: true },
   { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product", noindex: true },
+  { pattern: "/admin/preorder-settings", render: renderAdminPreorderSettings, title: "Preorder Settings", noindex: true },
   { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products", noindex: true },
   // Version 7, Milestone 172B: admin affiliate-product management.
   // Same "/new" before "/:id/edit" ordering as /admin/products above.

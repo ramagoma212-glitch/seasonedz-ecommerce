@@ -6,6 +6,7 @@
 import { getCardImageUrl } from "../js/imageTransforms.js";
 import { escapeHtml } from "../js/search.js";
 import { GIFT_WRAP_FEE_PER_ITEM } from "../js/cart.js";
+import { preorderAvailabilityText } from "../js/preorder.js";
 
 // Version 7, Milestone 92A: width/height match .cart-item__image's own
 // fixed 72x72 CSS size exactly (unlike the square card images
@@ -34,7 +35,7 @@ import { GIFT_WRAP_FEE_PER_ITEM } from "../js/cart.js";
 // meaningful when available) disables the increase button once the
 // line already matches all remaining stock — the backend independently
 // re-validates the real limit at order-creation time either way.
-export function renderCartItem(item, { eager = false, unavailable = false, maxQuantity = Infinity } = {}) {
+export function renderCartItem(item, { eager = false, unavailable = false, maxQuantity = Infinity, isPreorder = false, preorderReleaseAt = null } = {}) {
   const giftWrapFee = item.giftWrap ? GIFT_WRAP_FEE_PER_ITEM * item.quantity : 0;
   const lineTotal = item.price * item.quantity + giftWrapFee;
   const atMaxStock = !unavailable && item.quantity >= maxQuantity;
@@ -57,7 +58,9 @@ export function renderCartItem(item, { eager = false, unavailable = false, maxQu
       <div class="cart-item__details">
         <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
         ${item.productType === "DIGITAL" ? `<span class="badge cart-item__digital-badge">Digital Download</span>` : ""}
+        ${isPreorder ? `<span class="badge product-card__badge--preorder">Preorder</span>` : ""}
         ${unavailable ? `<span class="badge cart-item__stock-badge">Out of Stock</span>` : ""}
+        ${isPreorder ? `<p class="cart-item__preorder-note">${preorderAvailabilityText(preorderReleaseAt)}</p>` : ""}
         <p class="cart-item__price">R${item.price.toFixed(2)} each</p>
         ${
           item.giftWrap

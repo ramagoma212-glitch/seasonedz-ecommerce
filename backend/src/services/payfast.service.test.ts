@@ -121,9 +121,10 @@ function stubNotificationChain(templateName: string, recipientEmail: string) {
 test("COMPLETE on a fresh order marks it PAID and enqueues exactly one PAYMENT_RECEIVED notification", async () => {
   configurePayfastForTest();
   const findUnique = stub(prisma.order, "findUnique", async () => orderRow());
-  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => Promise.all(ops));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const paymentUpdate = stub(prisma.payment, "update", async () => ({}));
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
+  const redemptionUpdateMany = stub(prisma.preorderDiscountRedemption, "updateMany", async () => ({ count: 0 }));
   const notifications = stubNotificationChain("payment-confirmed", "thandiwe@example.com");
 
   const body = signedNotifyBody({
@@ -147,6 +148,7 @@ test("COMPLETE on a fresh order marks it PAID and enqueues exactly one PAYMENT_R
   transactionStub.restore();
   paymentUpdate.restore();
   orderUpdate.restore();
+  redemptionUpdateMany.restore();
   await notifications.restore();
   restorePayfastConfig();
 });
@@ -155,9 +157,10 @@ test("COMPLETE on a 100%-digital order for a logged-in customer also schedules a
   configurePayfastForTest();
   const digitalOrder = orderRow({ customerId: "cust-1", items: [{ productType: "DIGITAL" }] });
   const findUnique = stub(prisma.order, "findUnique", async () => digitalOrder);
-  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => Promise.all(ops));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
   const paymentUpdate = stub(prisma.payment, "update", async () => ({}));
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
+  const redemptionUpdateMany = stub(prisma.preorderDiscountRedemption, "updateMany", async () => ({ count: 0 }));
   const preferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
   const notifications = stubNotificationChain("payment-confirmed", "thandiwe@example.com");
 
@@ -181,6 +184,7 @@ test("COMPLETE on a 100%-digital order for a logged-in customer also schedules a
   transactionStub.restore();
   paymentUpdate.restore();
   orderUpdate.restore();
+  redemptionUpdateMany.restore();
   preferenceFindUnique.restore();
   await notifications.restore();
   restorePayfastConfig();

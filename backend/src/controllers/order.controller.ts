@@ -23,7 +23,14 @@ function toOrderEmailData(order: OrderOutput): OrderEmailData {
     total: order.total,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
-    items: order.items.map((item) => ({ productName: item.productName, quantity: item.quantity, lineTotal: item.lineTotal })),
+    items: order.items.map((item) => ({
+      productName: item.productName,
+      quantity: item.quantity,
+      lineTotal: item.lineTotal,
+      isPreorder: item.isPreorder,
+      preorderReleaseAt: item.preorderReleaseAt,
+      preorderDiscountAmount: item.preorderDiscountAmount,
+    })),
     deliveryMethod: order.deliveryMethod,
     deliveryFee: order.deliveryFee,
     collectionCity: order.collectionCity,
@@ -39,7 +46,40 @@ function toOrderEmailData(order: OrderOutput): OrderEmailData {
     // the admin new-order alert. guestDownloadUrl is never set here;
     // see email.types.ts's own comment.
     hasDigitalItems: order.items.some((item) => item.productType === "DIGITAL"),
+    containsPreorder: order.containsPreorder,
+    latestPreorderReleaseAt: order.latestPreorderReleaseAt,
   };
+}
+
+// Milestone 181, Part L: read-only cart/checkout preview — never
+// reserves anything (see order.service.ts's own previewPreorderDiscount()
+// header comment). Deliberately forgiving input parsing, same
+// discipline as this file's other "unknown/invalid extra data is
+// dropped, not fatal" validators — a malformed items array simply
+// previews as "no eligible preorder items", never a 400, since this
+// is display-only and must never block the cart/checkout page render.
+function parsePreorderPreviewItems(raw: unknown): orderService.PreorderDiscountPreviewItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((entry): entry is Record<string, unknown> => typeof entry === "object" && entry !== null)
+    .map((entry) => ({
+      productSlug: typeof entry.productSlug === "string" ? entry.productSlug : "",
+      quantity: typeof entry.quantity === "number" ? entry.quantity : Number(entry.quantity),
+    }))
+    .filter((item) => item.productSlug && Number.isFinite(item.quantity) && item.quantity > 0)
+    .slice(0, 100);
+}
+
+export async function previewPreorderDiscountHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const items = parsePreorderPreviewItems((req.body as { items?: unknown } | undefined)?.items);
+    // Version 7, Milestone 129 (pattern): req.customerUser is only ever
+    // set by optionalCustomerAuth — never trusted from the request body.
+    const result = await orderService.previewPreorderDiscount(req.customerUser?.id ?? null, items);
+    sendSuccess(res, { message: "Preorder discount preview calculated.", data: result });
+  } catch (error) {
+    next(error);
+  }
 }
 
 export async function createOrderHandler(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -3,6 +3,7 @@
 // confirmation page.
 
 import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
+import { preorderAvailabilityText } from "../js/preorder.js";
 //
 // Version 7, Milestone 168C: delivery fee now depends on which of the
 // three owner-approved fulfilment methods was chosen (Courier Guy
@@ -98,10 +99,24 @@ export function getRegistrationDeliveryPrompt({ isRegisteredCustomer, physicalSu
 // calculation there — see cartPage.js); checkoutPage.js passes a
 // backend-confirmed PREVIEW amount, order-confirmation.js passes the
 // real, backend-persisted order.discountTotal.
+// Milestone 181, Part L/H: `discountTotal` is the FULL combined
+// discount (preorder + referral, never both applied to the same line —
+// see order.service.ts's own "better discount wins" architecture).
+// `preorderDiscountTotal` and `preorderDiscountPercent` (defaulting to
+// 0/null) split out the preorder portion into its own clearly-labelled
+// row; whatever remains of `discountTotal` after subtracting it is
+// shown as the existing "Referral discount" row, so a mixed order (one
+// preorder line at 10%, one ordinary line at 5% referral — Part H's own
+// worked example) shows both rows with their own correct amounts,
+// summing to the same total either way. Every existing caller that
+// doesn't pass `preorderDiscountTotal` renders exactly as before (a
+// single "Referral discount" row, or none at all).
 export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
   discountTotal = 0,
+  preorderDiscountTotal = 0,
+  preorderDiscountPercent = null,
   deliveryFee,
   deliveryMethodLabel = null,
   hasPhysicalItems = true,
@@ -114,6 +129,7 @@ export function renderOrderSummary({
 }) {
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0) - discountTotal;
   const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
+  const referralDiscountTotal = Math.max(0, discountTotal - preorderDiscountTotal);
 
   return `
     <aside class="order-summary">
@@ -130,6 +146,11 @@ export function renderOrderSummary({
                       <span>${item.name} &times; ${item.quantity}</span>
                       <span>R${(item.price * item.quantity).toFixed(2)}</span>
                     </div>
+                    ${
+                      item.isPreorder
+                        ? `<p class="order-summary__item-preorder-note">Preorder. ${preorderAvailabilityText(item.preorderReleaseAt)}</p>`
+                        : ""
+                    }
                   `
                 )
                 .join("")}
@@ -163,11 +184,21 @@ export function renderOrderSummary({
       `
       }
       ${
-        discountTotal > 0
+        preorderDiscountTotal > 0
+          ? `
+        <div class="order-summary__row order-summary__row--discount" data-order-summary-preorder-discount-row>
+          <span>First preorder discount${preorderDiscountPercent ? ` (${preorderDiscountPercent}%)` : ""}</span>
+          <span data-order-summary-preorder-discount-value>-R${preorderDiscountTotal.toFixed(2)}</span>
+        </div>
+      `
+          : ""
+      }
+      ${
+        referralDiscountTotal > 0
           ? `
         <div class="order-summary__row order-summary__row--discount" data-order-summary-discount-row>
           <span>Referral discount</span>
-          <span data-order-summary-discount-value>-R${discountTotal.toFixed(2)}</span>
+          <span data-order-summary-discount-value>-R${referralDiscountTotal.toFixed(2)}</span>
         </div>
       `
           : ""

@@ -10,6 +10,7 @@
 
 import { isInWishlist } from "../js/wishlist.js";
 import { getCardImageUrl } from "../js/imageTransforms.js";
+import { preorderAvailabilityText } from "../js/preorder.js";
 
 const STOCK_STATUS_CLASS = {
   "In Stock": "in",
@@ -72,7 +73,13 @@ export function renderStars(rating) {
 // physical inventory concept, matching every other stock check in this
 // codebase (order.service.ts's verifyItems(), cart.js's
 // getUnavailableCartItems()).
+// Milestone 181, Part J: an explicitly admin-enabled active preorder
+// (product.isPreorder — computed backend-side, never a raw admin flag)
+// bypasses the ordinary stock gate here too, mirroring the backend's
+// own verifyItems() bypass exactly — never a guess made independently
+// on the frontend.
 export function isOutOfStockForCart(product) {
+  if (product.isPreorder) return false;
   return (product.productType || "PHYSICAL") !== "DIGITAL" && product.stockStatus === "Out of Stock";
 }
 
@@ -98,9 +105,10 @@ export function renderProductCard(product, { eager = false, showViewLink = false
           />
         </a>
         ${
-          product.discountLabel || product.productType === "DIGITAL"
+          product.discountLabel || product.productType === "DIGITAL" || product.isPreorder
             ? `
           <div class="product-card__badges">
+            ${product.isPreorder ? `<span class="badge product-card__badge--preorder">Preorder</span>` : ""}
             ${product.discountLabel ? `<span class="badge">${product.discountLabel}</span>` : ""}
             ${product.productType === "DIGITAL" ? `<span class="badge product-card__badge--digital">Digital Download</span>` : ""}
           </div>
@@ -136,7 +144,11 @@ export function renderProductCard(product, { eager = false, showViewLink = false
           ${product.oldPrice ? `<span class="product-card__old-price">R${product.oldPrice.toFixed(2)}</span>` : ""}
         </div>
 
-        <p class="product-card__stock product-card__stock--${stockClass}">${product.stockStatus}</p>
+        ${
+          product.isPreorder
+            ? `<p class="product-card__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
+            : `<p class="product-card__stock product-card__stock--${stockClass}">${product.stockStatus}</p>`
+        }
 
         <div class="product-card__actions">
           ${showViewLink ? `<a class="btn btn--secondary btn--sm" href="/product/${product.slug}">View Product</a>` : ""}
@@ -154,7 +166,9 @@ export function renderProductCard(product, { eager = false, showViewLink = false
             data-price="${product.price}"
             data-image="${product.image}"
             data-product-type="${product.productType || "PHYSICAL"}"
-          >Add to Cart</button>
+            data-is-preorder="${product.isPreorder ? "true" : "false"}"
+            data-preorder-release-at="${product.preorderReleaseAt || ""}"
+          >${product.isPreorder ? "Add Preorder to Cart" : "Add to Cart"}</button>
           `
           }
         </div>

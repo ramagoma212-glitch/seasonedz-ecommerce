@@ -50,6 +50,10 @@ function wireStubs(order: ReturnType<typeof orderRow>, updateManyCount = 1) {
   const orderUpdate = stub(prisma.order, "update", async () => ({}));
   const preferenceFindUnique = stub(prisma.notificationPreference, "findUnique", async () => null);
   const notificationCreate = stub(prisma.notification, "create", async () => ({ id: "notif-1" }));
+  // Milestone 181: confirming a Bank Transfer/COD payment consumes any
+  // preorder discount redemption tied to this order — harmless no-op
+  // when the order never used the benefit.
+  const redemptionUpdateMany = stub(prisma.preorderDiscountRedemption, "updateMany", async () => ({ count: 0 }));
   return {
     updateMany,
     orderUpdate,
@@ -62,6 +66,7 @@ function wireStubs(order: ReturnType<typeof orderRow>, updateManyCount = 1) {
       orderUpdate.restore();
       preferenceFindUnique.restore();
       notificationCreate.restore();
+      redemptionUpdateMany.restore();
     },
   };
 }

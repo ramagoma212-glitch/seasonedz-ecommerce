@@ -17,6 +17,7 @@ import { renderOrderCancelledEmail, renderOrderProcessingEmail } from "./email/e
 import type { OrderEmailData } from "./email/email.types.js";
 import * as notificationEngine from "./notificationEngine.service.js";
 import { scheduleProductReviewRequestForDeliveredOrder } from "./productReviewRequest.service.js";
+import { releasePreorderDiscountRedemption } from "./preorderDiscountRedemption.service.js";
 
 // A business-rule failure (order not found, invalid status, disallowed
 // transition, invalid note) — distinct from an unexpected error, so
@@ -256,6 +257,17 @@ export async function updateOrderStatus(
     // deliberately left for explicit admin action instead).
     if (newStatus === OrderStatus.CANCELLED || newStatus === OrderStatus.REFUNDED) {
       await reverseCommissionsForOrder(tx, order.id, order.orderNumber, `Order ${newStatus.toLowerCase()}.`);
+      // Milestone 181, Part F: "If a first-preorder Order is fully
+      // cancelled/refunded before fulfilment: prefer releasing the
+      // benefit" — same trigger condition as the commission reversal
+      // just above (this is the only currently-reachable way an order
+      // becomes CANCELLED in this backend; REFUNDED is included for the
+      // same defensive reason reverseCommissionsForOrder() already is,
+      // even though no code path reaches it today). Releases from
+      // either RESERVED (cancelled before payment) or CONSUMED
+      // (cancelled after payment but before fulfilment) — a no-op for
+      // any order with no redemption row at all.
+      await releasePreorderDiscountRedemption(tx, order.id);
     }
 
     const historyRow = await tx.orderStatusHistory.create({

@@ -498,6 +498,21 @@
   color: var(--color-white);
 }
 
+/* Milestone 181, Part J/S: a plain, professional badge — no flashing,
+   no urgency colour (e.g. red/orange-alert), just a clear label. Reused
+   as-is on cart lines (components/cartItem.js) so the badge reads
+   identically everywhere it appears. */
+.product-card__badge--preorder {
+  background-color: var(--color-primary-dark);
+  color: var(--color-white);
+}
+
+.product-card__preorder-note,
+.cart-item__preorder-note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
 .product-card__wishlist {
   position: absolute;
   top: var(--space-sm);
@@ -1481,6 +1496,14 @@ body.has-cookie-preferences-open {
   font-size: var(--font-size-sm);
   color: var(--color-text-light);
   padding-block: var(--space-xs);
+}
+
+/* Milestone 181, Part K/N: a small, plain note under a preorder line —
+   no urgency styling, matches the rest of this summary's muted tone. */
+.order-summary__item-preorder-note {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-xs);
 }
 
 /* ---- Form fields (checkout) ------------------------------------------------------ */

@@ -64,6 +64,11 @@ function normalizeCartItem(item) {
     giftWrap,
     giftMessage,
     lineId: item.lineId || computeLineId(item.productId, giftWrap, giftMessage),
+    // Milestone 181, Part K: a cart item saved before this milestone
+    // existed has neither field at all — safely treated as "not a
+    // preorder", the correct default since preorder didn't exist yet.
+    isPreorder: item.isPreorder === true,
+    preorderReleaseAt: item.isPreorder === true ? item.preorderReleaseAt || null : null,
   };
 }
 
@@ -121,6 +126,8 @@ export function addToCart(product, quantity = 1, giftOptions = {}) {
       giftWrap,
       giftMessage,
       quantity,
+      isPreorder: product.isPreorder === true,
+      preorderReleaseAt: product.isPreorder === true ? product.preorderReleaseAt || null : null,
     });
   }
 
@@ -264,13 +271,22 @@ export function isInCart(productId) {
 // DIGITAL items are never flagged: physical inventory rules have never
 // applied to them (see productType checks throughout this file), and
 // this milestone doesn't introduce a digital-availability concept.
-// `liveProductsBySlug` is a Map<slug, { stockStatus, productType }> —
-// callers build it once from getCatalog() and reuse it for every line.
+// `liveProductsBySlug` is a Map<slug, { stockStatus, productType,
+// isPreorder }> — callers build it once from getCatalog() and reuse it
+// for every line.
+// Milestone 181, Part J: an explicitly active preorder Product (judged
+// from the LIVE catalogue, never the cart's own possibly-stale
+// snapshot — the preorder window may have started or ended since this
+// item was added) is never flagged unavailable purely for being out of
+// stock. It can still be flagged if the Product has vanished from the
+// catalogue entirely (e.g. archived) — that's a genuine unavailability,
+// not a stock question.
 export function getUnavailableCartItems(items, liveProductsBySlug) {
   return items.filter((item) => {
     if ((item.productType || "PHYSICAL") === "DIGITAL") return false;
     const liveProduct = liveProductsBySlug.get(item.slug);
     if (!liveProduct) return true;
+    if (liveProduct.isPreorder) return false;
     return liveProduct.stockStatus === "Out of Stock";
   });
 }

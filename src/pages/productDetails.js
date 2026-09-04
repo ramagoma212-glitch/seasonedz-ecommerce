@@ -38,6 +38,8 @@ import { escapeHtml } from "../js/search.js";
 import { resolveDescriptionHtml } from "../js/descriptionFormat.js";
 import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
 import { withBase } from "../js/paths.js";
+import { preorderAvailabilityText } from "../js/preorder.js";
+import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -256,6 +258,21 @@ function renderDigitalDownloadNote(product) {
   `;
 }
 
+// Milestone 181, Part J: shown only for a Product both actively in
+// preorder AND marked eligible for the first-preorder discount — never
+// a claim about a Product that isn't actually configured that way.
+// `discountPercent` comes from the live, real programme settings (see
+// renderProductDetails()'s own fetch) — never a hardcoded "10%" that
+// could silently drift from what Preorder Settings actually says.
+function renderPreorderDiscountOffer(product, discountPercent) {
+  if (!product.isPreorderDiscountEligible || !discountPercent) return "";
+  return `
+    <div class="product-details__preorder-offer">
+      <p><strong>Registered customer offer.</strong> Get ${discountPercent}% off your first qualifying preorder when signed in. Sign in or create an account at checkout.</p>
+    </div>
+  `;
+}
+
 function renderSupportNote() {
   return `
     <h3>Support</h3>
@@ -377,6 +394,22 @@ export async function renderProductDetails({ slug } = {}) {
 
   const reviewData = await getProductReviews(product.slug);
 
+  // Milestone 181, Part J: best-effort, same discipline as every other
+  // "must never block the page" fetch on this site — a slow/failed
+  // lookup just means the registered-customer offer note doesn't show
+  // for this page load, never a broken product page.
+  let preorderDiscountPercent = null;
+  if (product.isPreorderDiscountEligible) {
+    try {
+      const settingsResponse = await getPublicPreorderSettings();
+      if (settingsResponse?.data?.firstRegisteredPreorderDiscountEnabled) {
+        preorderDiscountPercent = settingsResponse.data.firstRegisteredPreorderDiscountPercent;
+      }
+    } catch {
+      preorderDiscountPercent = null;
+    }
+  }
+
   const wishlisted = isInWishlist(product.id);
   const outOfStock = isOutOfStockForCart(product);
   const stockClass = product.stockStatus === "Low Stock" ? "product-details__stock--low" : product.stockStatus === "Out of Stock" ? "product-details__stock--out" : "";
@@ -400,6 +433,7 @@ export async function renderProductDetails({ slug } = {}) {
           <p class="product-details__category">${product.category}</p>
           <h1 class="product-details__title">${product.name}</h1>
           ${product.productType === "DIGITAL" ? `<span class="badge product-details__digital-badge">Digital Download</span>` : ""}
+          ${product.isPreorder ? `<span class="badge product-card__badge--preorder">Preorder</span>` : ""}
 
           <div class="product-details__price-row">
             <span class="product-details__price">R${product.price.toFixed(2)}</span>
@@ -407,7 +441,12 @@ export async function renderProductDetails({ slug } = {}) {
             ${product.discountLabel ? `<span class="badge">${product.discountLabel}</span>` : ""}
           </div>
 
-          <p class="product-details__stock ${stockClass}">${product.stockStatus}</p>
+          ${
+            product.isPreorder
+              ? `<p class="product-details__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
+              : `<p class="product-details__stock ${stockClass}">${product.stockStatus}</p>`
+          }
+          ${renderPreorderDiscountOffer(product, preorderDiscountPercent)}
           <p class="product-details__short-desc">${product.shortDescription}</p>
 
           <!--
@@ -419,7 +458,9 @@ export async function renderProductDetails({ slug } = {}) {
           <div class="product-details__purchase-row">
             <div class="product-details__quantity">
               <span>Quantity</span>
-              <div class="quantity-selector" ${product.productType !== "DIGITAL" ? `data-max-quantity="${product.stockQuantity}"` : ""}>
+              <div class="quantity-selector" ${
+                product.productType !== "DIGITAL" && !product.isPreorder ? `data-max-quantity="${product.stockQuantity}"` : ""
+              }>
                 <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity" ${outOfStock ? "disabled" : ""}>&minus;</button>
                 <input type="number" class="quantity-selector__input" value="1" min="1" readonly ${outOfStock ? "disabled" : ""} />
                 <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity" ${outOfStock ? "disabled" : ""}>&plus;</button>
@@ -439,8 +480,10 @@ export async function renderProductDetails({ slug } = {}) {
               data-price="${product.price}"
               data-image="${product.image}"
               data-product-type="${product.productType || "PHYSICAL"}"
+              data-is-preorder="${product.isPreorder ? "true" : "false"}"
+              data-preorder-release-at="${product.preorderReleaseAt || ""}"
             >
-              Add to Cart
+              ${product.isPreorder ? "Add Preorder to Cart" : "Add to Cart"}
             </button>
             `
             }

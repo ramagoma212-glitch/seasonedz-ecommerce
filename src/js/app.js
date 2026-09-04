@@ -112,6 +112,7 @@ import {
   updateAdminAffiliateProductSetting,
   deleteAdminAffiliateProductSetting,
 } from "./api/adminReferralsApi.js";
+import { updatePreorderSettings } from "./api/adminPreorderApi.js";
 import { renderProductSearchResults, renderSelectedProductPreview } from "../pages/adminReferralAffiliateProductForm.js";
 import {
   createAdminBrandKnowledgeEntry,
@@ -204,6 +205,7 @@ function mountApp() {
   setupAdminAffiliateProductSettingActions();
   setupAdminAffiliateApplicationActions();
   setupAdminReferralSettingsForm();
+  setupAdminPreorderSettingsForm();
   setupAdminCommissionFilterForm();
   setupAdminCommissionActions();
   setupAdminCommissionReverseForm();
@@ -419,6 +421,15 @@ function readProductFromButton(buttonEl) {
     image: buttonEl.dataset.image,
     category: buttonEl.dataset.category,
     productType: buttonEl.dataset.productType || "PHYSICAL",
+    // Milestone 181, Part K: a display-only snapshot carried onto the
+    // cart line at add-time (cart.js's addToCart()) so the cart page can
+    // show a "Preorder" badge/release date without re-fetching the live
+    // catalogue on every render — the backend independently re-derives
+    // the real preorder status from the live Product at checkout time
+    // regardless (see order.service.ts's verifyItems()), so a stale
+    // snapshot here can never affect what's actually charged.
+    isPreorder: buttonEl.dataset.isPreorder === "true",
+    preorderReleaseAt: buttonEl.dataset.preorderReleaseAt || null,
   };
 }
 
@@ -3136,6 +3147,32 @@ function setupAdminProductForm() {
     const digitalFields = form?.querySelector("[data-admin-digital-fields]");
     if (digitalFields) digitalFields.hidden = event.target.value !== "DIGITAL";
   });
+
+  // Milestone 181, Part C: shows/hides the preorder date/discount
+  // fields as the owner toggles Preorder Enabled — purely a display
+  // convenience, same pattern as the Product Type toggle above. The
+  // actual submit payload always reads isPreorderEnabled directly from
+  // the checkbox regardless of which fields are currently visible.
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-admin-preorder-enabled-toggle]")) return;
+    const form = event.target.closest("[data-admin-product-form]");
+    const preorderFields = form?.querySelector("[data-admin-preorder-fields]");
+    if (preorderFields) preorderFields.hidden = !event.target.checked;
+  });
+}
+
+// Milestone 181, Part T: a datetime-local input's value has no
+// timezone of its own — `new Date(value)` on a "YYYY-MM-DDTHH:mm"
+// string (no offset) is parsed as the browser's own local wall-clock
+// time per the ES2015+ Date-parsing spec, which for this dashboard
+// (used from South Africa) is SAST. Returns null for an empty/blank
+// input so an optional date field submits null rather than an
+// "Invalid Date" ISO string.
+function readAdminDatetimeLocalField(form, id) {
+  const raw = form.querySelector(`#${id}`)?.value;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function parseAdminProductFeatures(rawText) {
@@ -3165,6 +3202,11 @@ function readAdminProductFormValues(form) {
   const productType = form.querySelector("#productType")?.value || "PHYSICAL";
   const digitalTermsNote = form.querySelector("#productDigitalTermsNote")?.value.trim() || "";
   const downloadEnabled = form.querySelector("#productDownloadEnabled")?.checked ?? true;
+  const isPreorderEnabled = form.querySelector("#productPreorderEnabled")?.checked || false;
+  const preorderStartAt = readAdminDatetimeLocalField(form, "productPreorderStartAt");
+  const preorderEndAt = readAdminDatetimeLocalField(form, "productPreorderEndAt");
+  const preorderReleaseAt = readAdminDatetimeLocalField(form, "productPreorderReleaseAt");
+  const isPreorderDiscountEligible = form.querySelector("#productPreorderDiscountEligible")?.checked || false;
 
   return {
     name,
@@ -3185,6 +3227,11 @@ function readAdminProductFormValues(form) {
     productType,
     digitalTermsNote: digitalTermsNote || null,
     downloadEnabled,
+    isPreorderEnabled,
+    preorderStartAt,
+    preorderEndAt,
+    preorderReleaseAt,
+    isPreorderDiscountEligible,
   };
 }
 
@@ -3218,6 +3265,19 @@ function validateAdminProductForm(values, mode) {
   const descriptionCharacterCount = getDescriptionVisibleCharacterCount("productDescription");
   if (descriptionCharacterCount > MAX_DESCRIPTION_VISIBLE_CHARACTERS) {
     return `Full Description must be ${MAX_DESCRIPTION_VISIBLE_CHARACTERS} visible characters or fewer (currently ${descriptionCharacterCount}).`;
+  }
+
+  // Milestone 181, Part C: UX convenience only, mirroring
+  // preorder.service.ts's own validatePreorderConfig() — the backend
+  // remains the final authority regardless of what passes here.
+  if (values.isPreorderEnabled) {
+    if (!values.preorderReleaseAt) return "Release Date is required while Preorder Enabled is checked.";
+    if (values.preorderStartAt && values.preorderEndAt && new Date(values.preorderEndAt) < new Date(values.preorderStartAt)) {
+      return "Preorder End Date cannot be before Preorder Start Date.";
+    }
+    if (values.preorderStartAt && new Date(values.preorderReleaseAt) < new Date(values.preorderStartAt)) {
+      return "Release Date cannot be before Preorder Start Date.";
+    }
   }
 
   return null;
@@ -4157,6 +4217,83 @@ async function handleAdminReferralSettingsFormSubmit(form) {
       redirectToAdminLogin();
       return;
     } else if (error instanceof ApiError && error.status === 400) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 181, Part D: store-wide preorder programme settings — same
+// pattern as the referral settings form just above. The form only ever
+// renders its Save button for a signed-in ADMIN (see
+// pages/adminPreorderSettings.js), but the backend's own ADMIN-only
+// gate (adminPreorder.routes.ts) is the real enforcement.
+function setupAdminPreorderSettingsForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-preorder-settings-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminPreorderSettingsFormSubmit(form);
+  });
+}
+
+function readAdminPreorderSettingsFormValues(form) {
+  return {
+    firstRegisteredPreorderDiscountEnabled: form.querySelector("#preorderSettingsDiscountEnabled")?.checked ?? true,
+    firstRegisteredPreorderDiscountPercent: Number(form.querySelector("#preorderSettingsDiscountPercent")?.value),
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (preorderProgrammeSettings.service.ts) independently re-validates
+// every field regardless and remains the final authority.
+function validateAdminPreorderSettingsForm(values) {
+  if (!Number.isFinite(values.firstRegisteredPreorderDiscountPercent) || values.firstRegisteredPreorderDiscountPercent < 0 || values.firstRegisteredPreorderDiscountPercent > 50) {
+    return "First preorder discount % must be a number between 0 and 50.";
+  }
+  return null;
+}
+
+async function handleAdminPreorderSettingsFormSubmit(form) {
+  const banner = form.querySelector("[data-admin-preorder-settings-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminPreorderSettingsFormValues(form);
+  const validationError = validateAdminPreorderSettingsForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updatePreorderSettings(values);
+    setPendingAdminMessage("Preorder programme settings updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 403)) {
       message = error.message;
     } else if (error instanceof ApiUnavailableError) {
       message = "We could not connect to the admin system right now. Please try again shortly.";

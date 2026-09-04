@@ -93,12 +93,24 @@ function withinWindow(at: Date, startsAt: Date | null, endsAt: Date | null): boo
 // rather than re-derived here, so there is exactly one place
 // (referralPricing.service.ts's resolveCommissionRate()) that ever
 // decides what an affiliate's "own rate" is.
+//
+// Milestone 181, Part H: `discountRateOverrideByOrderItemId` is an
+// optional per-line override — order.service.ts passes one entry per
+// line that actually received the STRONGER first-preorder discount
+// instead of the customer's ordinary referral discount, so that
+// specific line's own "net amount for commission purposes" reflects
+// the 10% it genuinely lost, not the flat referral rate every other
+// line uses. A line with no entry in the map keeps using
+// `discountRateApplied` exactly as before this milestone — this
+// parameter is purely additive, and every pre-181 caller that never
+// passes it behaves identically.
 export function calculateProductCommissions(
   items: OrderItemForCommission[],
   settingsByProductId: Map<string, AffiliateProductSettingSnapshot>,
   fallbackCommissionPercent: Prisma.Decimal,
   discountRateApplied: Prisma.Decimal,
-  orderCreatedAt: Date
+  orderCreatedAt: Date,
+  discountRateOverrideByOrderItemId: Map<string, Prisma.Decimal> = new Map()
 ): ProductCommissionCalculationResult {
   const lines: ProductLineCommissionResult[] = [];
 
@@ -117,7 +129,8 @@ export function calculateProductCommissions(
       fixedCommissionAmount = setting.fixedCommissionAmount ?? new Prisma.Decimal(0);
       calculated = roundHalfUpToCents(fixedCommissionAmount.times(item.quantity));
     } else {
-      const netLineAmount = roundHalfUpToCents(item.lineTotal.times(new Prisma.Decimal(100).minus(discountRateApplied)).dividedBy(100));
+      const effectiveDiscountRate = discountRateOverrideByOrderItemId.get(item.orderItemId) ?? discountRateApplied;
+      const netLineAmount = roundHalfUpToCents(item.lineTotal.times(new Prisma.Decimal(100).minus(effectiveDiscountRate)).dividedBy(100));
       commissionPercent = setting.commissionPercent ?? fallbackCommissionPercent;
       calculated = roundHalfUpToCents(netLineAmount.times(commissionPercent).dividedBy(100));
     }

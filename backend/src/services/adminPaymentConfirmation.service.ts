@@ -48,6 +48,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from "@prisma/clien
 import { prisma } from "../config/prisma.js";
 import type { SafeAdminProfile } from "./adminAuth.service.js";
 import { scheduleProductReviewRequestForDigitalOrder } from "./productReviewRequest.service.js";
+import { consumePreorderDiscountRedemption } from "./preorderDiscountRedemption.service.js";
 
 export class ManualPaymentConfirmationError extends Error {
   statusCode: number;
@@ -151,6 +152,11 @@ export async function confirmManualPayment(orderNumber: string, admin: SafeAdmin
     // never touches Order.status itself — see this file's own header
     // comment for why.
     await tx.order.update({ where: { id: order.id }, data: { paymentStatus: PaymentStatus.PAID } });
+
+    // Milestone 181, Part F: same consumption hook as payfast.service.ts's
+    // own COMPLETE branch — Payment.status reaching PAID is the one
+    // moment shared by every payment method's own transaction.
+    await consumePreorderDiscountRedemption(tx, order.id);
 
     // Payment.amount is never touched here — it stays exactly what
     // order.service.ts's createOrder() originally set from verified,

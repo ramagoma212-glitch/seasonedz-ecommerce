@@ -12,6 +12,7 @@ import { ApiError } from "../js/apiClient.js";
 import { escapeHtml } from "../js/search.js";
 import { renderDigitalDownloadsCard } from "../components/digitalDownloadsCard.js";
 import { renderReviewPromptsCard } from "../components/reviewPrompt.js";
+import { preorderAvailabilityText, preorderShipTogetherNotice } from "../js/preorder.js";
 
 function humanizeEnum(value) {
   return value
@@ -49,8 +50,33 @@ function renderItemRow(item) {
       <div class="account-order-item__details">
         <p class="account-order-item__name">${escapeHtml(item.productName)}</p>
         <p class="account-order-item__meta">Qty ${item.quantity} &times; ${formatRand(item.unitPrice)}</p>
+        ${
+          item.isPreorder
+            ? `<p class="account-order-item__meta">Preorder. ${preorderAvailabilityText(item.preorderReleaseAt)}${
+                item.preorderDiscountAmount ? ` First preorder discount applied: -${formatRand(item.preorderDiscountAmount)}.` : ""
+              }</p>`
+            : ""
+        }
       </div>
       <p class="account-order-item__total">${formatRand(item.lineTotal)}</p>
+    </div>
+  `;
+}
+
+// Milestone 181, Part P: a simple, informative notice while an order is
+// still waiting on its preorder item(s) — never a fabricated shipping
+// status. Once the latest release date has passed, this stops showing
+// (the order becomes eligible for normal fulfilment display below —
+// still never automatically SHIPPED/DELIVERED, per Part R).
+function renderPreorderWaitingNotice(order) {
+  if (!order.containsPreorder) return "";
+  const releaseHasPassed = order.latestPreorderReleaseAt && new Date(order.latestPreorderReleaseAt).getTime() <= Date.now();
+  if (releaseHasPassed) return "";
+
+  return `
+    <div class="demo-notice">
+      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
+      <div><p>${preorderShipTogetherNotice(order.latestPreorderReleaseAt)}</p></div>
     </div>
   `;
 }
@@ -121,10 +147,17 @@ function renderOrderDetail(order, digitalItems, reviewPromptsForOrder) {
         <div class="order-confirmation__row"><span>Payment Method</span><span>${humanizeEnum(order.paymentMethod)}</span></div>
         <div class="order-confirmation__row"><span>Payment Status</span><span class="badge">${humanizeEnum(order.paymentStatus)}</span></div>
         <div class="order-confirmation__row"><span>Subtotal</span><span>${formatRand(order.subtotal)}</span></div>
+        ${
+          order.preorderDiscountTotal > 0
+            ? `<div class="order-confirmation__row"><span>First Preorder Discount</span><span>-${formatRand(order.preorderDiscountTotal)}</span></div>`
+            : ""
+        }
         <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
         <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)}</span></div>
         <div class="order-confirmation__row"><span>Total</span><span>${formatRand(order.total)}</span></div>
       </div>
+
+      ${renderPreorderWaitingNotice(order)}
 
       <div class="order-confirmation__card">
         <h3>Items</h3>
