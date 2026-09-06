@@ -62,6 +62,9 @@ test("an adversarial product description never reaches systemInstructions either
       isInStock: true,
       status: "ACTIVE",
       images: [],
+      isActivePreorder: false,
+      isPreorderDiscountEligible: false,
+      preorderReleaseAt: null,
     },
   });
 

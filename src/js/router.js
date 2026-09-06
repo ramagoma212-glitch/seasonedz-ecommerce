@@ -121,6 +121,12 @@ import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
 // Milestone 181, Part D: the preorder programme's own settings page —
 // separate from Referrals above, reached from the Products page.
 import { renderAdminPreorderSettings } from "../pages/adminPreorderSettings.js";
+// Milestone 182: Content Studio repurposed as the Seasonedz Marketing
+// Control Centre — see adminContentStudioHome.js's own header comment.
+import { renderAdminContentStudioHome } from "../pages/adminContentStudioHome.js";
+import { renderAdminCampaignBriefs } from "../pages/adminCampaignBriefs.js";
+import { renderAdminCampaignBriefCreate, renderAdminCampaignBriefEdit } from "../pages/adminCampaignBriefForm.js";
+import { renderAdminCampaignBriefDetail } from "../pages/adminCampaignBriefDetail.js";
 // Content Studio Phase 2: Brand Knowledge Foundation only — no
 // campaign/generation/publishing page exists anywhere yet.
 import { renderAdminBrandKnowledge } from "../pages/adminBrandKnowledge.js";
@@ -407,6 +413,7 @@ const routeDefs = [
   // group above.
   { pattern: "/admin/content-studio/brand-knowledge/new", render: renderAdminBrandKnowledgeCreate, title: "Add Brand Knowledge Entry", noindex: true },
   { pattern: "/admin/content-studio/brand-knowledge/:id/edit", render: renderAdminBrandKnowledgeEdit, title: "Edit Brand Knowledge Entry", noindex: true },
+  { pattern: "/admin/content-studio/brand-knowledge", render: renderAdminBrandKnowledge, title: "Brand Knowledge", noindex: true },
   { pattern: "/admin/content-studio/pillars/new", render: renderAdminContentPillarCreate, title: "Add Content Pillar", noindex: true },
   { pattern: "/admin/content-studio/pillars/:id/edit", render: renderAdminContentPillarEdit, title: "Edit Content Pillar", noindex: true },
   { pattern: "/admin/content-studio/pillars", render: renderAdminContentPillars, title: "Content Pillars", noindex: true },
@@ -414,7 +421,14 @@ const routeDefs = [
   { pattern: "/admin/content-studio/audiences/:id/edit", render: renderAdminAudienceEdit, title: "Edit Audience", noindex: true },
   { pattern: "/admin/content-studio/audiences", render: renderAdminAudiences, title: "Audiences", noindex: true },
   { pattern: "/admin/content-studio/context-preview", render: renderAdminContentContextPreview, title: "AI Context Preview", noindex: true },
-  { pattern: "/admin/content-studio", render: renderAdminBrandKnowledge, title: "Content Studio", noindex: true },
+  // Milestone 182: Zeely Campaign Brief tool — "/new" before the
+  // ":id" wildcard, same ordering discipline as every other admin
+  // list/:id-wildcard pair in this file.
+  { pattern: "/admin/content-studio/campaign-briefs/new", render: renderAdminCampaignBriefCreate, title: "New Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs/:id/edit", render: renderAdminCampaignBriefEdit, title: "Edit Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs/:id", render: renderAdminCampaignBriefDetail, title: "Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs", render: renderAdminCampaignBriefs, title: "Campaign Briefs", noindex: true },
+  { pattern: "/admin/content-studio", render: renderAdminContentStudioHome, title: "Content Studio", noindex: true },
   // Milestone 179, Part G: admin-user management — ADMIN-only,
   // backend-enforced (see adminUsers.routes.ts). "/invite" before the
   // bare list, same ordering discipline as every other admin

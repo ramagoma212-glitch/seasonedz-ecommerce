@@ -270,6 +270,13 @@ model Product {
   preorderReleaseAt         DateTime?
   isPreorderDiscountEligible Boolean  @default(false)
 
+  // Milestone 182: campaign briefs prepared for Zeely that reference
+  // this product. A brief snapshots the facts it used at generation
+  // time (see CampaignBrief's own header comment), so this relation is
+  // purely for lookup/traceability, never re-read to reinterpret a
+  // historical brief.
+  campaignBriefs CampaignBrief[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1009,6 +1016,11 @@ model AdminUser {
   // and, later, the editor of the same entry.
   brandKnowledgeEntriesCreated      BrandKnowledgeEntry[]        @relation("BrandKnowledgeEntryCreatedBy")
   brandKnowledgeEntriesUpdated      BrandKnowledgeEntry[]        @relation("BrandKnowledgeEntryUpdatedBy")
+  // Milestone 182: same SetNull, two-named-relation discipline as
+  // brandKnowledgeEntriesCreated/Updated above.
+  campaignBriefsCreated         CampaignBrief[]         @relation("CampaignBriefCreatedBy")
+  campaignBriefsUpdated         CampaignBrief[]         @relation("CampaignBriefUpdatedBy")
+  campaignContentRecordsCreated CampaignContentRecord[] @relation("CampaignContentRecordCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2505,6 +2517,8 @@ model ContentPillar {
   sortOrder   Int     @default(0)
 
   brandKnowledgeEntries BrandKnowledgeEntry[]
+  // Milestone 182.
+  campaignBriefs        CampaignBrief[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2532,9 +2546,155 @@ model Audience {
   isActive         Boolean @default(true)
 
   brandKnowledgeEntries BrandKnowledgeEntry[]
+  // Milestone 182.
+  campaignBriefs        CampaignBrief[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([isActive])
+}
+
+// ============================================================
+// Milestone 182: Seasonedz Marketing Control Centre — repurposes
+// Content Studio Phase 2/3A's Brand Knowledge/Pillar/Audience/Context
+// foundation for a new purpose. The owner has decided NOT to pursue
+// paid Claude/Gemini/Veo generation for now; instead, Seasonedz staff
+// prepare a structured "Zeely Campaign Brief" here (deterministically
+// assembled from real Product data, Brand Knowledge, the selected
+// Audience/Pillar/Platforms/Goal, and admin-entered instructions — see
+// zeelyCampaignBrief.service.ts), copy it, and paste it into Zeely
+// (a separate, owner-subscribed content-creation tool) to actually
+// create the content. No AI provider call, paid or otherwise, is
+// involved in producing generatedBriefText.
+//
+// SNAPSHOT DISCIPLINE: generatedBriefText is captured at generation
+// time and never silently reinterpreted — the same "immutable
+// historical record" rule this schema already applies to OrderItem's
+// preorder snapshot (Milestone 181). If a field a brief depends on
+// (Product price, preorder status, a Brand Knowledge entry) changes
+// later, the ALREADY-GENERATED brief text does not silently change
+// with it — a brief only ever gets a new generatedBriefText when
+// explicitly regenerated (zeelyCampaignBrief.service.ts's own
+// regenerateCampaignBrief()), which re-reads current data and
+// overwrites the snapshot on purpose.
+// ============================================================
+
+enum CampaignGoal {
+  AWARENESS
+  PREORDER
+  PRODUCT_LAUNCH
+  SALES
+  EDUCATION
+  ENGAGEMENT
+  CUSTOMER_FEEDBACK
+  FAITH_BASED_EDUCATION
+  SCHOOL_OUTREACH
+  CHURCH_OUTREACH
+  BULK_BUYING
+}
+
+enum CampaignPlatform {
+  FACEBOOK
+  INSTAGRAM
+  TIKTOK
+  WHATSAPP
+  X
+  LINKEDIN
+  REDDIT
+}
+
+// Manually controlled only (Part G) — nothing in this codebase ever
+// automatically knows what actually happened inside Zeely. DRAFT is
+// the only status a brand-new brief can start in; every other
+// transition is an explicit staff/admin action (see
+// campaignBrief.service.ts's own ALLOWED_STATUS_TRANSITIONS).
+enum CampaignBriefStatus {
+  DRAFT
+  READY_FOR_ZEELY
+  CREATED_IN_ZEELY
+  APPROVED
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+model CampaignBrief {
+  id String @id @default(cuid())
+
+  // All three optional and SetNull — a brief remains readable (its own
+  // generatedBriefText snapshot is unaffected) even if the Product/
+  // Audience/Pillar it referenced is later removed.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  audienceId String?
+  audience   Audience? @relation(fields: [audienceId], references: [id], onDelete: SetNull)
+  pillarId String?
+  pillar   ContentPillar? @relation(fields: [pillarId], references: [id], onDelete: SetNull)
+
+  platforms CampaignPlatform[]
+  goal      CampaignGoal
+
+  // Free-text campaign type (e.g. "Reel", "Carousel", "Story") — kept
+  // as plain text rather than a closed enum, since Zeely's own content-
+  // type vocabulary is outside this system's control and may not match
+  // a fixed list here.
+  campaignType    String?
+  contentQuantity Int?
+  campaignStartAt DateTime?
+  campaignEndAt   DateTime?
+  callToAction    String?  @db.Text
+  additionalInstructions String? @db.Text
+
+  // The deterministically-generated brief text — see this section's own
+  // header comment on the snapshot discipline.
+  generatedBriefText String   @db.Text
+  generatedAt         DateTime @default(now())
+
+  status CampaignBriefStatus @default(DRAFT)
+
+  createdByAdminId String?
+  createdByAdmin   AdminUser? @relation("CampaignBriefCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+  updatedByAdminId String?
+  updatedByAdmin   AdminUser? @relation("CampaignBriefUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: SetNull)
+
+  contentRecords CampaignContentRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([productId])
+  @@index([audienceId])
+  @@index([pillarId])
+  @@index([createdAt])
+}
+
+// Part H: a lightweight record of what was actually created/published
+// in Zeely for a given brief — staff-entered, never auto-populated
+// (this backend has no Zeely integration — see Part I). Deliberately
+// NOT a social media management platform: no publishing action, no
+// scheduling engine, just a record.
+model CampaignContentRecord {
+  id              String @id @default(cuid())
+  campaignBriefId String
+  campaignBrief   CampaignBrief @relation(fields: [campaignBriefId], references: [id], onDelete: Cascade)
+
+  contentType String // free text, e.g. "Image", "Video", "Carousel", "Story"
+  platform    CampaignPlatform?
+  caption     String? @db.Text
+  notes       String? @db.Text
+  scheduledAt DateTime?
+  publishedAt DateTime?
+  // A Zeely permalink or other external reference the staff member
+  // pastes in by hand — never fetched or verified by this backend.
+  externalReference String?
+
+  createdByAdminId String?
+  createdByAdmin   AdminUser? @relation("CampaignContentRecordCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignBriefId])
 }

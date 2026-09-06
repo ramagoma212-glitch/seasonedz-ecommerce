@@ -105,11 +105,37 @@ test.describe("Admin navigation", () => {
   });
 });
 
+// Milestone 182: the bare /admin/content-studio path now renders the
+// new landing page ("Seasonedz Marketing Control Centre"), not Brand
+// Knowledge directly — Brand Knowledge moved to its own dedicated path.
+test.describe("Content Studio home (Milestone 182)", () => {
+  test("shows the repurposed description and links to Campaign Briefs, Brand Knowledge, Pillars, Audiences and Context Preview", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.goto("/admin/content-studio");
+
+    await expect(page.getByText(/Plan Seasonedz campaigns, prepare content briefs/)).toBeVisible();
+    await expect(page.locator('a[href="/admin/content-studio/campaign-briefs"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/admin/content-studio/brand-knowledge"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/admin/content-studio/pillars"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/admin/content-studio/audiences"]').first()).toBeVisible();
+    await expect(page.locator('a[href="/admin/content-studio/context-preview"]').first()).toBeVisible();
+  });
+
+  test("never mentions Claude, Anthropic, Gemini or Veo, and has no paid-generation button", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.goto("/admin/content-studio");
+    const bodyText = (await page.locator("body").innerText()).toLowerCase();
+    for (const forbidden of ["claude", "anthropic", "gemini", "veo"]) {
+      expect(bodyText.includes(forbidden), `home page unexpectedly mentions "${forbidden}"`).toBe(false);
+    }
+  });
+});
+
 test.describe("Brand Knowledge admin", () => {
   test("list page shows entries with category, source, tags and status", async ({ page }) => {
     await mockAdminAuth(page);
     await mockBrandKnowledgeList(page);
-    await page.goto("/admin/content-studio");
+    await page.goto("/admin/content-studio/brand-knowledge");
 
     await expect(page.getByText("Use colouring, not coloring")).toBeVisible();
     await expect(page.getByRole("cell", { name: "Writing Rule" })).toBeVisible();
@@ -120,7 +146,7 @@ test.describe("Brand Knowledge admin", () => {
   test("empty state shows when no entries exist", async ({ page }) => {
     await mockAdminAuth(page);
     await mockBrandKnowledgeList(page, []);
-    await page.goto("/admin/content-studio");
+    await page.goto("/admin/content-studio/brand-knowledge");
     await expect(page.getByText(/No brand knowledge entries yet/)).toBeVisible();
   });
 
@@ -173,7 +199,7 @@ test.describe("Brand Knowledge admin", () => {
       return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ ...MOCK_ENTRY, isActive }) });
     });
 
-    await page.goto("/admin/content-studio");
+    await page.goto("/admin/content-studio/brand-knowledge");
     await page.locator('[data-action="deactivate-entry"]').click();
     await expect(page.locator(".admin-badge", { hasText: "Inactive" })).toBeVisible();
   });

@@ -39,6 +39,18 @@ import {
   updateAudienceHandler,
 } from "../controllers/audience.controller.js";
 import { previewContentContextHandler } from "../controllers/contentContextPreview.controller.js";
+import {
+  listCampaignBriefsHandler,
+  getCampaignBriefHandler,
+  createCampaignBriefHandler,
+  updateCampaignBriefHandler,
+  regenerateCampaignBriefHandler,
+  updateCampaignBriefStatusHandler,
+  archiveCampaignBriefHandler,
+  createCampaignContentRecordHandler,
+  updateCampaignContentRecordHandler,
+  deleteCampaignContentRecordHandler,
+} from "../controllers/campaignBrief.controller.js";
 
 const router = Router();
 
@@ -74,5 +86,23 @@ router.patch("/audiences/:id/reactivate", adminOnly, reactivateAudienceHandler);
 // receive. See contentContextPreview.controller.ts's own header
 // comment.
 router.post("/context-preview", previewContentContextHandler);
+
+// Milestone 182, Part J: STAFF may create/edit a working (non-archived)
+// brief, copy it, regenerate it, move its workflow status, and record
+// content — matching "create campaign briefs, edit working campaign
+// briefs, copy briefs for Zeely, record content workflow status".
+// Archiving is the one campaign-brief action reserved to ADMIN ("manage
+// ... create/edit/archive campaign briefs"), enforced with the same
+// adminOnly gate as Brand Knowledge/Pillars/Audiences writes above.
+router.get("/campaign-briefs", listCampaignBriefsHandler);
+router.get("/campaign-briefs/:id", getCampaignBriefHandler);
+router.post("/campaign-briefs", createCampaignBriefHandler);
+router.patch("/campaign-briefs/:id", updateCampaignBriefHandler);
+router.post("/campaign-briefs/:id/regenerate", regenerateCampaignBriefHandler);
+router.patch("/campaign-briefs/:id/status", updateCampaignBriefStatusHandler);
+router.patch("/campaign-briefs/:id/archive", adminOnly, archiveCampaignBriefHandler);
+router.post("/campaign-briefs/:id/content-records", createCampaignContentRecordHandler);
+router.patch("/campaign-briefs/:briefId/content-records/:recordId", updateCampaignContentRecordHandler);
+router.delete("/campaign-briefs/:briefId/content-records/:recordId", deleteCampaignContentRecordHandler);
 
 export default router;

@@ -114,7 +114,7 @@ function renderPagination(result, query) {
   function pageLink(page) {
     const params = new URLSearchParams(query);
     params.set("page", page);
-    return `/admin/content-studio?${params.toString()}`;
+    return `/admin/content-studio/brand-knowledge?${params.toString()}`;
   }
 
   return `

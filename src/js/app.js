@@ -131,6 +131,15 @@ import {
 } from "./api/contentStudioApi.js";
 import { renderContextPreviewResult } from "../pages/adminContentContextPreview.js";
 import {
+  createAdminCampaignBrief,
+  updateAdminCampaignBrief,
+  regenerateAdminCampaignBrief,
+  updateAdminCampaignBriefStatus,
+  archiveAdminCampaignBrief,
+  createAdminCampaignContentRecord,
+  deleteAdminCampaignContentRecord,
+} from "./api/campaignBriefApi.js";
+import {
   requestAdminAffiliateApplicationCorrection,
   approveAdminAffiliateApplication,
   rejectAdminAffiliateApplication,
@@ -217,6 +226,10 @@ function mountApp() {
   setupAdminBrandKnowledgeActions();
   setupAdminContentPillarFilterForm();
   setupAdminContentPillarForm();
+  setupAdminCampaignBriefFilterForm();
+  setupAdminCampaignBriefForm();
+  setupAdminCampaignBriefActions();
+  setupAdminContentRecordForm();
   setupAdminContentPillarActions();
   setupAdminAudienceFilterForm();
   setupAdminAudienceForm();
@@ -4729,6 +4742,341 @@ async function handleAdminContentPillarFormSubmit(form) {
     }
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 182: Zeely Campaign Brief tool. Every action here relays a
+// controlled-field form or a single button click to the real backend
+// (campaignBrief.service.ts) — nothing here calls a paid AI provider or
+// Zeely itself. "Copy for Zeely" and "Download as .txt" both operate on
+// the exact generatedBriefText already rendered on the page, never a
+// re-fetch or a re-generation.
+// ---------------------------------------------------------------------------
+
+function setupAdminCampaignBriefFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-campaign-brief-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const status = form.querySelector('select[name="status"]')?.value || "";
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    navigateTo(`/admin/content-studio/campaign-briefs?${params.toString()}`);
+  });
+}
+
+function readAdminCampaignBriefFormValues(form) {
+  const platforms = Array.from(form.querySelectorAll('input[name="briefPlatform"]:checked')).map((input) => input.value);
+  const contentQuantityRaw = form.querySelector("#briefContentQuantity")?.value;
+  const startRaw = form.querySelector("#briefStartDate")?.value;
+  const endRaw = form.querySelector("#briefEndDate")?.value;
+
+  return {
+    productId: form.querySelector("#briefProduct")?.value || "",
+    audienceId: form.querySelector("#briefAudience")?.value || "",
+    pillarId: form.querySelector("#briefPillar")?.value || "",
+    platforms,
+    goal: form.querySelector("#briefGoal")?.value || "",
+    campaignType: form.querySelector("#briefCampaignType")?.value.trim() || null,
+    contentQuantity: contentQuantityRaw ? Number(contentQuantityRaw) : null,
+    campaignStartAt: startRaw || null,
+    campaignEndAt: endRaw || null,
+    callToAction: form.querySelector("#briefCallToAction")?.value.trim() || null,
+    additionalInstructions: form.querySelector("#briefAdditionalInstructions")?.value.trim() || null,
+  };
+}
+
+// Client-side validation is a UX convenience only — campaignBrief.service.ts
+// independently re-validates every field and remains the final authority.
+function validateAdminCampaignBriefForm(values) {
+  if (!values.productId) return "Product is required.";
+  if (!values.audienceId) return "Audience is required.";
+  if (!values.pillarId) return "Content Pillar is required.";
+  if (values.platforms.length === 0) return "At least one platform must be selected.";
+  if (!values.goal) return "Campaign Goal is required.";
+  if (values.campaignStartAt && values.campaignEndAt && values.campaignEndAt < values.campaignStartAt) {
+    return "Campaign End Date cannot be before Campaign Start Date.";
+  }
+  return null;
+}
+
+function setupAdminCampaignBriefForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-campaign-brief-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminCampaignBriefFormSubmit(form);
+  });
+}
+
+async function handleAdminCampaignBriefFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-campaign-brief-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminCampaignBriefFormValues(form);
+  const validationError = validateAdminCampaignBriefForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminCampaignBrief(values);
+      setPendingAdminMessage("Campaign brief generated successfully.");
+      navigateTo(`/admin/content-studio/campaign-briefs/${encodeURIComponent(response.data.id)}`);
+    } else {
+      const briefId = form.dataset.briefId;
+      await updateAdminCampaignBrief(briefId, values);
+      setPendingAdminMessage("Campaign brief updated and regenerated successfully.");
+      navigateTo(`/admin/content-studio/campaign-briefs/${encodeURIComponent(briefId)}`);
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 172B.6's own handleCopyReferralLink() established this
+// clipboard-with-fallback pattern — reused verbatim here for the brief
+// text instead of a referral link.
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function downloadTextFile(filename, text) {
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function handleCampaignBriefCopy(button) {
+  const text = document.querySelector("[data-admin-campaign-brief-text]")?.textContent || "";
+  const succeeded = await copyTextToClipboard(text);
+  const originalText = button.textContent;
+  button.textContent = succeeded ? "Copied!" : "Could not copy";
+  setTimeout(() => {
+    button.textContent = originalText;
+  }, 2000);
+}
+
+function handleCampaignBriefDownload() {
+  const text = document.querySelector("[data-admin-campaign-brief-text]")?.textContent || "";
+  downloadTextFile(`zeely-campaign-brief-${Date.now()}.txt`, text);
+}
+
+async function handleCampaignBriefRegenerate(button) {
+  const briefId = button.dataset.briefId;
+  const banner = document.querySelector("[data-admin-campaign-brief-detail-banner]");
+  button.disabled = true;
+  try {
+    await regenerateAdminCampaignBrief(briefId);
+    setPendingAdminMessage("Campaign brief regenerated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleCampaignBriefSetStatus(button) {
+  const briefId = button.dataset.briefId;
+  const status = button.dataset.status;
+  const banner = document.querySelector("[data-admin-campaign-brief-detail-banner]");
+  button.disabled = true;
+  try {
+    await updateAdminCampaignBriefStatus(briefId, status);
+    setPendingAdminMessage("Campaign brief status updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleCampaignBriefArchive(button) {
+  if (!window.confirm("Archive this campaign brief? It can no longer be edited afterwards.")) return;
+  const briefId = button.dataset.briefId;
+  const banner = document.querySelector("[data-admin-campaign-brief-detail-banner]");
+  button.disabled = true;
+  try {
+    await archiveAdminCampaignBrief(briefId);
+    setPendingAdminMessage("Campaign brief archived successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+function setupAdminCampaignBriefActions() {
+  document.addEventListener("click", (event) => {
+    const copyButton = event.target.closest('[data-action="campaign-brief-copy"]');
+    if (copyButton) {
+      handleCampaignBriefCopy(copyButton);
+      return;
+    }
+    const downloadButton = event.target.closest('[data-action="campaign-brief-download"]');
+    if (downloadButton) {
+      handleCampaignBriefDownload();
+      return;
+    }
+    const regenerateButton = event.target.closest('[data-action="campaign-brief-regenerate"]');
+    if (regenerateButton) {
+      handleCampaignBriefRegenerate(regenerateButton);
+      return;
+    }
+    const statusButton = event.target.closest('[data-action="campaign-brief-set-status"]');
+    if (statusButton) {
+      handleCampaignBriefSetStatus(statusButton);
+      return;
+    }
+    const archiveButton = event.target.closest('[data-action="campaign-brief-archive"]');
+    if (archiveButton) {
+      handleCampaignBriefArchive(archiveButton);
+    }
+  });
+}
+
+function readAdminContentRecordFormValues(form) {
+  return {
+    contentType: form.querySelector("#contentRecordType")?.value.trim() || "",
+    platform: form.querySelector("#contentRecordPlatform")?.value || null,
+    caption: form.querySelector("#contentRecordCaption")?.value.trim() || null,
+    scheduledAt: form.querySelector("#contentRecordScheduledAt")?.value || null,
+    publishedAt: form.querySelector("#contentRecordPublishedAt")?.value || null,
+    externalReference: form.querySelector("#contentRecordExternalReference")?.value.trim() || null,
+  };
+}
+
+function setupAdminContentRecordForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-content-record-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminContentRecordFormSubmit(form);
+  });
+
+  document.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest('[data-action="campaign-content-record-delete"]');
+    if (deleteButton) {
+      handleCampaignContentRecordDelete(deleteButton);
+    }
+  });
+}
+
+async function handleAdminContentRecordFormSubmit(form) {
+  const briefId = form.dataset.briefId;
+  const banner = form.querySelector("[data-admin-content-record-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminContentRecordFormValues(form);
+  if (!values.contentType) {
+    if (banner) {
+      banner.textContent = "Content Type is required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await createAdminCampaignContentRecord(briefId, values);
+    setPendingAdminMessage("Content record added successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleCampaignContentRecordDelete(button) {
+  if (!window.confirm("Remove this content record?")) return;
+  const briefId = button.dataset.briefId;
+  const recordId = button.dataset.recordId;
+  button.disabled = true;
+  try {
+    await deleteAdminCampaignContentRecord(briefId, recordId);
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    window.alert(error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.");
   }
 }
 

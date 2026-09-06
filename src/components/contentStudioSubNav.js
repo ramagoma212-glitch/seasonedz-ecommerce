@@ -7,7 +7,13 @@
 // look larger" instruction.
 
 const SUB_NAV_LINKS = [
-  { key: "brand-knowledge", href: "/admin/content-studio", label: "Brand Knowledge" },
+  // Milestone 182, Part C: the Content Studio landing page — see
+  // pages/adminContentStudioHome.js.
+  { key: "home", href: "/admin/content-studio", label: "Home" },
+  // Milestone 182: the Zeely Campaign Brief tool — see
+  // campaignBrief.service.ts's own header comment for the architecture.
+  { key: "campaign-briefs", href: "/admin/content-studio/campaign-briefs", label: "Campaign Briefs" },
+  { key: "brand-knowledge", href: "/admin/content-studio/brand-knowledge", label: "Brand Knowledge" },
   { key: "pillars", href: "/admin/content-studio/pillars", label: "Content Pillars" },
   { key: "audiences", href: "/admin/content-studio/audiences", label: "Audiences" },
   // Phase 3A: a read-only preview of the structured context a future

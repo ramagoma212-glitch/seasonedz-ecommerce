@@ -7,7 +7,7 @@
 // Version 7, Milestone 171C: APPROVED/REJECTED added for the genuine
 // product review moderation queue (pages/adminReviews.js) — the same
 // generic tone convention every other admin status badge already uses.
-const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED"]);
+const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED"]);
 const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED"]);
 
 export function humanizeEnum(value) {

@@ -245,7 +245,7 @@ test.describe("Copy audit: admin pages", () => {
       });
     });
 
-    await page.goto("/admin/content-studio");
+    await page.goto("/admin/content-studio/brand-knowledge");
     await assertNoDecorativeDashes(page, "admin brand knowledge list");
   });
 
@@ -297,5 +297,32 @@ test.describe("Copy audit: admin pages", () => {
 
     await page.goto("/admin/content-studio/context-preview");
     await assertNoDecorativeDashes(page, "admin AI context preview page");
+  });
+
+  // Milestone 182: the repurposed Content Studio home page and the
+  // Zeely Campaign Brief tool.
+  test("admin Content Studio home page has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.goto("/admin/content-studio");
+    await assertNoDecorativeDashes(page, "admin Content Studio home page");
+  });
+
+  test("admin campaign brief creation form has no em/en dash in its rendered body text", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/products*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ products: [], total: 0, page: 1, limit: 100, totalPages: 1 }) });
+    });
+    await page.route("**/api/admin/content-studio/pillars*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope([]) });
+    });
+    await page.route("**/api/admin/content-studio/audiences*", (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope([]) });
+    });
+
+    await page.goto("/admin/content-studio/campaign-briefs/new");
+    await assertNoDecorativeDashes(page, "admin campaign brief creation form");
   });
 });

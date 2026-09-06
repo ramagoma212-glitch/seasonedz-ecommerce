@@ -18,6 +18,7 @@
 import { prisma } from "../../config/prisma.js";
 import { BrandKnowledgeCategory } from "@prisma/client";
 import { getKnowledgeContext } from "../brandKnowledge.service.js";
+import { isActivePreorder, isActivePreorderDiscountEligible } from "../preorder.service.js";
 
 export class ContentContextError extends Error {
   constructor(
@@ -46,6 +47,16 @@ export interface ProductContentContext {
   isInStock: boolean;
   status: string;
   images: string[];
+  // Milestone 182, Part K: computed the exact same way the storefront
+  // itself decides preorder status (preorder.service.ts's
+  // isActivePreorder()/isActivePreorderDiscountEligible()) — never a
+  // raw isPreorderEnabled flag, and never trusted as static once
+  // written. A campaign brief built from this context automatically
+  // stops presenting a product as preorder once its configured window
+  // ends, with no Content Studio code change required.
+  isActivePreorder: boolean;
+  isPreorderDiscountEligible: boolean;
+  preorderReleaseAt: Date | null;
 }
 
 export interface AudienceContentContext {
@@ -101,6 +112,9 @@ export async function buildProductContentContext(productId: string): Promise<Pro
     throw new ContentContextError(`No product found with id "${productId}".`, 404);
   }
 
+  const preorderNow = new Date();
+  const activePreorder = isActivePreorder(product, product.status, preorderNow);
+
   return {
     id: product.id,
     name: product.name,
@@ -115,6 +129,9 @@ export async function buildProductContentContext(productId: string): Promise<Pro
     // Real, stored image URLs only — never a placeholder or an
     // invented path (brief section 14's own visual-accuracy rule).
     images: product.images.map((image) => image.url),
+    isActivePreorder: activePreorder,
+    isPreorderDiscountEligible: isActivePreorderDiscountEligible(product, product.status, preorderNow),
+    preorderReleaseAt: activePreorder ? product.preorderReleaseAt : null,
   };
 }
 
