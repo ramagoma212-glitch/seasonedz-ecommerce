@@ -99,6 +99,66 @@ test.describe("Category landing pages (Milestone 171I)", () => {
   });
 });
 
+// Growth Plan, Phase 2: real, keyword-targeted long-form copy on each
+// of the four real buying-intent categories — shown only on the real
+// path-based page, never on the query-filtered legacy view, so it
+// only ever lives under one canonical URL.
+test.describe("Category long-form SEO content (Growth Plan Phase 2)", () => {
+  const CONTENT_CHECKS = [
+    { slug: "bible-colouring-books", phrase: "Little Hands, Big Faith" },
+    { slug: "kids-colouring-books", phrase: "foundation phase" },
+    { slug: "mindfulness-colouring", phrase: "screen free" },
+    { slug: "markers-and-crayons", phrase: "non bleed" },
+  ];
+
+  for (const { slug, phrase } of CONTENT_CHECKS) {
+    test(`/category/${slug} shows its own long-form content, mentioning "${phrase}"`, async ({ page }) => {
+      await page.goto(`/category/${slug}`);
+      const content = page.locator(".category-seo-content");
+      await expect(content).toBeVisible();
+      await expect(content).toContainText(phrase, { ignoreCase: true });
+    });
+  }
+
+  test("the query-filtered /shop?category= view never shows the long-form content block", async ({ page }) => {
+    await page.goto("/shop?category=bible-colouring-books");
+    await expect(page.locator(".category-seo-content")).toHaveCount(0);
+  });
+
+  test("the generic /shop view (no category) never shows the long-form content block", async ({ page }) => {
+    await page.goto("/shop");
+    await expect(page.locator(".category-seo-content")).toHaveCount(0);
+  });
+
+  test("the long-form content sits below the product grid, not above it", async ({ page }) => {
+    await page.goto("/category/mindfulness-colouring");
+    const grid = page.locator(".product-grid");
+    const content = page.locator(".category-seo-content");
+    await expect(grid).toBeVisible();
+    await expect(content).toBeVisible();
+    const gridBox = await grid.boundingBox();
+    const contentBox = await content.boundingBox();
+    expect(contentBox.y).toBeGreaterThan(gridBox.y);
+  });
+
+  test("the meta description on a category page is the real, keyword-targeted one, not the generic fallback", async ({ page }) => {
+    await page.goto("/category/bible-colouring-books");
+    const description = await page.locator('meta[name="description"]').getAttribute("content");
+    expect(description).toContain("Christian colouring books");
+    expect(description).not.toContain("Shop Bible Colouring Books from Seasonedz Group.");
+  });
+
+  test("never claims a fabricated review, rating, award or sales number in the long-form content", async ({ page }) => {
+    for (const { slug } of CONTENT_CHECKS) {
+      await page.goto(`/category/${slug}`);
+      const text = (await page.locator(".category-seo-content").innerText()).toLowerCase();
+      for (const forbidden of ["5 star", "5-star", "award winning", "award-winning", "thousands of", "best seller in south africa", "highly rated", "top rated"]) {
+        expect(text.includes(forbidden), `${slug} unexpectedly claims "${forbidden}"`).toBe(false);
+      }
+    }
+  });
+});
+
 test.describe("Category page internal linking (Milestone 171I)", () => {
   test("category cards on the /categories page link to the new /category/:slug routes", async ({ page }) => {
     await page.goto("/categories");

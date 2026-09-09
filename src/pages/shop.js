@@ -23,6 +23,7 @@ import { getProductResults, getDistinctAgeRanges, getDistinctTags } from "../js/
 import { getCatalog } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
 import { escapeHtml } from "../js/search.js";
+import { getCategorySeoContent } from "../data/categorySeoContent.js";
 
 // Version 6, Milestone 48: when a category filter is active, this page
 // doubles as that category's own page — overriding the router's
@@ -37,16 +38,23 @@ function categoryIntro(activeCategory) {
   return activeCategory.description || `Browse our ${activeCategory.name} range from Seasonedz Group.`;
 }
 
-export async function renderShop({ query } = {}) {
+// Growth Plan, Phase 2: `showLongFormContent` is only ever passed true
+// by categoryPage.js's own real, path-based /category/:slug route —
+// never by the generic /shop view or a legacy ?category= filtered
+// link, so this long-form SEO content lives under exactly one URL
+// (matching this file's own existing canonical-tag discipline, see
+// categoryPage.js's header comment).
+export async function renderShop({ query, showLongFormContent = false } = {}) {
   const { products, categories } = await getCatalog();
   const { results, term, activeCategory, sort } = getProductResults(products, categories, query);
   const ageRanges = getDistinctAgeRanges(products);
   const tags = getDistinctTags(products);
+  const seoContent = showLongFormContent && activeCategory ? getCategorySeoContent(activeCategory.slug) : null;
 
   if (activeCategory) {
     setPageMeta({
       title: activeCategory.name,
-      description: `Shop ${activeCategory.name} from Seasonedz Group. ${categoryIntro(activeCategory)}`.slice(0, 160),
+      description: seoContent ? seoContent.metaDescription : `Shop ${activeCategory.name} from Seasonedz Group. ${categoryIntro(activeCategory)}`.slice(0, 160),
     });
     // Version 7, Milestone 171I: real Home > Category hierarchy, now
     // that /category/:slug pages genuinely exist (categoryPage.js) —
@@ -110,6 +118,16 @@ export async function renderShop({ query } = {}) {
           }
         </div>
       </div>
+
+      ${
+        seoContent
+          ? `
+      <section class="category-seo-content" aria-label="About ${escapeHtml(activeCategory.name)}">
+        ${seoContent.body.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}
+      </section>
+      `
+          : ""
+      }
     </section>
   `;
 }

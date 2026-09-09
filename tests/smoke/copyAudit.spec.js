@@ -52,6 +52,12 @@ const PUBLIC_PAGES = [
   "/account/affiliate-application",
   "/admin/login",
   "/this-page-does-not-exist",
+  // Growth Plan Phase 2: the four real category pages, each now
+  // carrying its own long-form SEO copy.
+  "/category/bible-colouring-books",
+  "/category/kids-colouring-books",
+  "/category/mindfulness-colouring",
+  "/category/markers-and-crayons",
 ];
 
 test.describe("Copy audit: no decorative em/en dash in visible page text", () => {

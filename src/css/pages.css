@@ -227,6 +227,28 @@
   color: var(--color-text);
 }
 
+/* Growth Plan, Phase 2: long-form category SEO content, shown only on
+   the real /category/:slug page (see shop.js's own showLongFormContent
+   comment), below the product grid so browsing never scrolls past a
+   wall of text before reaching a product. Same prose rhythm as
+   .product-details__description-content above. */
+.category-seo-content {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-2xl);
+  padding-top: var(--space-2xl);
+  max-width: 70ch;
+}
+
+.category-seo-content p {
+  margin-bottom: var(--space-md);
+  line-height: 1.7;
+  color: var(--color-text-light);
+}
+
+.category-seo-content p:last-child {
+  margin-bottom: 0;
+}
+
 /* ---- Product details page ------------------------------------------------------ */
 .product-details {
   padding-bottom: var(--space-3xl);

@@ -29,5 +29,8 @@ import { renderShop } from "./shop.js";
 export async function renderCategoryPage({ slug, query } = {}) {
   const mergedQuery = new URLSearchParams(query);
   mergedQuery.set("category", slug || "");
-  return renderShop({ query: mergedQuery });
+  // Growth Plan, Phase 2: this is the one real, path-based URL a
+  // category's own long-form SEO content is allowed to render under —
+  // see shop.js's own comment on why /shop?category= never gets it.
+  return renderShop({ query: mergedQuery, showLongFormContent: true });
 }
