@@ -143,6 +143,14 @@ test.describe("Category long-form SEO content (Growth Plan Phase 2)", () => {
 
   test("the meta description on a category page is the real, keyword-targeted one, not the generic fallback", async ({ page }) => {
     await page.goto("/category/bible-colouring-books");
+    // router.js's own generic "/category/:slug" route entry has no
+    // description of its own, so its first, synchronous setPageMeta()
+    // call briefly sets the shared default description — shop.js's own
+    // async render then corrects it once the catalogue resolves. Wait
+    // for that real content first, same pattern as this file's other
+    // category-page checks, so this reads the settled value rather than
+    // racing that correction.
+    await page.locator(".product-card").first().waitFor();
     const description = await page.locator('meta[name="description"]').getAttribute("content");
     expect(description).toContain("Christian colouring books");
     expect(description).not.toContain("Shop Bible Colouring Books from Seasonedz Group.");
