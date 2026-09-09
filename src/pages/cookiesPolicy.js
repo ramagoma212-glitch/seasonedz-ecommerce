@@ -2,15 +2,19 @@
 // UPDATE, 24 August 2026), replacing the previous Milestone 171H
 // version in full. This is the owner's own supplied text, transcribed
 // exactly, including its conditional "where enabled"/"may in future"
-// wording for analytics and marketing, which is accurate: no
-// analytics or marketing trackers are active on this site today. The
-// route stays at /cookies-policy, the one already live and linked
-// from the footer and consent banner; no duplicate /cookie-policy
-// route is created. The "Cookie Settings" button is the same live
-// control the consent banner uses (js/app.js's cookie-manage handler,
-// opening js/consent.js's preferences manager), kept working inside
-// section 11 so the page's own text about changing your preferences
-// later has a real control to point to.
+// wording for analytics and marketing — kept exactly as supplied since
+// it stays accurate either way. The route stays at /cookies-policy,
+// the one already live and linked from the footer and consent banner;
+// no duplicate /cookie-policy route is created. The "Cookie Settings"
+// button is the same live control the consent banner uses (js/app.js's
+// cookie-manage handler, opening js/consent.js's preferences manager),
+// kept working inside section 11 so the page's own text about changing
+// your preferences later has a real control to point to.
+//
+// Milestone 183: Section 6 gained one small, additive sentence naming
+// Google Analytics 4 specifically (see js/analytics.js) — no other
+// wording in this file was changed. Marketing/advertising trackers
+// remain genuinely unused (Section 7's own text is still accurate).
 
 import { businessInfo } from "../data/businessInfo.js";
 
@@ -117,6 +121,11 @@ export function renderCookiesPolicy() {
           <li>General technical information.</li>
         </ul>
         <p>Analytics information helps us understand how the website performs and where improvements may be needed.</p>
+        <p>
+          Where analytics cookies are enabled, this may include Google Analytics 4. Google Analytics 4 is not
+          anonymous, and information collected through it is processed by Google in accordance with Google's own
+          privacy policy.
+        </p>
         <p>Where required, non essential analytics technologies will be managed in accordance with applicable privacy requirements.</p>
 
         <h2>7. Marketing Cookies</h2>

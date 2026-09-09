@@ -543,9 +543,42 @@ async function renderCurrentRoute() {
   }
 }
 
+// Milestone 183: incremented once per genuine navigation (initial
+// load, popstate, or a navigateTo() push — every one of them runs
+// through resolveRoute()) and never by rerenderCurrentRoute() below,
+// which reuses the same render without a real navigation ever having
+// happened. Incremented BEFORE render (not after) so a page's own
+// render function — e.g. productDetails.js calling
+// js/analytics.js's trackViewItem() — already sees this navigation's
+// final epoch value; js/analytics.js imports getNavigationEpoch() to
+// dedupe its per-navigation ecommerce events (view_item/view_cart/
+// begin_checkout) against it, so e.g. clicking the cart quantity
+// stepper (which re-renders via rerenderCurrentRoute(), leaving the
+// epoch unchanged) can never re-fire view_cart.
+let navigationEpoch = 0;
+export function getNavigationEpoch() {
+  return navigationEpoch;
+}
+
 async function resolveRoute() {
+  navigationEpoch += 1;
   await renderCurrentRoute();
   window.scrollTo({ top: 0, behavior: "instant" });
+
+  // A separate event (rather than analytics.js's trackPageView() being
+  // called directly from here) so this file keeps talking to the rest
+  // of the app only through events/History, never a direct cross-
+  // import — see navigation.js's own comment on the same discipline.
+  try {
+    window.dispatchEvent(
+      new CustomEvent("seasonedz:navigation", {
+        detail: { path: window.location.pathname, title: document.title },
+      })
+    );
+  } catch {
+    // CustomEvent unavailable — never fatal, just means analytics
+    // won't see this particular navigation.
+  }
 }
 
 function isModifiedClick(event) {

@@ -40,6 +40,7 @@ import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
 import { withBase } from "../js/paths.js";
 import { preorderAvailabilityText } from "../js/preorder.js";
 import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
+import { trackViewItem } from "../js/analytics.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -391,6 +392,7 @@ export async function renderProductDetails({ slug } = {}) {
   setPageMeta({ title: product.name, description: product.shortDescription });
   const breadcrumbTrail = buildBreadcrumbTrail(product);
   setPageStructuredData([buildProductStructuredData(product), buildBreadcrumbStructuredData(breadcrumbTrail)]);
+  trackViewItem(product);
 
   const reviewData = await getProductReviews(product.slug);
 

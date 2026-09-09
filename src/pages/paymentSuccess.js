@@ -8,13 +8,35 @@
 // says. Only a verified backend ITN (see backend/PAYFAST_SETUP.md)
 // can ever set paymentStatus: PAID.
 
-import { getOrderTracking } from "../js/api/ordersApi.js";
+import { getOrderTracking, getOrderByNumber } from "../js/api/ordersApi.js";
 import { ApiError } from "../js/apiClient.js";
 import { getPendingPayment, clearPendingPayment } from "../js/pendingPayment.js";
 import { clearReferralAttributionIfPendingForOrder } from "../js/referral.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { escapeHtml } from "../js/search.js";
 import { isPayfastRetryEligible, renderPayfastRetryButton } from "../components/payfastRetry.js";
+import { trackPurchase } from "../js/analytics.js";
+
+// Milestone 183, Part J: many PayFast customers land here (PayFast's
+// own return_url) and never click through to /order-confirmation, so
+// this is the only reliable place a PayFast purchase is ever seen.
+// getOrderTracking() above only returns a light status shape (no
+// items/value), so the real order is fetched separately, purely for
+// analytics — best-effort, matching every other "must never break the
+// page" fetch in this codebase: a slow/failed call here just means
+// this particular visit doesn't get a purchase event; it never blocks
+// or delays showing the real payment result above. trackPurchase()
+// itself already no-ops for anything other than a genuinely PAID
+// order and already dedupes by orderNumber, so this is always safe to
+// call whenever the tracking status says PAID.
+async function trackPurchaseForPaidOrder(orderNumber) {
+  try {
+    const response = await getOrderByNumber(orderNumber);
+    trackPurchase(response.data);
+  } catch {
+    // Best-effort only — see this function's own header comment.
+  }
+}
 
 function humanizeEnum(value) {
   return value
@@ -143,6 +165,11 @@ async function renderResultForOrderNumber(orderNumber) {
     // with the same referral still attached.
     if (tracking.paymentStatus === "PAID") {
       clearReferralAttributionIfPendingForOrder(orderNumber);
+      // Fire-and-forget — see trackPurchaseForPaidOrder()'s own
+      // comment; never awaited, so it can never delay this result
+      // rendering (mirrors js/referral.js's captureReferralFromUrl()
+      // in router.js, the same established pattern in this codebase).
+      void trackPurchaseForPaidOrder(orderNumber);
       return renderPaidResult(tracking);
     }
     if (tracking.paymentStatus === "FAILED" || tracking.paymentStatus === "CANCELLED") return renderUnsuccessfulResult(tracking);

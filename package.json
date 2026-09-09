@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:smoke": "playwright test tests/smoke --project=local",
+    "test:smoke:analytics": "playwright test tests/smoke --project=analytics",
     "test:smoke:live": "playwright test tests/smoke --project=live",
     "test:feed": "node --test scripts/*.test.mjs"
   },

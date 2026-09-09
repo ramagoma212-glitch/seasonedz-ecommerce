@@ -11,6 +11,7 @@ import { renderCartCompositionNotice } from "../components/cartCompositionNotice
 import { getCatalog } from "../js/api/productsApi.js";
 import { getCurrentCustomer, recoverCheckoutIntent } from "../js/api/customerApi.js";
 import { getLatestPreorderReleaseAt, preorderShipTogetherNotice } from "../js/preorder.js";
+import { trackViewCart } from "../js/analytics.js";
 
 // Version 7, Milestone 129 (pattern), Milestone 180, Part A: best-effort
 // only — being logged out (or the request failing) is never an error on
@@ -83,6 +84,8 @@ export async function renderCartPage() {
       </section>
     `;
   }
+
+  trackViewCart(items, subtotal);
 
   // Version 7, Milestone 171E: cross-checks every cart line against
   // live product data (the same catalogue shop/homepage/product pages

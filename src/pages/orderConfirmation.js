@@ -16,6 +16,7 @@ import { getOrderByNumber as getLocalOrderByNumber, PAYMENT_METHODS, getOrderSta
 import { renderOrderSummary } from "../components/orderSummary.js";
 import { escapeHtml } from "../js/search.js";
 import { preorderShipTogetherNotice } from "../js/preorder.js";
+import { trackPurchase } from "../js/analytics.js";
 
 function paymentMethodLabel(value) {
   return PAYMENT_METHODS.find((method) => method.value === value)?.label || value;
@@ -312,6 +313,12 @@ export async function renderOrderConfirmation({ query } = {}) {
 
   try {
     const response = await getBackendOrderByNumber(orderNumber);
+    // Milestone 183, Part J: the real, backend-authoritative order —
+    // trackPurchase() itself decides whether this is actually a
+    // completed, not-yet-recorded purchase (PayFast only counts once
+    // paymentStatus is PAID; Bank Transfer/COD count immediately, per
+    // its own header comment) and never double-fires on a refresh.
+    trackPurchase(response.data);
     return renderBackendOrderConfirmation(response.data);
   } catch (error) {
     const localOrder = getLocalOrderByNumber(orderNumber);

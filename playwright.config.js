@@ -30,6 +30,24 @@ const LOCAL_PORT = 4600;
 const LOCAL_BASE_URL = `http://localhost:${LOCAL_PORT}`;
 const LIVE_BASE_URL = "https://www.seasonedzgroup.co.za";
 
+// Milestone 183: a second, separate build+server, used ONLY by
+// tests/smoke/analyticsEnabled.spec.js. Every other spec file runs
+// against the "local" build above, which deliberately never sets
+// VITE_GA_MEASUREMENT_ID (same discipline as VITE_API_BASE_URL) so GA4
+// stays off there — that build alone already proves the "no ID -> no
+// analytics" and "test environment -> no analytics" requirements.
+// Testing the OPPOSITE path (ID present + consent granted -> events
+// actually fire) needs a build that genuinely has an ID, so this one
+// sets an obviously-fake, non-existent Measurement ID — never a real
+// Seasonedz property (Part S: "never send fake ecommerce transactions
+// to the real GA4 property") — and the spec file itself intercepts
+// and blocks the one real network request GA4 would make (loading
+// https://www.googletagmanager.com/gtag/js), so no request ever
+// actually leaves the test runner either.
+const ANALYTICS_TEST_MEASUREMENT_ID = "G-TESTNOTREAL01";
+const LOCAL_ANALYTICS_PORT = 4601;
+const LOCAL_ANALYTICS_BASE_URL = `http://localhost:${LOCAL_ANALYTICS_PORT}`;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -59,6 +77,10 @@ export default defineConfig({
       name: "local",
       use: { ...devices["Desktop Chrome"], baseURL: LOCAL_BASE_URL },
       retries: 0,
+      // Milestone 183: this build has no Measurement ID, so the
+      // "enabled" spec can never pass here — it only runs under the
+      // "analytics" project below, against the build that has one.
+      testIgnore: /analyticsEnabled\.spec\.js$/,
     },
     {
       name: "live",
@@ -67,19 +89,50 @@ export default defineConfig({
       // cold-start slowness on the live backend, never masks the
       // "local" project's failures, which must stay deterministic.
       retries: 2,
+      testIgnore: /analyticsEnabled\.spec\.js$/,
+    },
+    {
+      name: "analytics",
+      use: { ...devices["Desktop Chrome"], baseURL: LOCAL_ANALYTICS_BASE_URL },
+      retries: 0,
+      // Only this one spec file needs the fake-Measurement-ID build —
+      // every other spec already runs under "local"/"live" above and
+      // must never be re-run against this throwaway build too.
+      testMatch: /analyticsEnabled\.spec\.js$/,
     },
   ],
-  webServer: {
-    // Rebuilds and regenerates static routes/sitemap.xml/404.html
-    // itself, exactly like .github/workflows/deploy.yml does — fully
-    // self-contained so `npm run test:smoke` works the same whether
-    // or not a build already happened earlier in the same CI job.
-    // VITE_API_BASE_URL is deliberately left unset (see file header).
-    command:
-      "npm run build && node scripts/generate-static-routes.mjs && node -e \"require('fs').copyFileSync('dist/index.html','dist/404.html')\" && node tests/helpers/server.mjs dist " +
-      LOCAL_PORT,
-    url: `${LOCAL_BASE_URL}/`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      // Rebuilds and regenerates static routes/sitemap.xml/404.html
+      // itself, exactly like .github/workflows/deploy.yml does — fully
+      // self-contained so `npm run test:smoke` works the same whether
+      // or not a build already happened earlier in the same CI job.
+      // VITE_API_BASE_URL and VITE_GA_MEASUREMENT_ID are deliberately
+      // left unset (see file header).
+      command:
+        "npm run build && node scripts/generate-static-routes.mjs && node -e \"require('fs').copyFileSync('dist/index.html','dist/404.html')\" && node tests/helpers/server.mjs dist " +
+        LOCAL_PORT,
+      url: `${LOCAL_BASE_URL}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+    {
+      // Milestone 183: a second, independent build (own dist-analytics-
+      // test/ output directory, own port) with a fake, non-existent
+      // Measurement ID baked in — see this file's own header comment
+      // on why analyticsEnabled.spec.js alone needs this. Needs the
+      // exact same static-route-generation + 404.html-fallback steps
+      // as the "local" build above (tests/helpers/server.mjs has no
+      // SPA rewrite of its own, matching real GitHub Pages — a direct
+      // page.goto() to e.g. /shop or /checkout 404s without a real
+      // dist-analytics-test/shop/index.html file to serve), so this
+      // spec's own direct navigations to non-root routes actually
+      // load the app instead of a bare 404.
+      command: `npm run build -- --outDir dist-analytics-test && node scripts/generate-static-routes.mjs dist-analytics-test && node -e "require('fs').copyFileSync('dist-analytics-test/index.html','dist-analytics-test/404.html')" && node tests/helpers/server.mjs dist-analytics-test ${LOCAL_ANALYTICS_PORT}`,
+      url: `${LOCAL_ANALYTICS_BASE_URL}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { VITE_GA_MEASUREMENT_ID: ANALYTICS_TEST_MEASUREMENT_ID },
+    },
+  ],
 });

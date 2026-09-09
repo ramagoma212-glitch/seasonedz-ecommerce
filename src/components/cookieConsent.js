@@ -72,7 +72,13 @@ export function renderCookiePreferencesModal(consent) {
           ${renderToggleRow({
             id: "cookie-category-analytics",
             label: "Analytics",
-            description: "Would help us understand how the site is used, so we can improve it. Not currently in use on this site. Off by default until you say otherwise.",
+            // Milestone 183: Google Analytics 4 is now the real,
+            // optional script this toggle gates (see js/analytics.js)
+            // — worded to stay accurate whether or not a Measurement
+            // ID has actually been configured yet (Part T), rather
+            // than the old "Not currently in use" claim, which would
+            // otherwise go stale the moment GA4 goes live.
+            description: "Helps us understand how the site is used (via Google Analytics), so we can improve it. Off by default until you say otherwise.",
             checked: consent.analytics,
           })}
           ${renderToggleRow({

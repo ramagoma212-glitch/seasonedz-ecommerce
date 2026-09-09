@@ -23,6 +23,7 @@ import {
   getCartItemCount,
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
+import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
 import {
   validateCheckoutForm,
   validateCustomerLoginForm,
@@ -165,13 +166,18 @@ function mountApp() {
   app.insertAdjacentHTML("beforeend", renderFooter());
 
   // Version 7, Milestone 171H: initialized before initRouter() and
-  // every other feature below — this is where a future optional
-  // analytics/marketing script would first become able to check
-  // consent (see js/consent.js's hasConsent()/subscribeToConsentChanges()),
-  // so it must run before anything else has a chance to load one.
-  // Seasonedz has zero such scripts today; this ordering is purely
-  // future-readiness, not fixing an existing problem.
+  // every other feature below — this is where an analytics/marketing
+  // script first becomes able to check consent (see js/consent.js's
+  // hasConsent()/subscribeToConsentChanges()), so it must run before
+  // anything else has a chance to load one.
+  // Milestone 183: js/analytics.js (Google Analytics 4) is that
+  // script — initializeAnalytics() itself is a no-op whenever no
+  // Measurement ID is configured, we're in Vite's dev server, or the
+  // customer hasn't granted analytics consent (see its own header
+  // comment for the exact gating), so this call is always safe to make
+  // unconditionally.
   setupCookieConsent();
+  initializeAnalytics();
   initRouter();
   setupMobileMenu();
   setupNavMoreMenu();
@@ -471,7 +477,12 @@ function setupProductActions() {
       rerenderCurrentRoute();
       updateHeaderCounters();
     } else if (action === "cart-remove") {
+      // Captured before removal — removeFromCart() only takes a
+      // lineId, so the real name/price/quantity being removed has to
+      // be read here for trackRemoveFromCart() (js/analytics.js).
+      const removedItem = getCart().find((item) => item.lineId === actionEl.dataset.lineId);
       removeFromCart(actionEl.dataset.lineId);
+      if (removedItem) trackRemoveFromCart(removedItem);
       rerenderCurrentRoute();
       updateHeaderCounters();
       showToast("Item removed from cart.");
@@ -683,6 +694,7 @@ function handleAddToCart(buttonEl) {
   const product = readProductFromButton(buttonEl);
   const giftOptions = readGiftOptionsFromProductDetails(buttonEl);
   addToCart(product, quantity, giftOptions);
+  trackAddToCart(product, quantity);
 
   updateHeaderCounters();
   showToast(giftOptions.giftWrap ? `${product.name} (gift wrapped) added to cart.` : `${product.name} added to cart.`);

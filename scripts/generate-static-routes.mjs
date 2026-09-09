@@ -55,7 +55,12 @@ import { getCategorySeoContent } from "../src/data/categorySeoContent.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const DIST = join(ROOT, "dist");
+// Milestone 183: optional CLI override (`node generate-static-routes.mjs
+// <dir>`), used ONLY by playwright.config.js's second, GA4-enabled
+// throwaway build (its own separate dist-analytics-test/ output, so it
+// never collides with the real dist/ the "local" project and the real
+// deploy.yml build both still use by default with no argument).
+const DIST = join(ROOT, process.argv[2] || "dist");
 const INDEX_HTML_PATH = join(DIST, "index.html");
 
 // Matches router.js's own list of public, indexable routes (see

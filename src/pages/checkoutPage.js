@@ -20,6 +20,7 @@ import { getStoredReferralAttribution } from "../js/referral.js";
 import { previewReferral } from "../js/api/referralApi.js";
 import { previewPreorderDiscount as previewPreorderDiscountApi } from "../js/api/ordersApi.js";
 import { getLatestPreorderReleaseAt, preorderShipTogetherNotice, preorderAvailabilityText } from "../js/preorder.js";
+import { trackBeginCheckout } from "../js/analytics.js";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
 // the request failing) is never an error on the checkout page, just
@@ -413,6 +414,7 @@ export async function renderCheckoutPage() {
   // authoritative fee at order-creation time from verified DB-priced
   // items and the delivery method actually submitted.
   const { subtotal, giftWrapTotal, deliveryFee, physicalSubtotal } = getCartSummary(null, isRegisteredCustomer);
+  trackBeginCheckout(items, subtotal);
 
   // Version 7, Milestone 171E: best-effort, same discipline as the
   // logged-in-customer lookup above — a slow/failed catalogue fetch

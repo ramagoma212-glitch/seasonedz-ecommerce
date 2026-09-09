@@ -4,6 +4,7 @@ node_modules
 # Build output
 dist
 dist-ssr
+dist-analytics-test
 *.local
 
 # Playwright smoke-test output (Version 7, Milestone 103)

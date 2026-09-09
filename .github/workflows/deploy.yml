@@ -62,6 +62,19 @@ jobs:
         # dist/ before it gets uploaded.
         run: npm run test:smoke
 
+      - name: Run GA4 analytics smoke tests
+        # Milestone 183: a second, independent throwaway build+server,
+        # writing to its own dist-analytics-test/ output directory and
+        # its own port (see playwright.config.js's own header comment)
+        # with a fake, non-existent Measurement ID baked in — so
+        # tests/smoke/analyticsEnabled.spec.js can prove GA4 events
+        # actually fire correctly once a real ID exists, without ever
+        # touching a real GA4 property. Unlike "Run smoke tests" above,
+        # this build never writes to dist/ at all, so it has no Hotfix
+        # 103C ordering risk against the real production build below —
+        # placed here simply to fail fast, alongside the other suite.
+        run: npm run test:smoke:analytics
+
       - name: Build
         # VITE_API_BASE_URL is not secret — it's baked into the built JS
         # either way (any visitor's browser can see it), so it's safe to
@@ -91,9 +104,22 @@ jobs:
         # Hotfix 103C: must run AFTER "Run smoke tests" above, so this
         # is the last build to touch dist/ before the steps below read
         # it — see that step's comment for why order matters here.
+        # Milestone 183: VITE_GA_MEASUREMENT_ID is a repository VARIABLE
+        # (vars.*, not secrets.* — a GA4 Measurement ID is visible in
+        # every visitor's page source anyway, exactly like the two
+        # above), not hardcoded here like VITE_API_BASE_URL/
+        # VITE_PAYFAST_ENABLED are — those two are always-the-same,
+        # explicitly non-secret values; this one is owner-supplied and
+        # may not exist yet. When it's unset, ${{ vars.* }} resolves to
+        # an empty string, js/analytics.js sees no Measurement ID
+        # configured, and GA4 stays fully disabled in production —
+        # never a fabricated/guessed ID. See PROJECT_SUMMARY.md (or
+        # ask the owner) for how to add this repository variable once
+        # a real GA4 property exists.
         env:
           VITE_API_BASE_URL: https://api.seasonedzgroup.co.za/api
           VITE_PAYFAST_ENABLED: "true"
+          VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
         run: npm run build
 
       - name: Generate static route files and sitemap.xml for SEO
