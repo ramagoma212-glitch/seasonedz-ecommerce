@@ -13,6 +13,7 @@ import { escapeHtml } from "../js/search.js";
 import { renderDigitalDownloadsCard } from "../components/digitalDownloadsCard.js";
 import { renderReviewPromptsCard } from "../components/reviewPrompt.js";
 import { preorderAvailabilityText, preorderShipTogetherNotice } from "../js/preorder.js";
+import { trackPurchase } from "../js/analytics.js";
 
 function humanizeEnum(value) {
   return value
@@ -267,6 +268,18 @@ export async function renderAccountOrderDetail({ orderNumber: rawOrderNumber } =
     } catch {
       reviewPromptsForOrder = "";
     }
+
+    // Milestone 183A: a registered customer returning to an order whose
+    // Bank Transfer / Cash on Delivery payment has since been confirmed
+    // by an admin is the reliable place a delayed-payment GA4 purchase
+    // is finally recorded — the checkout-time visit to Order
+    // Confirmation saw it still PENDING and sent nothing.
+    // trackPurchase() is completely self-gating (only a genuinely PAID
+    // order, only once per real orderNumber via a persisted guard,
+    // never throws), so calling it on every view is safe and needs no
+    // conditions here — a PayFast order is already recorded elsewhere
+    // and simply dedupes, an unpaid order is ignored.
+    trackPurchase(response.data.order);
 
     body = renderOrderDetail(response.data.order, digitalItems, reviewPromptsForOrder);
   } catch (error) {

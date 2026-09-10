@@ -94,6 +94,16 @@ function buildMockOrder(overrides = {}) {
   };
 }
 
+// A freshly-placed order is always PENDING/PENDING (see buildMockOrder
+// above) — that is the real backend state for every payment method at
+// creation. This is the same order AFTER its payment has genuinely
+// been confirmed: a verified PayFast ITN, or an admin recording a
+// received Bank Transfer / Cash on Delivery payment. Milestone 183A:
+// a GA4 purchase is only ever this state, never mere order creation.
+function buildPaidOrder(overrides = {}) {
+  return buildMockOrder({ status: "CONFIRMED", paymentStatus: "PAID", ...overrides });
+}
+
 // Blocks the one real outbound request GA4 would make — see this
 // file's own header comment. Every test needs this, so it's applied
 // automatically rather than repeated per test.
@@ -273,19 +283,38 @@ test.describe("GA4 ecommerce events (Milestone 183, Part E/F)", () => {
   });
 });
 
-test.describe("GA4 purchase event (Milestone 183, Part J)", () => {
-  test("Bank Transfer: purchase fires on Order Confirmation with the real transaction id/value/items, and carries no PII", async ({ page }) => {
-    const mockOrder = buildMockOrder();
+test.describe("GA4 purchase event (Milestone 183 / 183A, Part J)", () => {
+  // Milestone 183A: the backend creates EVERY order paymentStatus
+  // PENDING, of every method — nothing is confirmed at order creation.
+  // A GA4 purchase must never be recorded off mere order creation, only
+  // off a genuine paymentStatus === "PAID". These tests exercise each
+  // method's real lifecycle: placed-but-unpaid (no purchase), then
+  // confirmed-paid (exactly one).
+
+  test("Bank Transfer: an order just placed (paymentStatus PENDING) records NO purchase on Order Confirmation", async ({ page }) => {
+    const placedOrder = buildMockOrder({ orderNumber: "SZ-TEST-GA4-BT-PENDING" });
     await grantAnalyticsConsent(page);
-    await page.route(`**/api/orders/${mockOrder.orderNumber}`, (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: mockOrder }) })
+    await page.route(`**/api/orders/${placedOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: placedOrder }) })
     );
 
-    await page.goto(`/order-confirmation?order=${mockOrder.orderNumber}`);
+    await page.goto(`/order-confirmation?order=${placedOrder.orderNumber}`);
+    await page.waitForTimeout(300);
+    expect(await getGtagEvents(page, "purchase")).toHaveLength(0);
+  });
+
+  test("Bank Transfer: once an admin has confirmed the payment (paymentStatus PAID), a return to Order Confirmation records exactly one purchase with the real transaction id/value/items and no PII", async ({ page }) => {
+    const paidOrder = buildPaidOrder({ orderNumber: "SZ-TEST-GA4-BT-PAID" });
+    await grantAnalyticsConsent(page);
+    await page.route(`**/api/orders/${paidOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: paidOrder }) })
+    );
+
+    await page.goto(`/order-confirmation?order=${paidOrder.orderNumber}`);
     await expect.poll(async () => (await getGtagEvents(page, "purchase")).length).toBe(1);
 
     const [purchase] = await getGtagEvents(page, "purchase");
-    expect(purchase.transaction_id).toBe(mockOrder.orderNumber);
+    expect(purchase.transaction_id).toBe(paidOrder.orderNumber);
     expect(purchase.currency).toBe("ZAR");
     expect(purchase.value).toBe(200);
     expect(purchase.shipping).toBe(0);
@@ -297,14 +326,126 @@ test.describe("GA4 purchase event (Milestone 183, Part J)", () => {
     expect(dataLayerText).not.toContain("Nkosi");
   });
 
-  test("refreshing Order Confirmation for the same order never records a duplicate purchase", async ({ page }) => {
-    const mockOrder = buildMockOrder({ orderNumber: "SZ-TEST-GA4-DEDUP" });
+  test("Bank Transfer: a registered customer opening their account order detail for a since-confirmed order is a reliable place the delayed purchase is finally recorded (once)", async ({ page }) => {
+    const orderNumber = "SG-2026-GA4BT";
+    const paidOrder = {
+      orderNumber,
+      status: "CONFIRMED",
+      paymentStatus: "PAID",
+      paymentMethod: "BANK_TRANSFER",
+      subtotal: 200,
+      deliveryFee: 0,
+      discountTotal: 0,
+      total: 200,
+      createdAt: new Date().toISOString(),
+      customer: { firstName: "Thandiwe", lastName: "Nkosi", email: "thandiwe@example.com", phone: "0821234567" },
+      deliveryMethod: "COLLECTION",
+      collectionCity: "Pretoria",
+      deliveryAddress: null,
+      containsPreorder: false,
+      latestPreorderReleaseAt: null,
+      preorderDiscountTotal: 0,
+      isDigitalOnly: false,
+      items: [{ productName: "Mock GA4 Test Book", productSlug: PHYSICAL_SLUG, quantity: 1, unitPrice: 200, lineTotal: 200, imageUrl: null }],
+      shipping: { status: "NOT_STARTED", courierName: null, trackingNumber: null, trackingUrl: null },
+    };
     await grantAnalyticsConsent(page);
-    await page.route(`**/api/orders/${mockOrder.orderNumber}`, (route) =>
-      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: mockOrder }) })
+    await page.route("**/api/customers/me", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ success: true, message: "OK", data: { customer: { id: "mock-customer-id", email: "thandiwe@example.com", firstName: "Thandiwe", lastName: "Nkosi", phone: "0821234567", type: "REGISTERED" } } }),
+      })
+    );
+    await page.route(`**/api/customers/orders/${orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { order: paidOrder } }) })
+    );
+    // Best-effort side lookups the page also makes — stubbed empty so
+    // the test never depends on a real backend for them.
+    await page.route(`**/api/customers/orders/${orderNumber}/downloads`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { items: [] } }) })
+    );
+    await page.route("**/api/customers/reviews/eligible", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { candidates: [] } }) })
+    );
+    await page.route("**/api/customers/reviews", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: { reviews: [] } }) })
     );
 
-    await page.goto(`/order-confirmation?order=${mockOrder.orderNumber}`);
+    await page.goto(`/account/orders/${orderNumber}`);
+    await expect.poll(async () => (await getGtagEvents(page, "purchase")).length).toBe(1);
+
+    const [purchase] = await getGtagEvents(page, "purchase");
+    expect(purchase.transaction_id).toBe(orderNumber);
+    expect(purchase.value).toBe(200);
+    expect(purchase.items[0]).toMatchObject({ item_id: PHYSICAL_SLUG, item_name: "Mock GA4 Test Book", price: 200, quantity: 1 });
+
+    // Re-opening the same order detail must never record a second one.
+    await page.reload();
+    await page.waitForTimeout(300);
+    expect(await getGtagEvents(page, "purchase")).toHaveLength(0);
+  });
+
+  test("Cash on Delivery: an order just placed (paymentStatus PENDING) records NO purchase", async ({ page }) => {
+    const placedOrder = buildMockOrder({ orderNumber: "SZ-TEST-GA4-COD-PENDING", paymentMethod: "CASH_ON_DELIVERY" });
+    await grantAnalyticsConsent(page);
+    await page.route(`**/api/orders/${placedOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: placedOrder }) })
+    );
+
+    await page.goto(`/order-confirmation?order=${placedOrder.orderNumber}`);
+    await page.waitForTimeout(300);
+    expect(await getGtagEvents(page, "purchase")).toHaveLength(0);
+  });
+
+  test("Cash on Delivery: once delivered and the cash is confirmed (status DELIVERED, paymentStatus PAID), exactly one purchase is recorded", async ({ page }) => {
+    // The backend only allows a COD payment to be confirmed after the
+    // order is DELIVERED (adminPaymentConfirmation.service.ts) — so a
+    // real PAID COD order is always DELIVERED too.
+    const codPaidOrder = buildMockOrder({
+      orderNumber: "SZ-TEST-GA4-COD-PAID",
+      paymentMethod: "CASH_ON_DELIVERY",
+      status: "DELIVERED",
+      paymentStatus: "PAID",
+    });
+    await grantAnalyticsConsent(page);
+    await page.route(`**/api/orders/${codPaidOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: codPaidOrder }) })
+    );
+
+    await page.goto(`/order-confirmation?order=${codPaidOrder.orderNumber}`);
+    await expect.poll(async () => (await getGtagEvents(page, "purchase")).length).toBe(1);
+
+    const [purchase] = await getGtagEvents(page, "purchase");
+    expect(purchase.transaction_id).toBe(codPaidOrder.orderNumber);
+    expect(purchase.value).toBe(200);
+  });
+
+  test("a cancelled order (status CANCELLED, paymentStatus CANCELLED) never records a purchase", async ({ page }) => {
+    const cancelledOrder = buildMockOrder({
+      orderNumber: "SZ-TEST-GA4-CANCELLED",
+      paymentMethod: "PAYFAST",
+      status: "CANCELLED",
+      paymentStatus: "CANCELLED",
+    });
+    await grantAnalyticsConsent(page);
+    await page.route(`**/api/orders/${cancelledOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: cancelledOrder }) })
+    );
+
+    await page.goto(`/order-confirmation?order=${cancelledOrder.orderNumber}`);
+    await page.waitForTimeout(300);
+    expect(await getGtagEvents(page, "purchase")).toHaveLength(0);
+  });
+
+  test("refreshing Order Confirmation for the same PAID order never records a duplicate purchase", async ({ page }) => {
+    const paidOrder = buildPaidOrder({ orderNumber: "SZ-TEST-GA4-DEDUP" });
+    await grantAnalyticsConsent(page);
+    await page.route(`**/api/orders/${paidOrder.orderNumber}`, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data: paidOrder }) })
+    );
+
+    await page.goto(`/order-confirmation?order=${paidOrder.orderNumber}`);
     await expect.poll(async () => (await getGtagEvents(page, "purchase")).length).toBe(1);
 
     // A real page.reload() is a hard reload, not an SPA route change —
@@ -332,7 +473,7 @@ test.describe("GA4 purchase event (Milestone 183, Part J)", () => {
   });
 
   test("PayFast: purchase fires once paymentStatus is genuinely PAID, seen via the Payment Success page", async ({ page }) => {
-    const paidOrder = buildMockOrder({ orderNumber: "SZ-TEST-GA4-PF-PAID", paymentMethod: "PAYFAST", paymentStatus: "PAID" });
+    const paidOrder = buildPaidOrder({ orderNumber: "SZ-TEST-GA4-PF-PAID", paymentMethod: "PAYFAST" });
     await grantAnalyticsConsent(page);
     await page.route(`**/api/orders/${paidOrder.orderNumber}/tracking`, (route) =>
       route.fulfill({
@@ -370,7 +511,7 @@ test.describe("GA4 purchase event (Milestone 183, Part J)", () => {
     // order.total, a bug in that arithmetic could silently pass this
     // test by coincidence — asserting against a total that does NOT
     // equal a naive subtotal+delivery sum (R320) rules that out.
-    const discountedOrder = buildMockOrder({
+    const discountedOrder = buildPaidOrder({
       orderNumber: "SZ-TEST-GA4-DISCOUNT",
       deliveryMethod: "COURIER_DOOR",
       deliveryFee: 120,
@@ -390,8 +531,8 @@ test.describe("GA4 purchase event (Milestone 183, Part J)", () => {
     expect(purchase.shipping).toBe(120);
   });
 
-  test("a preorder line item still tracks normally through add_to_cart and purchase (Milestone 181 preserved)", async ({ page }) => {
-    const preorderOrder = buildMockOrder({
+  test("a preorder line item still tracks normally through purchase (Milestone 181 preserved)", async ({ page }) => {
+    const preorderOrder = buildPaidOrder({
       orderNumber: "SZ-TEST-GA4-PREORDER",
       items: [
         {

@@ -181,20 +181,34 @@ function markPurchaseTracked(orderNumber) {
   setStorageItem(PURCHASE_TRACKED_KEY, next.slice(-500));
 }
 
-// Part J: Bank Transfer / Cash on Delivery have no separate payment-
-// confirmation step in this business — js/app.js's own
-// handleCheckoutSubmit() comment states order creation IS the final,
-// accepted state for both, matching exactly when Order Confirmation is
-// reached. PayFast is different: the order exists the moment it's
-// created (paymentStatus PENDING) but the customer may still fail or
-// cancel payment on PayFast's own page — only a verified backend ITN
-// ever sets paymentStatus: PAID (see pages/paymentSuccess.js's header
-// comment), so a PayFast order only counts as a completed purchase
-// once that's genuinely true.
+// Part J, corrected in Milestone 183A: a GA4 purchase must never
+// overstate Seasonedz revenue. A full backend lifecycle audit
+// (order.service.ts, payfast.service.ts, adminPaymentConfirmation
+// .service.ts) confirmed that EVERY order, of EVERY payment method, is
+// created paymentStatus PENDING — nothing is auto-confirmed at order
+// creation:
+//   - PayFast: only a verified PayFast ITN ever sets paymentStatus
+//     PAID (and Order.status CONFIRMED with it).
+//   - Bank Transfer: stays PENDING until an admin has genuinely
+//     verified the money landed in the bank account and records that
+//     — the only non-PayFast path to PAID (adminPaymentConfirmation
+//     .service.ts).
+//   - Cash on Delivery: the same manual admin confirmation, which the
+//     backend additionally refuses until the order is DELIVERED.
+// So "order created" is never "money received" for any method, and
+// Order.status reaching CONFIRMED does not mean paid either (an admin
+// can advance a still-unpaid Bank Transfer/COD order). The one
+// authoritative, method-independent signal that Seasonedz has actually
+// been paid is paymentStatus === "PAID" — that, and only that, is a
+// GA4 purchase. A customer who reaches Order Confirmation straight
+// after a Bank Transfer / COD checkout sees paymentStatus PENDING and
+// nothing is recorded; the purchase is recorded later — once — when
+// they return to an order page (the Order Confirmation link, or their
+// account order detail) after the payment has genuinely been
+// confirmed.
 function isPurchaseEligible(order) {
   if (!order || !order.orderNumber) return false;
-  if (order.paymentMethod === "PAYFAST") return order.paymentStatus === "PAID";
-  return true;
+  return order.paymentStatus === "PAID";
 }
 
 // --- Public API -------------------------------------------------------
@@ -320,9 +334,11 @@ export function trackBeginCheckout(items, value) {
 // backend's own final figure (subtotal + giftWrap + delivery -
 // discounts), never recalculated here. Safe to call with ANY order
 // this app has on hand (Bank Transfer/COD/PayFast alike, PAID or not)
-// — isPurchaseEligible() and the persisted dedup guard above decide
-// whether anything is actually sent, so callers (orderConfirmation.js,
-// paymentSuccess.js) never need their own gating or dedup logic.
+// — isPurchaseEligible() (paymentStatus must be "PAID", every method,
+// see its comment) and the persisted dedup guard above decide whether
+// anything is actually sent, so callers (orderConfirmation.js,
+// paymentSuccess.js, accountOrderDetail.js) never need their own
+// gating or dedup logic.
 export function trackPurchase(order) {
   try {
     if (!analyticsAllowed) return;

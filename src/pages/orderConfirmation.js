@@ -313,11 +313,14 @@ export async function renderOrderConfirmation({ query } = {}) {
 
   try {
     const response = await getBackendOrderByNumber(orderNumber);
-    // Milestone 183, Part J: the real, backend-authoritative order —
-    // trackPurchase() itself decides whether this is actually a
-    // completed, not-yet-recorded purchase (PayFast only counts once
-    // paymentStatus is PAID; Bank Transfer/COD count immediately, per
-    // its own header comment) and never double-fires on a refresh.
+    // Milestone 183 / 183A: the real, backend-authoritative order.
+    // trackPurchase() records a GA4 purchase only when the order's
+    // paymentStatus is genuinely "PAID" — for every payment method
+    // alike (see its own header comment) — and never double-fires on a
+    // refresh or a later revisit. A Bank Transfer / COD order shown
+    // here right after checkout is still PENDING, so nothing is sent
+    // until the customer returns to this page (or their account order
+    // detail) after an admin has confirmed the payment.
     trackPurchase(response.data);
     return renderBackendOrderConfirmation(response.data);
   } catch (error) {
