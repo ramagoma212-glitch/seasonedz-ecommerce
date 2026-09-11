@@ -281,6 +281,10 @@ function stubPreorderProgrammeSettings(overrides: Record<string, unknown> = {}) 
     id: "preorder-settings-1",
     firstRegisteredPreorderDiscountEnabled: true,
     firstRegisteredPreorderDiscountPercent: new Prisma.Decimal("10.00"),
+    // Milestone 181A: the real, owner-approved default — every test
+    // below that expects the 10% to actually apply now uses a price at
+    // or above this, exactly mirroring the real production default.
+    minimumEligiblePreorderSubtotal: new Prisma.Decimal("200.00"),
     updatedByAdminUserId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -349,18 +353,18 @@ test("guest never receives the first-registered-customer preorder discount, even
   stubs.restore();
 });
 
-test("a registered customer's first qualifying preorder order receives exactly 10% off the eligible line", async () => {
+test("a registered customer's first qualifying preorder order (at exactly the R200 minimum) receives exactly 10% off the eligible line", async () => {
   const settings = stubPreorderProgrammeSettings();
   const noRedemption = stubNoActiveRedemption();
   const reservationCreate = stubReservationCreate();
-  const stubs = stubPreorderOrderCreation(120);
+  const stubs = stubPreorderOrderCreation(200);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
 
   assert.equal(order.preorderDiscountApplied, true);
-  assert.equal(order.preorderDiscountTotal, 12, "10% of R120 = R12");
-  assert.equal(order.discountTotal, 12);
-  assert.equal(order.total, 108, "R120 - R12 discount + R0 delivery (Collection)");
+  assert.equal(order.preorderDiscountTotal, 20, "10% of R200 = R20");
+  assert.equal(order.discountTotal, 20);
+  assert.equal(order.total, 180, "R200 - R20 discount + R0 delivery (Collection)");
   assert.equal(reservationCreate.fn.mock.callCount(), 1, "the one-time benefit must be reserved");
 
   settings.restore();
@@ -369,13 +373,112 @@ test("a registered customer's first qualifying preorder order receives exactly 1
   stubs.restore();
 });
 
+// ---------------------------------------------------------------------------
+// Milestone 181A: owner rule change — the 10% first-preorder discount now
+// only applies once the order's own eligible preorder subtotal reaches the
+// programme-level minimum (R200.00, owner-approved default).
+// ---------------------------------------------------------------------------
+
+test("Milestone 181A: R0 eligible preorder subtotal (no eligible items) never qualifies", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  // Ordinary, non-preorder product — no eligible subtotal at all.
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, price: new Prisma.Decimal(120), stockQuantity: 10 }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => fakeOrderRow({ customerId: data.customerId, subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total }));
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
+
+  assert.equal(order.preorderDiscountApplied, false);
+  assert.equal(order.discountTotal, 0);
+
+  settings.restore();
+  noRedemption.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  orderCreate.restore();
+});
+
+test("Milestone 181A: R120 eligible preorder subtotal is below the R200 minimum — no discount, and the one-time benefit is NOT reserved", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
+    throw new Error("must never be called — R120 is below the R200 minimum, the benefit must not be reserved");
+  });
+  const stubs = stubPreorderOrderCreation(120);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
+
+  assert.equal(order.preorderDiscountApplied, false);
+  assert.equal(order.discountTotal, 0);
+  assert.equal(order.total, 120, "no discount at all — full price");
+  assert.equal(reservationCreate.fn.mock.callCount(), 0, "the one-time benefit must remain unused for a later qualifying order");
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  stubs.restore();
+});
+
+test("Milestone 181A: R199.99 eligible preorder subtotal is still below the R200 minimum — no discount", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
+    throw new Error("must never be called — R199.99 is below the R200 minimum");
+  });
+  const stubs = stubPreorderOrderCreation(199.99);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
+
+  assert.equal(order.preorderDiscountApplied, false);
+  assert.equal(order.discountTotal, 0);
+  assert.equal(reservationCreate.fn.mock.callCount(), 0);
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  stubs.restore();
+});
+
+test("Milestone 181A: a customer who places a below-minimum R120 preorder can still use the first-preorder benefit later on a genuinely qualifying R200+ preorder", async () => {
+  // Same customer, two sequential orders. The first (R120) must not
+  // reserve the benefit; the second (R200) must still be able to use it.
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const firstOrderStubs = stubPreorderOrderCreation(120);
+
+  const firstOrder = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
+  assert.equal(firstOrder.preorderDiscountApplied, false, "R120 does not qualify");
+
+  firstOrderStubs.restore();
+
+  // The second order re-checks redemption from scratch — still none on
+  // record, since the first order never reserved it.
+  const reservationCreate = stubReservationCreate();
+  const secondOrderStubs = stubPreorderOrderCreation(200);
+
+  const secondOrder = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
+  assert.equal(secondOrder.preorderDiscountApplied, true, "R200 qualifies, and the benefit was never consumed by the R120 order");
+  assert.equal(secondOrder.preorderDiscountTotal, 20);
+  assert.equal(reservationCreate.fn.mock.callCount(), 1);
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  secondOrderStubs.restore();
+});
+
 test("a registered customer who has already used the benefit does not receive it a second time", async () => {
   const settings = stubPreorderProgrammeSettings();
   const alreadyUsed = stubHasActiveRedemption();
   const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
     throw new Error("must never be called — customer already has an active redemption");
   });
-  const stubs = stubPreorderOrderCreation(120);
+  // At/above the R200 minimum, so this test genuinely isolates the
+  // "already used" gate — not the (separately tested) minimum itself.
+  const stubs = stubPreorderOrderCreation(200);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
 
@@ -392,7 +495,9 @@ test("a registered customer who has already used the benefit does not receive it
 test("the programme being disabled means no order ever receives the discount, even a genuinely first-time registered customer", async () => {
   const settings = stubPreorderProgrammeSettings({ firstRegisteredPreorderDiscountEnabled: false });
   const noRedemption = stubNoActiveRedemption();
-  const stubs = stubPreorderOrderCreation(120);
+  // At/above the R200 minimum, so this test genuinely isolates the
+  // "programme disabled" gate — not the minimum.
+  const stubs = stubPreorderOrderCreation(200);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1");
 
@@ -478,16 +583,36 @@ test("Part E worked example: multiple eligible preorder lines in one order ALL r
   orderCreate.restore();
 });
 
-test("Part J: gift wrap is excluded from the preorder discount — only the R120 product line is discounted, never the R30 wrap fee", async () => {
+test("Part J: gift wrap is excluded from the preorder discount — only the R220 product line is discounted, never the R30 wrap fee", async () => {
   const settings = stubPreorderProgrammeSettings();
   const noRedemption = stubNoActiveRedemption();
   const reservationCreate = stubReservationCreate();
-  const stubs = stubPreorderOrderCreation(120);
+  const stubs = stubPreorderOrderCreation(220);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null }] }), "customer-1");
 
-  assert.equal(order.preorderDiscountTotal, 12, "10% of R120 physical line only, never the R30 gift wrap");
+  assert.equal(order.preorderDiscountTotal, 22, "10% of R220 physical line only, never the R30 gift wrap");
   assert.equal(order.giftWrapTotal, 30);
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  stubs.restore();
+});
+
+test("Milestone 181A: gift wrap does not count toward the R200 minimum either — a R180 product plus R30 gift wrap (R210 combined) still does not qualify", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
+    throw new Error("must never be called — the R180 product line alone is below R200; gift wrap must not help it qualify");
+  });
+  const stubs = stubPreorderOrderCreation(180);
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null }] }), "customer-1");
+
+  assert.equal(order.preorderDiscountApplied, false);
+  assert.equal(order.giftWrapTotal, 30, "gift wrap fee still charged normally");
+  assert.equal(reservationCreate.fn.mock.callCount(), 0);
 
   settings.restore();
   noRedemption.restore();
@@ -523,17 +648,52 @@ test("Part H: preorder discount (10%) wins over the referral discount (5%) on th
   const productSettingFind = stub(prisma.affiliateProductSetting, "findMany", async () => []);
   const commissionCreate = stub(prisma.orderAffiliateCommission, "create", async () => ({}));
   const productCommissionCreateMany = stub(prisma.orderAffiliateProductCommission, "createMany", async () => ({ count: 0 }));
+  const stubs = stubPreorderOrderCreation(200);
+
+  const referralAttribution = signReferralCapture("alice-1");
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", referralAttribution }), "customer-1");
+
+  // 10% of R200 = R20 (preorder), never 15% (R30) — the referral 5%
+  // never applies on top of the preorder discount on this same line,
+  // and since this is the ONLY line in the order, the referral itself
+  // has nothing left to discount.
+  assert.equal(order.discountTotal, 20);
+  assert.equal(order.total, 180);
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  settingsFind.restore();
+  affiliateFind.restore();
+  productSettingFind.restore();
+  commissionCreate.restore();
+  productCommissionCreateMany.restore();
+  stubs.restore();
+});
+
+test("Milestone 181A: below the R200 minimum, the preorder line falls back to the ordinary 5% referral discount just like any other line — never R0 stacking loss", async () => {
+  // Preorder line R120 alone is below R200, so it gets NO preorder
+  // discount — but Part E requires the normal referral discount to
+  // still apply to it exactly as if it were an ordinary line: 5% of
+  // R120 = R6.
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
+    throw new Error("must never be called — below the R200 minimum");
+  });
+  const settingsFind = stub(prisma.affiliateProgrammeSettings, "findFirst", async () => SETTINGS_ROW);
+  const affiliateFind = stub(prisma.affiliate, "findUnique", async () => affiliateRow());
+  const productSettingFind = stub(prisma.affiliateProductSetting, "findMany", async () => []);
+  const commissionCreate = stub(prisma.orderAffiliateCommission, "create", async () => ({}));
+  const productCommissionCreateMany = stub(prisma.orderAffiliateProductCommission, "createMany", async () => ({ count: 0 }));
   const stubs = stubPreorderOrderCreation(120);
 
   const referralAttribution = signReferralCapture("alice-1");
   const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", referralAttribution }), "customer-1");
 
-  // 10% of R120 = R12 (preorder), never 15% (R18) — the referral 5%
-  // never applies on top of the preorder discount on this same line,
-  // and since this is the ONLY line in the order, the referral itself
-  // has nothing left to discount.
-  assert.equal(order.discountTotal, 12);
-  assert.equal(order.total, 108);
+  assert.equal(order.preorderDiscountApplied, false);
+  assert.equal(order.discountTotal, 6, "5% of R120 = R6 referral discount, since the preorder discount never applied");
+  assert.equal(order.total, 114);
 
   settings.restore();
   noRedemption.restore();
@@ -547,10 +707,10 @@ test("Part H: preorder discount (10%) wins over the referral discount (5%) on th
 });
 
 test("Part H: a mixed order still gives the ordinary 5% referral discount to the NON-preorder line", async () => {
-  // Preorder line R120 (gets 10% = R12), ordinary line R100 (gets the
-  // usual 5% referral = R5). Total discount: R17, never R12 + (5% of
-  // R220 = R11) = R23 (which would double-count the preorder line under
-  // the referral rate too).
+  // Preorder line R200 (at the minimum, gets 10% = R20), ordinary line
+  // R100 (gets the usual 5% referral = R5). Total discount: R25, never
+  // R20 + (5% of R300 = R15) = R35 (which would double-count the
+  // preorder line under the referral rate too).
   const settings = stubPreorderProgrammeSettings();
   const noRedemption = stubNoActiveRedemption();
   const reservationCreate = stubReservationCreate();
@@ -561,7 +721,7 @@ test("Part H: a mixed order still gives the ordinary 5% referral discount to the
   const productCommissionCreateMany = stub(prisma.orderAffiliateProductCommission, "createMany", async () => ({ count: 0 }));
 
   const findUnique = stub(prisma.product, "findUnique", async (args: { where: { slug: string } }) => {
-    if (args.where.slug === "preorder-product") return { ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, slug: "preorder-product", price: new Prisma.Decimal(120), stockQuantity: 10 };
+    if (args.where.slug === "preorder-product") return { ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, slug: "preorder-product", price: new Prisma.Decimal(200), stockQuantity: 10 };
     return { ...PHYSICAL_PRODUCT_BASE, slug: "ordinary-product", price: new Prisma.Decimal(100), stockQuantity: 10 };
   });
   const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
@@ -584,7 +744,7 @@ test("Part H: a mixed order still gives the ordinary 5% referral discount to the
     "customer-1"
   );
 
-  assert.equal(order.discountTotal, 17, "R12 preorder (10% of R120) + R5 referral (5% of R100 ordinary line only)");
+  assert.equal(order.discountTotal, 25, "R20 preorder (10% of R200) + R5 referral (5% of R100 ordinary line only)");
 
   settings.restore();
   noRedemption.restore();
@@ -637,7 +797,9 @@ test("a concurrent reservation attempt for the same customer is rejected, rollin
   const reservationCreate = stub(prisma.preorderDiscountRedemption, "create", async () => {
     throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed", { code: "P2002", clientVersion: "5.22.0" });
   });
-  const stubs = stubPreorderOrderCreation(120);
+  // At/above the R200 minimum, so this order actually attempts the
+  // reservation at all.
+  const stubs = stubPreorderOrderCreation(200);
 
   await assert.rejects(() => createOrder(baseInput({ deliveryMethod: "COLLECTION" }), "customer-1"));
 
@@ -758,16 +920,18 @@ test("preview: no eligible preorder items in the cart never qualifies", async ()
   findUnique.restore();
 });
 
-test("preview: a first-time registered customer with an eligible line sees the real would-be discount", async () => {
+test("preview: a first-time registered customer with an eligible R250 line sees the real would-be discount and the real eligible subtotal", async () => {
   const settings = stubPreorderProgrammeSettings();
   const noRedemption = stubNoActiveRedemption();
-  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(120) }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(250) }));
 
   const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
   assert.equal(result.qualifies, true);
   assert.equal(result.discountPercent, 10);
-  assert.equal(result.discountAmount, 12);
+  assert.equal(result.discountAmount, 25);
   assert.equal(result.alreadyUsed, false);
+  assert.equal(result.eligibleSubtotal, 250);
+  assert.equal(result.minimumEligibleSubtotal, 200);
 
   settings.restore();
   noRedemption.restore();
@@ -777,7 +941,7 @@ test("preview: a first-time registered customer with an eligible line sees the r
 test("preview: a customer who already used the benefit sees alreadyUsed, never a misleading qualifying amount", async () => {
   const settings = stubPreorderProgrammeSettings();
   const hasRedemption = stubHasActiveRedemption();
-  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(120) }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(200) }));
 
   const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
   assert.equal(result.qualifies, false);
@@ -786,6 +950,93 @@ test("preview: a customer who already used the benefit sees alreadyUsed, never a
 
   settings.restore();
   hasRedemption.restore();
+  findUnique.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Milestone 181A: previewPreorderDiscount() and the R200 minimum.
+// ---------------------------------------------------------------------------
+
+test("preview: R120 eligible subtotal is below the R200 minimum — does not qualify, but reports the real eligible subtotal for the frontend's 'add RXX more' message", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(120) }));
+
+  const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
+  assert.equal(result.qualifies, false);
+  assert.equal(result.discountAmount, 0);
+  assert.equal(result.alreadyUsed, false);
+  assert.equal(result.eligibleSubtotal, 120);
+  assert.equal(result.minimumEligibleSubtotal, 200);
+
+  settings.restore();
+  noRedemption.restore();
+  findUnique.restore();
+});
+
+test("preview: R199.99 still does not qualify", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(199.99) }));
+
+  const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
+  assert.equal(result.qualifies, false);
+  assert.equal(result.discountAmount, 0);
+
+  settings.restore();
+  noRedemption.restore();
+  findUnique.restore();
+});
+
+test("preview: exactly R200 qualifies for 10%", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(200) }));
+
+  const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
+  assert.equal(result.qualifies, true);
+  assert.equal(result.discountAmount, 20);
+
+  settings.restore();
+  noRedemption.restore();
+  findUnique.restore();
+});
+
+test("preview: already-used precedence — a customer who already used the benefit sees alreadyUsed even on a below-minimum cart, never the misleading 'add RXX more' message", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const hasRedemption = stubHasActiveRedemption();
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, price: new Prisma.Decimal(120) }));
+
+  const result = await previewPreorderDiscount("customer-1", [{ productSlug: "preorder-book", quantity: 1 }]);
+  assert.equal(result.qualifies, false);
+  assert.equal(result.alreadyUsed, true, "already-used must win over the below-minimum reason");
+
+  settings.restore();
+  hasRedemption.restore();
+  findUnique.restore();
+});
+
+test("preview: multiple eligible lines combine toward the R200 minimum, and an ordinary/ineligible line is never counted", async () => {
+  const settings = stubPreorderProgrammeSettings();
+  const noRedemption = stubNoActiveRedemption();
+  const findUnique = stub(prisma.product, "findUnique", async (args: { where: { slug: string } }) => {
+    if (args.where.slug === "preorder-a") return { ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, slug: "preorder-a", price: new Prisma.Decimal(120) };
+    if (args.where.slug === "preorder-b") return { ...PHYSICAL_PRODUCT_BASE, ...ACTIVE_PREORDER_FIELDS, slug: "preorder-b", price: new Prisma.Decimal(120) };
+    // Ordinary product — never preorder-eligible, must not count toward the R240.
+    return { ...PHYSICAL_PRODUCT_BASE, slug: "ordinary", price: new Prisma.Decimal(1000) };
+  });
+
+  const result = await previewPreorderDiscount("customer-1", [
+    { productSlug: "preorder-a", quantity: 1 },
+    { productSlug: "preorder-b", quantity: 1 },
+    { productSlug: "ordinary", quantity: 1 },
+  ]);
+  assert.equal(result.eligibleSubtotal, 240, "R120 + R120 only — the R1000 ordinary line never counts");
+  assert.equal(result.qualifies, true);
+  assert.equal(result.discountAmount, 24, "10% of R240");
+
+  settings.restore();
+  noRedemption.restore();
   findUnique.restore();
 });
 

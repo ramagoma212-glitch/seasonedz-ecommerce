@@ -4275,6 +4275,8 @@ function readAdminPreorderSettingsFormValues(form) {
   return {
     firstRegisteredPreorderDiscountEnabled: form.querySelector("#preorderSettingsDiscountEnabled")?.checked ?? true,
     firstRegisteredPreorderDiscountPercent: Number(form.querySelector("#preorderSettingsDiscountPercent")?.value),
+    // Milestone 181A.
+    minimumEligiblePreorderSubtotal: Number(form.querySelector("#preorderSettingsMinimumSubtotal")?.value),
   };
 }
 
@@ -4284,6 +4286,9 @@ function readAdminPreorderSettingsFormValues(form) {
 function validateAdminPreorderSettingsForm(values) {
   if (!Number.isFinite(values.firstRegisteredPreorderDiscountPercent) || values.firstRegisteredPreorderDiscountPercent < 0 || values.firstRegisteredPreorderDiscountPercent > 50) {
     return "First preorder discount % must be a number between 0 and 50.";
+  }
+  if (!Number.isFinite(values.minimumEligiblePreorderSubtotal) || values.minimumEligiblePreorderSubtotal < 0 || values.minimumEligiblePreorderSubtotal > 50000) {
+    return "Minimum eligible preorder subtotal must be a number between 0 and 50000.";
   }
   return null;
 }

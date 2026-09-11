@@ -1546,6 +1546,14 @@ model PreorderProgrammeSettings {
   firstRegisteredPreorderDiscountEnabled Boolean @default(true)
   firstRegisteredPreorderDiscountPercent Decimal @default(10.00) @db.Decimal(5, 2)
 
+  // Milestone 181A: owner rule change — the 10% only applies once the
+  // SUM of the order's own eligible preorder Product lines (never gift
+  // wrap/delivery/ordinary/ineligible lines) reaches this amount.
+  // Programme-level, not per-Product. Additive column with a default,
+  // so every existing settings row picks it up automatically with no
+  // backfill needed.
+  minimumEligiblePreorderSubtotal Decimal @default(200.00) @db.Decimal(10, 2)
+
   // Same audit-trail intent as AffiliateProgrammeSettings.updatedByAdminUserId
   // above — SetNull so deleting an AdminUser can never delete the record
   // of what they changed.

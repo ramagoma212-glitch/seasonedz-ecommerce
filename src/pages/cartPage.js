@@ -10,8 +10,23 @@ import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { getCurrentCustomer, recoverCheckoutIntent } from "../js/api/customerApi.js";
+import { previewPreorderDiscount as previewPreorderDiscountApi } from "../js/api/ordersApi.js";
 import { getLatestPreorderReleaseAt, preorderShipTogetherNotice } from "../js/preorder.js";
+import { renderPreorderDiscountNotice } from "../components/preorderDiscountNotice.js";
 import { trackViewCart } from "../js/analytics.js";
+
+// Milestone 181A, Part G: best-effort, non-binding preview — same
+// discipline as checkoutPage.js's own getPreorderDiscountPreview(). A
+// slow/failed backend call must never block the cart page; it just
+// means no preorder-discount progress notice shows for this render.
+async function getPreorderDiscountPreview(items) {
+  try {
+    const response = await previewPreorderDiscountApi(items);
+    return response?.data || { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 0, minimumEligibleSubtotal: 0 };
+  } catch {
+    return { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 0, minimumEligibleSubtotal: 0 };
+  }
+}
 
 // Version 7, Milestone 129 (pattern), Milestone 180, Part A: best-effort
 // only — being logged out (or the request failing) is never an error on
@@ -97,6 +112,12 @@ export async function renderCartPage() {
   // check at order-creation time still protects the order regardless).
   let unavailableLineIds = new Set();
   let liveProductsBySlug = new Map();
+  // Milestone 181A, Part G: whether the cart has at least one eligible
+  // preorder line, and the real backend preview of the first-preorder
+  // discount — both best-effort, same "must never block the cart page"
+  // discipline as everything else in this try/catch.
+  let hasEligiblePreorderItems = false;
+  let preorderPreview = { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 0, minimumEligibleSubtotal: 0 };
   try {
     const { products } = await getCatalog();
     liveProductsBySlug = new Map(
@@ -108,12 +129,17 @@ export async function renderCartPage() {
           productType: product.productType,
           isPreorder: product.isPreorder,
           preorderReleaseAt: product.preorderReleaseAt,
+          isPreorderDiscountEligible: product.isPreorderDiscountEligible,
         },
       ])
     );
     unavailableLineIds = new Set(getUnavailableCartItems(items, liveProductsBySlug).map((item) => item.lineId));
+    hasEligiblePreorderItems = items.some((item) => liveProductsBySlug.get(item.slug)?.isPreorderDiscountEligible);
   } catch {
     unavailableLineIds = new Set();
+  }
+  if (hasEligiblePreorderItems) {
+    preorderPreview = await getPreorderDiscountPreview(items);
   }
 
   // Milestone 181, Part K: the LIVE preorder status/release date (never
@@ -148,6 +174,7 @@ export async function renderCartPage() {
       `
           : ""
       }
+      ${renderPreorderDiscountNotice({ isRegisteredCustomer, hasEligibleItems: hasEligiblePreorderItems, preview: preorderPreview, dataAttribute: "data-cart-preorder-discount-notice" })}
       ${
         registrationPrompt
           ? `

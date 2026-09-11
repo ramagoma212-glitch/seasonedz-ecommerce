@@ -22,15 +22,22 @@ export class PreorderProgrammeSettingsError extends Error {
 // Owner-approved V1 defaults (brief Part D).
 const MAX_RATE_PERCENT = 50;
 
+// Milestone 181A: a defensive upper bound only — not a business rule,
+// just rejects an obvious fat-finger entry (e.g. an extra zero). The
+// owner-approved minimum itself is R200.00 (the schema default).
+const MAX_MINIMUM_ELIGIBLE_SUBTOTAL = 50000;
+
 const DEFAULT_SETTINGS = {
   firstRegisteredPreorderDiscountEnabled: true,
   firstRegisteredPreorderDiscountPercent: new Prisma.Decimal("10.00"),
+  minimumEligiblePreorderSubtotal: new Prisma.Decimal("200.00"),
 };
 
 export interface PreorderProgrammeSettingsOutput {
   id: string;
   firstRegisteredPreorderDiscountEnabled: boolean;
   firstRegisteredPreorderDiscountPercent: number;
+  minimumEligiblePreorderSubtotal: number;
   updatedByAdminUserId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +50,7 @@ function toOutput(row: SettingsRow): PreorderProgrammeSettingsOutput {
     id: row.id,
     firstRegisteredPreorderDiscountEnabled: row.firstRegisteredPreorderDiscountEnabled,
     firstRegisteredPreorderDiscountPercent: row.firstRegisteredPreorderDiscountPercent.toNumber(),
+    minimumEligiblePreorderSubtotal: row.minimumEligiblePreorderSubtotal.toNumber(),
     updatedByAdminUserId: row.updatedByAdminUserId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -69,9 +77,10 @@ export async function getPreorderProgrammeSettings(): Promise<PreorderProgrammeS
 export interface PreorderProgrammeSettingsUpdateInput {
   firstRegisteredPreorderDiscountEnabled?: unknown;
   firstRegisteredPreorderDiscountPercent?: unknown;
+  minimumEligiblePreorderSubtotal?: unknown;
 }
 
-const ALLOWED_UPDATE_FIELDS = ["firstRegisteredPreorderDiscountEnabled", "firstRegisteredPreorderDiscountPercent"] as const;
+const ALLOWED_UPDATE_FIELDS = ["firstRegisteredPreorderDiscountEnabled", "firstRegisteredPreorderDiscountPercent", "minimumEligiblePreorderSubtotal"] as const;
 
 // Applies to FUTURE qualifying orders only — this function never
 // touches any existing PreorderDiscountRedemption/OrderItem snapshot,
@@ -102,6 +111,20 @@ export async function updatePreorderProgrammeSettings(rawInput: unknown, updated
       throw new PreorderProgrammeSettingsError(`firstRegisteredPreorderDiscountPercent must be a number between 0 and ${MAX_RATE_PERCENT}.`);
     }
     data.firstRegisteredPreorderDiscountPercent = new Prisma.Decimal(value);
+  }
+
+  // Milestone 181A: the programme-level minimum. Same "string or
+  // number in, validated finite Decimal out" discipline as the percent
+  // field above — never unsafe floating-point arithmetic performed on
+  // this value anywhere; it is only ever compared against/stored as a
+  // Prisma.Decimal (see order.service.ts's resolvePreorderDiscountForOrder()).
+  if (input.minimumEligiblePreorderSubtotal !== undefined) {
+    const raw = input.minimumEligiblePreorderSubtotal;
+    const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+    if (!Number.isFinite(value) || value < 0 || value > MAX_MINIMUM_ELIGIBLE_SUBTOTAL) {
+      throw new PreorderProgrammeSettingsError(`minimumEligiblePreorderSubtotal must be a number between 0 and ${MAX_MINIMUM_ELIGIBLE_SUBTOTAL}.`);
+    }
+    data.minimumEligiblePreorderSubtotal = new Prisma.Decimal(value);
   }
 
   if (Object.keys(data).length === 0) {

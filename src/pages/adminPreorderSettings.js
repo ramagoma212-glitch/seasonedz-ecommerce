@@ -36,8 +36,9 @@ export async function renderAdminPreorderSettings() {
         <p class="admin-page__subtitle">
           Controls the store-wide first-registered-customer preorder discount. A registered customer's first order
           containing at least one eligible preorder Product receives this percentage off those Product lines only —
-          never delivery, gift wrap, or non-eligible lines. Changing the rate here only ever applies to
-          <strong>future</strong> orders; a past order permanently keeps the exact rate that applied when it was placed.
+          never delivery, gift wrap, or non-eligible lines — but only once the SUM of those eligible lines reaches
+          the minimum below. Changing either value here only ever applies to <strong>future</strong> orders; a past
+          order permanently keeps the exact rate and minimum that applied when it was placed.
         </p>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${!isAdmin ? `<div class="form-banner form-banner--error">Only Administrators can change preorder discount settings. You can view the current settings below.</div>` : ""}
@@ -66,6 +67,25 @@ export async function renderAdminPreorderSettings() {
               Applied automatically to a registered customer's first qualifying preorder order. Individual Products
               never set their own rate — only whether they participate, under Preorder Settings on that Product's
               edit page.
+            </p>
+          </div>
+
+          <div class="form-field">
+            <label class="form-field__label" for="preorderSettingsMinimumSubtotal">Minimum Eligible Preorder Subtotal (R)</label>
+            <input
+              type="number"
+              id="preorderSettingsMinimumSubtotal"
+              class="form-field__input"
+              min="0"
+              max="50000"
+              step="0.01"
+              value="${settings.minimumEligiblePreorderSubtotal}"
+              ${isAdmin ? "" : "disabled"}
+            />
+            <p class="admin-product-form__hint">
+              Milestone 181A: the discount only applies once the SUM of a registered customer's eligible preorder
+              Product lines in one order (never gift wrap, delivery, ordinary Products, or ineligible preorder
+              Products) reaches this amount. Programme-level — never applied separately per Product.
             </p>
           </div>
 

@@ -18,6 +18,10 @@ export async function getPublicPreorderSettingsHandler(_req: Request, res: Respo
       data: {
         firstRegisteredPreorderDiscountEnabled: settings.firstRegisteredPreorderDiscountEnabled,
         firstRegisteredPreorderDiscountPercent: settings.firstRegisteredPreorderDiscountPercent,
+        // Milestone 181A: exposed so the Product page can state the
+        // real, currently-configured minimum — never a hardcoded "R200"
+        // that could silently drift from what Preorder Settings says.
+        minimumEligiblePreorderSubtotal: settings.minimumEligiblePreorderSubtotal,
       },
     });
   } catch (error) {

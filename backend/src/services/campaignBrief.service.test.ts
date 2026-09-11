@@ -51,6 +51,8 @@ const PREORDER_SETTINGS_ROW = {
   id: "settings-1",
   firstRegisteredPreorderDiscountEnabled: true,
   firstRegisteredPreorderDiscountPercent: new Prisma.Decimal("10.00"),
+  // Milestone 181A: real default — see preorderProgrammeSettings.service.ts.
+  minimumEligiblePreorderSubtotal: new Prisma.Decimal("200.00"),
   updatedByAdminUserId: null,
   createdAt: new Date(),
   updatedAt: new Date(),

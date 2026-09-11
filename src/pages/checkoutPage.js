@@ -20,6 +20,7 @@ import { getStoredReferralAttribution } from "../js/referral.js";
 import { previewReferral } from "../js/api/referralApi.js";
 import { previewPreorderDiscount as previewPreorderDiscountApi } from "../js/api/ordersApi.js";
 import { getLatestPreorderReleaseAt, preorderShipTogetherNotice, preorderAvailabilityText } from "../js/preorder.js";
+import { renderPreorderDiscountNotice } from "../components/preorderDiscountNotice.js";
 import { trackBeginCheckout } from "../js/analytics.js";
 
 // Version 7, Milestone 129: best-effort only — being logged out (or
@@ -72,9 +73,9 @@ async function getReferralDiscountPreview(qualifyingSubtotal) {
 async function getPreorderDiscountPreview(items) {
   try {
     const response = await previewPreorderDiscountApi(items);
-    return response?.data || { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false };
+    return response?.data || { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 0, minimumEligibleSubtotal: 0 };
   } catch {
-    return { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false };
+    return { qualifies: false, discountPercent: 0, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 0, minimumEligibleSubtotal: 0 };
   }
 }
 
@@ -327,36 +328,6 @@ function renderPreorderFulfilmentNotice(latestPreorderReleaseAt) {
   `;
 }
 
-// Milestone 181, Part G/L: a guest with an eligible preorder item sees a
-// professional, non-aggressive invitation to sign in. A registered
-// customer who has already used the benefit sees plain preorder
-// messaging only — never a misleading "10% will apply" offer (Part L:
-// "do not show misleading '10% will be applied' — use normal preorder
-// messaging only").
-function renderPreorderDiscountNotice({ customer, hasEligibleItems, preview }) {
-  if (!hasEligibleItems) return "";
-
-  if (!customer) {
-    return `
-      <div class="demo-notice" data-checkout-preorder-discount-notice>
-        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-        <div><p>Create an account or sign in to get ${preview.discountPercent}% off your first qualifying preorder.</p></div>
-      </div>
-    `;
-  }
-
-  if (preview.alreadyUsed) {
-    return `
-      <div class="demo-notice" data-checkout-preorder-discount-notice>
-        <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-        <div><p>You have already used your first-preorder discount on a previous order.</p></div>
-      </div>
-    `;
-  }
-
-  return "";
-}
-
 function renderUnavailableItemsNotice(unavailableItems) {
   if (!unavailableItems.length) return "";
 
@@ -485,7 +456,7 @@ export async function renderCheckoutPage() {
       ${renderAccountNote(customer)}
       ${renderCartCompositionNotice(composition)}
       ${renderPreorderFulfilmentNotice(latestPreorderReleaseAt)}
-      ${renderPreorderDiscountNotice({ customer, hasEligibleItems: hasEligiblePreorderItems, preview: preorderPreview })}
+      ${renderPreorderDiscountNotice({ isRegisteredCustomer, hasEligibleItems: hasEligiblePreorderItems, preview: preorderPreview, dataAttribute: "data-checkout-preorder-discount-notice" })}
       ${renderUnavailableItemsNotice(unavailableItems)}
 
       <div class="checkout-layout">

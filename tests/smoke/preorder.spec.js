@@ -73,12 +73,17 @@ async function mockCatalog(page, products) {
   );
 }
 
-async function mockPublicPreorderSettings(page, { enabled = true, percent = 10 } = {}) {
+// Milestone 181A: `minimum` defaults to the real owner-approved R200.00.
+async function mockPublicPreorderSettings(page, { enabled = true, percent = 10, minimum = 200 } = {}) {
   await page.route("**/api/preorder/settings", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ success: true, message: "OK", data: { firstRegisteredPreorderDiscountEnabled: enabled, firstRegisteredPreorderDiscountPercent: percent } }),
+      body: JSON.stringify({
+        success: true,
+        message: "OK",
+        data: { firstRegisteredPreorderDiscountEnabled: enabled, firstRegisteredPreorderDiscountPercent: percent, minimumEligiblePreorderSubtotal: minimum },
+      }),
     })
   );
 }
@@ -89,9 +94,33 @@ async function mockGuestCustomer(page) {
   );
 }
 
+async function mockLoggedInCustomer(page) {
+  await page.route("**/api/customers/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        message: "OK",
+        data: { customer: { id: "mock-customer-id", email: "mock-smoke-test@example.com", firstName: "Mock", lastName: "Smoke", phone: "0821234567", type: "REGISTERED" } },
+      }),
+    })
+  );
+}
+
+// Milestone 181A: `data` must always be a full PreorderDiscountPreviewResult
+// shape (see backend's order.service.ts) — eligibleSubtotal/
+// minimumEligibleSubtotal defaulted here so every existing call site
+// that only cares about qualifies/discountPercent/alreadyUsed doesn't
+// have to repeat them, but a test asserting the "add RXX more" message
+// must still pass its own eligibleSubtotal explicitly.
 async function mockPreorderDiscountPreview(page, data) {
   await page.route("**/api/orders/preorder-discount-preview", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, message: "OK", data }) })
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ success: true, message: "OK", data: { eligibleSubtotal: 0, minimumEligibleSubtotal: 200, ...data } }),
+    })
   );
 }
 
@@ -127,7 +156,8 @@ test.describe("Preorder Product: card and page display (Part J)", () => {
 
     await expect(page.locator(".product-details__info .product-card__badge--preorder")).toHaveText("Preorder");
     await expect(page.locator(".product-details__preorder-note")).toContainText("Available from");
-    await expect(page.locator(".product-details__preorder-offer")).toContainText("10% off your first qualifying preorder");
+    // Milestone 181A: states the real, currently-configured minimum spend.
+    await expect(page.locator(".product-details__preorder-offer")).toContainText("Get 10% off your first qualifying preorder when eligible preorder items total R200.00 or more.");
 
     const addButton = page.locator('[data-action="add-to-cart"]');
     await expect(addButton).toBeEnabled();
@@ -187,7 +217,7 @@ test.describe("Preorder Product: checkout (Part L)", () => {
     await expect(page.locator("[data-checkout-preorder-notice]")).toContainText("dispatched together once the preorder item becomes available");
   });
 
-  test("a guest sees a professional invitation to sign in for the first-preorder discount, never applied", async ({ page }) => {
+  test("a guest sees a professional invitation to sign in for the first-preorder discount, stating the R200 minimum, never applied", async ({ page }) => {
     await mockCatalog(page, [PREORDER_PRODUCT]);
     await mockGuestCustomer(page);
     await mockPreorderDiscountPreview(page, { qualifies: false, discountPercent: 10, discountAmount: 0, alreadyUsed: false });
@@ -196,7 +226,9 @@ test.describe("Preorder Product: checkout (Part L)", () => {
     await page.locator('[data-action="add-to-cart"]').click();
 
     await page.goto("/checkout");
-    await expect(page.locator("[data-checkout-preorder-discount-notice]")).toContainText("Create an account or sign in to get 10% off your first qualifying preorder");
+    await expect(page.locator("[data-checkout-preorder-discount-notice]")).toContainText(
+      "Create an account or sign in to get 10% off your first qualifying preorder of R200.00 or more."
+    );
     await expect(page.locator("[data-order-summary-preorder-discount-row]")).toHaveCount(0);
   });
 
@@ -209,6 +241,92 @@ test.describe("Preorder Product: checkout (Part L)", () => {
 
     await page.goto("/checkout");
     await expect(page.locator("[data-checkout-preorder-notice]")).toHaveCount(0);
+    await expect(page.locator("[data-checkout-preorder-discount-notice]")).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Milestone 181A: owner rule change — the first-preorder discount now only
+// applies once the eligible preorder subtotal reaches R200.00 (a programme-
+// level minimum). Real qualification/reservation math is covered by
+// backend/src/services/order.service.test.ts — these tests only prove the
+// frontend correctly displays whatever the (mocked) backend preview says,
+// on both Cart (new this milestone) and Checkout.
+// ---------------------------------------------------------------------------
+
+test.describe("Milestone 181A: R200 minimum — Cart page messaging", () => {
+  test("registered customer below the R200 minimum sees a dynamic 'add RXX more' notice on Cart", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]); // R120
+    await mockLoggedInCustomer(page);
+    await mockPreorderDiscountPreview(page, { qualifies: false, discountPercent: 10, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 120, minimumEligibleSubtotal: 200 });
+
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/cart");
+    await expect(page.locator("[data-cart-preorder-discount-notice]")).toContainText("Add R80.00 more in eligible preorder items to qualify for 10% off your first preorder.");
+  });
+
+  test("guest sees a sign-in invitation stating the R200 minimum on Cart", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]);
+    await mockGuestCustomer(page);
+    await mockPreorderDiscountPreview(page, { qualifies: false, discountPercent: 10, discountAmount: 0, alreadyUsed: false });
+
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/cart");
+    await expect(page.locator("[data-cart-preorder-discount-notice]")).toContainText("Create an account or sign in to get 10% off your first qualifying preorder of R200.00 or more.");
+  });
+
+  test("a registered customer who already used the benefit sees that message on Cart, never a misleading 'add RXX more'", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]);
+    await mockLoggedInCustomer(page);
+    await mockPreorderDiscountPreview(page, { qualifies: false, discountPercent: 10, discountAmount: 0, alreadyUsed: true, eligibleSubtotal: 120, minimumEligibleSubtotal: 200 });
+
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/cart");
+    await expect(page.locator("[data-cart-preorder-discount-notice]")).toContainText("You have already used your first-preorder discount on a previous order.");
+  });
+
+  test("a cart with no eligible preorder items never shows the discount notice on Cart (regression)", async ({ page }) => {
+    await mockCatalog(page, [ORDINARY_PRODUCT]);
+    await mockLoggedInCustomer(page);
+
+    await page.goto(`/product/${ORDINARY_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/cart");
+    await expect(page.locator("[data-cart-preorder-discount-notice]")).toHaveCount(0);
+  });
+});
+
+test.describe("Milestone 181A: R200 minimum — Checkout order summary", () => {
+  test("below the minimum: the 'add RXX more' notice shows and the First Preorder Discount row stays hidden (Part H, never -R0.00)", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]); // R120
+    await mockLoggedInCustomer(page);
+    await mockPreorderDiscountPreview(page, { qualifies: false, discountPercent: 10, discountAmount: 0, alreadyUsed: false, eligibleSubtotal: 120, minimumEligibleSubtotal: 200 });
+
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/checkout");
+    await expect(page.locator("[data-checkout-preorder-discount-notice]")).toContainText("Add R80.00 more in eligible preorder items to qualify for 10% off your first preorder.");
+    await expect(page.locator("[data-order-summary-preorder-discount-row]")).toHaveCount(0);
+  });
+
+  test("at exactly the R200 minimum: the First Preorder Discount row shows the real 10% amount, and no progress notice", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]);
+    await mockLoggedInCustomer(page);
+    await mockPreorderDiscountPreview(page, { qualifies: true, discountPercent: 10, discountAmount: 20, alreadyUsed: false, eligibleSubtotal: 200, minimumEligibleSubtotal: 200 });
+
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await page.locator('[data-action="add-to-cart"]').click();
+
+    await page.goto("/checkout");
+    await expect(page.locator("[data-order-summary-preorder-discount-row]")).toContainText("-R20.00");
     await expect(page.locator("[data-checkout-preorder-discount-notice]")).toHaveCount(0);
   });
 });

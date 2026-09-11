@@ -262,14 +262,21 @@ function renderDigitalDownloadNote(product) {
 // Milestone 181, Part J: shown only for a Product both actively in
 // preorder AND marked eligible for the first-preorder discount — never
 // a claim about a Product that isn't actually configured that way.
-// `discountPercent` comes from the live, real programme settings (see
-// renderProductDetails()'s own fetch) — never a hardcoded "10%" that
-// could silently drift from what Preorder Settings actually says.
-function renderPreorderDiscountOffer(product, discountPercent) {
+// `discountPercent`/`minimumEligibleSubtotal` come from the live, real
+// programme settings (see renderProductDetails()'s own fetch) — never
+// a hardcoded "10%"/"R200" that could silently drift from what
+// Preorder Settings actually says.
+//
+// Milestone 181A: the offer now states the minimum spend up front
+// ("Registered customers get 10% off their first qualifying preorder
+// of R200 or more.") — never the old, now-inaccurate "regardless of
+// value" wording.
+function renderPreorderDiscountOffer(product, discountPercent, minimumEligibleSubtotal) {
   if (!product.isPreorderDiscountEligible || !discountPercent) return "";
+  const minimumText = minimumEligibleSubtotal ? `R${Number(minimumEligibleSubtotal).toFixed(2)} or more` : "the qualifying minimum";
   return `
     <div class="product-details__preorder-offer">
-      <p><strong>Registered customer offer.</strong> Get ${discountPercent}% off your first qualifying preorder when signed in. Sign in or create an account at checkout.</p>
+      <p><strong>Registered customer offer.</strong> Get ${discountPercent}% off your first qualifying preorder when eligible preorder items total ${minimumText}. Sign in or create an account at checkout.</p>
     </div>
   `;
 }
@@ -401,14 +408,17 @@ export async function renderProductDetails({ slug } = {}) {
   // lookup just means the registered-customer offer note doesn't show
   // for this page load, never a broken product page.
   let preorderDiscountPercent = null;
+  let preorderMinimumEligibleSubtotal = null;
   if (product.isPreorderDiscountEligible) {
     try {
       const settingsResponse = await getPublicPreorderSettings();
       if (settingsResponse?.data?.firstRegisteredPreorderDiscountEnabled) {
         preorderDiscountPercent = settingsResponse.data.firstRegisteredPreorderDiscountPercent;
+        preorderMinimumEligibleSubtotal = settingsResponse.data.minimumEligiblePreorderSubtotal;
       }
     } catch {
       preorderDiscountPercent = null;
+      preorderMinimumEligibleSubtotal = null;
     }
   }
 
@@ -448,7 +458,7 @@ export async function renderProductDetails({ slug } = {}) {
               ? `<p class="product-details__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
               : `<p class="product-details__stock ${stockClass}">${product.stockStatus}</p>`
           }
-          ${renderPreorderDiscountOffer(product, preorderDiscountPercent)}
+          ${renderPreorderDiscountOffer(product, preorderDiscountPercent, preorderMinimumEligibleSubtotal)}
           <p class="product-details__short-desc">${product.shortDescription}</p>
 
           <!--

@@ -506,6 +506,21 @@ async function resolvePreorderDiscountForOrder(customerId: string | null, verifi
   const alreadyHasActiveRedemption = await hasActivePreorderDiscountRedemption(prisma, customerId);
   if (alreadyHasActiveRedemption) return null;
 
+  // Milestone 181A, owner rule change: the 10% only applies once the
+  // SUM of this order's own eligible preorder lines (never gift wrap,
+  // delivery, ordinary lines, or ineligible preorder lines — each
+  // line's own `lineTotal` already excludes gift wrap, same as every
+  // other discount in this file) reaches the configured programme-
+  // level minimum. This is a single order-wide total, never applied
+  // per-Product. Below it, this returns null exactly like every other
+  // disqualifying condition above — createOrder() only ever reserves
+  // the one-time benefit when this function returns non-null (see its
+  // own call site below), so a below-minimum order never reserves or
+  // consumes it: the customer must still be able to use the benefit
+  // later on a genuinely qualifying order (Part D).
+  const eligibleSubtotal = eligibleIndexes.reduce((sum, index) => sum.plus(verifiedItems[index]!.lineTotal), new Prisma.Decimal(0));
+  if (eligibleSubtotal.lessThan(new Prisma.Decimal(settings.minimumEligiblePreorderSubtotal))) return null;
+
   const discountPercent = new Prisma.Decimal(settings.firstRegisteredPreorderDiscountPercent);
   const perLineDiscountAmount = new Map<number, Prisma.Decimal>();
   let totalDiscountAmount = new Prisma.Decimal(0);
@@ -540,6 +555,14 @@ export interface PreorderDiscountPreviewResult {
   // used" (alreadyUsed: true) — the frontend needs to tell these apart
   // to show the right message in each case.
   alreadyUsed: boolean;
+  // Milestone 181A: the real, backend-computed sum of the cart's own
+  // eligible preorder lines (0 when there are none) and the currently
+  // configured minimum — lets the frontend render "Add R80 more..."
+  // dynamically, entirely backend-authoritative (Part C: never trust a
+  // frontend-computed cart value for qualification), without a second
+  // round trip to read the programme settings separately.
+  eligibleSubtotal: number;
+  minimumEligibleSubtotal: number;
 }
 
 // Milestone 181, Part L: a non-binding PREVIEW of the first-registered-
@@ -556,7 +579,15 @@ export interface PreorderDiscountPreviewResult {
 export async function previewPreorderDiscount(customerId: string | null, items: PreorderDiscountPreviewItem[]): Promise<PreorderDiscountPreviewResult> {
   const settings = await getPreorderProgrammeSettings();
   const discountPercentNumber = settings.firstRegisteredPreorderDiscountPercent;
-  const notQualifying: PreorderDiscountPreviewResult = { qualifies: false, discountPercent: discountPercentNumber, discountAmount: 0, alreadyUsed: false };
+  const minimumEligibleSubtotal = settings.minimumEligiblePreorderSubtotal;
+  const notQualifying: PreorderDiscountPreviewResult = {
+    qualifies: false,
+    discountPercent: discountPercentNumber,
+    discountAmount: 0,
+    alreadyUsed: false,
+    eligibleSubtotal: 0,
+    minimumEligibleSubtotal,
+  };
 
   if (!customerId || !settings.firstRegisteredPreorderDiscountEnabled) return notQualifying;
 
@@ -572,11 +603,27 @@ export async function previewPreorderDiscount(customerId: string | null, items: 
 
   if (eligibleLineTotal.isZero()) return notQualifying;
 
+  const notQualifyingWithSubtotal = { ...notQualifying, eligibleSubtotal: eligibleLineTotal.toNumber() };
+
+  // Milestone 181A: "already used" is checked BEFORE the minimum, so a
+  // customer who has genuinely already used the benefit always sees
+  // that message — never a misleading "add R80 more" that implies
+  // spending more would still unlock a discount they can no longer
+  // receive at all.
   const alreadyHasActiveRedemption = await hasActivePreorderDiscountRedemption(prisma, customerId);
-  if (alreadyHasActiveRedemption) return { ...notQualifying, alreadyUsed: true };
+  if (alreadyHasActiveRedemption) return { ...notQualifyingWithSubtotal, alreadyUsed: true };
+
+  if (eligibleLineTotal.lessThan(new Prisma.Decimal(minimumEligibleSubtotal))) return notQualifyingWithSubtotal;
 
   const discountAmount = roundHalfUpToCents(eligibleLineTotal.times(discountPercentNumber).dividedBy(100));
-  return { qualifies: true, discountPercent: discountPercentNumber, discountAmount: discountAmount.toNumber(), alreadyUsed: false };
+  return {
+    qualifies: true,
+    discountPercent: discountPercentNumber,
+    discountAmount: discountAmount.toNumber(),
+    alreadyUsed: false,
+    eligibleSubtotal: eligibleLineTotal.toNumber(),
+    minimumEligibleSubtotal,
+  };
 }
 
 // Orders are created as PENDING (not CONFIRMED): paymentStatus also
