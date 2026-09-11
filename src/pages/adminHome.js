@@ -13,7 +13,7 @@ import { renderAdminNav } from "../components/adminNav.js";
 import { formatCurrency, formatDate, humanizeEnum, renderStatusBadge } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
 
-function renderOverviewCards(counts, lowStockCount) {
+function renderOverviewCards(counts, lowStockCount, paidRevenueTotal) {
   return `
     <div class="admin-cards">
       <div class="admin-card">
@@ -27,6 +27,10 @@ function renderOverviewCards(counts, lowStockCount) {
       <div class="admin-card">
         <span class="admin-card__label">Paid Orders</span>
         <span class="admin-card__value">${counts.paidOrders}</span>
+      </div>
+      <div class="admin-card">
+        <span class="admin-card__label">Total Paid Revenue</span>
+        <span class="admin-card__value">${formatCurrency(paidRevenueTotal)}</span>
       </div>
       <div class="admin-card">
         <span class="admin-card__label">Low Stock Items</span>
@@ -167,7 +171,7 @@ export async function renderAdminHome() {
         <h1 class="admin-page__title">Welcome, ${escapeHtml(admin.name)}</h1>
         <p class="admin-page__subtitle">Signed in as ${escapeHtml(admin.email)}</p>
 
-        ${renderOverviewCards(dashboard.counts, dashboard.lowStockProducts.length)}
+        ${renderOverviewCards(dashboard.counts, dashboard.lowStockProducts.length, dashboard.paidRevenueTotal)}
 
         <div class="admin-section">
           <div class="admin-section__header">

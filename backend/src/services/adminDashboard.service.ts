@@ -159,6 +159,14 @@ export interface AdminDashboardOverview {
     pendingOrders: number;
     paidOrders: number;
   };
+  // Genuine revenue, not an estimate: the sum of Order.total (the
+  // backend's own final, authoritative figure — subtotal + giftWrap +
+  // delivery - discounts, see order.service.ts's createOrder()) across
+  // every Order whose paymentStatus is genuinely PAID. Never includes
+  // a PENDING/FAILED/CANCELLED order's total, and never recalculates
+  // anything client-side — this is the one real "how much has actually
+  // been paid" figure on the dashboard.
+  paidRevenueTotal: number;
   recentOrders: AdminOrderListItem[];
   recentEnquiries: AdminEnquiryListItem[];
   lowStockProducts: AdminLowStockProduct[];
@@ -166,10 +174,11 @@ export interface AdminDashboardOverview {
 }
 
 export async function getDashboardOverview(): Promise<AdminDashboardOverview> {
-  const [totalOrders, pendingOrders, paidOrders, recentOrders, recentEnquiries, lowStockProducts] = await Promise.all([
+  const [totalOrders, pendingOrders, paidOrders, paidRevenueAggregate, recentOrders, recentEnquiries, lowStockProducts] = await Promise.all([
     prisma.order.count(),
     prisma.order.count({ where: { paymentStatus: PaymentStatus.PENDING } }),
     prisma.order.count({ where: { paymentStatus: PaymentStatus.PAID } }),
+    prisma.order.aggregate({ where: { paymentStatus: PaymentStatus.PAID }, _sum: { total: true } }),
     prisma.order.findMany({ select: orderListSelect, orderBy: { createdAt: "desc" }, take: RECENT_ORDERS_LIMIT }),
     prisma.enquiry.findMany({ select: enquiryListSelect, orderBy: { createdAt: "desc" }, take: RECENT_ENQUIRIES_LIMIT }),
     getLowStockProducts(),
@@ -177,6 +186,7 @@ export async function getDashboardOverview(): Promise<AdminDashboardOverview> {
 
   return {
     counts: { totalOrders, pendingOrders, paidOrders },
+    paidRevenueTotal: paidRevenueAggregate._sum.total?.toNumber() ?? 0,
     recentOrders: recentOrders.map(toAdminOrderListItem),
     recentEnquiries: recentEnquiries.map(toAdminEnquiryListItem),
     lowStockProducts,
