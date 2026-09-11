@@ -85,8 +85,14 @@ function ensureGtagLoaded() {
   if (gtagLoaded || !isConfigured()) return;
 
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function gtag(...args) {
-    window.dataLayer.push(args);
+  // Canonical Google gtag.js command shim — pushes the real `arguments`
+  // object, exactly as Google's own documented snippet does, not a
+  // rest-parameter Array (`(...args) => dataLayer.push(args)`, the
+  // prior form here). Every call site in this file (safeGtag() below)
+  // still calls window.gtag(...) with plain arguments either way, so
+  // nothing about how the rest of this file invokes gtag() changes.
+  window.gtag = function gtag() {
+    window.dataLayer.push(arguments);
   };
 
   const script = document.createElement("script");

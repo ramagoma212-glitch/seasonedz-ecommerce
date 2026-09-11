@@ -130,7 +130,13 @@ async function grantAnalyticsConsent(page) {
 async function getGtagEvents(page, eventName) {
   return page.evaluate((name) => {
     const dataLayer = window.dataLayer || [];
-    return dataLayer.filter((entry) => Array.isArray(entry) && entry[0] === "event" && entry[1] === name).map((entry) => entry[2]);
+    // GA4 GTAG TRANSMISSION FIX: a real gtag() call now pushes the
+    // canonical `arguments` object (Array.isArray === false), not a
+    // rest-parameter Array — see analytics.js's own ensureGtagLoaded().
+    // This filter must accept either shape, since both are equally
+    // valid, array-index-readable command envelopes; it only needs
+    // `entry[0]`/`entry[1]` to exist, never Array.isArray(entry).
+    return dataLayer.filter((entry) => entry && entry[0] === "event" && entry[1] === name).map((entry) => entry[2]);
   }, eventName);
 }
 
@@ -170,6 +176,60 @@ test.describe("GA4 consent gating (Milestone 183)", () => {
     expect(pageViews[0].page_path).toBe("/shop");
     expect(typeof pageViews[0].page_title).toBe("string");
     expect(pageViews[0].page_location).toContain("/shop");
+  });
+});
+
+// GA4 GTAG TRANSMISSION FIX: regression test for the exact bug — the
+// gtag shim must push the real `arguments` object into dataLayer, the
+// same as Google's own canonical snippet (`function gtag(){
+// dataLayer.push(arguments); }`), never a rest-parameter Array
+// (`function gtag(...args){ dataLayer.push(args); }` or
+// `dataLayer.push([...args])` — both produce a genuine Array).
+// Deliberately does NOT just check that the right values ended up in
+// dataLayer — a rest-parameter Array holds the exact same values at
+// the exact same indices, so that kind of test already passed under
+// the old, defective implementation while gtag.js sent zero hits.
+// Instead this asserts the pushed entry's own real JS type, which is
+// the one thing that actually differs between the two forms.
+test.describe("GA4 gtag command envelope (Arguments vs Array regression)", () => {
+  test("a gtag() call pushes the real Arguments object into dataLayer, never a plain Array", async ({ page }) => {
+    await grantAnalyticsConsent(page);
+    await mockCatalog(page);
+    await page.goto("/shop");
+    // Same readiness signal every other test in this file already
+    // relies on — a real page_view having fired proves gtag is fully
+    // loaded and dataLayer is live, not just that window.gtag exists.
+    await expect.poll(async () => (await getGtagEvents(page, "page_view")).length).toBeGreaterThan(0);
+
+    const result = await page.evaluate(() => {
+      window.gtag("event", "regression_envelope_test", { probe: 42 });
+      const entry = window.dataLayer[window.dataLayer.length - 1];
+      return {
+        isRealArray: Array.isArray(entry),
+        typeTag: Object.prototype.toString.call(entry),
+        length: entry.length,
+        command: entry[0],
+        eventName: entry[1],
+        params: entry[2],
+      };
+    });
+
+    // The one assertion that actually distinguishes the canonical
+    // `dataLayer.push(arguments)` shim from the defective
+    // `dataLayer.push(args)` / `dataLayer.push([...args])` rest-
+    // parameter forms — both of the latter produce Array.isArray ===
+    // true and a "[object Array]" tag; only a genuine Arguments object
+    // produces "[object Arguments]" and Array.isArray === false.
+    expect(result.isRealArray).toBe(false);
+    expect(result.typeTag).toBe("[object Arguments]");
+
+    // Still a fully valid, correctly-indexed command envelope either
+    // way — proves the fix changed nothing about what gtag.js itself
+    // would read out of this entry.
+    expect(result.length).toBe(3);
+    expect(result.command).toBe("event");
+    expect(result.eventName).toBe("regression_envelope_test");
+    expect(result.params).toMatchObject({ probe: 42 });
   });
 });
 
