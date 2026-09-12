@@ -125,6 +125,50 @@
       AggregateRating/Review here or on WebSite — genuine per-product
       reviews (see ProductReview) remain the only source of any rating
       markup anywhere on this site.
+
+      Small SEO improvement before Milestone 184: added
+      hasMerchantReturnPolicy and hasShippingService, per current Google
+      Search Central guidance ("We recommend you provide a global
+      shipping/return policy for your business under Organization
+      markup" — Merchant listing structured data docs) — a business-wide
+      policy here, not duplicated into every Product Offer, since no
+      product currently has a return/shipping policy that differs from
+      the standard one (Offer-level shippingDetails/hasMerchantReturnPolicy
+      is documented as being for exactly that override case).
+
+      hasMerchantReturnPolicy uses `merchantReturnLink` only (Google's
+      own documented alternative to stating `returnPolicyCategory` +
+      `merchantReturnDays` directly) — see src/pages/returnsPolicy.js:
+      the real Returns, Refunds and Exchanges Policy has no single
+      universal return window (7-day ECTA cooling-off for most physical
+      products, but books/used colouring books/personalised/digital
+      items are wholly or partly excluded from it, per that page's own
+      sections 7-13), so asserting one fixed category/day-count here
+      would misrepresent it. Linking to the real policy page is the
+      accurate choice, not a fabricated number.
+
+      hasShippingService models the two real, nationally-available
+      Courier Guy rates from src/config/delivery.js (mirrored in
+      src/pages/shippingPolicy.js's own customer-facing text): R100
+      Locker-to-Locker and R120 Door-to-Door, both free at a R600+
+      qualifying subtotal, South Africa (ZA) only. Two deliberate
+      omissions, not oversights: (1) Customer Collection is left out —
+      it's free in-person pickup "by arrangement" in Pretoria/
+      Thohoyandou specifically, not a nationally-shippable rate, and
+      schema.org's country/region-level shippingDestination can't
+      express "by arrangement in these two cities" without being
+      misleading; (2) no delivery/transit time estimate is included —
+      the site has never quantified one anywhere (shippingPolicy.js
+      explicitly calls delivery timing "a general guide rather than a
+      guaranteed date"), so there is nothing real to report and
+      schema.org has no field for "no estimate given". This markup also
+      can't express Milestone 180's registered-customer R500 threshold
+      (versus this R600 guest one) — schema.org's ShippingConditions has
+      no "customer account status" dimension — so it deliberately states
+      only the real, universally-applicable guest rate rather than
+      inventing a blended one; the lower registered threshold remains a
+      real, undiscovered-by-crawlers bonus rather than a misrepresented
+      global rate.
     -->
     <script type="application/ld+json">
       {
@@ -142,7 +186,35 @@
           "https://x.com/seasonedzgroup?s=11",
           "https://www.linkedin.com/company/seasonedz-group/",
           "https://www.reddit.com/u/SeasonedzGroup/s/4YQwVhRT1H"
-        ]
+        ],
+        "hasMerchantReturnPolicy": {
+          "@type": "MerchantReturnPolicy",
+          "merchantReturnLink": "https://www.seasonedzgroup.co.za/returns-policy"
+        },
+        "hasShippingService": {
+          "@type": "ShippingService",
+          "name": "Courier Guy delivery within South Africa",
+          "shippingConditions": [
+            {
+              "@type": "ShippingConditions",
+              "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 599.99 },
+              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 100 }
+            },
+            {
+              "@type": "ShippingConditions",
+              "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 599.99 },
+              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 120 }
+            },
+            {
+              "@type": "ShippingConditions",
+              "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 600 },
+              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 0 }
+            }
+          ]
+        }
       }
     </script>
 
