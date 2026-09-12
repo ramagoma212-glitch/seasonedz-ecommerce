@@ -56,12 +56,20 @@ function renderNotFound() {
   `;
 }
 
-// One of "In Stock" / "Low Stock" / "Out of Stock" today (see
-// data/products.js) — mapped to schema.org's own availability values
-// rather than passed through as-is, since those are the only three
-// values this catalogue's stockStatus ever actually takes.
-function schemaAvailability(stockStatus) {
-  if (stockStatus === "Out of Stock") return "https://schema.org/OutOfStock";
+// Mirrors scripts/generate-static-routes.mjs's own schemaAvailability()
+// field-for-field (see that file's comment on buildProductJsonLd) — an
+// active preorder (product.isPreorder, the backend's own live computed
+// flag, never a hardcoded date here) always reports schema.org's real
+// PreOrder value, even at zero stock, since the two build/runtime
+// Product JSON-LD blocks must never disagree (this function's own
+// output replaces the build-time block via setPageStructuredData()
+// once the page hydrates, so a mismatch here is what a JS-executing
+// crawler like Googlebot would actually see). Otherwise one of "In
+// Stock" / "Low Stock" / "Out of Stock" today (see data/products.js),
+// mapped to schema.org's own availability values.
+function schemaAvailability(product) {
+  if (product.isPreorder) return "https://schema.org/PreOrder";
+  if (product.stockStatus === "Out of Stock") return "https://schema.org/OutOfStock";
   return "https://schema.org/InStock";
 }
 
@@ -113,7 +121,7 @@ function buildProductStructuredData(product) {
       "@type": "Offer",
       priceCurrency: "ZAR",
       price: product.price.toFixed(2),
-      availability: schemaAvailability(product.stockStatus),
+      availability: schemaAvailability(product),
       url: window.location.href,
     },
     // Version 7, Milestone 171C: only ever added once at least one

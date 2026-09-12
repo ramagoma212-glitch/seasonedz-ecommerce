@@ -10,6 +10,12 @@
 // code paths here would require a real backend + a real Order row,
 // which this project's test-safety rules forbid.
 import { test, expect } from "@playwright/test";
+// Node-side import (this test file itself runs in Node, only page.evaluate
+// callbacks run in the browser) of the exact same build-time function the
+// static-route generator uses, so the "build-time and runtime schema
+// availability agree" test below compares against the real build-time
+// logic rather than a hand-copied expectation that could quietly drift.
+import { schemaAvailability as buildTimeSchemaAvailability } from "../../scripts/generate-static-routes.mjs";
 
 const MOCK_CATEGORIES = [{ id: "cat-1", slug: "kids-colouring-books", name: "Kids Colouring Books", description: "", productCount: 2 }];
 
@@ -328,5 +334,120 @@ test.describe("Milestone 181A: R200 minimum — Checkout order summary", () => {
     await page.goto("/checkout");
     await expect(page.locator("[data-order-summary-preorder-discount-row]")).toContainText("-R20.00");
     await expect(page.locator("[data-checkout-preorder-discount-notice]")).toHaveCount(0);
+  });
+});
+
+// Root-cause regression coverage for the "Search Console sees InStock on
+// an active preorder Product" SEO bug: productDetails.js's own runtime
+// Product JSON-LD (rebuilt client-side via setPageStructuredData() once
+// the page hydrates — see js/seo.js's clearPageStructuredData(), which
+// removes the build-time <script id="page-structured-data"> block
+// before this one is appended) used to check stockStatus only, never
+// isPreorder, so it silently overwrote the build-time-correct PreOrder
+// value with InStock the moment a JS-executing crawler like Googlebot
+// rendered the page. Every case here reads the LIVE, post-hydration DOM
+// (`page.locator('script[type="application/ld+json"]')`), i.e. exactly
+// what such a crawler would see — never the raw pre-JS HTML.
+async function getRuntimeProductAvailability(page) {
+  const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+  for (const raw of scripts) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed["@type"] === "Product") return parsed.offers.availability;
+    } catch {
+      // Not this page's Product block (e.g. Organization/WebSite) — ignore.
+    }
+  }
+  return null;
+}
+
+test.describe("Preorder Product: JSON-LD schema availability (SEO)", () => {
+  test("an active preorder product with real stock available still reports the real schema.org PreOrder value, never InStock", async ({ page }) => {
+    const product = mockProduct({ slug: "active-preorder-in-stock", isPreorder: true, stockStatus: "In Stock", stockQuantity: 10 });
+    await mockCatalog(page, [product]);
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${product.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/PreOrder");
+  });
+
+  test("an active preorder product at zero stock reports PreOrder, never OutOfStock", async ({ page }) => {
+    await mockCatalog(page, [PREORDER_PRODUCT]); // isPreorder: true, stockStatus: "Out of Stock"
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${PREORDER_PRODUCT.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/PreOrder");
+  });
+
+  test("a product whose preorder window is scheduled but not yet active (isPreorder: false) reports normal availability, not PreOrder", async ({ page }) => {
+    const product = mockProduct({
+      slug: "preorder-scheduled-not-active",
+      isPreorder: false,
+      stockStatus: "In Stock",
+      stockQuantity: 10,
+      preorderReleaseAt: "2027-01-01T00:00:00.000Z",
+    });
+    await mockCatalog(page, [product]);
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${product.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/InStock");
+  });
+
+  test("a product whose preorder window has already ended (isPreorder: false) reports normal availability, not PreOrder", async ({ page }) => {
+    const product = mockProduct({
+      slug: "preorder-ended",
+      isPreorder: false,
+      stockStatus: "In Stock",
+      stockQuantity: 10,
+      preorderReleaseAt: "2020-01-01T00:00:00.000Z",
+    });
+    await mockCatalog(page, [product]);
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${product.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/InStock");
+  });
+
+  test("an ordinary product that was never a preorder reports normal availability (regression)", async ({ page }) => {
+    await mockCatalog(page, [ORDINARY_PRODUCT]); // isPreorder: false, preorderReleaseAt: null
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${ORDINARY_PRODUCT.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/InStock");
+  });
+
+  test("a genuinely out-of-stock, non-preorder product still reports OutOfStock — the preorder fix never masks real stock-outs", async ({ page }) => {
+    const product = mockProduct({ slug: "zero-stock-non-preorder", isPreorder: false, stockStatus: "Out of Stock", stockQuantity: 0, preorderReleaseAt: null });
+    await mockCatalog(page, [product]);
+    await mockPublicPreorderSettings(page);
+    await page.goto(`/product/${product.slug}`);
+    await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+    expect(await getRuntimeProductAvailability(page)).toBe("https://schema.org/OutOfStock");
+  });
+
+  test("build-time and runtime schema availability agree for every case (never raw HTML = InStock, runtime JS = PreOrder or the reverse)", async ({ page }) => {
+    const cases = [
+      mockProduct({ slug: "match-active-preorder", isPreorder: true, stockStatus: "In Stock", stockQuantity: 10 }),
+      PREORDER_PRODUCT,
+      ORDINARY_PRODUCT,
+      mockProduct({ slug: "match-zero-stock", isPreorder: false, stockStatus: "Out of Stock", preorderReleaseAt: null }),
+    ];
+
+    for (const product of cases) {
+      await mockCatalog(page, [product]);
+      await mockPublicPreorderSettings(page);
+      await page.goto(`/product/${product.slug}`);
+      await expect(page.locator(".product-details__main-image")).toBeVisible();
+
+      const runtimeAvailability = await getRuntimeProductAvailability(page);
+      expect(runtimeAvailability).toBe(buildTimeSchemaAvailability(product));
+    }
   });
 });
