@@ -175,6 +175,26 @@ test.describe("Category page internal linking (Milestone 171I)", () => {
     expect(href).toMatch(/^\/category\//);
   });
 
+  // Milestone 184 SEO audit fix: a live crawl found the /categories
+  // page still linked the genuine, active, zero-product "Schools and
+  // Wholesale" category (via categoryCard.js's plain <a href>) to
+  // /category/schools-and-wholesale — a route scripts/generate-static-
+  // routes.mjs deliberately never generates a static file for (its own
+  // `productCount > 0` filter), so that link was a real, confirmed
+  // HTTP 404 on production. The line above already established the
+  // site avoids linking to this exact empty category from other pages
+  // (/schools) — this closes the one remaining gap.
+  test("the /categories page never links a zero-product category (regression: was a real 404 on production)", async ({ page }) => {
+    await page.goto("/categories");
+    await expect(page.locator(".category-card").first()).toBeVisible();
+    await expect(page.locator('a[href="/category/schools-and-wholesale"]')).toHaveCount(0);
+
+    const subtitles = await page.locator(".category-card .card__subtitle").allInnerTexts();
+    for (const subtitle of subtitles) {
+      expect(subtitle).not.toMatch(/^0 products?$/);
+    }
+  });
+
   test("the header's Creative Supplies nav item links to /category/markers-and-crayons", async ({ page }) => {
     await page.goto("/");
     await page.setViewportSize({ width: 1440, height: 900 });
