@@ -465,3 +465,71 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
     });
   }
 });
+
+// Shipping Policy consistency fix (small SEO/copy improvement before
+// Milestone 184): the page used to state a single universal R600
+// threshold for every customer, guest or signed in — stale since
+// Milestone 180, Part A introduced a lower R500 threshold for
+// registered customers (src/config/delivery.js's own
+// REGISTERED_FREE_DELIVERY_THRESHOLD). These checks read the real
+// rendered page text directly, so a future edit that quietly drops one
+// of the two thresholds (or reverts to the old single-threshold
+// wording) fails here rather than only being caught by a human re-read.
+test.describe("Shipping Policy page: registered vs guest thresholds (consistency fix)", () => {
+  test("states both the R500 registered and R600 guest free-delivery thresholds, never a single universal figure", async ({ page }) => {
+    await page.goto("/shipping-policy");
+    const bodyText = await page.locator(".policy-page").innerText();
+
+    expect(bodyText).toContain("Registered customers receive free Locker or Door delivery when");
+    expect(bodyText).toContain("R500");
+    expect(bodyText).toContain("Guest customers receive free Locker or Door delivery when");
+    expect(bodyText).toContain("R600");
+    // The old, now-stale wording this fix replaces — must never reappear.
+    expect(bodyText).not.toContain("applies to every customer, guest or signed in");
+  });
+
+  test("states the real R100 Locker / R120 Door fees and free Customer Collection", async ({ page }) => {
+    await page.goto("/shipping-policy");
+    const bodyText = await page.locator(".policy-page").innerText();
+
+    expect(bodyText).toContain("Courier Guy Locker to Locker");
+    expect(bodyText).toContain("R100");
+    expect(bodyText).toContain("Courier Guy Door to Door");
+    expect(bodyText).toContain("R120");
+    expect(bodyText).toContain("Customer Collection");
+    expect(bodyText).toMatch(/Customer Collection[\s\S]{0,20}always free/);
+    expect(bodyText).toContain("Pretoria");
+    expect(bodyText).toContain("Thohoyandou");
+  });
+
+  test("states gift wrapping and digital products never count toward the free-delivery threshold", async ({ page }) => {
+    await page.goto("/shipping-policy");
+    const bodyText = await page.locator(".policy-page").innerText();
+
+    expect(bodyText).toContain("Gift wrapping does not count toward the free-delivery threshold");
+    expect(bodyText).toContain("Digital products do not count toward the free-delivery threshold");
+  });
+
+  // Regression guard for the explicit "keep the Merchant structured data
+  // unchanged" instruction — this fix only ever touches customer-facing
+  // copy on this one page, never index.html's Organization block.
+  test("Merchant Listing structured data (Organization hasShippingService/hasMerchantReturnPolicy) is unaffected by the Shipping Policy copy fix", async ({ page }) => {
+    await page.goto("/shipping-policy");
+    const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+    const organization = scripts.map((raw) => JSON.parse(raw)).find((entry) => entry["@type"] === "Organization");
+
+    expect(organization.hasMerchantReturnPolicy).toEqual({
+      "@type": "MerchantReturnPolicy",
+      merchantReturnLink: "https://www.seasonedzgroup.co.za/returns-policy",
+    });
+
+    const rates = organization.hasShippingService.shippingConditions.map((c) => c.shippingRate.value).sort((a, b) => a - b);
+    expect(rates).toEqual([0, 100, 120]);
+    const freeCondition = organization.hasShippingService.shippingConditions.find((c) => c.shippingRate.value === 0);
+    expect(freeCondition.orderValue.minValue).toBe(600);
+    for (const condition of organization.hasShippingService.shippingConditions) {
+      expect(condition.shippingDestination.addressCountry).toBe("ZA");
+      expect(condition.shippingRate.currency).toBe("ZAR");
+    }
+  });
+});

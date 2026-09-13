@@ -10,6 +10,20 @@
 // Version 7, Milestone 114 names The Courier Guy explicitly, since
 // Seasonedz Group now has a real account with them — still no
 // customer-facing quote, booking, or live tracking.
+//
+// Shipping Policy consistency fix (small SEO/copy improvement before
+// Milestone 184): Milestone 180, Part A reintroduced a lower R500
+// free-delivery threshold for authenticated/registered customers (see
+// REGISTERED_FREE_DELIVERY_THRESHOLD in both config files above), but
+// this page's own wording was never updated at the time and kept
+// stating a single universal R600 threshold for every customer — this
+// section now states both thresholds correctly. The Merchant Listing
+// structured data (index.html's Organization block) deliberately keeps
+// only the R600 guest figure — that's the real, universally-available
+// rate a schema.org consumer (with no concept of "logged in") can
+// state without misrepresenting anything; this page, which a real
+// signed-in customer actually reads, is the right place for the full
+// R500-vs-R600 picture.
 
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
 
@@ -36,15 +50,28 @@ export function renderShippingPolicy() {
           Choose your preferred option at checkout:
         </p>
         <ul>
-          <li><strong>Courier Guy Locker to Locker:</strong> R100, free on orders of R600 or more in qualifying products.</li>
-          <li><strong>Courier Guy Door to Door:</strong> R120, free on orders of R600 or more in qualifying products.</li>
+          <li><strong>Courier Guy Locker to Locker:</strong> R100 below your applicable free-delivery threshold.</li>
+          <li><strong>Courier Guy Door to Door:</strong> R120 below your applicable free-delivery threshold.</li>
           <li><strong>Customer Collection:</strong> always free, available in Pretoria or Thohoyandou by arrangement.</li>
         </ul>
+
+        <h2>Free-Delivery Thresholds</h2>
         <p>
-          The R600 free-delivery threshold applies to every customer,
-          guest or signed in. Gift wrapping does not count toward the
-          threshold. Your selected delivery method and fee are shown at
-          checkout before you place your order.
+          Registered customers receive free Locker or Door delivery when
+          eligible physical products total R500 or more. Guest customers
+          receive free Locker or Door delivery when eligible physical
+          products total R600 or more. Signing in before you check out
+          can lower the amount you need to spend to qualify for free
+          delivery.
+        </p>
+        <p>
+          Only eligible physical products count toward these thresholds.
+          Gift wrapping does not count toward the free-delivery
+          threshold. Digital products do not count toward the
+          free-delivery threshold, since they are not physically
+          delivered. Your selected delivery method and fee, based on
+          your actual cart and sign-in status, are shown at checkout
+          before you place your order.
         </p>
 
         <h2>Delivery Times</h2>
