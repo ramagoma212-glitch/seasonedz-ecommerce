@@ -24,6 +24,11 @@ const SECTIONS = [
     description: "Prepare a structured brief for a product, audience, pillar and platforms, then copy it into Zeely to create the actual content.",
   },
   {
+    href: "/admin/content-studio/marketing-links",
+    title: "Marketing Links",
+    description: "Generate a UTM-tagged link to a real Seasonedz page for a Facebook, Instagram or TikTok post scheduled through Metricool.",
+  },
+  {
     href: "/admin/content-studio/brand-knowledge",
     title: "Brand Knowledge",
     description: "Brand voice, writing rules, visual rules, approved claims and claims to avoid. The source of truth every brief is built from.",

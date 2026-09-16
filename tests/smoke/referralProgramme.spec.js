@@ -133,6 +133,31 @@ test.describe("Referral capture from a ?ref= link", () => {
     expect(called).toBe(false);
     expect(await getStoredReferral(page)).toBeNull();
   });
+
+  // Milestone 185: a Marketing Link Builder link and an affiliate
+  // referral link can legitimately land on the same URL at once (a
+  // Metricool post shared by an affiliate, carrying both their own
+  // ?ref= code and the campaign's UTM tags). js/referral.js's
+  // getRawRefParam() only ever reads its own named "ref" param off the
+  // full URLSearchParams object — it never rewrites or strips the
+  // query string — so the two must coexist with neither affecting the
+  // other, exactly like a traditional multi-page site.
+  test("a ?ref= code alongside UTM parameters still captures correctly, and neither set of parameters is stripped from the URL", async ({ page }) => {
+    const getCaptured = mockCaptureEndpoint(page);
+    await page.goto("/?ref=alice-1&utm_source=instagram&utm_medium=social&utm_campaign=revised_books_launch_2026&utm_content=abc_video_01");
+
+    await expect.poll(() => getCaptured()).toBe("alice-1");
+    const stored = await getStoredReferral(page);
+    expect(stored).toMatchObject({ code: "alice-1", signature: "test-signature-abc123" });
+
+    const search = await page.evaluate(() => window.location.search);
+    const params = new URLSearchParams(search);
+    expect(params.get("ref")).toBe("alice-1");
+    expect(params.get("utm_source")).toBe("instagram");
+    expect(params.get("utm_medium")).toBe("social");
+    expect(params.get("utm_campaign")).toBe("revised_books_launch_2026");
+    expect(params.get("utm_content")).toBe("abc_video_01");
+  });
 });
 
 test.describe("Checkout: referral discount preview and submission", () => {

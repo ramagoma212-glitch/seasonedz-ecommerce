@@ -125,6 +125,7 @@ import { renderAdminPreorderSettings } from "../pages/adminPreorderSettings.js";
 // Control Centre — see adminContentStudioHome.js's own header comment.
 import { renderAdminContentStudioHome } from "../pages/adminContentStudioHome.js";
 import { renderAdminCampaignBriefs } from "../pages/adminCampaignBriefs.js";
+import { renderAdminMarketingLinkBuilder } from "../pages/adminMarketingLinkBuilder.js";
 import { renderAdminCampaignBriefCreate, renderAdminCampaignBriefEdit } from "../pages/adminCampaignBriefForm.js";
 import { renderAdminCampaignBriefDetail } from "../pages/adminCampaignBriefDetail.js";
 // Content Studio Phase 2: Brand Knowledge Foundation only — no
@@ -428,6 +429,7 @@ const routeDefs = [
   { pattern: "/admin/content-studio/campaign-briefs/:id/edit", render: renderAdminCampaignBriefEdit, title: "Edit Campaign Brief", noindex: true },
   { pattern: "/admin/content-studio/campaign-briefs/:id", render: renderAdminCampaignBriefDetail, title: "Campaign Brief", noindex: true },
   { pattern: "/admin/content-studio/campaign-briefs", render: renderAdminCampaignBriefs, title: "Campaign Briefs", noindex: true },
+  { pattern: "/admin/content-studio/marketing-links", render: renderAdminMarketingLinkBuilder, title: "Marketing Link Builder", noindex: true },
   { pattern: "/admin/content-studio", render: renderAdminContentStudioHome, title: "Content Studio", noindex: true },
   // Milestone 179, Part G: admin-user management — ADMIN-only,
   // backend-enforced (see adminUsers.routes.ts). "/invite" before the

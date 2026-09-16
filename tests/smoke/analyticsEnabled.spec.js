@@ -177,6 +177,29 @@ test.describe("GA4 consent gating (Milestone 183)", () => {
     expect(typeof pageViews[0].page_title).toBe("string");
     expect(pageViews[0].page_location).toContain("/shop");
   });
+
+  // Milestone 185: confirms the Marketing Link Builder's whole reason
+  // for existing actually works — a UTM-tagged link landing on the
+  // site produces a GA4 page_view whose page_location carries every
+  // utm_* parameter intact, exactly like a traditional multi-page
+  // site. trackPageView() (js/analytics.js) sends
+  // page_location: window.location.href, and nothing in router.js's
+  // render pipeline rewrites the URL before that first page_view
+  // fires (Milestone 185's own Part A/F audit) — this is the
+  // regression test for that finding, not new production code.
+  test("a UTM-tagged landing URL sends a page_view whose page_location carries every utm_* parameter intact", async ({ page }) => {
+    await grantAnalyticsConsent(page);
+    await mockCatalog(page);
+    await page.goto("/product/abc-colouring-book-for-kids-with-fun-facts?utm_source=instagram&utm_medium=social&utm_campaign=revised_books_launch_2026&utm_content=abc_video_01");
+    await expect.poll(async () => (await getGtagEvents(page, "page_view")).length).toBeGreaterThan(0);
+
+    const pageViews = await getGtagEvents(page, "page_view");
+    const landingUrl = new URL(pageViews[0].page_location);
+    expect(landingUrl.searchParams.get("utm_source")).toBe("instagram");
+    expect(landingUrl.searchParams.get("utm_medium")).toBe("social");
+    expect(landingUrl.searchParams.get("utm_campaign")).toBe("revised_books_launch_2026");
+    expect(landingUrl.searchParams.get("utm_content")).toBe("abc_video_01");
+  });
 });
 
 // GA4 GTAG TRANSMISSION FIX: regression test for the exact bug — the

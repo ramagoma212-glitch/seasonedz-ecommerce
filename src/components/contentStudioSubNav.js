@@ -13,6 +13,9 @@ const SUB_NAV_LINKS = [
   // Milestone 182: the Zeely Campaign Brief tool — see
   // campaignBrief.service.ts's own header comment for the architecture.
   { key: "campaign-briefs", href: "/admin/content-studio/campaign-briefs", label: "Campaign Briefs" },
+  // Milestone 185: stateless UTM link builder for Metricool posts —
+  // see pages/adminMarketingLinkBuilder.js's own header comment.
+  { key: "marketing-links", href: "/admin/content-studio/marketing-links", label: "Marketing Links" },
   { key: "brand-knowledge", href: "/admin/content-studio/brand-knowledge", label: "Brand Knowledge" },
   { key: "pillars", href: "/admin/content-studio/pillars", label: "Content Pillars" },
   { key: "audiences", href: "/admin/content-studio/audiences", label: "Audiences" },

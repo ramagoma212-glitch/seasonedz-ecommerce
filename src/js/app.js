@@ -131,6 +131,7 @@ import {
   previewContentContext,
 } from "./api/contentStudioApi.js";
 import { renderContextPreviewResult } from "../pages/adminContentContextPreview.js";
+import { buildMarketingLink } from "./marketingLinks.js";
 import {
   createAdminCampaignBrief,
   updateAdminCampaignBrief,
@@ -241,6 +242,7 @@ function mountApp() {
   setupAdminAudienceForm();
   setupAdminAudienceActions();
   setupAdminContextPreviewForm();
+  setupMarketingLinkBuilder();
 
   window.addEventListener("popstate", onRouteChange);
   onRouteChange();
@@ -5319,6 +5321,98 @@ async function handleAdminContextPreviewSubmit(form) {
     }
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 185: the Marketing Link Builder recomputes its output on
+// every keystroke/selection change — no submit button, no backend
+// call, no database row (js/marketingLinks.js's buildMarketingLink()
+// is a pure function). "Destination" swaps which real-page picker is
+// visible; "Source" swaps in a free-text field when "Other (custom)"
+// is chosen.
+function setupMarketingLinkBuilder() {
+  document.addEventListener("input", (event) => {
+    if (event.target.closest("[data-marketing-link-form]")) updateMarketingLinkForm(event.target.closest("[data-marketing-link-form]"));
+  });
+  document.addEventListener("change", (event) => {
+    const form = event.target.closest("[data-marketing-link-form]");
+    if (form) updateMarketingLinkForm(form);
+  });
+
+  document.addEventListener("click", (event) => {
+    const copyButton = event.target.closest('[data-action="copy-marketing-link"]');
+    if (copyButton) handleCopyMarketingLink(copyButton);
+  });
+}
+
+function updateMarketingLinkForm(form) {
+  const destinationType = form.querySelector("#marketingLinkDestinationType")?.value || "home";
+
+  // Only the picker matching the chosen destination is shown — see
+  // marketingLinks.js's resolveDestinationUrl() for the same switch.
+  form.querySelectorAll("[data-marketing-link-field]").forEach((field) => {
+    field.hidden = field.dataset.marketingLinkField !== destinationType;
+  });
+
+  const sourceSelect = form.querySelector("#marketingLinkSource");
+  const sourceCustomInput = form.querySelector("#marketingLinkSourceCustom");
+  const usingCustomSource = sourceSelect?.value === "__custom__";
+  if (sourceCustomInput) sourceCustomInput.hidden = !usingCustomSource;
+
+  const result = buildMarketingLink({
+    destinationType,
+    productSlug: form.querySelector("#marketingLinkProduct")?.value,
+    categorySlug: form.querySelector("#marketingLinkCategory")?.value,
+    blogSlug: form.querySelector("#marketingLinkBlog")?.value,
+    manualUrl: form.querySelector("#marketingLinkManualUrl")?.value,
+    source: usingCustomSource ? sourceCustomInput?.value : sourceSelect?.value,
+    medium: form.querySelector("#marketingLinkMedium")?.value,
+    campaign: form.querySelector("#marketingLinkCampaign")?.value,
+    content: form.querySelector("#marketingLinkContent")?.value,
+    term: form.querySelector("#marketingLinkTerm")?.value,
+  });
+
+  const output = form.querySelector("#marketingLinkOutput");
+  const errorBanner = form.querySelector("[data-marketing-link-errors]");
+  const copyButton = form.querySelector('[data-action="copy-marketing-link"]');
+
+  if (result.url) {
+    if (output) output.value = result.url;
+    if (errorBanner) {
+      errorBanner.hidden = true;
+      errorBanner.textContent = "";
+    }
+    if (copyButton) copyButton.disabled = false;
+  } else {
+    if (output) output.value = "";
+    if (errorBanner) {
+      errorBanner.textContent = (result.errors || []).join(" ");
+      errorBanner.hidden = (result.errors || []).length === 0;
+    }
+    if (copyButton) copyButton.disabled = true;
+  }
+}
+
+// Same "copy, then briefly say Copied!" shape as handleCopyReferralLink
+// above — reads the CURRENT value of the output field at click time
+// (it changes on every keystroke) rather than a fixed data-link
+// attribute set once at render.
+async function handleCopyMarketingLink(button) {
+  const targetId = button.dataset.target;
+  const input = targetId ? document.getElementById(targetId) : null;
+  const link = input?.value;
+  if (!link) return;
+
+  try {
+    await navigator.clipboard.writeText(link);
+    const originalText = button.textContent;
+    button.textContent = "Copied!";
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 2000);
+  } catch {
+    input.select();
+    window.alert("Could not copy automatically. The link is selected, copy it manually (Ctrl/Cmd+C).");
   }
 }
 
