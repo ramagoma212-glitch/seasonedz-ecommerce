@@ -200,6 +200,33 @@ test.describe("GA4 consent gating (Milestone 183)", () => {
     expect(landingUrl.searchParams.get("utm_campaign")).toBe("revised_books_launch_2026");
     expect(landingUrl.searchParams.get("utm_content")).toBe("abc_video_01");
   });
+
+  // Milestone 186: Metricool Web Analytics was added alongside GA4 —
+  // this proves GA4 is genuinely unaffected, not just unchanged in the
+  // diff. Same consent gate (js/consent.js), same real gtag.js request
+  // interception discipline as every other test in this file, plus a
+  // mocked Metricool tracker response so this test never depends on
+  // tracker.metricool.com being reachable.
+  test("GA4 still loads and fires page_view correctly with Metricool also active on the same page", async ({ page }) => {
+    await page.route("**/tracker.metricool.com/resources/be.js", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/javascript",
+        body: `window.beTracker = { t: function (opts) { window.__metricoolCalls = window.__metricoolCalls || []; window.__metricoolCalls.push(opts); } };`,
+      })
+    );
+    await grantAnalyticsConsent(page);
+    await mockCatalog(page);
+    await page.goto("/shop");
+
+    await expect.poll(async () => (await getGtagEvents(page, "page_view")).length).toBeGreaterThan(0);
+    const pageViews = await getGtagEvents(page, "page_view");
+    expect(pageViews[0].page_path).toBe("/shop");
+
+    await expect.poll(() => page.evaluate(() => (window.__metricoolCalls || []).length)).toBeGreaterThan(0);
+    const metricoolCalls = await page.evaluate(() => window.__metricoolCalls);
+    expect(metricoolCalls).toEqual([{ hash: "1a4cb5231d8873d12258557dd3fd3c36" }]);
+  });
 });
 
 // GA4 GTAG TRANSMISSION FIX: regression test for the exact bug — the

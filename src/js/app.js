@@ -24,6 +24,7 @@ import {
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
+import { initMetricoolTracking } from "./metricool.js";
 import {
   validateCheckoutForm,
   validateCustomerLoginForm,
@@ -179,6 +180,10 @@ function mountApp() {
   // unconditionally.
   setupCookieConsent();
   initializeAnalytics();
+  // Milestone 186: Metricool Web Analytics — additional site analytics
+  // alongside GA4, same consent gate, same "safe to call unconditionally"
+  // contract (see js/metricool.js's own header comment).
+  initMetricoolTracking();
   initRouter();
   setupMobileMenu();
   setupNavMoreMenu();
