@@ -1,0 +1,15 @@
+{
+  "name": "seasonedz-chatbot-worker",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "wrangler": "^4.134.0",
+    "@cloudflare/workers-types": "^5.20260917.1",
+    "tsx": "^4.19.0"
+  }
+}

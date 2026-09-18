@@ -116,10 +116,23 @@ jobs:
         # never a fabricated/guessed ID. See PROJECT_SUMMARY.md (or
         # ask the owner) for how to add this repository variable once
         # a real GA4 property exists.
+        # Milestone 187: VITE_CHATBOT_API_URL/VITE_TURNSTILE_SITE_KEY
+        # follow the exact same "repository variable, not a hardcoded
+        # value, not a secret" pattern as VITE_GA_MEASUREMENT_ID just
+        # above — the Worker URL and the Turnstile site key are both
+        # visible in every visitor's page source anyway (a Turnstile
+        # site key is a public value by design, never the secret key,
+        # which lives only as a Cloudflare Worker secret and is never
+        # referenced anywhere in this repository). When
+        # VITE_TURNSTILE_SITE_KEY is unset, js/chatbot.js sees no site
+        # key configured and the chat widget stays fully hidden in
+        # production — never a broken/non-functional chat button.
         env:
           VITE_API_BASE_URL: https://api.seasonedzgroup.co.za/api
           VITE_PAYFAST_ENABLED: "true"
           VITE_GA_MEASUREMENT_ID: ${{ vars.VITE_GA_MEASUREMENT_ID }}
+          VITE_CHATBOT_API_URL: ${{ vars.VITE_CHATBOT_API_URL }}
+          VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
         run: npm run build
 
       - name: Generate static route files and sitemap.xml for SEO

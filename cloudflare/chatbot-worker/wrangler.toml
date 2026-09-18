@@ -1,0 +1,13 @@
+name = "seasonedz-chatbot-worker"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[ai]
+binding = "AI"
+
+[[kv_namespaces]]
+binding = "CHATBOT_USAGE"
+id = "0756acb1a6e14ee3a50b6451b2b45d51"
+
+[vars]
+ENVIRONMENT = "production"

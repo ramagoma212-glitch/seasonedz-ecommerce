@@ -5,6 +5,7 @@ node_modules
 dist
 dist-ssr
 dist-analytics-test
+dist-chatbot-test
 *.local
 
 # Playwright smoke-test output (Version 7, Milestone 103)

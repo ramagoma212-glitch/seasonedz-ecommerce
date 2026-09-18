@@ -48,6 +48,20 @@ const ANALYTICS_TEST_MEASUREMENT_ID = "G-TESTNOTREAL01";
 const LOCAL_ANALYTICS_PORT = 4601;
 const LOCAL_ANALYTICS_BASE_URL = `http://localhost:${LOCAL_ANALYTICS_PORT}`;
 
+// Milestone 187: same pattern again, a third throwaway build, this
+// time with VITE_TURNSTILE_SITE_KEY set — the chat widget stays fully
+// hidden without a site key configured (see js/chatbot.js), so only
+// this build can exercise it. Uses Cloudflare's own publicly
+// documented "always passes, visible" Turnstile TEST sitekey
+// (1x00000000000000000000AA) — never a real Seasonedz site key, and
+// every test still mocks the actual Cloudflare Worker endpoint
+// (**/chat, **/health) via page.route(), so no request ever reaches
+// the real deployed Worker or spends real Workers AI allocation.
+const CHATBOT_TEST_TURNSTILE_SITE_KEY = "1x00000000000000000000AA";
+const CHATBOT_TEST_API_URL = "https://chatbot-worker.invalid";
+const LOCAL_CHATBOT_PORT = 4602;
+const LOCAL_CHATBOT_BASE_URL = `http://localhost:${LOCAL_CHATBOT_PORT}`;
+
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: true,
@@ -80,7 +94,10 @@ export default defineConfig({
       // Milestone 183: this build has no Measurement ID, so the
       // "enabled" spec can never pass here — it only runs under the
       // "analytics" project below, against the build that has one.
-      testIgnore: /analyticsEnabled\.spec\.js$/,
+      // Milestone 187: same reasoning for the chat widget spec — this
+      // build has no Turnstile site key, so the widget never renders
+      // here.
+      testIgnore: [/analyticsEnabled\.spec\.js$/, /chatbot\.spec\.js$/],
     },
     {
       name: "live",
@@ -89,7 +106,7 @@ export default defineConfig({
       // cold-start slowness on the live backend, never masks the
       // "local" project's failures, which must stay deterministic.
       retries: 2,
-      testIgnore: /analyticsEnabled\.spec\.js$/,
+      testIgnore: [/analyticsEnabled\.spec\.js$/, /chatbot\.spec\.js$/],
     },
     {
       name: "analytics",
@@ -99,6 +116,12 @@ export default defineConfig({
       // every other spec already runs under "local"/"live" above and
       // must never be re-run against this throwaway build too.
       testMatch: /analyticsEnabled\.spec\.js$/,
+    },
+    {
+      name: "chatbot",
+      use: { ...devices["Desktop Chrome"], baseURL: LOCAL_CHATBOT_BASE_URL },
+      retries: 0,
+      testMatch: /chatbot\.spec\.js$/,
     },
   ],
   webServer: [
@@ -133,6 +156,13 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: { VITE_GA_MEASUREMENT_ID: ANALYTICS_TEST_MEASUREMENT_ID },
+    },
+    {
+      command: `npm run build -- --outDir dist-chatbot-test && node scripts/generate-static-routes.mjs dist-chatbot-test && node -e "require('fs').copyFileSync('dist-chatbot-test/index.html','dist-chatbot-test/404.html')" && node tests/helpers/server.mjs dist-chatbot-test ${LOCAL_CHATBOT_PORT}`,
+      url: `${LOCAL_CHATBOT_BASE_URL}/`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { VITE_TURNSTILE_SITE_KEY: CHATBOT_TEST_TURNSTILE_SITE_KEY, VITE_CHATBOT_API_URL: CHATBOT_TEST_API_URL },
     },
   ],
 });

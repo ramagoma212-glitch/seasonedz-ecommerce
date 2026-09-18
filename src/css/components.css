@@ -2998,3 +2998,227 @@ body.has-cookie-preferences-open {
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
+
+/* ---- Seasonedz AI Customer Assistant widget (Milestone 187) -----------------------
+   A docked bottom-right launcher + panel, same z-index discipline as
+   the toast/image-lightbox/cookie-consent stack above (kept below the
+   cookie consent banner/modal, since that one's Accept/Reject buttons
+   must never be covered). Hidden entirely by default — see js/app.js's
+   setupChatWidget(), which only ever unhides it once a route is known
+   to be public and the Worker/Turnstile config is present. */
+.chat-widget__launcher {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: none;
+  border-radius: 999px;
+  background-color: var(--color-primary);
+  color: var(--color-white);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  box-shadow: 0 4px 16px rgba(59, 42, 32, 0.25);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.chat-widget__launcher:hover,
+.chat-widget__launcher:focus-visible {
+  background-color: var(--color-primary-dark);
+}
+
+.chat-widget__launcher-icon {
+  font-size: var(--font-size-md);
+  line-height: 1;
+}
+
+.chat-widget__panel {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: calc(var(--space-lg) * 2 + 40px);
+  z-index: 1050;
+  width: min(360px, calc(100vw - var(--space-lg) * 2));
+  max-height: min(560px, calc(100vh - var(--space-lg) * 4));
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 32px rgba(59, 42, 32, 0.28);
+  overflow: hidden;
+}
+
+.chat-widget__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md);
+  background-color: var(--color-secondary);
+  color: var(--color-white);
+}
+
+.chat-widget__title {
+  margin: 0;
+  font-size: var(--font-size-md);
+  font-family: var(--font-heading);
+}
+
+.chat-widget__close {
+  background: none;
+  border: none;
+  color: var(--color-white);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+  padding: var(--space-xs);
+}
+
+.chat-widget__messages {
+  flex: 1;
+  min-height: 120px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.chat-widget__bubble {
+  max-width: 85%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.chat-widget__bubble p {
+  margin: 0;
+}
+
+.chat-widget__bubble p + p {
+  margin-top: var(--space-xs);
+}
+
+.chat-widget__bubble--assistant {
+  align-self: flex-start;
+  background-color: var(--color-bg-alt);
+  color: var(--color-text);
+}
+
+.chat-widget__bubble--user {
+  align-self: flex-end;
+  background-color: var(--color-secondary);
+  color: var(--color-white);
+}
+
+.chat-widget__quick-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  padding: 0 var(--space-md) var(--space-sm);
+}
+
+.chat-widget__quick-question {
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+
+.chat-widget__quick-question:hover,
+.chat-widget__quick-question:focus-visible {
+  border-color: var(--color-primary);
+}
+
+.chat-widget__turnstile:not(:empty) {
+  padding: 0 var(--space-md);
+}
+
+.chat-widget__status {
+  margin: 0;
+  padding: 0 var(--space-md) var(--space-xs);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.chat-widget__composer {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.chat-widget__input {
+  flex: 1;
+  resize: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-sm);
+  font-family: var(--font-body);
+  font-size: var(--font-size-sm);
+}
+
+.chat-widget__input:disabled,
+.chat-widget__send:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-widget__limit-reached {
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+}
+
+.chat-widget__limit-reached p {
+  margin: 0 0 var(--space-xs);
+}
+
+.chat-widget__support-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.chat-widget__support-links a {
+  color: var(--color-secondary-dark);
+  font-weight: 700;
+}
+
+.chat-widget__clear {
+  align-self: flex-end;
+  margin: 0 var(--space-md) var(--space-sm);
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  .chat-widget__launcher-label {
+    display: none;
+  }
+
+  .chat-widget__panel {
+    right: var(--space-sm);
+    left: var(--space-sm);
+    bottom: calc(var(--space-sm) * 2 + 40px);
+    width: auto;
+  }
+
+  .chat-widget__launcher {
+    right: var(--space-sm);
+    bottom: var(--space-sm);
+  }
+}

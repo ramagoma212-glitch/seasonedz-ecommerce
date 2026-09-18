@@ -25,6 +25,16 @@ import {
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
 import { initMetricoolTracking } from "./metricool.js";
+import { renderChatWidget } from "../components/chatWidget.js";
+import {
+  isChatbotConfigured,
+  getChatHistory,
+  appendToHistory,
+  clearChatHistory,
+  ensureTurnstileWidget,
+  sendChatMessage,
+  CHAT_DAILY_LIMIT,
+} from "./chatbot.js";
 import {
   validateCheckoutForm,
   validateCustomerLoginForm,
@@ -166,6 +176,12 @@ function mountApp() {
   app.insertAdjacentHTML("afterbegin", renderHeader());
   app.insertAdjacentHTML("beforeend", '<main id="main-content"></main>');
   app.insertAdjacentHTML("beforeend", renderFooter());
+  // Milestone 187: mounted once, hidden by default — setupChatWidget()
+  // below shows it only on public routes, and only once
+  // isChatbotConfigured() is true (VITE_CHATBOT_API_URL and
+  // VITE_TURNSTILE_SITE_KEY both set) — see chatWidget.js/chatbot.js's
+  // own header comments.
+  app.insertAdjacentHTML("beforeend", renderChatWidget());
 
   // Version 7, Milestone 171H: initialized before initRouter() and
   // every other feature below — this is where an analytics/marketing
@@ -184,6 +200,7 @@ function mountApp() {
   // alongside GA4, same consent gate, same "safe to call unconditionally"
   // contract (see js/metricool.js's own header comment).
   initMetricoolTracking();
+  setupChatWidget();
   initRouter();
   setupMobileMenu();
   setupNavMoreMenu();
@@ -5419,6 +5436,220 @@ async function handleCopyMarketingLink(button) {
     input.select();
     window.alert("Could not copy automatically. The link is selected, copy it manually (Ctrl/Cmd+C).");
   }
+}
+
+// Milestone 187: Seasonedz AI Customer Assistant widget. Talks only to
+// the dedicated Cloudflare Worker (js/chatbot.js) — never Render,
+// never Supabase. Hidden entirely (Part S) on any route the router
+// already classifies noindex (admin, account, checkout, payment,
+// order confirmation, password reset, and every other token-bearing/
+// private route — see router.js's own seasonedz:navigation event,
+// which now includes that same classification for exactly this).
+let chatWidgetSending = false;
+let chatWidgetOnPrivateRoute = false;
+
+// The cookie consent banner is a full-width fixed bar at the bottom of
+// the screen with a higher z-index than the chat launcher (it must
+// win any overlap with the banner's own Accept/Reject buttons) — left
+// as two separately-positioned fixed elements, the banner sits on top
+// of and blocks clicks on the launcher underneath it. Rather than
+// raising the launcher above the banner (which would then cover the
+// banner's own buttons — exactly what Part O forbids), the launcher is
+// hidden for the brief window the banner is actually showing, and
+// reappears the moment it's dismissed (accept/reject/manage-then-save
+// all remove the same [data-cookie-consent-banner] element — see
+// consent.js's hideCookieBanner()).
+function updateChatWidgetVisibility(widget) {
+  const bannerVisible = Boolean(document.querySelector("[data-cookie-consent-banner]"));
+  const shouldHide = chatWidgetOnPrivateRoute || bannerVisible;
+  widget.hidden = shouldHide;
+  if (shouldHide) closeChatPanel(widget);
+}
+
+function setupChatWidget() {
+  if (!isChatbotConfigured()) return;
+  const widget = document.querySelector("[data-chat-widget]");
+  if (!widget) return;
+
+  window.addEventListener("seasonedz:navigation", (event) => {
+    chatWidgetOnPrivateRoute = Boolean(event.detail?.noindex);
+    updateChatWidgetVisibility(widget);
+  });
+
+  try {
+    const bannerObserver = new MutationObserver(() => updateChatWidgetVisibility(widget));
+    bannerObserver.observe(document.body, { childList: true });
+  } catch {
+    // MutationObserver unavailable in some environment — the widget
+    // still correctly hides/shows on every real navigation above, it
+    // just won't react to the banner opening/closing without one.
+  }
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="toggle-chat-widget"]')) {
+      toggleChatPanel(widget);
+      return;
+    }
+    if (event.target.closest('[data-action="close-chat-widget"]')) {
+      closeChatPanel(widget);
+      return;
+    }
+    if (event.target.closest('[data-action="clear-chat"]')) {
+      handleClearChat(widget);
+      return;
+    }
+    const quickQuestionButton = event.target.closest("[data-chat-quick-question]");
+    if (quickQuestionButton) {
+      handleChatSubmit(widget, quickQuestionButton.dataset.chatQuickQuestion);
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const panel = widget.querySelector("#seasonedzChatPanel");
+    if (panel && !panel.hidden) closeChatPanel(widget);
+  });
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-chat-composer]");
+    if (!form) return;
+    event.preventDefault();
+    const input = form.querySelector("[data-chat-input]");
+    const text = input?.value || "";
+    if (input) input.value = "";
+    handleChatSubmit(widget, text);
+  });
+}
+
+function toggleChatPanel(widget) {
+  const panel = widget.querySelector("#seasonedzChatPanel");
+  if (!panel) return;
+  if (panel.hidden) openChatPanel(widget);
+  else closeChatPanel(widget);
+}
+
+async function openChatPanel(widget) {
+  const panel = widget.querySelector("#seasonedzChatPanel");
+  const launcher = widget.querySelector('[data-action="toggle-chat-widget"]');
+  if (!panel) return;
+  panel.hidden = false;
+  launcher?.setAttribute("aria-expanded", "true");
+
+  // Replays any prior messages from this browser session (Part N:
+  // sessionStorage) — the deterministic welcome message stays put
+  // above them, never duplicated or removed.
+  const messagesEl = widget.querySelector("[data-chat-messages]");
+  if (messagesEl && !messagesEl.dataset.historyReplayed) {
+    messagesEl.dataset.historyReplayed = "true";
+    for (const entry of getChatHistory()) {
+      renderChatMessageBubble(messagesEl, entry.role, entry.content);
+    }
+  }
+
+  const input = widget.querySelector("[data-chat-input]");
+  input?.focus();
+
+  // Part AC: Turnstile is lazily loaded only now, the first time the
+  // visitor actually opens the panel — never on page load.
+  const turnstileContainer = widget.querySelector("[data-chat-turnstile-container]");
+  if (turnstileContainer) {
+    try {
+      await ensureTurnstileWidget(turnstileContainer);
+    } catch {
+      // Turnstile failing to load is surfaced only when the visitor
+      // actually tries to send a message (sendChatMessage() handles
+      // that gracefully) — never a page-breaking error here.
+    }
+  }
+}
+
+function closeChatPanel(widget) {
+  const panel = widget.querySelector("#seasonedzChatPanel");
+  const launcher = widget.querySelector('[data-action="toggle-chat-widget"]');
+  if (!panel || panel.hidden) return;
+  panel.hidden = true;
+  launcher?.setAttribute("aria-expanded", "false");
+  launcher?.focus();
+}
+
+// Never innerHTML (Part U) — every line of a chat message (customer's
+// own text or the AI's reply) is inserted via textContent only, so
+// nothing in it can ever execute as HTML/JavaScript.
+function renderChatMessageBubble(messagesEl, role, text) {
+  const bubble = document.createElement("div");
+  bubble.className = `chat-widget__bubble chat-widget__bubble--${role === "user" ? "user" : "assistant"}`;
+  for (const line of String(text).split("\n").filter(Boolean)) {
+    const p = document.createElement("p");
+    p.textContent = line;
+    bubble.appendChild(p);
+  }
+  messagesEl.appendChild(bubble);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function setChatComposerDisabled(widget, disabled) {
+  widget.querySelector("[data-chat-input]").disabled = disabled;
+  widget.querySelector("[data-chat-send]").disabled = disabled;
+}
+
+function updateChatStatus(widget, remaining) {
+  const statusEl = widget.querySelector("[data-chat-status]");
+  if (!statusEl || remaining === null || remaining === undefined) return;
+  statusEl.textContent = remaining === 1 ? "1 reply remaining today" : `${remaining} ${remaining === CHAT_DAILY_LIMIT ? "replies available" : "replies remaining"} today`;
+}
+
+function showChatLimitReached(widget) {
+  const limitEl = widget.querySelector("[data-chat-limit-reached]");
+  if (limitEl) limitEl.hidden = false;
+  setChatComposerDisabled(widget, true);
+}
+
+async function handleChatSubmit(widget, text) {
+  const trimmed = (text || "").trim();
+  if (!trimmed || chatWidgetSending) return;
+
+  chatWidgetSending = true;
+  setChatComposerDisabled(widget, true);
+
+  const messagesEl = widget.querySelector("[data-chat-messages]");
+  renderChatMessageBubble(messagesEl, "user", trimmed);
+  appendToHistory("user", trimmed);
+
+  try {
+    const result = await sendChatMessage(trimmed);
+    if (result.skipped) return;
+
+    if (result.reply) {
+      renderChatMessageBubble(messagesEl, "assistant", result.reply);
+      // Only a genuine successful AI answer (never a blocked/
+      // unavailable/limit-reached response) is worth remembering as
+      // real conversation context for the next message — matches the
+      // Worker's own "only a successful reply counts" discipline.
+      if (!result.blocked && !result.unavailable && !result.limitReached) {
+        appendToHistory("assistant", result.reply);
+      }
+    }
+
+    updateChatStatus(widget, result.remaining);
+    if (result.limitReached) {
+      showChatLimitReached(widget);
+    }
+  } finally {
+    chatWidgetSending = false;
+    const limitEl = widget.querySelector("[data-chat-limit-reached]");
+    if (!limitEl || limitEl.hidden) setChatComposerDisabled(widget, false);
+  }
+}
+
+function handleClearChat(widget) {
+  clearChatHistory();
+  const messagesEl = widget.querySelector("[data-chat-messages]");
+  if (!messagesEl) return;
+  // The deterministic welcome bubble is the one thing that always
+  // stays — everything else in the log is a real exchange.
+  const welcome = messagesEl.querySelector("[data-chat-welcome]");
+  messagesEl.innerHTML = "";
+  if (welcome) messagesEl.appendChild(welcome);
 }
 
 // 503 is deliberately never shown to the admin verbatim — the backend

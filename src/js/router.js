@@ -502,10 +502,11 @@ const SKELETON_RENDERERS = {
 
 async function renderCurrentRoute() {
   const main = document.getElementById("main-content");
-  if (!main) return;
+  if (!main) return false;
 
   const { path, query } = parseLocation();
   const matched = matchRoute(path);
+  const noindex = matched ? Boolean(matched.noindex) : true;
 
   // Version 7, Milestone 172B.4: detects a ?ref=CODE on the CURRENT
   // page and, if present, captures it — covers a fresh external link
@@ -525,7 +526,7 @@ async function renderCurrentRoute() {
     // An unmatched path (typo, stale/removed link, or straight-up not
     // a real page) is noindexed too, same as any other error state —
     // see js/seo.js.
-    noindex: matched ? Boolean(matched.noindex) : true,
+    noindex,
   });
 
   const result = matched ? matched.render({ ...matched.params, query }) : renderNotFound();
@@ -543,6 +544,7 @@ async function renderCurrentRoute() {
   } else {
     main.innerHTML = result;
   }
+  return noindex;
 }
 
 // Milestone 183: incremented once per genuine navigation (initial
@@ -564,17 +566,23 @@ export function getNavigationEpoch() {
 
 async function resolveRoute() {
   navigationEpoch += 1;
-  await renderCurrentRoute();
+  const noindex = await renderCurrentRoute();
   window.scrollTo({ top: 0, behavior: "instant" });
 
   // A separate event (rather than analytics.js's trackPageView() being
   // called directly from here) so this file keeps talking to the rest
   // of the app only through events/History, never a direct cross-
   // import — see navigation.js's own comment on the same discipline.
+  // Milestone 187: `noindex` is included so js/chatbot.js can hide the
+  // chat widget on the same private/sensitive routes this field
+  // already identifies (admin, account, checkout, payment, order
+  // confirmation, password reset, token-bearing routes) — reusing the
+  // router's own real, already-audited classification rather than a
+  // second hardcoded route list that could drift out of sync.
   try {
     window.dispatchEvent(
       new CustomEvent("seasonedz:navigation", {
-        detail: { path: window.location.pathname, title: document.title },
+        detail: { path: window.location.pathname, title: document.title, noindex },
       })
     );
   } catch {
