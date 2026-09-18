@@ -90,6 +90,130 @@ function renderNotFound(id) {
   `;
 }
 
+// ---------------------------------------------------------------------------
+// Product Variations (Milestone 188). Part of the create/edit form
+// itself: "This product has variations" plus its option-group editor
+// (e.g. "Pack Size" with values "10 Colours, 20 Colours, 30 Colours").
+// Submitted as hasVariants/variantOptions alongside every other product
+// field (see app.js's readAdminProductFormValues()/handleAdminProduct
+// FormSubmit()). The actual purchasable ProductVariant ROWS (price/
+// stock/sku/weight/image/active per combination) can only be created
+// once the product itself exists — see renderProductVariantsSection()
+// below, rendered separately, edit-page only.
+// ---------------------------------------------------------------------------
+
+export function renderOptionGroupRow(group = { name: "", values: [] }, index) {
+  const valuesText = Array.isArray(group.values) ? group.values.join(", ") : "";
+  return `
+    <div class="admin-variant-option-group" data-variant-option-group-row>
+      <div class="form-field">
+        <label class="form-field__label">Option name <span class="form-field__optional">(e.g. "Pack Size")</span></label>
+        <input type="text" class="form-field__input" maxlength="60" value="${escapeHtml(group.name || "")}" data-variant-option-name />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label">Values <span class="form-field__optional">(comma-separated, e.g. "10 Colours, 20 Colours, 30 Colours")</span></label>
+        <input type="text" class="form-field__input" value="${escapeHtml(valuesText)}" data-variant-option-values />
+      </div>
+      <button type="button" class="btn btn--danger btn--sm" data-action="remove-variant-option-group" aria-label="Remove option group ${index + 1}">Remove</button>
+    </div>
+  `;
+}
+
+function renderVariationOptionsSection(product) {
+  const hasVariants = Boolean(product?.hasVariants);
+  const groups = Array.isArray(product?.variantOptions) && product.variantOptions.length > 0 ? product.variantOptions : [{ name: "", values: [] }];
+
+  return `
+    <div class="admin-product-form__section" data-admin-variant-section>
+      <h3 class="admin-page__section-subtitle">Product Variations</h3>
+      <div class="admin-product-form__checkboxes">
+        <label>
+          <input type="checkbox" id="productHasVariants" data-admin-has-variants-toggle ${hasVariants ? "checked" : ""} ${product?.hasVariants ? "disabled" : ""} />
+          This product has variations
+        </label>
+      </div>
+      ${
+        product?.hasVariants
+          ? `<p class="admin-product-form__hint">Once a product has variations, this cannot be turned off here. Deactivate individual variants below instead of disabling variations.</p>`
+          : `<p class="admin-product-form__hint">e.g. one "Pack Size" option offering "10 Colours" / "20 Colours" / "30 Colours", each with its own price and stock.</p>`
+      }
+
+      <div data-admin-variant-options-editor ${hasVariants ? "" : "hidden"}>
+        <div data-variant-option-groups>
+          ${groups.map((group, index) => renderOptionGroupRow(group, index)).join("")}
+        </div>
+        <button type="button" class="btn btn--secondary btn--sm" data-action="add-variant-option-group">Add Option Group</button>
+      </div>
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// Variant rows (price/stock/sku/weight/image/active per combination).
+// Edit page only — a product needs a real id before variants can exist.
+// "Generate Variations" creates a row for every option-value combination
+// that doesn't already have one (never touches an existing row's own
+// price/stock/etc.) — safe to re-run after adding a new option value.
+// ---------------------------------------------------------------------------
+
+function renderVariantRow(variant, groups) {
+  const label = groups
+    .filter((group) => group.name in (variant.optionValues || {}))
+    .map((group) => variant.optionValues[group.name])
+    .join(" / ");
+
+  return `
+    <tr data-admin-variant-row data-variant-id="${escapeHtml(variant.id)}">
+      <td>${escapeHtml(label)}</td>
+      <td><input type="text" class="form-field__input" maxlength="200" value="${escapeHtml(variant.sku || "")}" data-variant-field="sku" /></td>
+      <td><input type="number" class="form-field__input" min="0.01" step="0.01" value="${variant.price}" data-variant-field="price" /></td>
+      <td><input type="number" class="form-field__input" min="0" step="1" value="${variant.stockQuantity}" data-variant-field="stockQuantity" /></td>
+      <td><input type="number" class="form-field__input" min="0" step="0.001" value="${variant.weight ?? ""}" data-variant-field="weight" /></td>
+      <td><input type="text" class="form-field__input" maxlength="2000" value="${escapeHtml(variant.imageUrl || "")}" data-variant-field="imageUrl" placeholder="Image URL (optional)" /></td>
+      <td><label class="admin-variant-active-toggle"><input type="checkbox" ${variant.isActive ? "checked" : ""} data-variant-field="isActive" /> Active</label></td>
+      <td>
+        <button type="button" class="btn btn--secondary btn--sm" data-action="save-variant-row">Save</button>
+        <button type="button" class="btn btn--danger btn--sm" data-action="remove-variant-row">Remove</button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderProductVariantsSection(product) {
+  if (!product?.hasVariants) return "";
+  const groups = Array.isArray(product.variantOptions) ? product.variantOptions : [];
+  const variants = Array.isArray(product.variants) ? product.variants : [];
+
+  return `
+    <section class="admin-product-images" data-admin-variants-section data-product-id="${escapeHtml(product.id)}">
+      <h2 class="admin-page__section-title">Variants</h2>
+      <p class="admin-product-form__hint">
+        Save the option groups above first (Save Changes), then use Generate Variations to create a row for every
+        combination. Existing rows are never overwritten by Generate Variations — edit price/stock/SKU/weight/image/active
+        for each row individually below.
+      </p>
+      <button type="button" class="btn btn--primary" data-action="generate-variations">Generate Variations</button>
+
+      <div class="admin-table-wrap">
+        <table class="admin-table" data-admin-variants-table>
+          <thead>
+            <tr><th>Combination</th><th>SKU</th><th>Price (R)</th><th>Stock</th><th>Weight (kg)</th><th>Image URL</th><th>Active</th><th>Actions</th></tr>
+          </thead>
+          <tbody data-admin-variants-tbody>
+            ${
+              variants.length > 0
+                ? variants.map((variant) => renderVariantRow(variant, groups)).join("")
+                : `<tr><td colspan="8">No variants yet. Use Generate Variations above.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="form-banner form-banner--error" data-admin-variants-banner hidden></div>
+    </section>
+  `;
+}
+
 // mode is "create" or "edit". product is null for create.
 function renderProductForm(mode, product, categories) {
   const isEdit = mode === "edit";
@@ -275,6 +399,8 @@ function renderProductForm(mode, product, categories) {
         <label><input type="checkbox" id="productIsBestSeller" ${product?.isBestSeller ? "checked" : ""} /> Best Seller</label>
         <label><input type="checkbox" id="productIsNewArrival" ${product?.isNewArrival ? "checked" : ""} /> New Arrival</label>
       </div>
+
+      ${renderVariationOptionsSection(product)}
 
       <div class="admin-product-form__image-note">
         Image upload is coming later. For now, product images are managed separately.
@@ -520,6 +646,7 @@ export async function renderAdminProductEdit({ id } = {}) {
         <h1 class="admin-page__title">Edit ${escapeHtml(product.name)}</h1>
         ${successMessage ? `<div class="form-banner form-banner--success">${escapeHtml(successMessage)}</div>` : ""}
         ${renderProductForm("edit", product, categories)}
+        ${renderProductVariantsSection(product)}
         ${renderProductImagesSection(product.id, images)}
         ${product.productType === "DIGITAL" ? renderDigitalAssetSection(product.id, digitalAsset) : ""}
       </section>

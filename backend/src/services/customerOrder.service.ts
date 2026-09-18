@@ -74,6 +74,9 @@ export interface CustomerOrderDetail {
     isGiftWrapped: boolean;
     giftMessage: string | null;
     giftWrapFee: number;
+    // Milestone 188: null for a simple-product line — see
+    // order.service.ts's OrderItemOutput for the same fields.
+    variantLabel: string | null;
   }>;
   shipping: {
     status: string;
@@ -195,6 +198,7 @@ export async function getOrderForCustomer(orderNumber: string, customerId: strin
       isGiftWrapped: item.isGiftWrapped,
       giftMessage: item.giftMessage,
       giftWrapFee: item.giftWrapFeePerUnit ? item.giftWrapFeePerUnit.times(item.quantity).toNumber() : 0,
+      variantLabel: item.variantLabel,
     })),
     shipping: order.shipping
       ? {

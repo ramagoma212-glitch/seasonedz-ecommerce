@@ -127,6 +127,39 @@ export function updateAdminProduct(id, payload) {
   });
 }
 
+// Milestone 188: admin product variation management. All four reuse
+// the same requireAdminAuth-protected router as every other product
+// route — see backend/src/routes/adminDashboard.routes.ts. Every call
+// returns the full, refreshed AdminProductDetail (including its
+// current `variants` array), so callers never need a second fetch
+// after a write.
+export function generateAdminProductVariations(productId, payload = {}) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants/generate`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createAdminProductVariant(productId, payload) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminProductVariant(productId, variantId, payload) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminProductVariant(productId, variantId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}`, {
+    method: "DELETE",
+  });
+}
+
 // Version 7, Milestone 70: admin product image management. Uses the
 // image routes already live from Milestone 69
 // (adminProductImage.controller.ts) — nothing new on the backend.

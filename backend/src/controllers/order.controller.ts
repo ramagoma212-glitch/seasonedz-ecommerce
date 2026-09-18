@@ -30,6 +30,7 @@ function toOrderEmailData(order: OrderOutput): OrderEmailData {
       isPreorder: item.isPreorder,
       preorderReleaseAt: item.preorderReleaseAt,
       preorderDiscountAmount: item.preorderDiscountAmount,
+      variantLabel: item.variantLabel,
     })),
     deliveryMethod: order.deliveryMethod,
     deliveryFee: order.deliveryFee,

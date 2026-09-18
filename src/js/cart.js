@@ -33,9 +33,14 @@ export const GIFT_MESSAGE_MAX_LENGTH = 150;
 // this milestone, or added via a flow that never mentions gift
 // wrapping) already satisfies this by construction, so nothing else in
 // this file or its callers needs to change for the plain, no-wrap case.
-function computeLineId(productId, giftWrap, giftMessage) {
-  if (!giftWrap) return productId;
-  return `${productId}::gift::${encodeURIComponent((giftMessage || "").trim())}`;
+// Milestone 188: a variant is now part of line identity too — two
+// different variants of the same product (or a variant vs. the bare
+// product) must never merge into one cart line, mirroring
+// order.service.ts's own groupItemsByLine() extension.
+function computeLineId(productId, variantId, giftWrap, giftMessage) {
+  const base = variantId ? `${productId}::variant::${variantId}` : productId;
+  if (!giftWrap) return base;
+  return `${base}::gift::${encodeURIComponent((giftMessage || "").trim())}`;
 }
 
 // Version 7, Milestone 159: migrates an item saved before gift wrapping
@@ -63,7 +68,13 @@ function normalizeCartItem(item) {
     productType,
     giftWrap,
     giftMessage,
-    lineId: item.lineId || computeLineId(item.productId, giftWrap, giftMessage),
+    // Milestone 188: absent for every item saved before variations
+    // existed, and for every simple-product line — normalized to null,
+    // never undefined, so every consumer's `item.variantId ? ... : ...`
+    // check behaves identically regardless of when the line was added.
+    variantId: item.variantId || null,
+    variantLabel: item.variantLabel || null,
+    lineId: item.lineId || computeLineId(item.productId, item.variantId || null, giftWrap, giftMessage),
     // Milestone 181, Part K: a cart item saved before this milestone
     // existed has neither field at all — safely treated as "not a
     // preorder", the correct default since preorder didn't exist yet.
@@ -107,7 +118,13 @@ export function saveCart(cart) {
 export function addToCart(product, quantity = 1, giftOptions = {}) {
   const giftWrap = giftOptions.giftWrap === true && (product.productType || "PHYSICAL") === "PHYSICAL";
   const giftMessage = giftWrap && giftOptions.giftMessage ? giftOptions.giftMessage.trim().slice(0, GIFT_MESSAGE_MAX_LENGTH) || null : null;
-  const lineId = computeLineId(product.productId, giftWrap, giftMessage);
+  // Milestone 188: `product.variantId`/`product.variantLabel` are
+  // undefined for every existing caller (shop grid/homepage quick-add,
+  // which only ever sells simple products) — added backward-compatibly,
+  // never a required field.
+  const variantId = product.variantId || null;
+  const variantLabel = product.variantLabel || null;
+  const lineId = computeLineId(product.productId, variantId, giftWrap, giftMessage);
 
   const cart = getCart();
   const existing = cart.find((item) => item.lineId === lineId);
@@ -128,6 +145,8 @@ export function addToCart(product, quantity = 1, giftOptions = {}) {
       quantity,
       isPreorder: product.isPreorder === true,
       preorderReleaseAt: product.isPreorder === true ? product.preorderReleaseAt || null : null,
+      variantId,
+      variantLabel,
     });
   }
 
@@ -281,12 +300,25 @@ export function isInCart(productId) {
 // stock. It can still be flagged if the Product has vanished from the
 // catalogue entirely (e.g. archived) — that's a genuine unavailability,
 // not a stock question.
+// Milestone 188: a variant cart line's availability comes from ITS OWN
+// live variant row (looked up by variantId inside the live product's
+// own `variants` array — see mappers.js), never the parent product's
+// stockStatus (meaningless once hasVariants is true). A variant that
+// has vanished entirely (deactivated/removed since it was added to the
+// cart) is unavailable, same as a vanished product.
 export function getUnavailableCartItems(items, liveProductsBySlug) {
   return items.filter((item) => {
     if ((item.productType || "PHYSICAL") === "DIGITAL") return false;
     const liveProduct = liveProductsBySlug.get(item.slug);
     if (!liveProduct) return true;
     if (liveProduct.isPreorder) return false;
+
+    if (item.variantId) {
+      const liveVariant = (liveProduct.variants || []).find((variant) => variant.id === item.variantId);
+      if (!liveVariant) return true;
+      return liveVariant.stockQuantity <= 0;
+    }
+
     return liveProduct.stockStatus === "Out of Stock";
   });
 }

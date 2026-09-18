@@ -277,6 +277,29 @@ model Product {
   // historical brief.
   campaignBriefs CampaignBrief[]
 
+  // Milestone 188: admin-managed product variations (e.g. "Pack Size:
+  // 10/20/30 Colours"). Additive-only — every existing product's
+  // exact current behaviour (own price/stock/sku, no variation
+  // selector) is completely unchanged; hasVariants defaults false and
+  // nothing here is ever backfilled onto an existing product
+  // automatically (Part D/BE). See adminProductVariant.service.ts's
+  // own header comment for the full architecture and why option
+  // GROUP DEFINITIONS live here as validated JSON (never trusted
+  // verbatim from a request) while each purchasable COMBINATION is a
+  // real ProductVariant row below — the same "hybrid" split Part B
+  // asked to be audited and documented.
+  //
+  // variantOptions shape: an array of { name: string, values: string[] }
+  // groups, e.g. [{"name":"Pack Size","values":["10 Colours","20 Colours"]}]
+  // or two groups for a multi-option product. Always validated (no
+  // empty names, no duplicate names, no duplicate/blank values within
+  // a group) before being written — never a raw pass-through, same
+  // discipline as `features` above. Null/empty for every simple
+  // product, including every product that exists today.
+  hasVariants    Boolean @default(false)
+  variantOptions Json?
+  variants       ProductVariant[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -285,6 +308,91 @@ model Product {
   @@index([isFeatured])
   @@index([productType])
   @@index([isPreorderEnabled])
+  @@index([hasVariants])
+}
+
+// Milestone 188: one purchasable option combination of a variable
+// Product (e.g. "Pack Size: 20 Colours", or "Size: A4 / Frame: Framed"
+// for a two-option product). Never hard-deleted once it has ever been
+// ordered — see OrderItem's own onDelete: SetNull below and
+// adminProductVariant.service.ts's own deactivate-not-delete rule
+// (Part P); a freshly-created, never-ordered, unsaved row is the one
+// exception where normal removal is fine, handled entirely client-side
+// in Admin before Save is ever pressed.
+//
+// The parent Product remains the sole source of truth for everything
+// NOT purchasable-difference-specific (title, description, images,
+// category, preorder config, affiliate eligibility, gift wrap
+// eligibility, SEO) — see Part C. This row is deliberately narrow:
+// only the fields that can genuinely differ between "10 Colours" and
+// "20 Colours" of the very same product.
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // The exact combination this row represents, e.g.
+  // {"Pack Size":"20 Colours"} — always validated against the parent
+  // Product's own variantOptions at write time (never trusted
+  // verbatim), and always a subset/match of those option names+values.
+  // A human-readable label ("20 Colours", or "A4 / Framed" for a
+  // multi-option product) is derived from this at READ time
+  // (adminProductVariant.service.ts's own formatVariantLabel()) —
+  // never stored redundantly here, only ever snapshotted immutably on
+  // OrderItem once an order is actually placed (see OrderItem below).
+  optionValues Json
+
+  // Milestone 188, Part K: its own unique constraint, exactly like
+  // Product.sku above — Postgres has no single constraint spanning two
+  // separate tables, so cross-table uniqueness (a variant SKU never
+  // colliding with a Product's own sku, or another product's variant)
+  // is additionally enforced at the service layer, transactionally,
+  // on every create/update of either a Product or a ProductVariant —
+  // see this milestone's own final report for the documented
+  // limitation Part K anticipates.
+  sku String? @unique
+
+  // Server-authoritative — checkout always re-reads this from the
+  // database, never a client-supplied value (Part I/AA).
+  price Decimal @db.Decimal(10, 2)
+
+  // Independent per-variant inventory (Part J) — the exact same
+  // atomic, race-safe decrement pattern order.service.ts's createOrder()
+  // already uses for Product.stockQuantity is reused here unchanged,
+  // just against this column instead (see that file's own comment).
+  stockQuantity Int @default(0)
+
+  // Part L: optional override. This catalogue has never had a
+  // Product-level weight field at all — delivery pricing is purely
+  // subtotal-threshold based, never weight-based (see
+  // config/delivery.ts) — so there is no parent weight to "fall back
+  // to" and this currently has zero effect on any calculation. Kept
+  // as a real, admin-editable field purely for record-keeping/future
+  // use, exactly mirroring the fact Product itself has never captured
+  // this either. Documented explicitly in this milestone's own final
+  // report per Part L's own instruction to "document the rule clearly."
+  weight Decimal? @db.Decimal(10, 3)
+
+  // Part M: optional — the storefront falls back to the parent
+  // Product's own primary image whenever this is null. Reuses the
+  // exact same Supabase Storage upload architecture as ProductImage
+  // (adminProductImage.service.ts), never a second storage system.
+  imageUrl String?
+
+  // Part P: never hard-deleted once ordered — deactivating (not
+  // deleting) is how a variant is retired. An inactive variant is
+  // never selectable by a new customer but stays fully intact for
+  // historical orders/reporting.
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([productId, isActive])
 }
 
 // Version 7, Milestone 152: the one digital file attached to a DIGITAL
@@ -700,11 +808,32 @@ model OrderItem {
   preorderDiscountRateApplied   Decimal?  @db.Decimal(5, 2)
   preorderDiscountAmountApplied Decimal?  @db.Decimal(10, 2)
 
+  // Milestone 188, Part AB: immutable variant snapshot, same "never
+  // depend on a live, changeable value" philosophy as every other
+  // snapshot field on this model. Nullable — every historical
+  // OrderItem placed before variations existed, and every OrderItem
+  // for a simple (non-variable) product, has variantId=null and no
+  // snapshot, and continues working completely unchanged (Part BA).
+  // variantId is SetNull-on-delete (a variant is never hard-deleted in
+  // normal use — see ProductVariant's own Part P comment — but this
+  // guarantees a historical order can never be broken even if one
+  // somehow were). variantLabel/variantOptionsSnapshot capture what
+  // was actually purchased ("20 Colours" / {"Pack Size":"20 Colours"})
+  // so a later rename of that option value on the live product can
+  // never reinterpret this order. The existing `sku` field above is
+  // reused for the variant's own SKU snapshot when variantId is set —
+  // no second SKU column needed.
+  variantId              String?
+  variant                ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  variantLabel           String?
+  variantOptionsSnapshot Json?
+
   createdAt DateTime @default(now())
 
   @@index([orderId])
   @@index([productId])
   @@index([digitalAssetId])
+  @@index([variantId])
 }
 
 // Version 7, Milestone 152: tracks download activity for one purchased

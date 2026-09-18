@@ -74,7 +74,8 @@ function humanizeEnum(value: string): string {
 function formatItemsList(items: OrderEmailItem[]): string {
   return items
     .map((item) => {
-      const base = `- ${item.productName} x${item.quantity}: ${formatRand(item.lineTotal)}`;
+      const nameWithVariant = item.variantLabel ? `${item.productName} (${item.variantLabel})` : item.productName;
+      const base = `- ${nameWithVariant} x${item.quantity}: ${formatRand(item.lineTotal)}`;
       if (!item.isPreorder) return base;
       const releaseNote = item.preorderReleaseAt ? ` Preorder, available from ${formatSastDate(item.preorderReleaseAt)}.` : " Preorder.";
       const discountNote = item.preorderDiscountAmount ? ` First preorder discount applied: -${formatRand(item.preorderDiscountAmount)}.` : "";

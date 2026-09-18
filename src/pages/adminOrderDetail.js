@@ -107,7 +107,7 @@ function renderItemsTable(items) {
             .map(
               (item) => `
             <tr>
-              <td>${escapeHtml(item.productName)}</td>
+              <td>${escapeHtml(item.productName)}${item.variantLabel ? `<span class="admin-table__meta">${escapeHtml(item.variantLabel)}</span>` : ""}</td>
               <td>${escapeHtml(item.sku || "N/A")}</td>
               <td>${item.quantity}</td>
               <td>${formatCurrency(item.unitPrice)}</td>

@@ -67,12 +67,14 @@ function renderFlags(product) {
 // validation prevents it — but surfaced here too in case a file was
 // ever removed by other means).
 function renderTypeCell(product) {
-  if (product.productType !== "DIGITAL") return "Physical";
+  const variantBadge = product.hasVariants ? ' <span class="admin-badge">Variable</span>' : "";
+
+  if (product.productType !== "DIGITAL") return `Physical${variantBadge}`;
 
   if (product.digitalFileMissingWarning) {
-    return `Digital: <span class="admin-badge admin-badge--danger">No file (Active)</span>`;
+    return `Digital: <span class="admin-badge admin-badge--danger">No file (Active)</span>${variantBadge}`;
   }
-  return `Digital: ${product.hasDigitalFile ? '<span class="admin-badge admin-badge--success">File attached</span>' : '<span class="admin-badge">No file</span>'}`;
+  return `Digital: ${product.hasDigitalFile ? '<span class="admin-badge admin-badge--success">File attached</span>' : '<span class="admin-badge">No file</span>'}${variantBadge}`;
 }
 
 function renderProductsTable(products) {
@@ -108,8 +110,8 @@ function renderProductsTable(products) {
               <td>${escapeHtml(product.category.name)}</td>
               <td>${renderTypeCell(product)}</td>
               <td>${formatCurrency(product.price)}</td>
-              <td>${product.productType === "DIGITAL" ? "N/A" : product.stockQuantity}</td>
-              <td>${product.productType === "DIGITAL" ? "N/A" : product.lowStockThreshold}</td>
+              <td>${product.productType === "DIGITAL" ? "N/A" : product.hasVariants ? "See variants" : product.stockQuantity}</td>
+              <td>${product.productType === "DIGITAL" ? "N/A" : product.hasVariants ? "N/A" : product.lowStockThreshold}</td>
               <td>${renderStatusBadge(product.status)}</td>
               <td>${renderFlags(product)}</td>
               <td>${formatDate(product.updatedAt)}</td>

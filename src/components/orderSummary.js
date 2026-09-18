@@ -143,7 +143,7 @@ export function renderOrderSummary({
                 .map(
                   (item) => `
                     <div class="order-summary__item">
-                      <span>${item.name} &times; ${item.quantity}</span>
+                      <span>${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ""} &times; ${item.quantity}</span>
                       <span>R${(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                     ${

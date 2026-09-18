@@ -53,6 +53,12 @@ export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, c
       quantity: item.quantity,
       giftWrap: Boolean(item.giftWrap),
       giftMessage: item.giftWrap ? item.giftMessage || null : null,
+      // Milestone 188: absent for every simple-product line, exactly as
+      // before — the backend re-derives price/stock/sku from ITS OWN
+      // ProductVariant row whenever this is present, never trusting
+      // anything else this payload claims (see order.service.ts's
+      // verifyItems()).
+      ...(item.variantId ? { variantId: item.variantId } : {}),
     })),
     // Version 7, Milestone 172B.4: the referral programme's ONLY input
     // from this frontend — the exact {code, capturedAt, signature}

@@ -37,7 +37,7 @@ function baseInput(overrides: Partial<ValidatedOrderInput> = {}): ValidatedOrder
     },
     collectionCity: null,
     paymentMethod: "BANK_TRANSFER" as ValidatedOrderInput["paymentMethod"],
-    items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null }],
+    items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }],
     referralAttribution: null,
     ...overrides,
   };
@@ -86,7 +86,7 @@ test("requesting more quantity than is in stock is rejected with the exact remai
   const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, stockQuantity: 2 }));
 
   await assert.rejects(
-    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 3, giftWrap: false, giftMessage: null }] })),
+    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 3, giftWrap: false, giftMessage: null, variantId: null }] })),
     (error: unknown) => error instanceof OrderError && error.message.includes("Only 2") && error.message.includes("requested 3")
   );
 
@@ -106,7 +106,7 @@ test("requesting exactly the remaining stock quantity is allowed through the sto
   });
 
   await assert.rejects(
-    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 2, giftWrap: false, giftMessage: null }] })),
+    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 2, giftWrap: false, giftMessage: null, variantId: null }] })),
     (error: unknown) => error === sentinel
   );
 
@@ -129,7 +129,7 @@ test("a nonexistent product slug is rejected with a clear 'not found' error", as
   const findUnique = stub(prisma.product, "findUnique", async () => null);
 
   await assert.rejects(
-    () => createOrder(baseInput({ items: [{ productSlug: "does-not-exist", quantity: 1, giftWrap: false, giftMessage: null }] })),
+    () => createOrder(baseInput({ items: [{ productSlug: "does-not-exist", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }] })),
     (error: unknown) => error instanceof OrderError && /not found/i.test(error.message)
   );
 
@@ -153,7 +153,7 @@ test("a DIGITAL product with stockQuantity 0 is never rejected for stock — phy
   });
 
   await assert.rejects(
-    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null }] })),
+    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }] })),
     (error: unknown) => error === sentinel
   );
 
@@ -190,7 +190,7 @@ test("even after passing the initial stock check, the transaction's own atomic d
   const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 0 }));
 
   await assert.rejects(
-    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null }] })),
+    () => createOrder(baseInput({ items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }] })),
     (error: unknown) => error instanceof OrderError && /not enough stock/i.test(error.message)
   );
 
@@ -562,9 +562,9 @@ test("Part E worked example: multiple eligible preorder lines in one order ALL r
     baseInput({
       deliveryMethod: "COLLECTION",
       items: [
-        { productSlug: "old-testament", quantity: 1, giftWrap: false, giftMessage: null },
-        { productSlug: "new-testament", quantity: 1, giftWrap: false, giftMessage: null },
-        { productSlug: "abc", quantity: 1, giftWrap: false, giftMessage: null },
+        { productSlug: "old-testament", quantity: 1, giftWrap: false, giftMessage: null, variantId: null },
+        { productSlug: "new-testament", quantity: 1, giftWrap: false, giftMessage: null, variantId: null },
+        { productSlug: "abc", quantity: 1, giftWrap: false, giftMessage: null, variantId: null },
       ],
     }),
     "customer-1"
@@ -589,7 +589,7 @@ test("Part J: gift wrap is excluded from the preorder discount — only the R220
   const reservationCreate = stubReservationCreate();
   const stubs = stubPreorderOrderCreation(220);
 
-  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null }] }), "customer-1");
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null, variantId: null }] }), "customer-1");
 
   assert.equal(order.preorderDiscountTotal, 22, "10% of R220 physical line only, never the R30 gift wrap");
   assert.equal(order.giftWrapTotal, 30);
@@ -608,7 +608,7 @@ test("Milestone 181A: gift wrap does not count toward the R200 minimum either �
   });
   const stubs = stubPreorderOrderCreation(180);
 
-  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null }] }), "customer-1");
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", items: [{ productSlug: "test-product", quantity: 1, giftWrap: true, giftMessage: null, variantId: null }] }), "customer-1");
 
   assert.equal(order.preorderDiscountApplied, false);
   assert.equal(order.giftWrapTotal, 30, "gift wrap fee still charged normally");
@@ -737,8 +737,8 @@ test("Part H: a mixed order still gives the ordinary 5% referral discount to the
       deliveryMethod: "COLLECTION",
       referralAttribution,
       items: [
-        { productSlug: "preorder-product", quantity: 1, giftWrap: false, giftMessage: null },
-        { productSlug: "ordinary-product", quantity: 1, giftWrap: false, giftMessage: null },
+        { productSlug: "preorder-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null },
+        { productSlug: "ordinary-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null },
       ],
     }),
     "customer-1"
@@ -1134,7 +1134,7 @@ function referralInput(referralAttribution: ValidatedOrderInput["referralAttribu
     deliveryMethod: "COLLECTION",
     deliveryAddress: null,
     collectionCity: "Pretoria",
-    items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null }],
+    items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }],
     referralAttribution,
     ...overrides,
   });
@@ -1464,4 +1464,158 @@ test("isAffiliateAvailable:false excludes a product from commission entirely, wh
   assert.equal(stubs.productCommissionCreateMany.fn.mock.callCount(), 0);
 
   stubs.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Milestone 188: product variations — verifyItems()'s variant handling
+// and the transaction's variant-level atomic stock decrement.
+// ---------------------------------------------------------------------------
+
+const VARIABLE_PRODUCT_BASE = {
+  ...PHYSICAL_PRODUCT_BASE,
+  hasVariants: true,
+  variantOptions: [{ name: "Pack Size", values: ["10 Colours", "20 Colours"] }],
+};
+
+const VARIANT_ROW = {
+  id: "variant-1",
+  productId: "product-1",
+  optionValues: { "Pack Size": "20 Colours" },
+  sku: "TCB-1-20",
+  price: new Prisma.Decimal("150.00"),
+  stockQuantity: 3,
+  isActive: true,
+};
+
+function variantItem(overrides: Partial<{ quantity: number; variantId: string | null }> = {}) {
+  return { productSlug: "test-product", quantity: overrides.quantity ?? 1, giftWrap: false, giftMessage: null, variantId: overrides.variantId === undefined ? "variant-1" : overrides.variantId };
+}
+
+test("a variable product ordered with no variantId at all is rejected — a variable product can never be bought as the bare product", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...VARIABLE_PRODUCT_BASE, stockQuantity: 0 }));
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem({ variantId: null })] })),
+    (error: unknown) => error instanceof OrderError && /select options/i.test(error.message)
+  );
+
+  findUnique.restore();
+});
+
+test("a variantId sent for a simple (non-variable) product is rejected", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, stockQuantity: 10 }));
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem()] })),
+    (error: unknown) => error instanceof OrderError && /does not have variations/i.test(error.message)
+  );
+
+  findUnique.restore();
+});
+
+test("a variantId that doesn't exist at all is rejected with a clear error", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => VARIABLE_PRODUCT_BASE);
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => null);
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem()] })),
+    (error: unknown) => error instanceof OrderError && /option not found/i.test(error.message)
+  );
+
+  findUnique.restore();
+  variantFindUnique.restore();
+});
+
+test("a variantId belonging to a DIFFERENT product is rejected — never trusted just because it resolves to a real variant row", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => VARIABLE_PRODUCT_BASE);
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ ...VARIANT_ROW, productId: "some-other-product" }));
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem()] })),
+    (error: unknown) => error instanceof OrderError && /does not belong to/i.test(error.message)
+  );
+
+  findUnique.restore();
+  variantFindUnique.restore();
+});
+
+test("a deactivated variant is rejected, even though it genuinely exists and belongs to the right product", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => VARIABLE_PRODUCT_BASE);
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ ...VARIANT_ROW, isActive: false }));
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem()] })),
+    (error: unknown) => error instanceof OrderError && /no longer available/i.test(error.message)
+  );
+
+  findUnique.restore();
+  variantFindUnique.restore();
+});
+
+test("requesting more than a variant's own stockQuantity is rejected with the variant's real remaining count, never the parent product's stock", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...VARIABLE_PRODUCT_BASE, stockQuantity: 999 }));
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ ...VARIANT_ROW, stockQuantity: 2 }));
+
+  await assert.rejects(
+    () => createOrder(baseInput({ items: [variantItem({ quantity: 3 })] })),
+    (error: unknown) => error instanceof OrderError && error.message.includes("Only 2") && error.message.includes("requested 3")
+  );
+
+  findUnique.restore();
+  variantFindUnique.restore();
+});
+
+test("a valid variant purchase uses the VARIANT's own price/sku, decrements the VARIANT's own stock (never the parent Product's), and snapshots a variantLabel", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...VARIABLE_PRODUCT_BASE, stockQuantity: 0, sku: "TCB-1" }));
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => VARIANT_ROW);
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const productUpdateMany = stub(prisma.product, "updateMany", async () => {
+    throw new Error("must never be called for a variant line — only productVariant.updateMany decrements a variant's stock");
+  });
+  const variantUpdateMany = stub(prisma.productVariant, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const itemsCreate = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, total: data.total, items: itemsCreate.map((item) => fakeOrderItemRow(item)) });
+  });
+
+  const order = await createOrder(baseInput({ items: [variantItem({ quantity: 2 })] }));
+
+  assert.equal(variantUpdateMany.fn.mock.callCount(), 1);
+  const decrementArgs = variantUpdateMany.fn.mock.calls[0]!.arguments[0];
+  assert.equal(decrementArgs.where.id, "variant-1");
+  assert.equal(decrementArgs.where.stockQuantity.gte, 2);
+  assert.equal(decrementArgs.data.stockQuantity.decrement, 2);
+
+  assert.equal(order.items[0]!.unitPrice, 150);
+  assert.equal(order.items[0]!.sku, "TCB-1-20");
+  assert.equal(order.items[0]!.variantId, "variant-1");
+  assert.equal(order.items[0]!.variantLabel, "Pack Size: 20 Colours");
+
+  findUnique.restore();
+  variantFindUnique.restore();
+  transactionStub.restore();
+  productUpdateMany.restore();
+  variantUpdateMany.restore();
+  orderCreate.restore();
+});
+
+test("a variant with no SKU of its own falls back to the parent product's SKU, never leaving the order line with no SKU at all", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...VARIABLE_PRODUCT_BASE, sku: "TCB-1" }));
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ ...VARIANT_ROW, sku: null }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const variantUpdateMany = stub(prisma.productVariant, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const itemsCreate = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, total: data.total, items: itemsCreate.map((item) => fakeOrderItemRow(item)) });
+  });
+
+  const order = await createOrder(baseInput({ items: [variantItem()] }));
+
+  assert.equal(order.items[0]!.sku, "TCB-1");
+
+  findUnique.restore();
+  variantFindUnique.restore();
+  transactionStub.restore();
+  variantUpdateMany.restore();
+  orderCreate.restore();
 });

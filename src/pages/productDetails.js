@@ -41,6 +41,7 @@ import { withBase } from "../js/paths.js";
 import { preorderAvailabilityText } from "../js/preorder.js";
 import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
 import { trackViewItem } from "../js/analytics.js";
+import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "../js/variantSelector.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -69,6 +70,15 @@ function renderNotFound() {
 // mapped to schema.org's own availability values.
 function schemaAvailability(product) {
   if (product.isPreorder) return "https://schema.org/PreOrder";
+  // Milestone 188: a variable product has no product-level stockStatus
+  // that means anything (see product.service.ts's own toProductOutput()
+  // — stockQuantity/stockStatus still reflect the legacy Product row,
+  // never touched by variant stock) — availability is derived from
+  // whether ANY active variant still has stock instead.
+  if (product.hasVariants) {
+    const anyVariantInStock = product.variants.some((variant) => variant.stockQuantity > 0);
+    return anyVariantInStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock";
+  }
   if (product.stockStatus === "Out of Stock") return "https://schema.org/OutOfStock";
   return "https://schema.org/InStock";
 }
@@ -100,6 +110,36 @@ function buildBreadcrumbStructuredData(trail) {
   };
 }
 
+// Milestone 188, Part AN: schema.org's own documented pattern for a
+// product with multiple purchasable variations is AggregateOffer
+// (lowPrice/highPrice/offerCount), used instead of a single Offer only
+// when the product actually hasVariants AND has at least one active
+// variant to summarise — never fabricated when variantPriceRange is
+// null (e.g. option groups defined but Generate Variations not run
+// yet), in which case this falls back to the plain product price
+// exactly as before, same "never invent data" discipline as the sku/
+// mpn block below.
+function buildOffers(product) {
+  if (product.hasVariants && product.variantPriceRange) {
+    return {
+      "@type": "AggregateOffer",
+      priceCurrency: "ZAR",
+      lowPrice: product.variantPriceRange.min.toFixed(2),
+      highPrice: product.variantPriceRange.max.toFixed(2),
+      offerCount: product.variants.length,
+      availability: schemaAvailability(product),
+      url: window.location.href,
+    };
+  }
+  return {
+    "@type": "Offer",
+    priceCurrency: "ZAR",
+    price: product.price.toFixed(2),
+    availability: schemaAvailability(product),
+    url: window.location.href,
+  };
+}
+
 function buildProductStructuredData(product) {
   return {
     "@context": "https://schema.org",
@@ -117,13 +157,7 @@ function buildProductStructuredData(product) {
     // (scripts/generate-static-routes.mjs) — not a fabricated
     // identifier, and no gtin/isbn is ever added since none exists.
     ...(product.sku ? { sku: product.sku, mpn: product.sku } : {}),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "ZAR",
-      price: product.price.toFixed(2),
-      availability: schemaAvailability(product),
-      url: window.location.href,
-    },
+    offers: buildOffers(product),
     // Version 7, Milestone 171C: only ever added once at least one
     // genuine, admin-approved review exists for this product — omitted
     // entirely otherwise (Part L of the milestone brief: "never
@@ -303,8 +337,14 @@ function renderSupportNote() {
 // from and updates (data-current-index) as the customer moves between
 // images. escapeHtml() (not JSON's own escaping) is what makes this
 // safe to embed inside an HTML attribute — see js/search.js.
-function renderGallery(product) {
-  const images = product.gallery?.length ? product.gallery : [product.image];
+function renderGallery(product, selectedVariant) {
+  // Milestone 188: when the selected variant has its own image, it
+  // leads the gallery (shown first, still within the same slider/
+  // lightbox) — never replaces the product's own gallery images, so
+  // switching variants never loses access to the product's other
+  // photos.
+  const baseImages = product.gallery?.length ? product.gallery : [product.image];
+  const images = selectedVariant?.imageUrl && !baseImages.includes(selectedVariant.imageUrl) ? [selectedVariant.imageUrl, ...baseImages] : baseImages;
   const hasMultiple = images.length > 1;
 
   const galleryData = images.map((img, index) => ({
@@ -379,6 +419,52 @@ function renderGallery(product) {
   `;
 }
 
+// Milestone 188: renders one button group per option group (e.g.
+// "Pack Size") with one button per defined value. app.js's delegated
+// "select-variant-option" handler updates .is-active/disabled state,
+// the price/stock/image/Add-to-Cart area, and the ?variant= URL param
+// in place — no full page re-render, matching this file's existing
+// gallery-slider precedent for in-place DOM updates. A value button is
+// disabled when no in-stock variant could ever result from picking it
+// together with whatever is already selected for the other groups.
+function renderVariantSelector(product, selection) {
+  if (!product.hasVariants) return "";
+  return `
+    <div
+      class="product-details__variant-selector"
+      data-variant-selector
+      data-variant-options="${escapeHtml(JSON.stringify(product.variantOptions))}"
+      data-variants="${escapeHtml(JSON.stringify(product.variants))}"
+      data-product-id="${product.id}"
+      data-product-slug="${product.slug}"
+      data-product-name="${escapeHtml(product.name)}"
+      data-product-image="${product.image}"
+      data-product-type="${product.productType || "PHYSICAL"}"
+      data-is-preorder="${product.isPreorder ? "true" : "false"}"
+      data-preorder-release-at="${product.preorderReleaseAt || ""}"
+    >
+      ${product.variantOptions
+        .map(
+          (group) => `
+        <div class="product-details__variant-group" data-variant-group="${escapeHtml(group.name)}">
+          <p class="product-details__variant-group-label">${escapeHtml(group.name)}</p>
+          <div class="product-details__variant-values" role="group" aria-label="${escapeHtml(group.name)}">
+            ${group.values
+              .map((value) => {
+                const isSelected = selection[group.name] === value;
+                const isSelectable = isValueSelectable(product.variants, group.name, value, selection);
+                return `<button type="button" class="variant-option-btn${isSelected ? " is-active" : ""}${isSelectable ? "" : " is-disabled"}" data-action="select-variant-option" data-group="${escapeHtml(group.name)}" data-value="${escapeHtml(value)}" ${isSelectable ? "" : "disabled"} aria-pressed="${isSelected}">${escapeHtml(value)}</button>`;
+              })
+              .join("")}
+          </div>
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 function renderRelatedProducts(product, products) {
   const related = products
     .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id)
@@ -399,15 +485,40 @@ function renderRelatedProducts(product, products) {
   `;
 }
 
-export async function renderProductDetails({ slug } = {}) {
+export async function renderProductDetails({ slug, query } = {}) {
   const { products } = await getCatalog();
   const product = products.find((item) => item.slug === slug);
   if (!product) return renderNotFound();
 
+  // Milestone 188: resolves the initial variant selection from the
+  // ?variant= deep link (the same query param the Merchant Center feed
+  // and any shared link uses — see scripts/generate-static-routes.mjs's
+  // buildVariantItemXml()), falling back to auto-selecting when the
+  // product has exactly one active variant (Part I: "auto-select if
+  // there's only one"). Otherwise nothing is pre-selected and the
+  // customer must choose before Add to Cart is enabled.
+  const groupNames = product.hasVariants ? product.variantOptions.map((group) => group.name) : [];
+  let initialSelection = {};
+  if (product.hasVariants) {
+    const requestedVariantId = query?.get ? query.get("variant") : null;
+    let initialVariant = requestedVariantId ? product.variants.find((variant) => variant.id === requestedVariantId) : null;
+    if (!initialVariant && product.variants.length === 1) initialVariant = product.variants[0];
+    if (initialVariant) initialSelection = { ...initialVariant.optionValues };
+  }
+  const selectedVariant = product.hasVariants ? findVariantForSelection(product.variants, groupNames, initialSelection) : null;
+
   setPageMeta({ title: product.name, description: product.shortDescription });
   const breadcrumbTrail = buildBreadcrumbTrail(product);
   setPageStructuredData([buildProductStructuredData(product), buildBreadcrumbStructuredData(breadcrumbTrail)]);
-  trackViewItem(product);
+  // Milestone 188: view_item reports the initially-resolved variant's
+  // own price/label when one is already selected (deep link or
+  // auto-selected single variant) — the base product's own price is
+  // meaningless for a variable product once it has variants.
+  trackViewItem(
+    selectedVariant
+      ? { ...product, price: selectedVariant.price, variantLabel: buildVariantLabel(selectedVariant.optionValues, product.variantOptions) }
+      : product
+  );
 
   const reviewData = await getProductReviews(product.slug);
 
@@ -431,8 +542,17 @@ export async function renderProductDetails({ slug } = {}) {
   }
 
   const wishlisted = isInWishlist(product.id);
-  const outOfStock = isOutOfStockForCart(product);
-  const stockClass = product.stockStatus === "Low Stock" ? "product-details__stock--low" : product.stockStatus === "Out of Stock" ? "product-details__stock--out" : "";
+  // Milestone 188: for a variable product, "out of stock" (and
+  // therefore whether Add to Cart can even render) depends entirely on
+  // the SELECTED variant, never the parent Product's own stockQuantity
+  // (meaningless once hasVariants is true — see product.service.ts).
+  // No selection yet (ambiguous, more than one variant, none chosen) is
+  // treated the same as out of stock for this purpose: Add to Cart
+  // must never be enabled until a full, real combination is chosen.
+  const outOfStock = product.hasVariants ? !selectedVariant || selectedVariant.stockQuantity <= 0 : isOutOfStockForCart(product);
+  const displayPrice = product.hasVariants ? (selectedVariant ? selectedVariant.price : null) : product.price;
+  const stockLabel = product.hasVariants ? (selectedVariant ? (selectedVariant.stockQuantity > 0 ? "In Stock" : "Out of Stock") : "Select options to see availability") : product.stockStatus;
+  const stockClass = stockLabel === "Low Stock" ? "product-details__stock--low" : stockLabel === "Out of Stock" ? "product-details__stock--out" : "";
 
   return `
     <section class="container product-details">
@@ -447,7 +567,7 @@ export async function renderProductDetails({ slug } = {}) {
       </nav>
 
       <div class="product-details__layout">
-        ${renderGallery(product)}
+        ${renderGallery(product, selectedVariant)}
 
         <div class="product-details__info">
           <p class="product-details__category">${product.category}</p>
@@ -455,16 +575,28 @@ export async function renderProductDetails({ slug } = {}) {
           ${product.productType === "DIGITAL" ? `<span class="badge product-details__digital-badge">Digital Download</span>` : ""}
           ${product.isPreorder ? `<span class="badge product-card__badge--preorder">Preorder</span>` : ""}
 
-          <div class="product-details__price-row">
+          <div class="product-details__price-row" data-variant-price-row>
+            ${
+              product.hasVariants
+                ? displayPrice !== null
+                  ? `<span class="product-details__price">R${displayPrice.toFixed(2)}</span>`
+                  : product.variantPriceRange
+                    ? `<span class="product-details__price">From R${product.variantPriceRange.min.toFixed(2)}</span>`
+                    : `<span class="product-details__price">Select options</span>`
+                : `
             <span class="product-details__price">R${product.price.toFixed(2)}</span>
             ${product.oldPrice ? `<span class="product-details__old-price">R${product.oldPrice.toFixed(2)}</span>` : ""}
             ${product.discountLabel ? `<span class="badge">${product.discountLabel}</span>` : ""}
+            `
+            }
           </div>
+
+          ${renderVariantSelector(product, initialSelection)}
 
           ${
             product.isPreorder
               ? `<p class="product-details__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
-              : `<p class="product-details__stock ${stockClass}">${product.stockStatus}</p>`
+              : `<p class="product-details__stock ${stockClass}" data-variant-stock-label>${stockLabel}</p>`
           }
           ${renderPreorderDiscountOffer(product, preorderDiscountPercent, preorderMinimumEligibleSubtotal)}
           <p class="product-details__short-desc">${product.shortDescription}</p>
@@ -479,7 +611,9 @@ export async function renderProductDetails({ slug } = {}) {
             <div class="product-details__quantity">
               <span>Quantity</span>
               <div class="quantity-selector" ${
-                product.productType !== "DIGITAL" && !product.isPreorder ? `data-max-quantity="${product.stockQuantity}"` : ""
+                product.productType !== "DIGITAL" && !product.isPreorder
+                  ? `data-max-quantity="${product.hasVariants ? (selectedVariant ? selectedVariant.stockQuantity : 0) : product.stockQuantity}"`
+                  : ""
               }>
                 <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity" ${outOfStock ? "disabled" : ""}>&minus;</button>
                 <input type="number" class="quantity-selector__input" value="1" min="1" readonly ${outOfStock ? "disabled" : ""} />
@@ -487,21 +621,25 @@ export async function renderProductDetails({ slug } = {}) {
               </div>
             </div>
             ${
-              outOfStock
-                ? `<button type="button" class="btn btn--primary product-details__add-to-cart" disabled aria-disabled="true">Out of Stock</button>`
-                : `
+              product.hasVariants && !selectedVariant
+                ? `<button type="button" class="btn btn--primary product-details__add-to-cart" disabled aria-disabled="true" data-variant-add-to-cart>Select Options</button>`
+                : outOfStock
+                  ? `<button type="button" class="btn btn--primary product-details__add-to-cart" disabled aria-disabled="true" data-variant-add-to-cart>Out of Stock</button>`
+                  : `
             <button
               type="button"
               class="btn btn--primary product-details__add-to-cart"
               data-action="add-to-cart"
+              data-variant-add-to-cart
               data-product-id="${product.id}"
               data-slug="${product.slug}"
               data-name="${product.name}"
-              data-price="${product.price}"
-              data-image="${product.image}"
+              data-price="${selectedVariant ? selectedVariant.price : product.price}"
+              data-image="${(selectedVariant && selectedVariant.imageUrl) || product.image}"
               data-product-type="${product.productType || "PHYSICAL"}"
               data-is-preorder="${product.isPreorder ? "true" : "false"}"
               data-preorder-release-at="${product.preorderReleaseAt || ""}"
+              ${selectedVariant ? `data-variant-id="${selectedVariant.id}" data-variant-label="${escapeHtml(buildVariantLabel(selectedVariant.optionValues, product.variantOptions))}"` : ""}
             >
               ${product.isPreorder ? "Add Preorder to Cart" : "Add to Cart"}
             </button>

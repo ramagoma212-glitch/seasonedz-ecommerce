@@ -39,10 +39,14 @@ export function renderCartItem(item, { eager = false, unavailable = false, maxQu
   const giftWrapFee = item.giftWrap ? GIFT_WRAP_FEE_PER_ITEM * item.quantity : 0;
   const lineTotal = item.price * item.quantity + giftWrapFee;
   const atMaxStock = !unavailable && item.quantity >= maxQuantity;
+  // Milestone 188: the same ?variant= deep link the product page reads
+  // to preselect a variant (see productDetails.js) — undefined for
+  // every simple-product line, so the URL is unchanged from before.
+  const productUrl = item.variantId ? `/product/${item.slug}?variant=${encodeURIComponent(item.variantId)}` : `/product/${item.slug}`;
 
   return `
     <div class="cart-item${unavailable ? " cart-item--unavailable" : ""}">
-      <a class="cart-item__image-link" href="/product/${item.slug}">
+      <a class="cart-item__image-link" href="${productUrl}">
         <img
           class="cart-item__image"
           src="${getCardImageUrl(item.image)}"
@@ -56,7 +60,8 @@ export function renderCartItem(item, { eager = false, unavailable = false, maxQu
       </a>
 
       <div class="cart-item__details">
-        <a class="cart-item__name" href="/product/${item.slug}">${item.name}</a>
+        <a class="cart-item__name" href="${productUrl}">${item.name}</a>
+        ${item.variantLabel ? `<p class="cart-item__variant">${escapeHtml(item.variantLabel)}</p>` : ""}
         ${item.productType === "DIGITAL" ? `<span class="badge cart-item__digital-badge">Digital Download</span>` : ""}
         ${isPreorder ? `<span class="badge product-card__badge--preorder">Preorder</span>` : ""}
         ${unavailable ? `<span class="badge cart-item__stock-badge">Out of Stock</span>` : ""}

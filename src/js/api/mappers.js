@@ -57,6 +57,22 @@ export function mapApiProductToFrontendShape(apiProduct) {
     isPreorder: apiProduct.isPreorder || false,
     isPreorderDiscountEligible: apiProduct.isPreorderDiscountEligible || false,
     preorderReleaseAt: apiProduct.preorderReleaseAt || null,
+    // Milestone 188: false/null/[] for every product this milestone
+    // didn't touch — a simple product's mapped shape is unchanged.
+    // Variant images are relative backend paths too, same as gallery/
+    // image above, so each one is run through withBase() here once
+    // rather than at every place a variant image gets displayed.
+    hasVariants: apiProduct.hasVariants || false,
+    variantOptions: apiProduct.variantOptions || null,
+    variants: (apiProduct.variants || []).map((variant) => ({
+      id: variant.id,
+      optionValues: variant.optionValues || {},
+      sku: variant.sku || null,
+      price: variant.price,
+      stockQuantity: variant.stockQuantity,
+      imageUrl: variant.imageUrl ? withBase(variant.imageUrl) : "",
+    })),
+    variantPriceRange: apiProduct.variantPriceRange || null,
   };
 }
 

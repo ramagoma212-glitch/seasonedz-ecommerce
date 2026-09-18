@@ -28,6 +28,17 @@ export class AdminProductError extends Error {
 
 const MAX_FEATURE_ITEMS = 20;
 const MAX_FEATURE_ITEM_LENGTH = 200;
+
+// Milestone 188: sane ceilings so an admin typo (e.g. pasting a huge
+// list) can't create an unusably large option matrix — not a business
+// rule from the brief, just the same defensive-limits discipline as
+// features above. "Generate Variations" (adminProductVariant.service.ts)
+// multiplies these together, so keeping both bounded keeps that
+// combinatorial step bounded too.
+const MAX_VARIANT_OPTION_GROUPS = 5;
+const MAX_VARIANT_OPTION_VALUES_PER_GROUP = 30;
+const MAX_VARIANT_OPTION_NAME_LENGTH = 60;
+const MAX_VARIANT_OPTION_VALUE_LENGTH = 60;
 const MAX_SHORT_TEXT_LENGTH = 200;
 const MAX_LONG_TEXT_LENGTH = 5000;
 // Version 7, Milestone 146: the Full Description rich text field's own
@@ -44,7 +55,10 @@ const MAX_DESCRIPTION_VISIBLE_LENGTH = 5000;
 // adminOrderStatus.service.ts.
 // ---------------------------------------------------------------------------
 
-function requireTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_SHORT_TEXT_LENGTH): string {
+// Milestone 188: exported so adminProductVariant.service.ts can reuse
+// the exact same shape/range rules for variant price/stock/sku fields
+// rather than a second, potentially-drifting copy.
+export function requireTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_SHORT_TEXT_LENGTH): string {
   if (typeof raw !== "string" || raw.trim().length === 0) {
     throw new AdminProductError(`${fieldName} is required.`);
   }
@@ -55,7 +69,7 @@ function requireTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_S
   return trimmed;
 }
 
-function optionalTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_LONG_TEXT_LENGTH): string | null {
+export function optionalTrimmedString(raw: unknown, fieldName: string, maxLength = MAX_LONG_TEXT_LENGTH): string | null {
   if (raw === undefined || raw === null) return null;
   if (typeof raw !== "string") {
     throw new AdminProductError(`${fieldName} must be a string.`);
@@ -90,7 +104,7 @@ function optionalDescriptionHtml(raw: unknown): string | null {
   return sanitized.length > 0 ? sanitized : null;
 }
 
-function requirePositiveNumber(raw: unknown, fieldName: string): number {
+export function requirePositiveNumber(raw: unknown, fieldName: string): number {
   const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
   if (!Number.isFinite(value) || value <= 0) {
     throw new AdminProductError(`${fieldName} must be a number greater than 0.`);
@@ -98,12 +112,12 @@ function requirePositiveNumber(raw: unknown, fieldName: string): number {
   return value;
 }
 
-function optionalPositiveNumber(raw: unknown, fieldName: string): number | null {
+export function optionalPositiveNumber(raw: unknown, fieldName: string): number | null {
   if (raw === undefined || raw === null) return null;
   return requirePositiveNumber(raw, fieldName);
 }
 
-function requiredNonNegativeInteger(raw: unknown, fieldName: string): number {
+export function requiredNonNegativeInteger(raw: unknown, fieldName: string): number {
   const value = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
   if (!Number.isInteger(value) || value < 0) {
     throw new AdminProductError(`${fieldName} must be a whole number of 0 or more.`);
@@ -111,7 +125,7 @@ function requiredNonNegativeInteger(raw: unknown, fieldName: string): number {
   return value;
 }
 
-function nonNegativeIntegerWithDefault(raw: unknown, fieldName: string, fallback: number): number {
+export function nonNegativeIntegerWithDefault(raw: unknown, fieldName: string, fallback: number): number {
   if (raw === undefined || raw === null) return fallback;
   return requiredNonNegativeInteger(raw, fieldName);
 }
@@ -209,6 +223,82 @@ function parseFeatures(raw: unknown): string[] | undefined {
   });
 }
 
+// Milestone 188, Part B/F: Product.variantOptions defines the option
+// groups a variable product offers (e.g. { name: "Pack Size", values:
+// ["10 Colours", "20 Colours", "30 Colours"] }) — the menu of choices,
+// NOT the purchasable rows themselves (those are ProductVariant, each
+// holding one specific combination of these values plus its own price/
+// stock/sku/weight/image). Exported so adminProductVariant.service.ts
+// can validate a variant's optionValues against this same shape (every
+// key must be a group name defined here, every value must be one of
+// that group's defined values) rather than trusting the client.
+export interface VariantOptionGroup {
+  name: string;
+  values: string[];
+}
+
+export function parseVariantOptions(raw: unknown): VariantOptionGroup[] | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new AdminProductError("variantOptions must be an array of option groups.");
+  }
+  if (raw.length > MAX_VARIANT_OPTION_GROUPS) {
+    throw new AdminProductError(`variantOptions cannot have more than ${MAX_VARIANT_OPTION_GROUPS} option groups.`);
+  }
+
+  const seenGroupNames = new Set<string>();
+  return raw.map((group, groupIndex) => {
+    if (typeof group !== "object" || group === null || Array.isArray(group)) {
+      throw new AdminProductError(`variantOptions[${groupIndex}] must be an object with "name" and "values".`);
+    }
+    const { name, values } = group as { name?: unknown; values?: unknown };
+
+    if (typeof name !== "string" || name.trim().length === 0) {
+      throw new AdminProductError(`variantOptions[${groupIndex}].name is required.`);
+    }
+    const trimmedName = name.trim();
+    if (trimmedName.length > MAX_VARIANT_OPTION_NAME_LENGTH) {
+      throw new AdminProductError(`variantOptions[${groupIndex}].name must be ${MAX_VARIANT_OPTION_NAME_LENGTH} characters or fewer.`);
+    }
+    const normalizedName = trimmedName.toLowerCase();
+    if (seenGroupNames.has(normalizedName)) {
+      throw new AdminProductError(`variantOptions has a duplicate option group name: "${trimmedName}".`);
+    }
+    seenGroupNames.add(normalizedName);
+
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new AdminProductError(`variantOptions[${groupIndex}].values must be a non-empty array.`);
+    }
+    if (values.length > MAX_VARIANT_OPTION_VALUES_PER_GROUP) {
+      throw new AdminProductError(
+        `variantOptions[${groupIndex}].values cannot have more than ${MAX_VARIANT_OPTION_VALUES_PER_GROUP} values.`
+      );
+    }
+
+    const seenValues = new Set<string>();
+    const trimmedValues = values.map((value, valueIndex) => {
+      if (typeof value !== "string" || value.trim().length === 0) {
+        throw new AdminProductError(`variantOptions[${groupIndex}].values[${valueIndex}] must be a non-empty string.`);
+      }
+      const trimmedValue = value.trim();
+      if (trimmedValue.length > MAX_VARIANT_OPTION_VALUE_LENGTH) {
+        throw new AdminProductError(
+          `variantOptions[${groupIndex}].values[${valueIndex}] must be ${MAX_VARIANT_OPTION_VALUE_LENGTH} characters or fewer.`
+        );
+      }
+      const normalizedValue = trimmedValue.toLowerCase();
+      if (seenValues.has(normalizedValue)) {
+        throw new AdminProductError(`variantOptions[${groupIndex}] has a duplicate value: "${trimmedValue}".`);
+      }
+      seenValues.add(normalizedValue);
+      return trimmedValue;
+    });
+
+    return { name: trimmedName, values: trimmedValues };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Slug handling. Decision (documented here, not just in code): if the
 // admin explicitly supplies a slug, a collision is a 409 — explicit
@@ -278,6 +368,10 @@ const adminProductListSelect = {
   preorderEndAt: true,
   preorderReleaseAt: true,
   isPreorderDiscountEligible: true,
+  // Milestone 188, Part AR: lets the admin product list flag a variable
+  // product at a glance — the list intentionally never fetches the full
+  // variants array (that's the edit page's job), just this one flag.
+  hasVariants: true,
 } satisfies Prisma.ProductSelect;
 
 type AdminProductListRow = Prisma.ProductGetPayload<{ select: typeof adminProductListSelect }>;
@@ -311,6 +405,7 @@ export interface AdminProductListItem {
   // could go stale (see preorder.service.ts's own comment).
   preorderAdminStatus: PreorderAdminStatus;
   isPreorderEnabled: boolean;
+  hasVariants: boolean;
 }
 
 function toAdminProductListItem(product: AdminProductListRow): AdminProductListItem {
@@ -336,6 +431,7 @@ function toAdminProductListItem(product: AdminProductListRow): AdminProductListI
     digitalFileMissingWarning: product.productType === ProductType.DIGITAL && product.status === ProductStatus.ACTIVE && !hasDigitalFile,
     preorderAdminStatus: derivePreorderAdminStatus(product),
     isPreorderEnabled: product.isPreorderEnabled,
+    hasVariants: product.hasVariants,
   };
 }
 
@@ -411,9 +507,37 @@ const adminProductDetailInclude = {
     orderBy: { sortOrder: "asc" },
     select: { url: true, altText: true, isPrimary: true, sortOrder: true },
   },
+  // Milestone 188: every variant, active or not — Admin needs to see
+  // and manage inactive/retired ones too (Part P), unlike the public
+  // API's active-only view (see product.service.ts's own include).
+  variants: {
+    orderBy: { sortOrder: "asc" },
+  },
 } satisfies Prisma.ProductInclude;
 
 type AdminProductDetailRow = Prisma.ProductGetPayload<{ include: typeof adminProductDetailInclude }>;
+
+// Milestone 188: the admin-facing shape of one ProductVariant row —
+// every variant regardless of isActive (Part P), with Decimal fields
+// converted to plain numbers the same way the parent Product's own
+// price/oldPrice are below. optionValues is stored as Json but every
+// value this service ever writes is a flat { [groupName]: value }
+// string map, so it's typed as such here for admin UI convenience;
+// adminProductVariant.service.ts re-validates it defensively rather
+// than trusting this type alone.
+export interface AdminProductVariantRow {
+  id: string;
+  optionValues: Record<string, string>;
+  sku: string | null;
+  price: number;
+  stockQuantity: number;
+  weight: number | null;
+  imageUrl: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 export interface AdminProductDetail {
   id: string;
@@ -448,6 +572,10 @@ export interface AdminProductDetail {
   preorderReleaseAt: Date | null;
   isPreorderDiscountEligible: boolean;
   preorderAdminStatus: PreorderAdminStatus;
+  // Milestone 188.
+  hasVariants: boolean;
+  variantOptions: VariantOptionGroup[] | null;
+  variants: AdminProductVariantRow[];
 }
 
 // Version 7, Milestone 146 (second review fix): sanitised again here,
@@ -500,6 +628,21 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
     preorderReleaseAt: product.preorderReleaseAt,
     isPreorderDiscountEligible: product.isPreorderDiscountEligible,
     preorderAdminStatus: derivePreorderAdminStatus(product),
+    hasVariants: product.hasVariants,
+    variantOptions: (product.variantOptions as unknown as VariantOptionGroup[] | null) ?? null,
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      optionValues: variant.optionValues as unknown as Record<string, string>,
+      sku: variant.sku,
+      price: variant.price.toNumber(),
+      stockQuantity: variant.stockQuantity,
+      weight: variant.weight ? variant.weight.toNumber() : null,
+      imageUrl: variant.imageUrl,
+      isActive: variant.isActive,
+      sortOrder: variant.sortOrder,
+      createdAt: variant.createdAt,
+      updatedAt: variant.updatedAt,
+    })),
   };
 }
 
@@ -545,6 +688,8 @@ export interface AdminProductCreateInput {
   preorderEndAt?: unknown;
   preorderReleaseAt?: unknown;
   isPreorderDiscountEligible?: unknown;
+  hasVariants?: unknown;
+  variantOptions?: unknown;
 }
 
 export async function createProduct(rawInput: unknown): Promise<AdminProductDetail> {
@@ -577,6 +722,11 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
   const preorderEndAt = optionalPreorderDate(input.preorderEndAt, "preorderEndAt");
   const preorderReleaseAt = optionalPreorderDate(input.preorderReleaseAt, "preorderReleaseAt");
   const isPreorderDiscountEligible = Boolean(input.isPreorderDiscountEligible);
+  const hasVariants = Boolean(input.hasVariants);
+  const variantOptions = parseVariantOptions(input.variantOptions) ?? [];
+  if (hasVariants && variantOptions.length === 0) {
+    throw new AdminProductError("A variable product needs at least one option group in variantOptions.");
+  }
 
   await assertDigitalProductHasFileIfActive(null, productType, status);
   try {
@@ -639,6 +789,8 @@ export async function createProduct(rawInput: unknown): Promise<AdminProductDeta
       preorderEndAt,
       preorderReleaseAt,
       isPreorderDiscountEligible,
+      hasVariants,
+      variantOptions: hasVariants ? (variantOptions as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
     },
     include: adminProductDetailInclude,
   });
@@ -680,6 +832,8 @@ const ALLOWED_UPDATE_FIELDS = [
   "preorderEndAt",
   "preorderReleaseAt",
   "isPreorderDiscountEligible",
+  "hasVariants",
+  "variantOptions",
 ] as const;
 
 export async function updateProduct(id: string, rawInput: unknown): Promise<AdminProductDetail> {
@@ -695,6 +849,9 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
       preorderEndAt: true,
       preorderReleaseAt: true,
       isPreorderDiscountEligible: true,
+      hasVariants: true,
+      variantOptions: true,
+      variants: { select: { id: true, sku: true, optionValues: true } },
     },
   });
   if (!existing) {
@@ -737,6 +894,54 @@ export async function updateProduct(id: string, rawInput: unknown): Promise<Admi
   if ("preorderEndAt" in input) data.preorderEndAt = optionalPreorderDate(input.preorderEndAt, "preorderEndAt");
   if ("preorderReleaseAt" in input) data.preorderReleaseAt = optionalPreorderDate(input.preorderReleaseAt, "preorderReleaseAt");
   if ("isPreorderDiscountEligible" in input) data.isPreorderDiscountEligible = Boolean(input.isPreorderDiscountEligible);
+  if ("hasVariants" in input) data.hasVariants = Boolean(input.hasVariants);
+  if ("variantOptions" in input) {
+    const parsedVariantOptions = parseVariantOptions(input.variantOptions) ?? [];
+    data.variantOptions = parsedVariantOptions.length > 0 ? (parsedVariantOptions as unknown as Prisma.InputJsonValue) : Prisma.JsonNull;
+  }
+
+  // Milestone 188, Part O: reversing a variable product back to a
+  // simple one is a deliberately deferred, documented limitation — it
+  // would require deciding what happens to existing ProductVariant rows
+  // (including ones already referenced by past orders), which is too
+  // risky to improvise here. Once hasVariants is true, it can stay true
+  // (updating option groups/variants) but never flip back to false.
+  const effectiveHasVariants = "hasVariants" in input ? Boolean(data.hasVariants) : existing.hasVariants;
+  if (existing.hasVariants && !effectiveHasVariants) {
+    throw new AdminProductError(
+      "Converting a variable product back to a simple product is not supported. Deactivate its variants instead of disabling variations."
+    );
+  }
+
+  const effectiveVariantOptions: VariantOptionGroup[] = "variantOptions" in input
+    ? (parseVariantOptions(input.variantOptions) ?? [])
+    : ((existing.variantOptions as unknown as VariantOptionGroup[] | null) ?? []);
+
+  if (effectiveHasVariants && effectiveVariantOptions.length === 0) {
+    throw new AdminProductError("A variable product needs at least one option group in variantOptions.");
+  }
+
+  // Milestone 188, Part F: if variantOptions is changing (or hasVariants
+  // is being turned on for the first time on a product that already has
+  // variant rows — shouldn't normally happen, but defend anyway), make
+  // sure no existing variant would be left pointing at an option group
+  // or value that no longer exists. Never silently orphan a variant —
+  // the admin must fix/remove the conflicting variant first.
+  if ("variantOptions" in input && existing.variants.length > 0) {
+    const validValuesByGroup = new Map(effectiveVariantOptions.map((group) => [group.name, new Set(group.values)]));
+    for (const variant of existing.variants) {
+      const optionValues = (variant.optionValues as unknown as Record<string, string>) ?? {};
+      for (const [groupName, value] of Object.entries(optionValues)) {
+        const validValues = validValuesByGroup.get(groupName);
+        if (!validValues || !validValues.has(value)) {
+          throw new AdminProductError(
+            `Cannot update variantOptions: existing variant (sku: ${variant.sku ?? variant.id}) uses "${groupName}: ${value}", which is no longer offered. Update or remove that variant first.`,
+            409
+          );
+        }
+      }
+    }
+  }
 
   // Milestone 181, Part C: same "EFFECTIVE" merged-value discipline as
   // productType/status below — an update that only touches ONE

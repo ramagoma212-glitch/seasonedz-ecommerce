@@ -24,6 +24,8 @@ import {
 } from "./cart.js";
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
+import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "./variantSelector.js";
+import { renderOptionGroupRow } from "../pages/adminProductForm.js";
 import { initMetricoolTracking } from "./metricool.js";
 import { renderChatWidget } from "../components/chatWidget.js";
 import {
@@ -100,6 +102,9 @@ import {
   approveAdminReview,
   rejectAdminReview,
   confirmAdminManualPayment,
+  generateAdminProductVariations,
+  updateAdminProductVariant,
+  deleteAdminProductVariant,
 } from "./api/adminDashboardApi.js";
 import {
   createAdminAffiliateProduct,
@@ -230,6 +235,7 @@ function mountApp() {
   setupAdminProductFilterForm();
   setupAdminProductForm();
   setupAdminProductImages();
+  setupAdminProductVariants();
   setupAdminDigitalAsset();
   setupAdminReviewModeration();
   setupAdminAffiliateFilterForm();
@@ -473,6 +479,12 @@ function readProductFromButton(buttonEl) {
     // snapshot here can never affect what's actually charged.
     isPreorder: buttonEl.dataset.isPreorder === "true",
     preorderReleaseAt: buttonEl.dataset.preorderReleaseAt || null,
+    // Milestone 188: absent for every card/wishlist button and every
+    // simple-product detail page — only productDetails.js's Add to
+    // Cart button ever carries these, and only once a variant is
+    // actually resolved (see updateVariantSelectionUI() below).
+    variantId: buttonEl.dataset.variantId || null,
+    variantLabel: buttonEl.dataset.variantLabel || null,
   };
 }
 
@@ -549,6 +561,8 @@ function setupProductActions() {
       handleScrollToNewsletter();
     } else if (action === "request-download") {
       handleRequestDownload(actionEl);
+    } else if (action === "select-variant-option") {
+      handleSelectVariantOption(actionEl);
     }
   });
 }
@@ -722,6 +736,132 @@ function handleAddToCart(buttonEl) {
 
   updateHeaderCounters();
   showToast(giftOptions.giftWrap ? `${product.name} (gift wrapped) added to cart.` : `${product.name} added to cart.`);
+}
+
+// Milestone 188: updates the whole purchase area in place — price,
+// availability text, quantity max, main gallery image, and the Add to
+// Cart button's own data-* attributes — as the customer picks option
+// values, without a full page re-render (matching this file's existing
+// gallery-slider precedent). Also keeps the ?variant= URL query
+// parameter in sync via history.replaceState (no navigation, so this
+// never triggers the router or a component re-render) — the same
+// canonical page, deep-linkable to a specific variant (the Merchant
+// Center feed and shared cart/order links use this same parameter; see
+// scripts/generate-static-routes.mjs and cartItem.js).
+function handleSelectVariantOption(buttonEl) {
+  if (buttonEl.disabled) return;
+
+  const container = buttonEl.closest("[data-variant-selector]");
+  const root = buttonEl.closest(".product-details");
+  if (!container || !root) return;
+
+  let groups, variants;
+  try {
+    groups = JSON.parse(container.dataset.variantOptions);
+    variants = JSON.parse(container.dataset.variants);
+  } catch {
+    return;
+  }
+
+  const selection = {};
+  container.querySelectorAll("[data-variant-group]").forEach((groupEl) => {
+    const activeBtn = groupEl.querySelector(".variant-option-btn.is-active");
+    if (activeBtn) selection[groupEl.dataset.variantGroup] = activeBtn.dataset.value;
+  });
+  selection[buttonEl.dataset.group] = buttonEl.dataset.value;
+
+  const groupNames = groups.map((group) => group.name);
+  const selectedVariant = findVariantForSelection(variants, groupNames, selection);
+
+  // Re-render every option button's selected/selectable state — a
+  // choice in one group can make values in ANOTHER group newly valid
+  // or newly invalid, not just the group that was just clicked.
+  container.querySelectorAll("[data-variant-group]").forEach((groupEl) => {
+    const groupName = groupEl.dataset.variantGroup;
+    groupEl.querySelectorAll(".variant-option-btn").forEach((btn) => {
+      const value = btn.dataset.value;
+      const isSelected = selection[groupName] === value;
+      const isSelectable = isValueSelectable(variants, groupName, value, selection);
+      btn.classList.toggle("is-active", isSelected);
+      btn.classList.toggle("is-disabled", !isSelectable);
+      btn.disabled = !isSelectable;
+      btn.setAttribute("aria-pressed", String(isSelected));
+    });
+  });
+
+  const priceRow = root.querySelector("[data-variant-price-row]");
+  if (priceRow) {
+    if (selectedVariant) {
+      priceRow.innerHTML = `<span class="product-details__price">R${selectedVariant.price.toFixed(2)}</span>`;
+    } else {
+      const min = variants.length ? Math.min(...variants.map((v) => v.price)) : null;
+      priceRow.innerHTML = min !== null ? `<span class="product-details__price">From R${min.toFixed(2)}</span>` : `<span class="product-details__price">Select options</span>`;
+    }
+  }
+
+  const stockLabelEl = root.querySelector("[data-variant-stock-label]");
+  if (stockLabelEl) {
+    const label = selectedVariant ? (selectedVariant.stockQuantity > 0 ? "In Stock" : "Out of Stock") : "Select options to see availability";
+    stockLabelEl.textContent = label;
+    stockLabelEl.classList.toggle("product-details__stock--out", label === "Out of Stock");
+  }
+
+  const quantitySelector = root.querySelector(".quantity-selector");
+  const quantityInput = quantitySelector?.querySelector(".quantity-selector__input");
+  if (quantitySelector && quantitySelector.hasAttribute("data-max-quantity")) {
+    const max = selectedVariant ? selectedVariant.stockQuantity : 0;
+    quantitySelector.dataset.maxQuantity = String(max);
+    if (quantityInput) {
+      quantityInput.value = String(Math.max(1, Math.min(max || 1, parseInt(quantityInput.value, 10) || 1)));
+    }
+  }
+
+  const addToCartBtn = root.querySelector("[data-variant-add-to-cart]");
+  if (addToCartBtn) {
+    const isPreorder = container.dataset.isPreorder === "true";
+    const outOfStock = !selectedVariant || selectedVariant.stockQuantity <= 0;
+    addToCartBtn.disabled = outOfStock;
+    addToCartBtn.setAttribute("aria-disabled", String(outOfStock));
+    if (!selectedVariant) {
+      addToCartBtn.textContent = "Select Options";
+    } else if (outOfStock) {
+      addToCartBtn.textContent = "Out of Stock";
+    } else {
+      addToCartBtn.textContent = isPreorder ? "Add Preorder to Cart" : "Add to Cart";
+      addToCartBtn.dataset.action = "add-to-cart";
+      addToCartBtn.dataset.productId = container.dataset.productId;
+      addToCartBtn.dataset.slug = container.dataset.productSlug;
+      addToCartBtn.dataset.name = container.dataset.productName;
+      addToCartBtn.dataset.price = String(selectedVariant.price);
+      addToCartBtn.dataset.image = selectedVariant.imageUrl || container.dataset.productImage;
+      addToCartBtn.dataset.productType = container.dataset.productType;
+      addToCartBtn.dataset.isPreorder = container.dataset.isPreorder;
+      addToCartBtn.dataset.preorderReleaseAt = container.dataset.preorderReleaseAt || "";
+      addToCartBtn.dataset.variantId = selectedVariant.id;
+      addToCartBtn.dataset.variantLabel = buildVariantLabel(selectedVariant.optionValues, groups);
+    }
+  }
+
+  if (selectedVariant?.imageUrl) {
+    const mainImage = root.querySelector(".product-details__main-image");
+    if (mainImage) {
+      mainImage.src = selectedVariant.imageUrl;
+      mainImage.dataset.originalSrc = selectedVariant.imageUrl;
+    }
+  }
+
+  try {
+    const url = new URL(window.location.href);
+    if (selectedVariant) {
+      url.searchParams.set("variant", selectedVariant.id);
+    } else {
+      url.searchParams.delete("variant");
+    }
+    window.history.replaceState(window.history.state, "", url.pathname + url.search);
+  } catch {
+    // URL/history unavailable in this environment — never fatal, the
+    // selector still works, it just won't deep-link.
+  }
 }
 
 // Version 7, Milestone 152: secure digital downloads. One handler
@@ -3208,6 +3348,39 @@ function setupAdminProductForm() {
     const preorderFields = form?.querySelector("[data-admin-preorder-fields]");
     if (preorderFields) preorderFields.hidden = !event.target.checked;
   });
+
+  // Milestone 188: shows/hides the option-group editor as "This product
+  // has variations" is toggled — purely a display convenience, same
+  // pattern as Product Type/Preorder Enabled above. Once a product
+  // already hasVariants, this checkbox itself is rendered disabled (see
+  // adminProductForm.js's renderVariationOptionsSection()) so it can
+  // never actually be unchecked in the UI — reversing a variable
+  // product is a deliberate, documented limitation (Part O), enforced
+  // for real on the backend regardless of anything here.
+  document.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-admin-has-variants-toggle]")) return;
+    const form = event.target.closest("[data-admin-product-form]");
+    const editor = form?.querySelector("[data-admin-variant-options-editor]");
+    if (editor) editor.hidden = !event.target.checked;
+  });
+
+  document.addEventListener("click", (event) => {
+    const addButton = event.target.closest('[data-action="add-variant-option-group"]');
+    if (addButton) {
+      const form = addButton.closest("[data-admin-product-form]");
+      const groupsContainer = form?.querySelector("[data-variant-option-groups]");
+      if (groupsContainer) {
+        const index = groupsContainer.querySelectorAll("[data-variant-option-group-row]").length;
+        groupsContainer.insertAdjacentHTML("beforeend", renderOptionGroupRow({ name: "", values: [] }, index));
+      }
+      return;
+    }
+
+    const removeButton = event.target.closest('[data-action="remove-variant-option-group"]');
+    if (removeButton) {
+      removeButton.closest("[data-variant-option-group-row]")?.remove();
+    }
+  });
 }
 
 // Milestone 181, Part T: a datetime-local input's value has no
@@ -3256,6 +3429,18 @@ function readAdminProductFormValues(form) {
   const preorderEndAt = readAdminDatetimeLocalField(form, "productPreorderEndAt");
   const preorderReleaseAt = readAdminDatetimeLocalField(form, "productPreorderReleaseAt");
   const isPreorderDiscountEligible = form.querySelector("#productPreorderDiscountEligible")?.checked || false;
+  const hasVariants = form.querySelector("#productHasVariants")?.checked || false;
+  const variantOptions = Array.from(form.querySelectorAll("[data-variant-option-group-row]"))
+    .map((row) => {
+      const groupName = row.querySelector("[data-variant-option-name]")?.value.trim() || "";
+      const valuesRaw = row.querySelector("[data-variant-option-values]")?.value || "";
+      const values = valuesRaw
+        .split(",")
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+      return { name: groupName, values };
+    })
+    .filter((group) => group.name.length > 0 && group.values.length > 0);
 
   return {
     name,
@@ -3281,6 +3466,8 @@ function readAdminProductFormValues(form) {
     preorderEndAt,
     preorderReleaseAt,
     isPreorderDiscountEligible,
+    hasVariants,
+    variantOptions,
   };
 }
 
@@ -3294,6 +3481,9 @@ function validateAdminProductForm(values, mode) {
   if (!Number.isInteger(values.stockQuantity) || values.stockQuantity < 0) return "Stock quantity must be a whole number of 0 or more.";
   if (!Number.isInteger(values.lowStockThreshold) || values.lowStockThreshold < 0) return "Low stock threshold must be a whole number of 0 or more.";
   if (values.oldPrice !== null && (!Number.isFinite(values.oldPrice) || values.oldPrice <= 0)) return "Old price must be a number greater than 0.";
+  if (values.hasVariants && values.variantOptions.length === 0) {
+    return 'At least one option group (a name and at least one comma-separated value) is required when "This product has variations" is checked.';
+  }
 
   if (mode === "create") {
     const sku = document.getElementById("productSku")?.value.trim();
@@ -5861,6 +6051,160 @@ async function handleAdminImageRemove(button) {
     // here touches the DOM until the API call actually succeeds.
     button.disabled = false;
     window.alert(friendlyAdminImageErrorMessage(error));
+  }
+}
+
+// Milestone 188: admin product variation management. Same "re-render
+// the whole edit page on success" pattern as product images above —
+// every write returns the full, refreshed product (including its
+// current variants array), so rerenderCurrentRoute() (which re-fetches
+// via getAdminProduct()) always shows the real, current state rather
+// than this file trying to patch the DOM's table by hand.
+function setupAdminProductVariants() {
+  document.addEventListener("click", (event) => {
+    const generateButton = event.target.closest('[data-action="generate-variations"]');
+    if (generateButton) {
+      handleGenerateVariations(generateButton);
+      return;
+    }
+
+    const saveButton = event.target.closest('[data-action="save-variant-row"]');
+    if (saveButton) {
+      handleSaveVariantRow(saveButton);
+      return;
+    }
+
+    const removeButton = event.target.closest('[data-action="remove-variant-row"]');
+    if (removeButton) {
+      handleRemoveVariantRow(removeButton);
+    }
+  });
+}
+
+function friendlyAdminVariantErrorMessage(error) {
+  if (error instanceof ApiError && (error.status === 400 || error.status === 404 || error.status === 409)) {
+    return error.message;
+  }
+  if (error instanceof ApiUnavailableError) {
+    return "We could not connect to the admin system right now. Please try again shortly.";
+  }
+  return "Something went wrong. Please try again shortly.";
+}
+
+function getAdminVariantsProductId(el) {
+  return el.closest("[data-admin-variants-section]")?.dataset.productId || null;
+}
+
+function showAdminVariantsBanner(section, message) {
+  const banner = section?.querySelector("[data-admin-variants-banner]");
+  if (!banner) return;
+  banner.textContent = message;
+  banner.hidden = false;
+}
+
+async function handleGenerateVariations(button) {
+  const section = button.closest("[data-admin-variants-section]");
+  const productId = getAdminVariantsProductId(button);
+  if (!productId) return;
+
+  button.disabled = true;
+  try {
+    const response = await generateAdminProductVariations(productId, {});
+    setPendingAdminMessage(
+      response.message || "Variations generated successfully."
+    );
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    showAdminVariantsBanner(section, friendlyAdminVariantErrorMessage(error));
+  }
+}
+
+// Reads price/stockQuantity/sku/weight/imageUrl/isActive straight off
+// this one row's own inputs — never sends the other rows' fields, so
+// two admins editing different variant rows can never clobber each
+// other's unsaved edits.
+function readVariantRowValues(row) {
+  const sku = row.querySelector('[data-variant-field="sku"]')?.value.trim() || "";
+  const price = row.querySelector('[data-variant-field="price"]')?.value;
+  const stockQuantity = row.querySelector('[data-variant-field="stockQuantity"]')?.value;
+  const weight = row.querySelector('[data-variant-field="weight"]')?.value;
+  const imageUrl = row.querySelector('[data-variant-field="imageUrl"]')?.value.trim() || "";
+  const isActive = row.querySelector('[data-variant-field="isActive"]')?.checked || false;
+
+  return {
+    sku: sku || null,
+    price: price === "" ? NaN : Number(price),
+    stockQuantity: stockQuantity === "" ? NaN : Number(stockQuantity),
+    weight: weight === "" ? null : Number(weight),
+    imageUrl: imageUrl || null,
+    isActive,
+  };
+}
+
+async function handleSaveVariantRow(button) {
+  const row = button.closest("[data-admin-variant-row]");
+  const section = button.closest("[data-admin-variants-section]");
+  const productId = getAdminVariantsProductId(button);
+  const variantId = row?.dataset.variantId;
+  if (!row || !productId || !variantId) return;
+
+  const values = readVariantRowValues(row);
+  if (!Number.isFinite(values.price) || values.price <= 0) {
+    showAdminVariantsBanner(section, "Price must be a number greater than 0.");
+    return;
+  }
+  if (!Number.isInteger(values.stockQuantity) || values.stockQuantity < 0) {
+    showAdminVariantsBanner(section, "Stock must be a whole number of 0 or more.");
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    await updateAdminProductVariant(productId, variantId, values);
+    setPendingAdminMessage("Variant updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    showAdminVariantsBanner(section, friendlyAdminVariantErrorMessage(error));
+  }
+}
+
+// A variant already referenced by a past order is deactivated instead
+// of hard-deleted by the backend (adminProductVariant.service.ts's
+// removeVariant()) — this button always just says "Remove"; what
+// actually happens to the row is the backend's own decision, never
+// something this confirm dialog needs to predict.
+async function handleRemoveVariantRow(button) {
+  const row = button.closest("[data-admin-variant-row]");
+  const section = button.closest("[data-admin-variants-section]");
+  const productId = getAdminVariantsProductId(button);
+  const variantId = row?.dataset.variantId;
+  if (!row || !productId || !variantId) return;
+
+  const confirmed = window.confirm("Remove this variant?\nIf it has never been ordered it will be deleted; if it has, it will be deactivated instead.");
+  if (!confirmed) return;
+
+  button.disabled = true;
+  try {
+    await deleteAdminProductVariant(productId, variantId);
+    setPendingAdminMessage("Variant removed successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    showAdminVariantsBanner(section, friendlyAdminVariantErrorMessage(error));
   }
 }
 

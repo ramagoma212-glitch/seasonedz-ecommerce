@@ -398,8 +398,39 @@ export function insertJsonLdBlocks(html, blocks) {
 
 export function schemaAvailability(product) {
   if (product.isPreorder) return "https://schema.org/PreOrder";
+  // Milestone 188: mirrors productDetails.js's own schemaAvailability()
+  // — see that file's comment for why a variable product's
+  // product-level stockStatus is meaningless here.
+  if (product.hasVariants) {
+    const anyVariantInStock = (product.variants || []).some((variant) => variant.stockQuantity > 0);
+    return anyVariantInStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock";
+  }
   if (product.stockStatus === "Out of Stock") return "https://schema.org/OutOfStock";
   return "https://schema.org/InStock";
+}
+
+// Milestone 188: mirrors productDetails.js's own buildOffers() — see
+// that file's comment for why AggregateOffer is used instead of a
+// single Offer for a variable product.
+function buildOffers(product, canonicalUrl) {
+  if (product.hasVariants && product.variantPriceRange) {
+    return {
+      "@type": "AggregateOffer",
+      priceCurrency: "ZAR",
+      lowPrice: Number(product.variantPriceRange.min).toFixed(2),
+      highPrice: Number(product.variantPriceRange.max).toFixed(2),
+      offerCount: (product.variants || []).length,
+      availability: schemaAvailability(product),
+      url: canonicalUrl,
+    };
+  }
+  return {
+    "@type": "Offer",
+    priceCurrency: "ZAR",
+    price: Number(product.price).toFixed(2),
+    availability: schemaAvailability(product),
+    url: canonicalUrl,
+  };
 }
 
 export function buildProductJsonLd(product, canonicalUrl) {
@@ -413,13 +444,7 @@ export function buildProductJsonLd(product, canonicalUrl) {
     category: product.category?.name,
     brand: { "@type": "Brand", name: SITE_NAME },
     ...(product.sku ? { sku: product.sku, mpn: product.sku } : {}),
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "ZAR",
-      price: Number(product.price).toFixed(2),
-      availability: schemaAvailability(product),
-      url: canonicalUrl,
-    },
+    offers: buildOffers(product, canonicalUrl),
     ...(product.reviewCount > 0
       ? { aggregateRating: { "@type": "AggregateRating", ratingValue: Number(product.ratingAverage).toFixed(2), reviewCount: product.reviewCount } }
       : {}),
@@ -576,6 +601,12 @@ function buildIdentifierFields(product) {
 // share one, the whole feed is withheld for this build (same discipline
 // as getProductsForFeed()'s own live-API-only rule above) rather than
 // publish a broken or duplicate id to Google.
+// Milestone 188, Part AP: a variable product still needs its OWN sku
+// too — used below as the shared g:item_group_id every one of its
+// variant items carries (see buildVariantItemXml()) — plus a genuine
+// sku on EVERY one of its active variants, each variant's own g:id.
+// Missing either withholds the whole feed, same discipline as a
+// missing simple-product sku always has.
 export function validateFeedIdentifiers(products) {
   const missingSku = products.filter((product) => !product.sku);
   if (missingSku.length > 0) {
@@ -584,7 +615,22 @@ export function validateFeedIdentifiers(products) {
     );
     return false;
   }
-  const skus = products.map((product) => product.sku);
+
+  const variableProductsWithMissingVariantSku = products.filter(
+    (product) => product.hasVariants && Array.isArray(product.variants) && product.variants.some((variant) => !variant.sku)
+  );
+  if (variableProductsWithMissingVariantSku.length > 0) {
+    console.warn(
+      `[generate-static-routes] ${variableProductsWithMissingVariantSku.length} variable product(s) have a variant with no SKU — Merchant Center feed not generated for this build (each variant needs its own genuine SKU as its g:id).`
+    );
+    return false;
+  }
+
+  const skus = products.flatMap((product) =>
+    product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0
+      ? product.variants.map((variant) => variant.sku)
+      : [product.sku]
+  );
   if (new Set(skus).size !== skus.length) {
     console.warn("[generate-static-routes] duplicate SKUs found across products — Merchant Center feed not generated for this build.");
     return false;
@@ -592,29 +638,81 @@ export function validateFeedIdentifiers(products) {
   return true;
 }
 
+function buildItemXml(product) {
+  const availability = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
+  const link = `${SITE_URL}/product/${product.slug}/`;
+  const priceValue = Number(product.price).toFixed(2);
+
+  return [
+    "  <item>",
+    `    <g:id>${escapeXml(product.sku)}</g:id>`,
+    `    <title>${escapeXml(product.name)}</title>`,
+    `    <description>${escapeXml(product.shortDescription || product.name)}</description>`,
+    `    <link>${escapeXml(link)}</link>`,
+    `    <g:image_link>${escapeXml(product.image)}</g:image_link>`,
+    `    <g:availability>${availability}</g:availability>`,
+    `    <g:price>${priceValue} ZAR</g:price>`,
+    "    <g:brand>Seasonedz Group</g:brand>",
+    "    <g:condition>new</g:condition>",
+    product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
+    ...buildIdentifierFields(product),
+  ]
+    .filter(Boolean)
+    .join("\n") + "\n  </item>";
+}
+
+// Milestone 188, Part AP: per Google's own current documented guidance
+// (support.google.com/merchants/answer/6324507 — "item group ID"),
+// each variant needs its own g:id/link/price/availability, all sharing
+// one g:item_group_id. Google explicitly requires each variant's link
+// to be a genuinely distinct URL "using a different path segment
+// and/or query parameters" when there's no separate per-variant page —
+// this project's storefront deliberately has only ONE canonical URL
+// per product (no per-variant pages/routes exist or are added by this
+// milestone), so a `?variant=<id>` query parameter on that same
+// canonical page is used here, exactly the pattern Google's own
+// documentation names as valid in that situation. productDetails.js
+// reads that parameter to preselect the matching variant on load.
+// Never emitted for a variable product with zero active variants yet
+// (nothing purchasable to list) — falls through to no items for that
+// product, not a broken/empty listing.
+function buildVariantItemXml(product, variant) {
+  const availability = variant.stockQuantity > 0 ? "in stock" : "out of stock";
+  const link = `${SITE_URL}/product/${product.slug}/?variant=${encodeURIComponent(variant.id)}`;
+  const priceValue = Number(variant.price).toFixed(2);
+  const optionLabel = Object.values(variant.optionValues || {}).join(" / ");
+  const title = optionLabel ? `${product.name} - ${optionLabel}` : product.name;
+
+  return [
+    "  <item>",
+    `    <g:id>${escapeXml(variant.sku)}</g:id>`,
+    `    <title>${escapeXml(title)}</title>`,
+    `    <description>${escapeXml(product.shortDescription || product.name)}</description>`,
+    `    <link>${escapeXml(link)}</link>`,
+    `    <g:image_link>${escapeXml(variant.imageUrl || product.image)}</g:image_link>`,
+    `    <g:availability>${availability}</g:availability>`,
+    `    <g:price>${priceValue} ZAR</g:price>`,
+    "    <g:brand>Seasonedz Group</g:brand>",
+    "    <g:condition>new</g:condition>",
+    product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
+    `    <g:item_group_id>${escapeXml(product.sku)}</g:item_group_id>`,
+    // Same "reuse the genuine, stable SKU as mpn" convention
+    // buildIdentifierFields() already uses for a simple product —
+    // ProductVariant has no gtin field, so this is always the mpn path.
+    `    <g:mpn>${escapeXml(variant.sku)}</g:mpn>`,
+  ]
+    .filter(Boolean)
+    .join("\n") + "\n  </item>";
+}
+
 export function buildMerchantFeedXml(products) {
   const items = products
-    .map((product) => {
-      const availability = product.stockStatus === "Out of Stock" ? "out of stock" : "in stock";
-      const link = `${SITE_URL}/product/${product.slug}/`;
-      const priceValue = Number(product.price).toFixed(2);
-
-      return [
-        "  <item>",
-        `    <g:id>${escapeXml(product.sku)}</g:id>`,
-        `    <title>${escapeXml(product.name)}</title>`,
-        `    <description>${escapeXml(product.shortDescription || product.name)}</description>`,
-        `    <link>${escapeXml(link)}</link>`,
-        `    <g:image_link>${escapeXml(product.image)}</g:image_link>`,
-        `    <g:availability>${availability}</g:availability>`,
-        `    <g:price>${priceValue} ZAR</g:price>`,
-        "    <g:brand>Seasonedz Group</g:brand>",
-        "    <g:condition>new</g:condition>",
-        product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
-        ...buildIdentifierFields(product),
-      ]
-        .filter(Boolean)
-        .join("\n") + "\n  </item>";
+    .flatMap((product) => {
+      if (product.hasVariants) {
+        const activeVariants = Array.isArray(product.variants) ? product.variants : [];
+        return activeVariants.map((variant) => buildVariantItemXml(product, variant));
+      }
+      return [buildItemXml(product)];
     })
     .join("\n");
 

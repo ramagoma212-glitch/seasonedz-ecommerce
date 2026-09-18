@@ -79,6 +79,10 @@ export interface OrderEmailItem {
   isPreorder?: boolean;
   preorderReleaseAt?: Date | null;
   preorderDiscountAmount?: number | null;
+  // Milestone 188: "20 Colours" — appended after productName whenever
+  // this line was a variant purchase (undefined/null for a simple
+  // product line, including every historical order).
+  variantLabel?: string | null;
 }
 
 export interface OrderEmailData {

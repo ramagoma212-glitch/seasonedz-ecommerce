@@ -54,6 +54,12 @@ import {
 } from "../controllers/adminDigitalAsset.controller.js";
 import { approveReviewHandler, listAdminReviewsHandler, rejectReviewHandler } from "../controllers/adminProductReview.controller.js";
 import { getNotificationHandler, listNotificationsHandler } from "../controllers/adminNotification.controller.js";
+import {
+  createVariantHandler,
+  generateVariationsHandler,
+  removeVariantHandler,
+  updateVariantHandler,
+} from "../controllers/adminProductVariant.controller.js";
 
 const router = Router();
 
@@ -108,6 +114,14 @@ router.delete("/products/:id/images/:imageId", deleteAdminProductImageHandler);
 router.get("/products/:id/digital-asset", getAdminDigitalAssetHandler);
 router.post("/products/:id/digital-asset", uploadDigitalAssetMiddleware, uploadAdminDigitalAssetHandler);
 router.delete("/products/:id/digital-asset", deleteAdminDigitalAssetHandler);
+// Milestone 188: variant sub-routes. Same "one more path segment, no
+// ordering conflict with /products/:id" reasoning as /images above.
+// generateVariations is POST (it can create rows) but idempotent to
+// re-call — it only ever adds missing option-value combinations.
+router.post("/products/:id/variants/generate", generateVariationsHandler);
+router.post("/products/:id/variants", createVariantHandler);
+router.patch("/products/:id/variants/:variantId", updateVariantHandler);
+router.delete("/products/:id/variants/:variantId", removeVariantHandler);
 // Version 7, Milestone 171C: review moderation only (approve/reject an
 // existing PENDING review) — no route anywhere lets an admin create a
 // review. See adminProductReview.service.ts's own header comment.

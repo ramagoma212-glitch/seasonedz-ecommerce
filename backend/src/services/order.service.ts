@@ -57,6 +57,13 @@ interface VerifiedItem {
   isActivePreorder: boolean;
   isPreorderDiscountEligible: boolean;
   preorderReleaseAt: Date | null;
+  // Milestone 188: null for a simple (non-variable) product line —
+  // every field below is null/undefined too in that case. See
+  // OrderItem's own schema comment for why sku doubles as the variant
+  // SKU snapshot rather than a second column.
+  variantId: string | null;
+  variantLabel: string | null;
+  variantOptionsSnapshot: Prisma.InputJsonValue | typeof Prisma.JsonNull;
 }
 
 // Version 7, Milestone 159: a distinct order LINE is a product plus its
@@ -65,19 +72,49 @@ interface VerifiedItem {
 // and store separately, mirroring the frontend cart's own line-identity
 // rule (src/js/cart.js's lineId). Only exact duplicates (same product,
 // same wrap state, same message) merge, same as the old plain-slug
-// behaviour did for everything before this milestone.
-function groupItemsByLine(items: ValidatedOrderInput["items"]): Map<string, { productSlug: string; quantity: number; giftWrap: boolean; giftMessage: string | null }> {
-  const groups = new Map<string, { productSlug: string; quantity: number; giftWrap: boolean; giftMessage: string | null }>();
+// behaviour did for everything before this milestone. Milestone 188:
+// variantId is now part of that identity too — two different variants
+// of the same product (or a variant vs. the base product) must never
+// merge into one line, matching cart.js's own extended lineId.
+interface LineGroup {
+  productSlug: string;
+  variantId: string | null;
+  quantity: number;
+  giftWrap: boolean;
+  giftMessage: string | null;
+}
+
+function groupItemsByLine(items: ValidatedOrderInput["items"]): Map<string, LineGroup> {
+  const groups = new Map<string, LineGroup>();
   for (const item of items) {
-    const key = `${item.productSlug}::${item.giftWrap ? `wrap::${item.giftMessage ?? ""}` : "plain"}`;
+    const key = `${item.productSlug}::${item.variantId ?? "base"}::${item.giftWrap ? `wrap::${item.giftMessage ?? ""}` : "plain"}`;
     const existing = groups.get(key);
     if (existing) {
       existing.quantity += item.quantity;
     } else {
-      groups.set(key, { productSlug: item.productSlug, quantity: item.quantity, giftWrap: item.giftWrap, giftMessage: item.giftMessage });
+      groups.set(key, {
+        productSlug: item.productSlug,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        giftWrap: item.giftWrap,
+        giftMessage: item.giftMessage,
+      });
     }
   }
   return groups;
+}
+
+// Milestone 188: "Pack Size: 20 Colours" — joins every option group in
+// the variant's own optionValues (already validated, at save time by
+// adminProductVariant.service.ts, to only ever contain the product's
+// defined groups/values). Order matters for readability, so this walks
+// the product's variantOptions (its defined group order) rather than
+// Object.keys(optionValues), which has no guaranteed order.
+function buildVariantLabel(optionValues: Record<string, string>, groupOrder: { name: string }[]): string {
+  return groupOrder
+    .filter((group) => group.name in optionValues)
+    .map((group) => `${group.name}: ${optionValues[group.name]}`)
+    .join(", ");
 }
 
 // Looks up and re-prices every requested item from the database —
@@ -85,24 +122,38 @@ function groupItemsByLine(items: ValidatedOrderInput["items"]): Map<string, { pr
 // whether gift wrapping is even allowed for it: isGiftWrapped is only
 // ever true here when the request asked for it AND the real product's
 // own productType is PHYSICAL, regardless of what the request claims.
-// Duplicate (productSlug + gift-wrap-configuration) entries are merged
-// (summed quantity) before the stock check; the STOCK check itself
-// still totals every configuration of the same product together (they
-// draw from the same physical inventory), even though they end up as
-// separate order lines below.
+// Duplicate (productSlug + variant + gift-wrap-configuration) entries
+// are merged (summed quantity) before the stock check; the STOCK check
+// itself still totals every gift-wrap configuration of the same
+// product+variant together (they draw from the same inventory pool),
+// even though they end up as separate order lines below.
+//
+// Milestone 188: a variable product (hasVariants=true) can only ever be
+// bought AS a specific variant — never as the bare product — and a
+// variant's price/stock/sku come from ITS OWN ProductVariant row, never
+// the parent Product's, which for a variable product no longer
+// represents anything purchasable on its own. A requested variantId is
+// re-verified to actually belong to the resolved product (rejecting a
+// variant id copy-pasted from a different product's page) and to
+// currently be active (rejecting a variant the admin has since
+// deactivated) — exactly the same "never trust the client, re-derive
+// from the database" discipline this function already applies to price.
 async function verifyItems(items: ValidatedOrderInput["items"]): Promise<VerifiedItem[]> {
-  const totalQuantityBySlug = new Map<string, number>();
+  const totalQuantityByStockKey = new Map<string, number>();
   for (const item of items) {
-    totalQuantityBySlug.set(item.productSlug, (totalQuantityBySlug.get(item.productSlug) ?? 0) + item.quantity);
+    const stockKey = `${item.productSlug}::${item.variantId ?? "base"}`;
+    totalQuantityByStockKey.set(stockKey, (totalQuantityByStockKey.get(stockKey) ?? 0) + item.quantity);
   }
 
   const lineGroups = groupItemsByLine(items);
   const productCache = new Map<string, Product & { digitalAsset: { id: string; isActive: boolean } | null }>();
+  const variantCache = new Map<string, { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean }>();
   const verified: VerifiedItem[] = [];
 
   for (const [, group] of lineGroups) {
-    const totalQuantityForSlug = totalQuantityBySlug.get(group.productSlug) ?? group.quantity;
-    if (totalQuantityForSlug > 99) {
+    const stockKey = `${group.productSlug}::${group.variantId ?? "base"}`;
+    const totalQuantityForStockKey = totalQuantityByStockKey.get(stockKey) ?? group.quantity;
+    if (totalQuantityForStockKey > 99) {
       throw new OrderError(`Total quantity for "${group.productSlug}" cannot exceed 99.`);
     }
 
@@ -123,6 +174,32 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       throw new OrderError(`Product is not currently available: ${product.name}`);
     }
 
+    if (product.hasVariants && !group.variantId) {
+      throw new OrderError(`Please select options for: ${product.name}`);
+    }
+    if (!product.hasVariants && group.variantId) {
+      throw new OrderError(`Product does not have variations: ${product.name}`);
+    }
+
+    let variant: { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean } | null = null;
+    if (group.variantId) {
+      variant = variantCache.get(group.variantId) ?? null;
+      if (!variant) {
+        const found = await prisma.productVariant.findUnique({ where: { id: group.variantId } });
+        if (!found) {
+          throw new OrderError(`Product option not found for: ${product.name}`);
+        }
+        variant = found;
+        variantCache.set(group.variantId, variant);
+      }
+      if (variant.productId !== product.id) {
+        throw new OrderError(`Product option does not belong to: ${product.name}`);
+      }
+      if (!variant.isActive) {
+        throw new OrderError(`The selected option is no longer available: ${product.name}`);
+      }
+    }
+
     // Version 7, Milestone 152: a DIGITAL product has no physical
     // inventory — stock checks/decrements are meaningless for it and
     // are skipped entirely, same as they've never applied to anything
@@ -139,6 +216,10 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
     // item rather than once per whole call so a very slow request that
     // straddles a preorder boundary is judged consistently line by
     // line; in practice this always resolves within the same instant.
+    // Milestone 188, Part T: a variant inherits its parent's preorder
+    // configuration entirely unchanged — isActivePreorder/eligibility is
+    // always derived from `product`, never from anything on the variant
+    // itself (ProductVariant has no preorder fields of its own).
     const preorderNow = new Date();
     const activePreorder = isActivePreorder(product, product.status, preorderNow);
     const preorderDiscountEligible = isActivePreorderDiscountEligible(product, product.status, preorderNow);
@@ -151,17 +232,18 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
     // happens to be out of stock without preorder explicitly enabled —
     // isActivePreorder() already requires isPreorderEnabled=true plus a
     // currently-open configured window, never inferred from stock alone.
+    const availableStock = variant ? variant.stockQuantity : product.stockQuantity;
     if (product.productType === ProductType.DIGITAL) {
       if (!product.digitalAsset || !product.digitalAsset.isActive || !product.downloadEnabled) {
         throw new OrderError(`This digital product is not currently available for download: ${product.name}`);
       }
     } else if (!activePreorder) {
-      if (product.stockQuantity <= 0) {
+      if (availableStock <= 0) {
         throw new OrderError(`Product is out of stock: ${product.name}`);
       }
 
-      if (totalQuantityForSlug > product.stockQuantity) {
-        throw new OrderError(`Only ${product.stockQuantity} of "${product.name}" left in stock (requested ${totalQuantityForSlug}).`);
+      if (totalQuantityForStockKey > availableStock) {
+        throw new OrderError(`Only ${availableStock} of "${product.name}" left in stock (requested ${totalQuantityForStockKey}).`);
       }
     }
 
@@ -175,13 +257,22 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
     const giftMessage = isGiftWrapped ? group.giftMessage : null;
     const giftWrapFeePerUnit = isGiftWrapped ? new Prisma.Decimal(GIFT_WRAP_FEE_PER_ITEM) : null;
 
-    const unitPrice = product.price;
+    // Milestone 188, Part K/AB: a variant's own price/sku always win
+    // over the parent product's when a variant is selected — the
+    // parent's price/sku are meaningless for a variable product once it
+    // has variants. sku falls back to the parent's only when the
+    // variant itself has none set, so the order still carries a SKU on
+    // file either way.
+    const unitPrice = variant ? variant.price : product.price;
+    const sku = variant ? (variant.sku ?? product.sku) : product.sku;
+    const variantGroups = (product.variantOptions as unknown as { name: string; values: string[] }[] | null) ?? [];
+    const variantOptionValues = variant ? ((variant.optionValues as unknown as Record<string, string>) ?? {}) : null;
 
     verified.push({
       productId: product.id,
       productName: product.name,
       productSlug: product.slug,
-      sku: product.sku,
+      sku,
       quantity: group.quantity,
       unitPrice,
       lineTotal: unitPrice.times(group.quantity),
@@ -194,6 +285,9 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       isActivePreorder: activePreorder,
       isPreorderDiscountEligible: preorderDiscountEligible,
       preorderReleaseAt: activePreorder ? product.preorderReleaseAt : null,
+      variantId: variant ? variant.id : null,
+      variantLabel: variantOptionValues ? buildVariantLabel(variantOptionValues, variantGroups) : null,
+      variantOptionsSnapshot: variantOptionValues ? (variantOptionValues as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
     });
   }
 
@@ -232,6 +326,14 @@ export interface OrderItemOutput {
   preorderReleaseAt: Date | null;
   preorderDiscountRate: number | null;
   preorderDiscountAmount: number | null;
+  // Milestone 188, Part AB/AC: the immutable variant snapshot — null
+  // for every line that was never a variant purchase (a simple product,
+  // or any order placed before variations existed). Every caller that
+  // renders order items (confirmation, account history, admin orders,
+  // emails) shows variantLabel next to productName whenever it's set.
+  variantId: string | null;
+  variantLabel: string | null;
+  variantOptionsSnapshot: Record<string, string> | null;
 }
 
 export interface OrderOutput {
@@ -358,6 +460,9 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       preorderReleaseAt: item.preorderReleaseAtSnapshot,
       preorderDiscountRate: item.preorderDiscountRateApplied ? item.preorderDiscountRateApplied.toNumber() : null,
       preorderDiscountAmount: item.preorderDiscountAmountApplied ? item.preorderDiscountAmountApplied.toNumber() : null,
+      variantId: item.variantId,
+      variantLabel: item.variantLabel,
+      variantOptionsSnapshot: (item.variantOptionsSnapshot as unknown as Record<string, string> | null) ?? null,
     })),
     subtotal: order.subtotal.toNumber(),
     giftWrapTotal: order.giftWrapTotal.toNumber(),
@@ -759,6 +864,22 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
       // again to future orders.
       if (item.isActivePreorder) continue;
 
+      // Milestone 188: a variant line decrements ITS OWN
+      // ProductVariant.stockQuantity, never the parent Product's — same
+      // atomic "only matches/decrements if still enough stock at write
+      // time" guard as the simple-product path below, just against the
+      // variant's own pool.
+      if (item.variantId) {
+        const variantResult = await tx.productVariant.updateMany({
+          where: { id: item.variantId, stockQuantity: { gte: item.quantity } },
+          data: { stockQuantity: { decrement: item.quantity } },
+        });
+        if (variantResult.count === 0) {
+          throw new OrderError(`Not enough stock for "${item.productName}${item.variantLabel ? ` (${item.variantLabel})` : ""}". Please review your order and try again.`);
+        }
+        continue;
+      }
+
       const result = await tx.product.updateMany({
         where: { id: item.productId, stockQuantity: { gte: item.quantity } },
         data: { stockQuantity: { decrement: item.quantity } },
@@ -815,6 +936,9 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
             preorderReleaseAtSnapshot: item.preorderReleaseAt,
             preorderDiscountRateApplied: preorderDiscount?.perLineDiscountAmount.has(index) ? preorderDiscount.discountPercent : null,
             preorderDiscountAmountApplied: preorderDiscount?.perLineDiscountAmount.get(index) ?? null,
+            variantId: item.variantId,
+            variantLabel: item.variantLabel,
+            variantOptionsSnapshot: item.variantOptionsSnapshot,
           })),
         },
         payment: {

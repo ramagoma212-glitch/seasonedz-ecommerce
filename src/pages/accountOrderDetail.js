@@ -50,6 +50,7 @@ function renderItemRow(item) {
       ${item.imageUrl ? `<img src="${escapeHtml(item.imageUrl)}" alt="" class="account-order-item__image" width="56" height="56" loading="lazy" />` : ""}
       <div class="account-order-item__details">
         <p class="account-order-item__name">${escapeHtml(item.productName)}</p>
+        ${item.variantLabel ? `<p class="account-order-item__meta">${escapeHtml(item.variantLabel)}</p>` : ""}
         <p class="account-order-item__meta">Qty ${item.quantity} &times; ${formatRand(item.unitPrice)}</p>
         ${
           item.isPreorder

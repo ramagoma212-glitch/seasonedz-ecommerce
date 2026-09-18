@@ -80,14 +80,18 @@ export function renderStars(rating) {
 // on the frontend.
 export function isOutOfStockForCart(product) {
   if (product.isPreorder) return false;
+  // Milestone 188: a variable product's own stockStatus is meaningless
+  // (see product.service.ts) — "out of stock" for card purposes means
+  // every one of its active variants is, not the parent Product row.
+  if (product.hasVariants) return !(product.variants || []).some((variant) => variant.stockQuantity > 0);
   return (product.productType || "PHYSICAL") !== "DIGITAL" && product.stockStatus === "Out of Stock";
 }
 
 export function renderProductCard(product, { eager = false, showViewLink = false, displayTitle = null, hiddenExtra = false } = {}) {
-  const stockClass = STOCK_STATUS_CLASS[product.stockStatus] || "in";
+  const outOfStock = isOutOfStockForCart(product);
+  const stockClass = product.hasVariants ? (outOfStock ? "out" : "in") : STOCK_STATUS_CLASS[product.stockStatus] || "in";
   const wishlisted = isInWishlist(product.id);
   const title = displayTitle || product.name;
-  const outOfStock = isOutOfStockForCart(product);
 
   return `
     <article class="card product-card"${hiddenExtra ? ' hidden data-extra-card="true"' : ""}>
@@ -140,22 +144,34 @@ export function renderProductCard(product, { eager = false, showViewLink = false
         <p class="product-card__desc">${product.shortDescription}</p>
 
         <div class="product-card__price-row">
+          ${
+            product.hasVariants
+              ? product.variantPriceRange
+                ? `<span class="product-card__price">From R${product.variantPriceRange.min.toFixed(2)}</span>`
+                : `<span class="product-card__price">R${product.price.toFixed(2)}</span>`
+              : `
           <span class="product-card__price">R${product.price.toFixed(2)}</span>
           ${product.oldPrice ? `<span class="product-card__old-price">R${product.oldPrice.toFixed(2)}</span>` : ""}
+          `
+          }
         </div>
 
         ${
           product.isPreorder
             ? `<p class="product-card__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
-            : `<p class="product-card__stock product-card__stock--${stockClass}">${product.stockStatus}</p>`
+            : `<p class="product-card__stock product-card__stock--${stockClass}">${product.hasVariants ? (outOfStock ? "Out of Stock" : "In Stock") : product.stockStatus}</p>`
         }
 
         <div class="product-card__actions">
           ${showViewLink ? `<a class="btn btn--secondary btn--sm" href="/product/${product.slug}">View Product</a>` : ""}
           ${
-            outOfStock
-              ? `<button type="button" class="btn btn--primary btn--sm" disabled aria-disabled="true">Out of Stock</button>`
-              : `
+            product.hasVariants
+              ? outOfStock
+                ? `<button type="button" class="btn btn--primary btn--sm" disabled aria-disabled="true">Out of Stock</button>`
+                : `<a class="btn btn--primary btn--sm" href="/product/${product.slug}">Choose Options</a>`
+              : outOfStock
+                ? `<button type="button" class="btn btn--primary btn--sm" disabled aria-disabled="true">Out of Stock</button>`
+                : `
           <button
             type="button"
             class="btn btn--primary btn--sm"

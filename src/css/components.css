@@ -1327,6 +1327,13 @@ body.has-cookie-preferences-open {
   color: var(--color-text-muted);
 }
 
+/* Milestone 188: "Pack Size: 20 Colours" under the product name. */
+.cart-item__variant {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-xs);
+}
+
 /* Version 7, Milestone 152: secure digital downloads. */
 .cart-item__digital-badge {
   display: inline-block;

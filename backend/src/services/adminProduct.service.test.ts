@@ -48,6 +48,13 @@ function productRow(overrides: Record<string, unknown> = {}) {
     productType: "PHYSICAL",
     digitalTermsNote: null,
     downloadEnabled: true,
+    // Milestone 188: matches the real Prisma row shape now that
+    // adminProductDetailInclude also includes `variants` — never
+    // undefined in a genuine response, only in an under-specified test
+    // fixture.
+    hasVariants: false,
+    variantOptions: null,
+    variants: [],
     ...overrides,
   };
 }

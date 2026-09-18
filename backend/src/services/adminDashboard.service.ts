@@ -145,7 +145,15 @@ export interface AdminLowStockProduct {
 // "Low Stock" label.
 export async function getLowStockProducts(): Promise<AdminLowStockProduct[]> {
   const products = await prisma.product.findMany({
-    where: { status: { in: LOW_STOCK_VISIBLE_STATUSES } },
+    // Milestone 188: a variable product's own stockQuantity is never
+    // touched (its real stock lives on each ProductVariant instead —
+    // see product.service.ts's own comment) and always reads 0, which
+    // would otherwise make every variable product permanently appear
+    // "low stock" here regardless of its actual variant stock levels.
+    // Excluded entirely rather than reporting a false alarm; per-variant
+    // low-stock alerting is a reasonable future enhancement, not part
+    // of this milestone.
+    where: { status: { in: LOW_STOCK_VISIBLE_STATUSES }, hasVariants: false },
     select: { name: true, sku: true, slug: true, stockQuantity: true, lowStockThreshold: true, status: true },
     orderBy: { stockQuantity: "asc" },
   });

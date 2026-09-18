@@ -40,6 +40,13 @@ export interface ValidatedOrderItem {
   // of what was sent, same as it already does for productSlug/quantity.
   giftWrap: boolean;
   giftMessage: string | null;
+  // Milestone 188: which ProductVariant (if any) this line is for —
+  // shape-only here (a non-empty string or absent/null). order.service.ts's
+  // verifyItems() is the only place that ever looks this id up, checks
+  // it actually belongs to productSlug's product, checks it's active,
+  // and uses ITS price/stock/sku instead of the parent product's — this
+  // validator never trusts or derives anything from it beyond its shape.
+  variantId: string | null;
 }
 
 export interface ValidatedOrderInput {
@@ -254,7 +261,23 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
         }
       }
 
-      if (hasValidSlug && isValidQuantity && giftMessageValid) {
+      // Milestone 188: absent/null means "this line is the simple
+      // product itself" — the same meaning a simple (non-variable)
+      // product's line has always had, so every pre-existing call site
+      // that never sends variantId keeps working unchanged. Anything
+      // present but not a non-empty string is a shape error.
+      let variantId: string | null = null;
+      let variantIdValid = true;
+      if (item.variantId !== undefined && item.variantId !== null) {
+        if (typeof item.variantId !== "string" || item.variantId.trim().length === 0) {
+          errors.push({ field: `items[${index}].variantId`, message: "Variant id must be a non-empty string." });
+          variantIdValid = false;
+        } else {
+          variantId = item.variantId.trim();
+        }
+      }
+
+      if (hasValidSlug && isValidQuantity && giftMessageValid && variantIdValid) {
         validatedItems.push({
           productSlug: item.productSlug as string,
           quantity: quantity as number,
@@ -263,6 +286,7 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
           // the brief's own "no gift wrapping unless chosen and paid
           // for" rule at the data layer too, not just pricing.
           giftMessage: giftWrap ? giftMessage : null,
+          variantId,
         });
       }
     });

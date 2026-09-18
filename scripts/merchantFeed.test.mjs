@@ -192,6 +192,65 @@ test("escapeXml handles every reserved XML character correctly", () => {
   assert.equal(escapeXml(`& < > " '`), "&amp; &lt; &gt; &quot; &apos;");
 });
 
+// Milestone 188, Part AP: a variable product emits ONE item per active
+// variant (never one item for the bare product), each with its own
+// g:id/link/price/availability and a shared g:item_group_id — see this
+// file's own header comment above buildVariantItemXml() for why the
+// link uses a ?variant= query parameter rather than a separate page.
+function variableProduct(overrides = {}) {
+  return {
+    ...baseProduct(overrides),
+    hasVariants: true,
+    variants: [
+      { id: "var-1", sku: "SG-0001-10", price: 100, stockQuantity: 5, optionValues: { "Pack Size": "10 Colours" }, imageUrl: null },
+      { id: "var-2", sku: "SG-0001-20", price: 150, stockQuantity: 0, optionValues: { "Pack Size": "20 Colours" }, imageUrl: null },
+    ],
+    ...overrides,
+  };
+}
+
+test("a variable product emits one item per active variant, never one item for the bare product", () => {
+  const xml = buildMerchantFeedXml([variableProduct()]);
+  const items = xml.split("<item>").slice(1);
+  assert.equal(items.length, 2);
+});
+
+test("each variant item carries its own g:id/price/availability and a shared g:item_group_id equal to the parent product's SKU", () => {
+  const xml = buildMerchantFeedXml([variableProduct()]);
+  assert.match(xml, /<g:id>SG-0001-10<\/g:id>/);
+  assert.match(xml, /<g:id>SG-0001-20<\/g:id>/);
+  assert.match(xml, /<g:price>100\.00 ZAR<\/g:price>/);
+  assert.match(xml, /<g:price>150\.00 ZAR<\/g:price>/);
+  assert.match(xml, /<g:availability>in stock<\/g:availability>/);
+  assert.match(xml, /<g:availability>out of stock<\/g:availability>/);
+  const groupIds = [...xml.matchAll(/<g:item_group_id>(.*?)<\/g:item_group_id>/g)].map((m) => m[1]);
+  assert.deepEqual(groupIds, ["SG-TEST-1", "SG-TEST-1"]);
+});
+
+test("each variant's landing page link is the SAME canonical product URL with a distinct ?variant= query parameter — never a separate per-variant page", () => {
+  const xml = buildMerchantFeedXml([variableProduct({ slug: "rotating-crayons" })]);
+  assert.match(xml, /<link>https:\/\/www\.seasonedzgroup\.co\.za\/product\/rotating-crayons\/\?variant=var-1<\/link>/);
+  assert.match(xml, /<link>https:\/\/www\.seasonedzgroup\.co\.za\/product\/rotating-crayons\/\?variant=var-2<\/link>/);
+});
+
+test("a variable product with zero active variants yet emits no items at all, rather than a broken or empty listing", () => {
+  const xml = buildMerchantFeedXml([variableProduct({ variants: [] })]);
+  assert.equal(xml.includes("<item>"), false);
+});
+
+test("validateFeedIdentifiers fails when any active variant of a variable product has no SKU of its own", () => {
+  const products = [variableProduct({ variants: [{ id: "var-1", sku: null, price: 100, stockQuantity: 1, optionValues: {} }] })];
+  assert.equal(validateFeedIdentifiers(products), false);
+});
+
+test("validateFeedIdentifiers fails when a variant SKU collides with another product's or variant's SKU elsewhere in the feed", () => {
+  const products = [
+    variableProduct({ slug: "product-a", sku: "SG-A" }),
+    baseProduct({ slug: "product-b", sku: "SG-0001-10" }),
+  ];
+  assert.equal(validateFeedIdentifiers(products), false);
+});
+
 // Version 7, Milestone 172B: the Merchant Center feed must remain
 // direct Seasonedz inventory only — an AffiliateProduct (172B's new,
 // fully separate Prisma model) must never be able to appear in it.

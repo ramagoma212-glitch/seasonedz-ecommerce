@@ -169,6 +169,12 @@ function toGa4Item(source, { idKey = "slug", nameKey = "name", priceKey = "price
     quantity: Number(source.quantity) || 1,
   };
   if (source.category) item.item_category = source.category;
+  // Milestone 188: GA4's own recognized field for "which variant of
+  // this product" — set whenever the source object carries a
+  // variantLabel (a cart line, an order line, or a product-page Add to
+  // Cart payload once a variant is selected). Absent for every simple-
+  // product source, exactly as before this milestone.
+  if (source.variantLabel) item.item_variant = source.variantLabel;
   return item;
 }
 

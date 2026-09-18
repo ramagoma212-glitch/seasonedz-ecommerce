@@ -408,6 +408,9 @@ export async function renderCheckoutPage() {
           isPreorder: product.isPreorder,
           preorderReleaseAt: product.preorderReleaseAt,
           isPreorderDiscountEligible: product.isPreorderDiscountEligible,
+          // Milestone 188: needed by getUnavailableCartItems() to judge
+          // a variant line's own stock, never the parent product's.
+          variants: product.variants,
         },
       ])
     );

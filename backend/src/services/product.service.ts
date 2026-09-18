@@ -20,6 +20,14 @@ const productInclude = {
   digitalAsset: {
     select: { displayName: true, mimeType: true, fileSizeBytes: true, pageCount: true, version: true, isActive: true },
   },
+  // Milestone 188: active variants only — a deactivated variant (Part P)
+  // must never appear as a choosable option on the public storefront,
+  // unlike the admin's own include (adminProduct.service.ts), which
+  // deliberately shows every variant regardless of isActive.
+  variants: {
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+  },
 } satisfies Prisma.ProductInclude;
 
 export type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
@@ -212,6 +220,31 @@ export interface ProductOutput {
   isPreorder: boolean;
   isPreorderDiscountEligible: boolean;
   preorderReleaseAt: Date | null;
+  // Milestone 188: hasVariants=false (and variantOptions/variants
+  // empty) for every product this milestone didn't touch — a simple
+  // product's output shape is completely unchanged. When true, `price`/
+  // `stockQuantity`/`stockStatus`/`image` above still reflect the
+  // parent Product row exactly as before (never removed, so nothing
+  // that reads this response without knowing about variants yet
+  // breaks), but the storefront should prefer `variantPriceRange` and
+  // `variants` once it selects a specific option combination.
+  hasVariants: boolean;
+  variantOptions: { name: string; values: string[] }[] | null;
+  variants: PublicProductVariant[];
+  // "From R99" card summary — the lowest and highest active variant
+  // price, null whenever hasVariants is false or there are no active
+  // variants yet (a variable product with its option groups defined
+  // but Generate Variations not yet run).
+  variantPriceRange: { min: number; max: number } | null;
+}
+
+export interface PublicProductVariant {
+  id: string;
+  optionValues: Record<string, string>;
+  sku: string | null;
+  price: number;
+  stockQuantity: number;
+  imageUrl: string | null;
 }
 
 // "PDF"/"ZIP" for the two allowed upload types (adminDigitalAsset.
@@ -250,6 +283,26 @@ function sanitizePublicDescription(description: string | null): string | null {
 export function toProductOutput(product: ProductWithRelations): ProductOutput {
   const preorderNow = new Date();
   const isPreorder = isActivePreorder(product, product.status, preorderNow);
+
+  const publicVariants: PublicProductVariant[] = product.hasVariants
+    ? product.variants.map((variant) => ({
+        id: variant.id,
+        optionValues: (variant.optionValues as unknown as Record<string, string>) ?? {},
+        sku: variant.sku,
+        price: variant.price.toNumber(),
+        stockQuantity: variant.stockQuantity,
+        imageUrl: variant.imageUrl,
+      }))
+    : [];
+
+  const variantPriceRange =
+    publicVariants.length > 0
+      ? publicVariants.reduce(
+          (range, variant) => ({ min: Math.min(range.min, variant.price), max: Math.max(range.max, variant.price) }),
+          { min: publicVariants[0]!.price, max: publicVariants[0]!.price }
+        )
+      : null;
+
   return {
     id: product.id,
     name: product.name,
@@ -294,5 +347,9 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
     isPreorder,
     isPreorderDiscountEligible: isActivePreorderDiscountEligible(product, product.status, preorderNow),
     preorderReleaseAt: isPreorder ? product.preorderReleaseAt : null,
+    hasVariants: product.hasVariants,
+    variantOptions: (product.variantOptions as unknown as { name: string; values: string[] }[] | null) ?? null,
+    variants: publicVariants,
+    variantPriceRange,
   };
 }

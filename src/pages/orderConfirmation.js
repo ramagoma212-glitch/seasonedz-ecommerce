@@ -168,6 +168,7 @@ function renderBackendOrderConfirmation(order) {
     quantity: item.quantity,
     isPreorder: item.isPreorder,
     preorderReleaseAt: item.preorderReleaseAt,
+    variantLabel: item.variantLabel,
   }));
 
   return `
