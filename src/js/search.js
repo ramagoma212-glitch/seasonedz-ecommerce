@@ -55,6 +55,16 @@ export function searchProducts(products, term) {
   if (!needle) return products;
 
   return products.filter((product) => {
+    // Milestone 188A, Part AB: searching a variant's own option value
+    // (e.g. "Tshivenda") surfaces the parent book product — never a
+    // separate card per language (Part AC), and never special-cased to
+    // "Language" specifically (Part B): every active variant's whole
+    // optionValues combination is searchable generically, the same way
+    // "Pack Size" values like "20 Colours" already would be too.
+    const variantValues = product.hasVariants
+      ? (product.variants || []).flatMap((variant) => Object.values(variant.optionValues || {}))
+      : [];
+
     const haystack = [
       product.name,
       product.category,
@@ -63,6 +73,7 @@ export function searchProducts(products, term) {
       ...(product.features || []),
       ...(product.tags || []),
       product.ageRange,
+      ...variantValues,
     ]
       .join(" ")
       .toLowerCase();

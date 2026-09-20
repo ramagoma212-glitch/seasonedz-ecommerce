@@ -64,6 +64,12 @@ interface VerifiedItem {
   variantId: string | null;
   variantLabel: string | null;
   variantOptionsSnapshot: Prisma.InputJsonValue | typeof Prisma.JsonNull;
+  // Milestone 188A, Part P: immutable ISBN/GTIN snapshot — null unless
+  // this line's variant genuinely had one set at the moment of
+  // purchase. Never re-derived from the live variant later (see
+  // OrderItem's own schema comment).
+  variantIsbnSnapshot: string | null;
+  variantGtinSnapshot: string | null;
 }
 
 // Version 7, Milestone 159: a distinct order LINE is a product plus its
@@ -147,7 +153,7 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
 
   const lineGroups = groupItemsByLine(items);
   const productCache = new Map<string, Product & { digitalAsset: { id: string; isActive: boolean } | null }>();
-  const variantCache = new Map<string, { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean }>();
+  const variantCache = new Map<string, { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean; isbn: string | null; gtin: string | null }>();
   const verified: VerifiedItem[] = [];
 
   for (const [, group] of lineGroups) {
@@ -181,7 +187,7 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       throw new OrderError(`Product does not have variations: ${product.name}`);
     }
 
-    let variant: { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean } | null = null;
+    let variant: { id: string; productId: string; optionValues: Prisma.JsonValue; sku: string | null; price: Prisma.Decimal; stockQuantity: number; isActive: boolean; isbn: string | null; gtin: string | null } | null = null;
     if (group.variantId) {
       variant = variantCache.get(group.variantId) ?? null;
       if (!variant) {
@@ -288,6 +294,8 @@ async function verifyItems(items: ValidatedOrderInput["items"]): Promise<Verifie
       variantId: variant ? variant.id : null,
       variantLabel: variantOptionValues ? buildVariantLabel(variantOptionValues, variantGroups) : null,
       variantOptionsSnapshot: variantOptionValues ? (variantOptionValues as unknown as Prisma.InputJsonValue) : Prisma.JsonNull,
+      variantIsbnSnapshot: variant?.isbn ?? null,
+      variantGtinSnapshot: variant?.gtin ?? null,
     });
   }
 
@@ -334,6 +342,12 @@ export interface OrderItemOutput {
   variantId: string | null;
   variantLabel: string | null;
   variantOptionsSnapshot: Record<string, string> | null;
+  // Milestone 188A, Part Q: shown on the admin order detail page so
+  // fulfilment staff can confirm/pack the correct language edition —
+  // deliberately never shown on any customer-facing surface (Part S:
+  // "ISBN may be omitted from customer email unless currently useful").
+  variantIsbnSnapshot: string | null;
+  variantGtinSnapshot: string | null;
 }
 
 export interface OrderOutput {
@@ -463,6 +477,8 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
       variantId: item.variantId,
       variantLabel: item.variantLabel,
       variantOptionsSnapshot: (item.variantOptionsSnapshot as unknown as Record<string, string> | null) ?? null,
+      variantIsbnSnapshot: item.variantIsbnSnapshot,
+      variantGtinSnapshot: item.variantGtinSnapshot,
     })),
     subtotal: order.subtotal.toNumber(),
     giftWrapTotal: order.giftWrapTotal.toNumber(),
@@ -939,6 +955,8 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
             variantId: item.variantId,
             variantLabel: item.variantLabel,
             variantOptionsSnapshot: item.variantOptionsSnapshot,
+            variantIsbnSnapshot: item.variantIsbnSnapshot,
+            variantGtinSnapshot: item.variantGtinSnapshot,
           })),
         },
         payment: {

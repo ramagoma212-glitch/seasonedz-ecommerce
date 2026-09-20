@@ -13,6 +13,21 @@ function isPrismaUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
+// Milestone 188A: isbn/gtin are single-table unique columns (unlike
+// sku's cross-table problem, which is pre-checked in the service layer
+// instead) — Prisma's own P2002 is the real, race-safe authority for
+// them, and its `meta.target` names exactly which column collided, so
+// this can give the admin a specific message rather than a generic one.
+function friendlyUniqueConstraintMessage(error: unknown): string {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const target = error.meta?.target;
+    const columns = Array.isArray(target) ? target : typeof target === "string" ? [target] : [];
+    if (columns.includes("isbn")) return "This ISBN is already in use by another variant.";
+    if (columns.includes("gtin")) return "This barcode/GTIN is already in use by another variant.";
+  }
+  return "A variant with this SKU already exists.";
+}
+
 function requireProductId(req: Request, res: Response): string | null {
   const { id } = req.params;
   if (!id) {
@@ -54,7 +69,7 @@ export async function createVariantHandler(req: Request, res: Response, next: Ne
       return;
     }
     if (isPrismaUniqueConstraintError(error)) {
-      sendError(res, { message: "A variant with this SKU already exists.", statusCode: 409 });
+      sendError(res, { message: friendlyUniqueConstraintMessage(error), statusCode: 409 });
       return;
     }
     next(error);
@@ -79,7 +94,7 @@ export async function updateVariantHandler(req: Request, res: Response, next: Ne
       return;
     }
     if (isPrismaUniqueConstraintError(error)) {
-      sendError(res, { message: "A variant with this SKU already exists.", statusCode: 409 });
+      sendError(res, { message: friendlyUniqueConstraintMessage(error), statusCode: 409 });
       return;
     }
     next(error);

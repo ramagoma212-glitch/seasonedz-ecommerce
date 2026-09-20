@@ -463,6 +463,13 @@
   color: var(--color-error);
 }
 
+/* Milestone 188A: a book language edition's own ISBN. */
+.product-details__isbn {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-sm);
+}
+
 /* Milestone 188: product variation selector. */
 .product-details__variant-selector {
   margin-bottom: var(--space-md);

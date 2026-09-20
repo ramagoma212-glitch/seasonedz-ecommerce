@@ -537,6 +537,13 @@ export interface AdminProductVariantRow {
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
+  // Milestone 188A: optional book-language-edition metadata — null for
+  // every non-book variant (e.g. "Pack Size"). See ProductVariant's own
+  // schema comment for why languageCode has a real column while the
+  // language label itself doesn't (it's already optionValues["Language"]).
+  languageCode: string | null;
+  isbn: string | null;
+  gtin: string | null;
 }
 
 export interface AdminProductDetail {
@@ -642,6 +649,9 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
       sortOrder: variant.sortOrder,
       createdAt: variant.createdAt,
       updatedAt: variant.updatedAt,
+      languageCode: variant.languageCode,
+      isbn: variant.isbn,
+      gtin: variant.gtin,
     })),
   };
 }

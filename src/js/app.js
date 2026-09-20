@@ -26,6 +26,7 @@ import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, ge
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "./variantSelector.js";
 import { renderOptionGroupRow } from "../pages/adminProductForm.js";
+import { SOUTH_AFRICAN_LANGUAGES } from "./southAfricanLanguages.js";
 import { initMetricoolTracking } from "./metricool.js";
 import { renderChatWidget } from "../components/chatWidget.js";
 import {
@@ -804,6 +805,20 @@ function handleSelectVariantOption(buttonEl) {
     const label = selectedVariant ? (selectedVariant.stockQuantity > 0 ? "In Stock" : "Out of Stock") : "Select options to see availability";
     stockLabelEl.textContent = label;
     stockLabelEl.classList.toggle("product-details__stock--out", label === "Out of Stock");
+  }
+
+  // Milestone 188A, Part L: only this specific selected variant's own
+  // ISBN — hidden entirely whenever the selected variant (or no
+  // variant at all) has none.
+  const isbnEl = root.querySelector("[data-variant-isbn-display]");
+  if (isbnEl) {
+    if (selectedVariant?.isbn) {
+      isbnEl.textContent = `ISBN: ${selectedVariant.isbn}`;
+      isbnEl.hidden = false;
+    } else {
+      isbnEl.textContent = "";
+      isbnEl.hidden = true;
+    }
   }
 
   const quantitySelector = root.querySelector(".quantity-selector");
@@ -3379,7 +3394,32 @@ function setupAdminProductForm() {
     const removeButton = event.target.closest('[data-action="remove-variant-option-group"]');
     if (removeButton) {
       removeButton.closest("[data-variant-option-group-row]")?.remove();
+      return;
     }
+
+    // Milestone 188A, Part C: fills the Values field with the 11 South
+    // African written languages (never South African Sign Language —
+    // the brief's own explicit exclusion). A plain overwrite, not a
+    // merge, so re-clicking after editing simply re-fills the preset;
+    // the owner can still freely remove any language before saving.
+    const presetButton = event.target.closest('[data-action="add-south-african-languages"]');
+    if (presetButton) {
+      const row = presetButton.closest("[data-variant-option-group-row]");
+      const valuesInput = row?.querySelector("[data-variant-option-values]");
+      if (valuesInput) valuesInput.value = SOUTH_AFRICAN_LANGUAGES.join(", ");
+    }
+  });
+
+  // Milestone 188A, Part C: "Add South African Languages" only ever
+  // shows next to an option group actually named "Language" (case-
+  // insensitive) — same live-toggle pattern as Product Type/Preorder
+  // Enabled above, just keyed off free text instead of a select/
+  // checkbox.
+  document.addEventListener("input", (event) => {
+    if (!event.target.matches("[data-variant-option-name]")) return;
+    const row = event.target.closest("[data-variant-option-group-row]");
+    const presetButton = row?.querySelector('[data-action="add-south-african-languages"]');
+    if (presetButton) presetButton.hidden = event.target.value.trim().toLowerCase() !== "language";
   });
 }
 
@@ -6134,6 +6174,8 @@ function readVariantRowValues(row) {
   const stockQuantity = row.querySelector('[data-variant-field="stockQuantity"]')?.value;
   const weight = row.querySelector('[data-variant-field="weight"]')?.value;
   const imageUrl = row.querySelector('[data-variant-field="imageUrl"]')?.value.trim() || "";
+  const isbn = row.querySelector('[data-variant-field="isbn"]')?.value.trim() || "";
+  const gtin = row.querySelector('[data-variant-field="gtin"]')?.value.trim() || "";
   const isActive = row.querySelector('[data-variant-field="isActive"]')?.checked || false;
 
   return {
@@ -6142,6 +6184,8 @@ function readVariantRowValues(row) {
     stockQuantity: stockQuantity === "" ? NaN : Number(stockQuantity),
     weight: weight === "" ? null : Number(weight),
     imageUrl: imageUrl || null,
+    isbn: isbn || null,
+    gtin: gtin || null,
     isActive,
   };
 }

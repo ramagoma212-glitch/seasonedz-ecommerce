@@ -23,9 +23,55 @@ import {
   type AdminProductDetail,
   type VariantOptionGroup,
 } from "./adminProduct.service.js";
+import { validateAndNormalizeIsbn, validateAndNormalizeGtin, ProductIdentifierError } from "../utils/productIdentifiers.js";
+import { lookupSouthAfricanLanguageCode } from "../utils/southAfricanLanguages.js";
 
 const MAX_SHORT_TEXT_LENGTH = 200;
 const MAX_IMAGE_URL_LENGTH = 2000;
+
+// Milestone 188A: languageCode is never an admin-typed input — it's
+// auto-derived, once, at variant CREATION time (createVariant() or
+// generateVariations() below) from the "Language" entry of that
+// variant's own optionValues, the same way this file already treats
+// optionValues as fixed-at-creation. A custom/unrecognised language
+// value (or a variant with no "Language" option group at all — e.g. a
+// "Pack Size" variant) simply gets languageCode: null — this never
+// blocks or forces anything (Part B: language metadata is optional).
+function deriveLanguageCode(optionValues: Record<string, string>): string | null {
+  const languageValue = optionValues["Language"];
+  return typeof languageValue === "string" ? lookupSouthAfricanLanguageCode(languageValue) : null;
+}
+
+// Milestone 188A, Part F/G: optional isbn/gtin — validated + normalised
+// to digits-only via utils/productIdentifiers.ts (never trusted or
+// stored as raw, possibly-hyphenated input). Uniqueness itself is
+// enforced by the database's own unique index on each column (unlike
+// sku's cross-table problem, isbn/gtin are single-table constraints —
+// no manual pre-check needed; the P2002 the database throws on a
+// genuine collision is caught and turned into a clean message by the
+// controller, same idiom as every other unique-field conflict in this
+// codebase).
+function parseOptionalIsbn(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") throw new AdminProductError("isbn must be a string.");
+  try {
+    return validateAndNormalizeIsbn(raw);
+  } catch (error) {
+    if (error instanceof ProductIdentifierError) throw new AdminProductError(error.message);
+    throw error;
+  }
+}
+
+function parseOptionalGtin(raw: unknown): string | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string") throw new AdminProductError("gtin must be a string.");
+  try {
+    return validateAndNormalizeGtin(raw);
+  } catch (error) {
+    if (error instanceof ProductIdentifierError) throw new AdminProductError(error.message);
+    throw error;
+  }
+}
 
 // Milestone 188, Part B: canonicalises one variant's optionValues into
 // a stable string key, independent of key order — used both to detect
@@ -81,7 +127,18 @@ async function assertSkuAvailable(sku: string, excludeVariantId?: string): Promi
 async function loadVariableProduct(productId: string) {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { id: true, sku: true, price: true, hasVariants: true, variantOptions: true },
+    select: {
+      id: true,
+      sku: true,
+      price: true,
+      hasVariants: true,
+      variantOptions: true,
+      // Milestone 188A, Part I: only ever read for the "prefill the
+      // English variant from the existing product" convenience in
+      // generateVariations() below — never written back to Product.
+      stockQuantity: true,
+      images: { where: { isPrimary: true }, take: 1, select: { url: true } },
+    },
   });
   if (!product) {
     throw new AdminProductError(`Product not found: ${productId}`, 404);
@@ -110,7 +167,8 @@ export interface GenerateVariationsInput {
 }
 
 export async function generateVariations(productId: string, rawInput: unknown): Promise<{ created: number; product: AdminProductDetail }> {
-  const { groups } = await loadVariableProduct(productId);
+  const sourceProduct = await loadVariableProduct(productId);
+  const { groups } = sourceProduct;
 
   const input = (typeof rawInput === "object" && rawInput !== null ? rawInput : {}) as GenerateVariationsInput;
   const defaultPrice = optionalPositiveNumber(input.defaultPrice, "defaultPrice");
@@ -142,20 +200,46 @@ export async function generateVariations(productId: string, rawInput: unknown): 
 
   const missing = combinations.filter((combo) => !existingKeys.has(optionValuesKey(combo)));
 
+  // Milestone 188A, Part I: the very first time variants are ever
+  // generated for this product (no existing rows at all — meaning it
+  // was, until now, a simple product), the ONE combination whose
+  // Language is exactly "English" is prefilled from the product's own
+  // current price/stock/sku/cover image, rather than the generic
+  // defaultPrice/defaultStockQuantity every other combination gets.
+  // Only applied when there is EXACTLY one such combination — a
+  // product with a second option group (e.g. Language + Format) would
+  // otherwise generate several "English" combinations that could never
+  // all share the same globally-unique sku, so the safer, correct
+  // choice there is to fall back to the generic defaults for every
+  // combination and let the admin fill in each row's real values
+  // afterward. Never applies to a re-run after variants already exist
+  // (adding a new language later must never silently touch old data),
+  // and never invents an ISBN/weight — Product has never had either
+  // field, so there is genuinely nothing to prefill there (see this
+  // milestone's own audit).
+  const isFirstGeneration = existingVariants.length === 0;
+  const englishCombos = isFirstGeneration ? missing.filter((combo) => combo["Language"] === "English") : [];
+  const soleEnglishCombo = englishCombos.length === 1 ? englishCombos[0] : null;
+  const parentImageUrl = sourceProduct.images[0]?.url ?? null;
+
   if (missing.length > 0) {
     await prisma.$transaction(
-      missing.map((combo) =>
-        prisma.productVariant.create({
+      missing.map((combo) => {
+        const isEnglishFirstEdition = combo === soleEnglishCombo;
+        return prisma.productVariant.create({
           data: {
             productId,
             optionValues: combo as unknown as Prisma.InputJsonValue,
-            price: defaultPrice ?? 0,
-            stockQuantity: defaultStockQuantity,
+            price: isEnglishFirstEdition ? sourceProduct.price : new Prisma.Decimal(defaultPrice ?? 0),
+            stockQuantity: isEnglishFirstEdition ? sourceProduct.stockQuantity : defaultStockQuantity,
+            sku: isEnglishFirstEdition ? sourceProduct.sku : null,
+            imageUrl: isEnglishFirstEdition ? parentImageUrl : null,
+            languageCode: deriveLanguageCode(combo),
             isActive: true,
             sortOrder: nextSortOrder++,
           },
-        })
-      )
+        });
+      })
     );
   }
 
@@ -180,6 +264,8 @@ export interface CreateVariantInput {
   weight?: unknown;
   imageUrl?: unknown;
   isActive?: unknown;
+  isbn?: unknown;
+  gtin?: unknown;
 }
 
 export async function createVariant(productId: string, rawInput: unknown): Promise<AdminProductDetail> {
@@ -205,6 +291,8 @@ export async function createVariant(productId: string, rawInput: unknown): Promi
   if (sku) {
     await assertSkuAvailable(sku);
   }
+  const isbn = parseOptionalIsbn(input.isbn);
+  const gtin = parseOptionalGtin(input.gtin);
 
   const existingVariants = await prisma.productVariant.findMany({ where: { productId }, select: { optionValues: true, sortOrder: true } });
   const key = optionValuesKey(optionValues);
@@ -225,6 +313,9 @@ export async function createVariant(productId: string, rawInput: unknown): Promi
       imageUrl,
       isActive,
       sortOrder,
+      isbn,
+      gtin,
+      languageCode: deriveLanguageCode(optionValues),
     },
   });
 
@@ -242,7 +333,7 @@ export async function createVariant(productId: string, rawInput: unknown): Promi
 // product's variantOptions and re-run Generate Variations instead.
 // ---------------------------------------------------------------------------
 
-const ALLOWED_VARIANT_UPDATE_FIELDS = ["price", "stockQuantity", "sku", "weight", "imageUrl", "isActive", "sortOrder"] as const;
+const ALLOWED_VARIANT_UPDATE_FIELDS = ["price", "stockQuantity", "sku", "weight", "imageUrl", "isActive", "sortOrder", "isbn", "gtin"] as const;
 
 export async function updateVariant(productId: string, variantId: string, rawInput: unknown): Promise<AdminProductDetail> {
   const variant = await prisma.productVariant.findUnique({ where: { id: variantId }, select: { id: true, productId: true } });
@@ -278,6 +369,8 @@ export async function updateVariant(productId: string, variantId: string, rawInp
     }
     data.sku = sku;
   }
+  if ("isbn" in input) data.isbn = parseOptionalIsbn(input.isbn);
+  if ("gtin" in input) data.gtin = parseOptionalGtin(input.gtin);
 
   if (Object.keys(data).length === 0) {
     throw new AdminProductError("No editable fields were provided.");

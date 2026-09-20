@@ -386,6 +386,27 @@ model ProductVariant {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
+  // Milestone 188A: optional book-language-edition metadata. Nullable
+  // and meaningless for a non-language variant (e.g. "Pack Size") —
+  // the generic Milestone 188 variation engine stays entirely unaware
+  // of these fields; only the admin/storefront book-display code ever
+  // reads them. languageLabel itself is NOT a separate column — it's
+  // already the "Language" entry inside optionValues above (the same
+  // generic mechanism every other option group already uses), so only
+  // languageCode (not derivable from optionValues alone, since a label
+  // like "Tshivenda" doesn't imply its ISO code) gets its own column.
+  // isbn/gtin are validated + normalised to digits-only (hyphens
+  // stripped) server-side before ever being stored — see
+  // utils/productIdentifiers.ts. Both are globally unique (a real
+  // ISBN/GTIN is a genuine global identifier), which a nullable unique
+  // index allows any number of NULL variants to satisfy at once. gtin
+  // is deliberately a separate field from isbn — Part G: "Do not
+  // assume every barcode equals ISBN" — even though for a book they
+  // commonly are the same value.
+  languageCode String?
+  isbn         String? @unique
+  gtin         String? @unique
+
   orderItems OrderItem[]
 
   createdAt DateTime @default(now())
@@ -827,6 +848,21 @@ model OrderItem {
   variant                ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   variantLabel           String?
   variantOptionsSnapshot Json?
+
+  // Milestone 188A, Part AG: the language LABEL a customer bought is
+  // already immutably captured above — it's just the "Language" entry
+  // inside variantOptionsSnapshot, the same generic mechanism every
+  // other option group already uses (no separate column needed for
+  // it). isbn/gtin are NOT part of optionValues at all (they're their
+  // own columns on ProductVariant, not one of the combination's
+  // choices), so they need their own snapshot here — nullable, same
+  // "never depend on a live, changeable value" philosophy as every
+  // other snapshot field on this model: if the owner later corrects a
+  // typo'd ISBN on the live variant, a historical order must still
+  // show the number that was actually on record at the moment of
+  // purchase, for fulfilment/reference purposes.
+  variantIsbnSnapshot String?
+  variantGtinSnapshot String?
 
   createdAt DateTime @default(now())
 

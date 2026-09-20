@@ -1619,3 +1619,60 @@ test("a variant with no SKU of its own falls back to the parent product's SKU, n
   variantUpdateMany.restore();
   orderCreate.restore();
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 188A: book language edition ISBN/GTIN order snapshots.
+// ---------------------------------------------------------------------------
+
+test("a variant with an isbn/gtin snapshots both immutably onto the order line", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({
+    ...VARIABLE_PRODUCT_BASE,
+    variantOptions: [{ name: "Language", values: ["English", "Tshivenda"] }],
+  }));
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({
+    ...VARIANT_ROW,
+    optionValues: { Language: "Tshivenda" },
+    isbn: "9780306406157",
+    gtin: "9780306406157",
+  }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const variantUpdateMany = stub(prisma.productVariant, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const itemsCreate = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, total: data.total, items: itemsCreate.map((item) => fakeOrderItemRow(item)) });
+  });
+
+  const order = await createOrder(baseInput({ items: [variantItem()] }));
+
+  assert.equal(order.items[0]!.variantIsbnSnapshot, "9780306406157");
+  assert.equal(order.items[0]!.variantGtinSnapshot, "9780306406157");
+  assert.equal(order.items[0]!.variantLabel, "Language: Tshivenda");
+
+  findUnique.restore();
+  variantFindUnique.restore();
+  transactionStub.restore();
+  variantUpdateMany.restore();
+  orderCreate.restore();
+});
+
+test("a variant with no isbn/gtin snapshots null for both, never a fabricated value", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => VARIABLE_PRODUCT_BASE);
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ ...VARIANT_ROW, isbn: null, gtin: null }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const variantUpdateMany = stub(prisma.productVariant, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const itemsCreate = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, total: data.total, items: itemsCreate.map((item) => fakeOrderItemRow(item)) });
+  });
+
+  const order = await createOrder(baseInput({ items: [variantItem()] }));
+
+  assert.equal(order.items[0]!.variantIsbnSnapshot, null);
+  assert.equal(order.items[0]!.variantGtinSnapshot, null);
+
+  findUnique.restore();
+  variantFindUnique.restore();
+  transactionStub.restore();
+  variantUpdateMany.restore();
+  orderCreate.restore();
+});

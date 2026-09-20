@@ -71,6 +71,11 @@ export function mapApiProductToFrontendShape(apiProduct) {
       price: variant.price,
       stockQuantity: variant.stockQuantity,
       imageUrl: variant.imageUrl ? withBase(variant.imageUrl) : "",
+      // Milestone 188A: optional book-language-edition metadata — null
+      // for every non-book variant.
+      languageCode: variant.languageCode || null,
+      isbn: variant.isbn || null,
+      gtin: variant.gtin || null,
     })),
     variantPriceRange: apiProduct.variantPriceRange || null,
   };

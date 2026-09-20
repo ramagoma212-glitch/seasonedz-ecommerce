@@ -245,6 +245,13 @@ export interface PublicProductVariant {
   price: number;
   stockQuantity: number;
   imageUrl: string | null;
+  // Milestone 188A: optional book-language-edition metadata — null for
+  // every non-book variant. Safe to expose publicly (never internal
+  // pricing data like costPrice) — a book's ISBN is ordinary public
+  // product information, same as its SKU already was.
+  languageCode: string | null;
+  isbn: string | null;
+  gtin: string | null;
 }
 
 // "PDF"/"ZIP" for the two allowed upload types (adminDigitalAsset.
@@ -292,6 +299,9 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
         price: variant.price.toNumber(),
         stockQuantity: variant.stockQuantity,
         imageUrl: variant.imageUrl,
+        languageCode: variant.languageCode,
+        isbn: variant.isbn,
+        gtin: variant.gtin,
       }))
     : [];
 

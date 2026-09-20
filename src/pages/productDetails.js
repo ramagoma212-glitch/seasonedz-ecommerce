@@ -140,7 +140,18 @@ function buildOffers(product) {
   };
 }
 
-function buildProductStructuredData(product) {
+// Milestone 188A, Part Y: audited against schema.org before implementing
+// — `isbn` is a real, documented property directly on schema.org's own
+// Product type (schema.org/isbn), so it's safe to add here. `inLanguage`
+// is NOT valid on Product (its domainIncludes lists CreativeWork/Book/
+// Event/etc., never Product, and Product extends Thing directly, not
+// CreativeWork) — deliberately never added, so as not to invent an
+// unsupported field. Only ever set when a SPECIFIC variant is actually
+// resolved (deep link, or the product's only variant) and that variant
+// genuinely has its own ISBN — never the base product's own sku/mpn
+// mistaken for an ISBN, and never a guess at which language edition a
+// crawler "should" see.
+function buildProductStructuredData(product, selectedVariant) {
   return {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -155,8 +166,10 @@ function buildProductStructuredData(product) {
     // seller/manufacturer of these products, so its own SKU is used as
     // both sku and mpn, same reasoning as the Merchant Center feed
     // (scripts/generate-static-routes.mjs) — not a fabricated
-    // identifier, and no gtin/isbn is ever added since none exists.
+    // identifier, and no gtin/isbn is ever added since none exists at
+    // the base-product level.
     ...(product.sku ? { sku: product.sku, mpn: product.sku } : {}),
+    ...(selectedVariant?.isbn ? { isbn: selectedVariant.isbn } : {}),
     offers: buildOffers(product),
     // Version 7, Milestone 171C: only ever added once at least one
     // genuine, admin-approved review exists for this product — omitted
@@ -447,7 +460,7 @@ function renderVariantSelector(product, selection) {
         .map(
           (group) => `
         <div class="product-details__variant-group" data-variant-group="${escapeHtml(group.name)}">
-          <p class="product-details__variant-group-label">${escapeHtml(group.name)}</p>
+          <p class="product-details__variant-group-label">${escapeHtml(group.name.trim().toLowerCase() === "language" ? "Choose Language" : group.name)}</p>
           <div class="product-details__variant-values" role="group" aria-label="${escapeHtml(group.name)}">
             ${group.values
               .map((value) => {
@@ -509,7 +522,7 @@ export async function renderProductDetails({ slug, query } = {}) {
 
   setPageMeta({ title: product.name, description: product.shortDescription });
   const breadcrumbTrail = buildBreadcrumbTrail(product);
-  setPageStructuredData([buildProductStructuredData(product), buildBreadcrumbStructuredData(breadcrumbTrail)]);
+  setPageStructuredData([buildProductStructuredData(product, selectedVariant), buildBreadcrumbStructuredData(breadcrumbTrail)]);
   // Milestone 188: view_item reports the initially-resolved variant's
   // own price/label when one is already selected (deep link or
   // auto-selected single variant) — the base product's own price is
@@ -597,6 +610,14 @@ export async function renderProductDetails({ slug, query } = {}) {
             product.isPreorder
               ? `<p class="product-details__preorder-note">${preorderAvailabilityText(product.preorderReleaseAt)}</p>`
               : `<p class="product-details__stock ${stockClass}" data-variant-stock-label>${stockLabel}</p>`
+          }
+          ${
+            /* Milestone 188A, Part L: only ever this SPECIFIC variant's
+               own ISBN — never falls back to a different edition's, and
+               never shown at all when the selected variant has none.
+               Kept live-updated on selection change by app.js's own
+               handleSelectVariantOption(). */
+            selectedVariant?.isbn ? `<p class="product-details__isbn" data-variant-isbn-display>ISBN: ${escapeHtml(selectedVariant.isbn)}</p>` : `<p class="product-details__isbn" data-variant-isbn-display hidden></p>`
           }
           ${renderPreorderDiscountOffer(product, preorderDiscountPercent, preorderMinimumEligibleSubtotal)}
           <p class="product-details__short-desc">${product.shortDescription}</p>

@@ -433,6 +433,15 @@ function buildOffers(product, canonicalUrl) {
   };
 }
 
+// Milestone 188A, Part Y: deliberately never adds `isbn` here (unlike
+// productDetails.js's own client-side buildProductStructuredData(),
+// which adds it for the SPECIFIC variant a ?variant= deep link
+// resolves to) — a static build has no "currently selected variant"
+// concept at all, and picking one language edition's ISBN to bake into
+// every visitor's first paint (regardless of which URL they actually
+// land on) would misrepresent the product. `inLanguage` is never added
+// either, on either version — audited against schema.org and confirmed
+// invalid on Product (see productDetails.js's own comment).
 export function buildProductJsonLd(product, canonicalUrl) {
   return {
     "@context": "https://schema.org",
@@ -676,6 +685,30 @@ function buildItemXml(product) {
 // Never emitted for a variable product with zero active variants yet
 // (nothing purchasable to list) — falls through to no items for that
 // product, not a broken/empty listing.
+// Milestone 188A, Part AA: verified against Google's own Merchant
+// Center documentation before implementing — there is no separate
+// "isbn" feed attribute; a book's ISBN-13 is submitted via the
+// standard `gtin` attribute (support.google.com/merchants/answer/6324461:
+// "Use the ISBN-13 of a book as the value for the GTIN attribute"), and
+// when a product genuinely has two distinct GTIN-type identifiers,
+// Google's own documented pattern is to submit `gtin` twice, once per
+// value ("For a product that has a UPC and an ISBN-13, submit the
+// GTIN attribute twice"). variant.gtin (a real physical barcode) and
+// variant.isbn are deliberately separate fields (Part G: "do not
+// assume every barcode equals ISBN") — when both exist and differ,
+// both are submitted; when they're the same value, only one is
+// emitted (never a pointless exact duplicate tag).
+function buildVariantIdentifierFields(variant) {
+  const gtinValues = [variant.gtin, variant.isbn].filter((value, index, all) => value && all.indexOf(value) === index);
+  if (gtinValues.length > 0) {
+    return gtinValues.map((value) => `    <g:gtin>${escapeXml(value)}</g:gtin>`);
+  }
+  // Same "reuse the genuine, stable SKU as mpn" convention
+  // buildIdentifierFields() already uses for a simple product with no
+  // gtin of its own.
+  return [`    <g:mpn>${escapeXml(variant.sku)}</g:mpn>`];
+}
+
 function buildVariantItemXml(product, variant) {
   const availability = variant.stockQuantity > 0 ? "in stock" : "out of stock";
   const link = `${SITE_URL}/product/${product.slug}/?variant=${encodeURIComponent(variant.id)}`;
@@ -696,10 +729,7 @@ function buildVariantItemXml(product, variant) {
     "    <g:condition>new</g:condition>",
     product.category?.name ? `    <g:product_type>${escapeXml(product.category.name)}</g:product_type>` : "",
     `    <g:item_group_id>${escapeXml(product.sku)}</g:item_group_id>`,
-    // Same "reuse the genuine, stable SKU as mpn" convention
-    // buildIdentifierFields() already uses for a simple product —
-    // ProductVariant has no gtin field, so this is always the mpn path.
-    `    <g:mpn>${escapeXml(variant.sku)}</g:mpn>`,
+    ...buildVariantIdentifierFields(variant),
   ]
     .filter(Boolean)
     .join("\n") + "\n  </item>";

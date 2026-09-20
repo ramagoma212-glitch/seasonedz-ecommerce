@@ -265,3 +265,61 @@ test("generate-static-routes.mjs (the Merchant feed generator) has no code path 
   const source = readFileSync(fileURLToPath(new URL("./generate-static-routes.mjs", import.meta.url)), "utf8");
   assert.doesNotMatch(source.toLowerCase(), /affiliate/, "the Merchant feed generator must never reference anything affiliate-related");
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 188A: book language edition variants — ISBN/GTIN handling.
+// Verified against Google's own Merchant Center documentation: there is
+// no separate "isbn" feed attribute — a book's ISBN-13 goes in the
+// standard `gtin` attribute (support.google.com/merchants/answer/6324461).
+// ---------------------------------------------------------------------------
+
+function languageVariableProduct(overrides = {}) {
+  return {
+    ...baseProduct(overrides),
+    hasVariants: true,
+    variants: [
+      { id: "var-en", sku: "NT-EN", price: 120, stockQuantity: 20, optionValues: { Language: "English" }, imageUrl: null, isbn: null, gtin: null },
+    ],
+    ...overrides,
+  };
+}
+
+test("a variant with only an ISBN emits it as g:gtin — there is no separate g:isbn tag, per Google's own documentation", () => {
+  const product = languageVariableProduct();
+  product.variants[0].isbn = "9780306406157";
+  const xml = buildMerchantFeedXml([product]);
+  assert.match(xml, /<g:gtin>9780306406157<\/g:gtin>/);
+  assert.doesNotMatch(xml, /<g:isbn>/);
+  assert.doesNotMatch(xml, /<g:mpn>/);
+});
+
+test("a variant with only a distinct barcode/gtin (no isbn) emits that as g:gtin", () => {
+  const product = languageVariableProduct();
+  product.variants[0].gtin = "4006381333931";
+  const xml = buildMerchantFeedXml([product]);
+  assert.match(xml, /<g:gtin>4006381333931<\/g:gtin>/);
+});
+
+test("a variant with BOTH a distinct barcode and an isbn submits g:gtin twice, once per value — Google's own documented pattern for two identifiers", () => {
+  const product = languageVariableProduct();
+  product.variants[0].isbn = "9780306406157";
+  product.variants[0].gtin = "4006381333931";
+  const xml = buildMerchantFeedXml([product]);
+  const gtinMatches = [...xml.matchAll(/<g:gtin>(.*?)<\/g:gtin>/g)].map((m) => m[1]);
+  assert.deepEqual(gtinMatches.sort(), ["4006381333931", "9780306406157"].sort());
+});
+
+test("a variant whose gtin and isbn happen to be identical emits only ONE g:gtin tag, never a pointless duplicate", () => {
+  const product = languageVariableProduct();
+  product.variants[0].isbn = "9780306406157";
+  product.variants[0].gtin = "9780306406157";
+  const xml = buildMerchantFeedXml([product]);
+  const gtinMatches = [...xml.matchAll(/<g:gtin>(.*?)<\/g:gtin>/g)].map((m) => m[1]);
+  assert.deepEqual(gtinMatches, ["9780306406157"]);
+});
+
+test("a variant with neither gtin nor isbn falls back to g:mpn via its own sku, same as a non-book variant", () => {
+  const xml = buildMerchantFeedXml([languageVariableProduct()]);
+  assert.match(xml, /<g:mpn>NT-EN<\/g:mpn>/);
+  assert.doesNotMatch(xml, /<g:gtin>/);
+});

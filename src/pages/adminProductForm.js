@@ -102,6 +102,19 @@ function renderNotFound(id) {
 // below, rendered separately, edit-page only.
 // ---------------------------------------------------------------------------
 
+// Milestone 188A, Part C: "Add South African Languages" only ever
+// appears next to an option group actually named "Language" (case-
+// insensitive) — toggled live as the admin types via app.js's own
+// input listener on [data-variant-option-name], same pattern as every
+// other conditional-field toggle in this form (Product Type/Preorder
+// Enabled). Clicking it only ever fills the Values field with the 11
+// preset labels — the owner can still freely remove any before saving
+// (Part C: never forces all 11 to be published), and re-clicking after
+// editing simply re-fills it again (a plain overwrite, not a merge).
+function isLanguageGroupName(name) {
+  return (name || "").trim().toLowerCase() === "language";
+}
+
 export function renderOptionGroupRow(group = { name: "", values: [] }, index) {
   const valuesText = Array.isArray(group.values) ? group.values.join(", ") : "";
   return `
@@ -114,6 +127,12 @@ export function renderOptionGroupRow(group = { name: "", values: [] }, index) {
         <label class="form-field__label">Values <span class="form-field__optional">(comma-separated, e.g. "10 Colours, 20 Colours, 30 Colours")</span></label>
         <input type="text" class="form-field__input" value="${escapeHtml(valuesText)}" data-variant-option-values />
       </div>
+      <button
+        type="button"
+        class="btn btn--secondary btn--sm"
+        data-action="add-south-african-languages"
+        ${isLanguageGroupName(group.name) ? "" : "hidden"}
+      >Add South African Languages</button>
       <button type="button" class="btn btn--danger btn--sm" data-action="remove-variant-option-group" aria-label="Remove option group ${index + 1}">Remove</button>
     </div>
   `;
@@ -161,15 +180,22 @@ function renderVariantRow(variant, groups) {
     .filter((group) => group.name in (variant.optionValues || {}))
     .map((group) => variant.optionValues[group.name])
     .join(" / ");
+  // Milestone 188A, Part E: "Admin may display: Tshivenda (ve)" — the
+  // code is purely informational here (auto-derived at creation time,
+  // never a separate admin-typed field — see adminProductVariant.
+  // service.ts's own comment on why).
+  const labelWithCode = variant.languageCode ? `${label} (${escapeHtml(variant.languageCode)})` : escapeHtml(label);
 
   return `
     <tr data-admin-variant-row data-variant-id="${escapeHtml(variant.id)}">
-      <td>${escapeHtml(label)}</td>
+      <td>${labelWithCode}</td>
       <td><input type="text" class="form-field__input" maxlength="200" value="${escapeHtml(variant.sku || "")}" data-variant-field="sku" /></td>
       <td><input type="number" class="form-field__input" min="0.01" step="0.01" value="${variant.price}" data-variant-field="price" /></td>
       <td><input type="number" class="form-field__input" min="0" step="1" value="${variant.stockQuantity}" data-variant-field="stockQuantity" /></td>
       <td><input type="number" class="form-field__input" min="0" step="0.001" value="${variant.weight ?? ""}" data-variant-field="weight" /></td>
       <td><input type="text" class="form-field__input" maxlength="2000" value="${escapeHtml(variant.imageUrl || "")}" data-variant-field="imageUrl" placeholder="Image URL (optional)" /></td>
+      <td><input type="text" class="form-field__input" maxlength="20" value="${escapeHtml(variant.isbn || "")}" data-variant-field="isbn" placeholder="978-0-..." /></td>
+      <td><input type="text" class="form-field__input" maxlength="20" value="${escapeHtml(variant.gtin || "")}" data-variant-field="gtin" placeholder="Barcode (optional)" /></td>
       <td><label class="admin-variant-active-toggle"><input type="checkbox" ${variant.isActive ? "checked" : ""} data-variant-field="isActive" /> Active</label></td>
       <td>
         <button type="button" class="btn btn--secondary btn--sm" data-action="save-variant-row">Save</button>
@@ -197,17 +223,21 @@ function renderProductVariantsSection(product) {
       <div class="admin-table-wrap">
         <table class="admin-table" data-admin-variants-table>
           <thead>
-            <tr><th>Combination</th><th>SKU</th><th>Price (R)</th><th>Stock</th><th>Weight (kg)</th><th>Image URL</th><th>Active</th><th>Actions</th></tr>
+            <tr><th>Combination</th><th>SKU</th><th>Price (R)</th><th>Stock</th><th>Weight (kg)</th><th>Image URL</th><th>ISBN</th><th>Barcode/GTIN</th><th>Active</th><th>Actions</th></tr>
           </thead>
           <tbody data-admin-variants-tbody>
             ${
               variants.length > 0
                 ? variants.map((variant) => renderVariantRow(variant, groups)).join("")
-                : `<tr><td colspan="8">No variants yet. Use Generate Variations above.</td></tr>`
+                : `<tr><td colspan="10">No variants yet. Use Generate Variations above.</td></tr>`
             }
           </tbody>
         </table>
       </div>
+      <p class="admin-product-form__hint">
+        ISBN must be a genuine 13-digit ISBN (hyphens are fine) — never invented or auto-assigned. Barcode/GTIN is optional
+        and separate from ISBN (a book's own barcode is commonly the same as its ISBN, but not always).
+      </p>
 
       <div class="form-banner form-banner--error" data-admin-variants-banner hidden></div>
     </section>

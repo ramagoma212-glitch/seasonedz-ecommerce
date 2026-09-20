@@ -60,7 +60,15 @@ function fullProductRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const PARTIAL_ROW = { id: "product-1", sku: "RC-1", price: new Prisma.Decimal("100.00"), hasVariants: true, variantOptions: [{ name: "Pack Size", values: ["10 Colours", "20 Colours"] }] };
+const PARTIAL_ROW = {
+  id: "product-1",
+  sku: "RC-1",
+  price: new Prisma.Decimal("100.00"),
+  hasVariants: true,
+  variantOptions: [{ name: "Pack Size", values: ["10 Colours", "20 Colours"] }],
+  stockQuantity: 0,
+  images: [] as { url: string }[],
+};
 
 // Routes prisma.product.findUnique to the right stubbed shape depending
 // on which of loadVariableProduct()'s `select`, assertSkuAvailable()'s
@@ -291,5 +299,184 @@ test("removeVariant: NEVER hard-deletes a variant already referenced by an order
   orderItemFindFirst.restore();
   deleteFn.restore();
   updateFn.restore();
+  findUnique.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Milestone 188A: book language edition support.
+// ---------------------------------------------------------------------------
+
+const LANGUAGE_PARTIAL_ROW = {
+  ...PARTIAL_ROW,
+  variantOptions: [{ name: "Language", values: ["English", "Tshivenda", "Sepedi"] }],
+};
+
+test("generateVariations: auto-derives languageCode from a known South African language label", async () => {
+  const findUnique = stubProductFindUnique({ partial: LANGUAGE_PARTIAL_ROW });
+  const findMany = stub(prisma.productVariant, "findMany", async () => []);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => ops);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await generateVariations("product-1", {});
+
+  const createdRows = create.fn.mock.calls.map((call) => call.arguments[0].data);
+  const tshivenda = createdRows.find((row: Record<string, unknown>) => (row.optionValues as Record<string, string>)["Language"] === "Tshivenda");
+  const sepedi = createdRows.find((row: Record<string, unknown>) => (row.optionValues as Record<string, string>)["Language"] === "Sepedi");
+  assert.equal(tshivenda.languageCode, "ve");
+  // Sepedi has no ISO 639-1 code — "nso" is its ISO 639-2 code.
+  assert.equal(sepedi.languageCode, "nso");
+
+  findUnique.restore();
+  findMany.restore();
+  transactionStub.restore();
+  create.restore();
+});
+
+test("generateVariations: a custom/unrecognised language value gets languageCode: null, never a guessed code", async () => {
+  const customLanguagePartial = { ...PARTIAL_ROW, variantOptions: [{ name: "Language", values: ["Klingon"] }] };
+  const findUnique = stubProductFindUnique({ partial: customLanguagePartial });
+  const findMany = stub(prisma.productVariant, "findMany", async () => []);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => ops);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await generateVariations("product-1", {});
+
+  const createdRow = create.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(createdRow.languageCode, null);
+
+  findUnique.restore();
+  findMany.restore();
+  transactionStub.restore();
+  create.restore();
+});
+
+test("generateVariations: on the very first generation, the sole 'English' combination is prefilled from the product's own price/stock/sku/cover image", async () => {
+  const partialWithParentData = {
+    ...LANGUAGE_PARTIAL_ROW,
+    sku: "NT-BOOK-1",
+    price: new Prisma.Decimal("199.99"),
+    stockQuantity: 42,
+    images: [{ url: "https://example.supabase.co/cover.png" }],
+  };
+  const findUnique = stubProductFindUnique({ partial: partialWithParentData });
+  const findMany = stub(prisma.productVariant, "findMany", async () => []);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => ops);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await generateVariations("product-1", { defaultPrice: 50, defaultStockQuantity: 0 });
+
+  const createdRows = create.fn.mock.calls.map((call) => call.arguments[0].data);
+  const english = createdRows.find((row: Record<string, unknown>) => (row.optionValues as Record<string, string>)["Language"] === "English");
+  const tshivenda = createdRows.find((row: Record<string, unknown>) => (row.optionValues as Record<string, string>)["Language"] === "Tshivenda");
+
+  assert.equal(english.price.toString(), "199.99");
+  assert.equal(english.stockQuantity, 42);
+  assert.equal(english.sku, "NT-BOOK-1");
+  assert.equal(english.imageUrl, "https://example.supabase.co/cover.png");
+
+  // Every OTHER combination still gets the generic defaults, never the
+  // parent's own price/sku/image (which would collide on sku anyway).
+  assert.equal(tshivenda.price.toString(), "50");
+  assert.equal(tshivenda.stockQuantity, 0);
+  assert.equal(tshivenda.sku, null);
+  assert.equal(tshivenda.imageUrl, null);
+
+  findUnique.restore();
+  findMany.restore();
+  transactionStub.restore();
+  create.restore();
+});
+
+test("generateVariations: never prefills English when re-run after variants already exist — a later Generate Variations call must never touch old data", async () => {
+  const findUnique = stubProductFindUnique({ partial: LANGUAGE_PARTIAL_ROW });
+  const findMany = stub(prisma.productVariant, "findMany", async () => [{ optionValues: { Language: "English" }, sortOrder: 0 }]);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => ops);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await generateVariations("product-1", {});
+
+  const createdRows = create.fn.mock.calls.map((call) => call.arguments[0].data);
+  // English already existed, so only Tshivenda/Sepedi are genuinely new — neither is prefilled from the parent.
+  assert.equal(createdRows.length, 2);
+  for (const row of createdRows) {
+    assert.equal(row.sku, null);
+  }
+
+  findUnique.restore();
+  findMany.restore();
+  transactionStub.restore();
+  create.restore();
+});
+
+test("generateVariations: a multi-group product's several 'English' combinations are never SKU-prefilled (would collide) — falls back to generic defaults for safety", async () => {
+  const multiGroupPartial = {
+    ...PARTIAL_ROW,
+    sku: "NT-BOOK-1",
+    variantOptions: [
+      { name: "Language", values: ["English", "Tshivenda"] },
+      { name: "Format", values: ["Paperback", "Digital"] },
+    ],
+  };
+  const findUnique = stubProductFindUnique({ partial: multiGroupPartial });
+  const findMany = stub(prisma.productVariant, "findMany", async () => []);
+  const transactionStub = stub(prisma, "$transaction", async (ops: unknown[]) => ops);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await generateVariations("product-1", {});
+
+  const createdRows = create.fn.mock.calls.map((call) => call.arguments[0].data);
+  const englishRows = createdRows.filter((row: Record<string, unknown>) => (row.optionValues as Record<string, string>)["Language"] === "English");
+  assert.equal(englishRows.length, 2);
+  // Neither English combination gets the parent's own sku — creating both would violate the unique sku constraint.
+  for (const row of englishRows) {
+    assert.equal(row.sku, null);
+  }
+
+  findUnique.restore();
+  findMany.restore();
+  transactionStub.restore();
+  create.restore();
+});
+
+test("createVariant: accepts a valid ISBN and GTIN, normalised to digits-only", async () => {
+  const findUnique = stubProductFindUnique({ partial: LANGUAGE_PARTIAL_ROW });
+  const findMany = stub(prisma.productVariant, "findMany", async () => []);
+  const create = stub(prisma.productVariant, "create", async ({ data }: { data: Record<string, unknown> }) => data);
+
+  await createVariant("product-1", { optionValues: { Language: "Tshivenda" }, price: 150, isbn: "978-0-306-40615-7", gtin: "4006381333931" });
+
+  const createdData = create.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(createdData.isbn, "9780306406157");
+  assert.equal(createdData.gtin, "4006381333931");
+  assert.equal(createdData.languageCode, "ve");
+
+  findUnique.restore();
+  findMany.restore();
+  create.restore();
+});
+
+test("createVariant: rejects an ISBN with an invalid check digit — never silently stores a typo", async () => {
+  const findUnique = stubProductFindUnique({ partial: LANGUAGE_PARTIAL_ROW });
+
+  await assert.rejects(
+    () => createVariant("product-1", { optionValues: { Language: "Tshivenda" }, price: 150, isbn: "9780306406150" }),
+    (error: unknown) => error instanceof AdminProductError && /check digit/i.test(error.message)
+  );
+
+  findUnique.restore();
+});
+
+test("updateVariant: accepts and normalises a valid ISBN update", async () => {
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ id: "variant-1", productId: "product-1" }));
+  const update = stub(prisma.productVariant, "update", async ({ data }: { data: Record<string, unknown> }) => data);
+  const findUnique = stubProductFindUnique();
+
+  await updateVariant("product-1", "variant-1", { isbn: "978-0-306-40615-7" });
+
+  const writtenData = update.fn.mock.calls[0]!.arguments[0].data;
+  assert.equal(writtenData.isbn, "9780306406157");
+
+  variantFindUnique.restore();
+  update.restore();
   findUnique.restore();
 });
