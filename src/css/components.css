@@ -3044,6 +3044,89 @@ body.has-cookie-preferences-open {
   line-height: 1;
 }
 
+/* Milestone 187A: mobile discovery bubble. Desktop keeps only the
+   existing plain launcher (display: none here, by design — the brief's
+   own "do not make desktop cluttered" instruction) — this only ever
+   appears at <=768px, positioned directly above the launcher with a
+   small pointer tail so the two read as one connected control. Its
+   own show/hide (mobile-open/closed-panel state) is handled in
+   js/app.js's updateDiscoveryBubbleVisibility(); the parent
+   .chat-widget's own [hidden] (private route / cookie banner) already
+   hides this along with everything else, so there's no separate
+   z-index concern with the cookie banner (z-index 1200) to manage. */
+.chat-widget__discovery-bubble {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .chat-widget__discovery-bubble {
+    display: block;
+    position: fixed;
+    right: var(--space-lg);
+    bottom: calc(var(--space-lg) + 40px + var(--space-sm));
+    z-index: 999;
+    max-width: min(230px, calc(100vw - var(--space-lg) * 2 - 16px));
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    text-align: left;
+    line-height: 1.3;
+    box-shadow: 0 4px 16px rgba(59, 42, 32, 0.2);
+    cursor: pointer;
+  }
+
+  /* The connecting "tail" pointing down toward the launcher. */
+  .chat-widget__discovery-bubble::after {
+    content: "";
+    position: absolute;
+    right: 20px;
+    bottom: -7px;
+    width: 14px;
+    height: 14px;
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    transform: rotate(45deg);
+  }
+
+  .chat-widget__discovery-bubble:hover,
+  .chat-widget__discovery-bubble:focus-visible {
+    border-color: var(--color-primary);
+  }
+
+  /* Subtle, one-time entrance only — never a repeating/attention-
+     grabbing animation, and skipped entirely under reduced motion. */
+  @media (prefers-reduced-motion: no-preference) {
+    .chat-widget__discovery-bubble {
+      animation: chat-widget-discovery-bubble-in 0.35s ease-out;
+    }
+  }
+}
+
+@keyframes chat-widget-discovery-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 480px) {
+  .chat-widget__discovery-bubble {
+    right: var(--space-sm);
+    bottom: calc(var(--space-sm) + 40px + var(--space-sm));
+    max-width: calc(100vw - var(--space-sm) * 2 - 16px);
+  }
+}
+
 .chat-widget__panel {
   position: fixed;
   right: var(--space-lg);

@@ -65,7 +65,7 @@ async function acceptCookiesIfShown(page) {
 
 async function openChat(page) {
   await acceptCookiesIfShown(page);
-  await page.locator('[data-action="toggle-chat-widget"]').click();
+  await page.locator(".chat-widget__launcher").click();
   await expect(page.locator("#seasonedzChatPanel")).toBeVisible();
 }
 
@@ -81,7 +81,7 @@ test.describe("Chat widget: visibility (Parts O, S)", () => {
   test("the launcher appears on a normal public page", async ({ page }) => {
     await page.goto("/");
     await acceptCookiesIfShown(page);
-    await expect(page.locator('[data-action="toggle-chat-widget"]')).toBeVisible();
+    await expect(page.locator(".chat-widget__launcher")).toBeVisible();
   });
 
   test("the launcher is hidden on the admin login route", async ({ page }) => {
@@ -262,7 +262,7 @@ test.describe("Chat widget: accessibility and safety (Parts AB, U)", () => {
   test("the launcher is keyboard-reachable, opens the panel, and Escape closes it returning focus to the launcher", async ({ page }) => {
     await page.goto("/");
     await acceptCookiesIfShown(page);
-    const launcher = page.locator('[data-action="toggle-chat-widget"]');
+    const launcher = page.locator(".chat-widget__launcher");
     await launcher.focus();
     await expect(launcher).toBeFocused();
     await page.keyboard.press("Enter");
@@ -296,9 +296,114 @@ test.describe("Chat widget: accessibility and safety (Parts AB, U)", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
     await acceptCookiesIfShown(page);
-    await expect(page.locator('[data-action="toggle-chat-widget"]')).toBeVisible();
+    await expect(page.locator(".chat-widget__launcher")).toBeVisible();
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+  });
+});
+
+// Milestone 187A: mobile discovery bubble ("How can we help you?"),
+// shown beside the launcher only at <=768px (components.css). Reuses
+// the exact same [data-action="toggle-chat-widget"] delegated handler
+// as the launcher itself — see js/app.js's own comment — so opening it
+// needs no new click-handling test beyond confirming the panel opens.
+test.describe("Chat widget: mobile discovery bubble (Milestone 187A)", () => {
+  const bubble = "[data-chat-discovery-bubble]";
+
+  test("appears on a normal public route at a mobile width", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    await expect(page.locator(bubble)).toBeVisible();
+  });
+
+  test("shows the exact required text, nothing else, and never a live-agent framing", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    await expect(page.locator(bubble)).toHaveText("How can we help you?");
+    const bodyText = await page.locator(bubble).innerText();
+    for (const forbidden of ["Online", "Live agent", "Someone is waiting", "Chat with us now"]) {
+      expect(bodyText).not.toContain(forbidden);
+    }
+  });
+
+  test("clicking the bubble opens the Seasonedz Assistant panel", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await stubTurnstile(page);
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    await page.locator(bubble).click();
+    await expect(page.locator("#seasonedzChatPanel")).toBeVisible();
+    await expect(page.locator("#chatWidgetTitle")).toHaveText("Seasonedz Assistant");
+  });
+
+  test("the bubble hides the moment the panel opens, and returns once it's closed again", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await stubTurnstile(page);
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    await expect(page.locator(bubble)).toBeVisible();
+
+    await page.locator(bubble).click();
+    await expect(page.locator("#seasonedzChatPanel")).toBeVisible();
+    await expect(page.locator(bubble)).toBeHidden();
+
+    await page.locator('[data-action="close-chat-widget"]').click();
+    await expect(page.locator("#seasonedzChatPanel")).toBeHidden();
+    await expect(page.locator(bubble)).toBeVisible();
+  });
+
+  test("hidden on a sensitive/private route, same as the rest of the widget", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/admin/login");
+    await expect(page.locator("[data-chat-widget]")).toBeHidden();
+    await expect(page.locator(bubble)).toBeHidden();
+  });
+
+  test("hidden while the cookie consent banner is still blocking the launcher", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/");
+    // Deliberately does NOT accept/dismiss the banner — the whole
+    // widget, bubble included, must stay hidden underneath it.
+    await expect(page.locator("[data-cookie-consent-banner]")).toBeVisible();
+    await expect(page.locator("[data-chat-widget]")).toBeHidden();
+    await expect(page.locator(bubble)).toBeHidden();
+  });
+
+  test("no horizontal overflow at 320px/375px/390px/430px with the bubble showing", async ({ page }) => {
+    for (const width of [320, 375, 390, 430]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/");
+      await acceptCookiesIfShown(page);
+      await expect(page.locator(bubble)).toBeVisible();
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth, `width=${width}`).toBeLessThanOrEqual(clientWidth + 1);
+    }
+  });
+
+  test("desktop stays uncluttered: the bubble never renders, only the existing plain launcher does", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    await expect(page.locator(".chat-widget__launcher")).toBeVisible();
+    await expect(page.locator(bubble)).toBeHidden();
+  });
+
+  test("the bubble is a real, keyboard-reachable button with an accessible label — never colour-only affordance", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await stubTurnstile(page);
+    await page.goto("/");
+    await acceptCookiesIfShown(page);
+    const bubbleLocator = page.locator(bubble);
+    await expect(bubbleLocator).toHaveAttribute("aria-label", "Open Seasonedz Assistant");
+    expect(await bubbleLocator.evaluate((el) => el.tagName)).toBe("BUTTON");
+
+    await bubbleLocator.focus();
+    await expect(bubbleLocator).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#seasonedzChatPanel")).toBeVisible();
   });
 });

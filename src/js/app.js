@@ -5694,6 +5694,21 @@ function updateChatWidgetVisibility(widget) {
   const shouldHide = chatWidgetOnPrivateRoute || bannerVisible;
   widget.hidden = shouldHide;
   if (shouldHide) closeChatPanel(widget);
+  updateDiscoveryBubbleVisibility(widget);
+}
+
+// Milestone 187A: the mobile discovery bubble ("How can we help you?")
+// is visible (CSS handles the <=768px/desktop split entirely) whenever
+// the panel is closed, and hidden the moment it opens — reappearing
+// the moment it closes again. Called from every place the panel's own
+// open/closed state changes, plus updateChatWidgetVisibility() above so
+// it's never left visible if the whole widget just became hidden
+// (private route / cookie banner) and then becomes visible again later.
+function updateDiscoveryBubbleVisibility(widget) {
+  const bubble = widget.querySelector("[data-chat-discovery-bubble]");
+  const panel = widget.querySelector("#seasonedzChatPanel");
+  if (!bubble || !panel) return;
+  bubble.hidden = !panel.hidden;
 }
 
 function setupChatWidget() {
@@ -5760,10 +5775,11 @@ function toggleChatPanel(widget) {
 
 async function openChatPanel(widget) {
   const panel = widget.querySelector("#seasonedzChatPanel");
-  const launcher = widget.querySelector('[data-action="toggle-chat-widget"]');
+  const launcher = widget.querySelector(".chat-widget__launcher");
   if (!panel) return;
   panel.hidden = false;
   launcher?.setAttribute("aria-expanded", "true");
+  updateDiscoveryBubbleVisibility(widget);
 
   // Replays any prior messages from this browser session (Part N:
   // sessionStorage) — the deterministic welcome message stays put
@@ -5795,11 +5811,12 @@ async function openChatPanel(widget) {
 
 function closeChatPanel(widget) {
   const panel = widget.querySelector("#seasonedzChatPanel");
-  const launcher = widget.querySelector('[data-action="toggle-chat-widget"]');
+  const launcher = widget.querySelector(".chat-widget__launcher");
   if (!panel || panel.hidden) return;
   panel.hidden = true;
   launcher?.setAttribute("aria-expanded", "false");
   launcher?.focus();
+  updateDiscoveryBubbleVisibility(widget);
 }
 
 // Never innerHTML (Part U) — every line of a chat message (customer's

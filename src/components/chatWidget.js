@@ -7,6 +7,13 @@
 // safe DOM APIs (textContent, never innerHTML) in js/app.js's own
 // chat-message renderer; see that file's renderChatMessageBubble()
 // for why (Part U: never let model output execute as HTML).
+//
+// Milestone 187A: the discovery-bubble button reuses the exact same
+// data-action="toggle-chat-widget" as the launcher itself, so clicking
+// it opens the panel with zero new click-handling logic — only its own
+// show/hide state (mobile-only, hidden while the panel is open) is new,
+// in js/app.js's updateDiscoveryBubbleVisibility(). Mobile-only display
+// is CSS-only (components.css) — nothing here differs per viewport.
 
 import { businessInfo } from "../data/businessInfo.js";
 
@@ -18,6 +25,16 @@ const QUICK_QUESTIONS = ["What products do you have?", "How much is delivery?", 
 export function renderChatWidget() {
   return `
     <div class="chat-widget" data-chat-widget hidden>
+      <button
+        type="button"
+        class="chat-widget__discovery-bubble"
+        data-chat-discovery-bubble
+        data-action="toggle-chat-widget"
+        aria-label="Open Seasonedz Assistant"
+      >
+        How can we help you?
+      </button>
+
       <button
         type="button"
         class="chat-widget__launcher"
