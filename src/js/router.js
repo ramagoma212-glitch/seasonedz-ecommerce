@@ -74,6 +74,7 @@ import { renderAccount } from "../pages/accountPage.js";
 import { renderAccountOrderDetail } from "../pages/accountOrderDetail.js";
 import { renderForgotPassword } from "../pages/forgotPasswordPage.js";
 import { renderResetPassword } from "../pages/resetPasswordPage.js";
+import { renderVerifyEmail } from "../pages/verifyEmailPage.js";
 import { renderAffiliateApplicationPage } from "../pages/affiliateApplicationPage.js";
 import { renderGuestDownloadPage } from "../pages/guestDownloadPage.js";
 import { renderAbout } from "../pages/about.js";
@@ -121,6 +122,7 @@ import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
 // Milestone 181, Part D: the preorder programme's own settings page —
 // separate from Referrals above, reached from the Products page.
 import { renderAdminPreorderSettings } from "../pages/adminPreorderSettings.js";
+import { renderAdminWelcomeGiftAssets } from "../pages/adminWelcomeGiftAssets.js";
 // Milestone 182: Content Studio repurposed as the Seasonedz Marketing
 // Control Centre — see adminContentStudioHome.js's own header comment.
 import { renderAdminContentStudioHome } from "../pages/adminContentStudioHome.js";
@@ -232,6 +234,10 @@ const routeDefs = [
   // convention already covers it without any extra pattern segment.
   { pattern: "/account/forgot-password", render: renderForgotPassword, title: "Forgot Password", noindex: true },
   { pattern: "/account/reset-password", render: renderResetPassword, title: "Reset Password", noindex: true },
+  // Milestone 189: same query-string-token convention as reset-password
+  // above. Logged-out-safe (no requireCustomerAuth anywhere in this
+  // flow) — see verifyEmailPage.js's own header comment.
+  { pattern: "/account/verify-email", render: renderVerifyEmail, title: "Verify Email", noindex: true },
   // Version 7, Milestone 176: affiliate application/document
   // verification — logged-in only (the page itself shows a sign-in
   // prompt on a 401, same discipline as accountOrderDetail.js).
@@ -372,6 +378,9 @@ const routeDefs = [
   { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product", noindex: true },
   { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product", noindex: true },
   { pattern: "/admin/preorder-settings", render: renderAdminPreorderSettings, title: "Preorder Settings", noindex: true },
+  // Milestone 189, brief Part O: admin upload/activation of the three
+  // fixed welcome-gift sample PDFs.
+  { pattern: "/admin/welcome-gift", render: renderAdminWelcomeGiftAssets, title: "Welcome Gift Samples", noindex: true },
   { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products", noindex: true },
   // Version 7, Milestone 172B: admin affiliate-product management.
   // Same "/new" before "/:id/edit" ordering as /admin/products above.

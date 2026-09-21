@@ -374,6 +374,19 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
   );
 }
 
+// Welcome gift (Milestone 189). Same safety-switch discipline as
+// EMAIL_ENABLED/PAYFAST_ENABLED above: real sends stay off until this
+// is explicitly "true", so a fresh deployment (or one where the three
+// real PDFs haven't been uploaded/verified yet) keeps starting and
+// serving every other route normally, with registration/verification
+// itself never blocked or slowed by this flag either way — see
+// welcomeGift.service.ts's own "never let a missing asset break
+// signup" comment. Reuses the existing digital-products private
+// bucket (digitalProductsBucket above) under its own path prefix
+// rather than a fourth bucket — these are downloadable files with the
+// exact same sensitivity/access-pattern as paid digital products.
+const welcomeGiftEnabled = getEnv("WELCOME_GIFT_ENABLED", "false").trim().toLowerCase() === "true";
+
 // Affiliate application verification documents (Version 7, Milestone 176)
 // — a THIRD, entirely separate private bucket, same "own bucket per
 // distinct sensitivity class" discipline as digital-products above.
@@ -792,6 +805,9 @@ export const env = {
   // supabaseServiceRoleKey; digitalProductsBucket is its own, separate,
   // private bucket name.
   digitalProductsBucket,
+  // Welcome gift — see the block above. Off by default; registration/
+  // verification behavior is identical whether this is true or false.
+  welcomeGiftEnabled,
   // Affiliate application document verification — see the block above.
   // Its own, separate, private bucket name.
   affiliateVerificationDocumentsBucket,

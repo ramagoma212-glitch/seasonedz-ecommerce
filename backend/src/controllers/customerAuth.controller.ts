@@ -11,13 +11,17 @@ import {
   CUSTOMER_SESSION_COOKIE_NAME,
   CustomerAuthError,
   createCustomerSession,
+  createEmailVerificationToken,
   destroyCustomerSession,
   registerCustomer,
   requestPasswordReset,
   resetPasswordWithToken,
   verifyCustomerCredentials,
+  verifyCustomerEmail,
 } from "../services/customerAuth.service.js";
 import { sendPasswordResetEmailAndRecord } from "../services/notificationEngine.service.js";
+import { sendCustomerEmailVerificationEmail } from "../services/email/email.service.js";
+import { maybeSendWelcomeGift } from "../services/welcomeGift.service.js";
 import { asRecord, isNonEmptyString, isValidEmail } from "../validators/shared.js";
 import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 
@@ -77,6 +81,21 @@ export async function registerHandler(req: Request, res: Response, next: NextFun
       ...sessionCookieOptions(),
       maxAge: CUSTOMER_SESSION_COOKIE_MAX_AGE_MS,
     });
+
+    // Milestone 189: fire-and-forget, same discipline as every other
+    // notification call site — a Brevo failure must never affect this
+    // response, and registration must never be slowed down or blocked
+    // by email delivery. The welcome gift itself is NOT triggered here
+    // — only once this customer actually verifies their email (see
+    // verifyEmailHandler below); a login-without-verifying customer
+    // gets no gift yet, by design.
+    const verificationToken = await createEmailVerificationToken(customer.id);
+    const verificationUrl = `${resetPasswordBaseUrl()}/account/verify-email?token=${verificationToken}`;
+    void sendCustomerEmailVerificationEmail({
+      customerFirstName: customer.firstName,
+      customerEmail: customer.email,
+      verificationUrl,
+    }).catch(() => {});
 
     sendSuccess(res, { message: "Account created successfully.", statusCode: 201, data: { customer, expiresAt } });
   } catch (error) {
@@ -174,6 +193,40 @@ export async function forgotPasswordHandler(req: Request, res: Response, next: N
 
     sendSuccess(res, { message: GENERIC_FORGOT_PASSWORD_MESSAGE });
   } catch (error) {
+    next(error);
+  }
+}
+
+// Milestone 189: GET (not POST) — the frontend page at
+// /account/verify-email reads ?token= from its own URL and calls this
+// once on load, no form submission involved. On success, and only when
+// this call is what genuinely set emailVerifiedAt for the first time
+// (firstTimeVerified — see verifyCustomerEmail()'s own comment), fires
+// the welcome-gift trigger. A double-clicked link, a delayed retry, or
+// a link opened a second time all resolve to firstTimeVerified: false
+// and never re-trigger anything — maybeSendWelcomeGift() itself is also
+// independently one-time-only (WelcomeGiftDelivery.customerId is
+// @unique), so this is defence in depth, not the only guard.
+export async function verifyEmailHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const token = typeof req.query.token === "string" ? req.query.token : undefined;
+    if (!token) {
+      sendError(res, { message: "This verification link is invalid or has expired.", statusCode: 400 });
+      return;
+    }
+
+    const { customer, firstTimeVerified } = await verifyCustomerEmail(token);
+
+    if (firstTimeVerified) {
+      void maybeSendWelcomeGift(customer.id).catch(() => {});
+    }
+
+    sendSuccess(res, { message: "Your email has been verified.", data: { customer } });
+  } catch (error) {
+    if (error instanceof CustomerAuthError) {
+      sendError(res, { message: error.message, statusCode: error.statusCode });
+      return;
+    }
     next(error);
   }
 }

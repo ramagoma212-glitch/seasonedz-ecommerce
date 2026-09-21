@@ -502,6 +502,16 @@ model Customer {
   passwordResetTokenHash String?
   passwordResetExpiresAt DateTime?
 
+  // Milestone 189: same "never store the raw secret" discipline as
+  // passwordResetTokenHash above — the raw token only ever exists in a
+  // verification-link email. Cleared once emailVerifiedAt is set.
+  // Registration always populates these; a social sign-in (Google/
+  // Facebook/Apple) never does, since findOrCreateCustomerForProviderLogin()
+  // only ever creates a Customer when the provider itself already
+  // confirmed the email, and sets emailVerifiedAt directly instead.
+  emailVerificationTokenHash String?
+  emailVerificationExpiresAt DateTime?
+
   // Version 7, Milestone 171F: optional avatar sourced from a connected
   // social provider (Google/Facebook may supply one; Apple never does).
   // Never required, never fetched/stored proactively — only populated
@@ -543,6 +553,10 @@ model Customer {
   // comment for the full lifecycle. Usually zero or one row; may
   // accumulate several RELEASED rows over time from abandoned orders.
   preorderDiscountRedemptions PreorderDiscountRedemption[]
+  // Milestone 189: at most one ever, per customer — see
+  // WelcomeGiftDelivery's own header comment for why customerId is
+  // @unique there (the one-time-delivery guarantee itself).
+  welcomeGiftDelivery         WelcomeGiftDelivery?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -918,6 +932,76 @@ model GuestDownloadToken {
 
   @@index([orderId])
   @@index([expiresAt])
+}
+
+// ============================================================================
+// WELCOME GIFT (Milestone 189)
+// ============================================================================
+
+// One fixed row per free sample PDF (abc_sample / mindfulness_sample /
+// creative_activity_sample — the allowlist lives in code, not here).
+// Deliberately NOT a DigitalAsset: that model is @unique per real
+// sellable Product (services/digitalAssetStorage.service.ts's own
+// comment), the wrong shape for three fixed non-product giveaway
+// files. isConfigured is the per-asset half of the kill switch — see
+// WELCOME_GIFT_ENABLED in config/env.ts for the feature-wide half.
+// Admin upload is the only writer; a row may exist with isConfigured
+// false (created but never successfully uploaded) or not exist at all
+// until an admin first touches that asset key — both read as "not
+// ready" by maybeSendWelcomeGift().
+model WelcomeGiftAsset {
+  id          String  @id @default(cuid())
+  assetKey    String  @unique
+  displayName String
+  isConfigured Boolean @default(false)
+
+  storageBucket String?
+  storagePath   String?
+  mimeType      String?
+  fileSizeBytes Int?
+  pageCount     Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// customerId @unique IS the one-time-delivery guarantee: creating this
+// row is attempted BEFORE any Brevo send is attempted, so a concurrent
+// duplicate trigger (retried verification callback, double-click,
+// race between two requests) collides on the database's own unique
+// constraint and silently no-ops — no retry, no second email, no
+// error surfaced to the caller. Deliberately its own table rather than
+// a row in the general Notification engine (notificationEngine.service.ts):
+// that engine has its own bounded-retry sweep, which must never touch
+// a one-time gift. status only ever moves CLAIMED -> SENT or CLAIMED ->
+// FAILED, once, by the single winner of the create() race; FAILED is
+// terminal (matches the brief's "never mark sent before Brevo confirms"
+// and "never retry in a tight loop" — there is no retry at all).
+// tokenHash/expiresAt mirror GuestDownloadToken exactly (random 32-byte
+// token, SHA-256 hash stored, raw token only ever exists in the email).
+model WelcomeGiftDelivery {
+  id         String @id @default(cuid())
+  customerId String @unique
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  status    WelcomeGiftDeliveryStatus @default(CLAIMED)
+  tokenHash String                    @unique
+  expiresAt DateTime
+
+  sentAt    DateTime?
+  failedAt  DateTime?
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+enum WelcomeGiftDeliveryStatus {
+  CLAIMED
+  SENT
+  FAILED
 }
 
 // ============================================================================

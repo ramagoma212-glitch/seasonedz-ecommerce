@@ -87,6 +87,7 @@ import {
 } from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
+import { uploadWelcomeGiftAsset } from "./api/adminWelcomeGiftApi.js";
 import {
   updateAdminOrderStatus,
   updateAdminShipping,
@@ -238,6 +239,7 @@ function mountApp() {
   setupAdminProductImages();
   setupAdminProductVariants();
   setupAdminDigitalAsset();
+  setupAdminWelcomeGiftAssets();
   setupAdminReviewModeration();
   setupAdminAffiliateFilterForm();
   setupAdminAffiliateForm();
@@ -6401,6 +6403,92 @@ async function handleAdminDigitalAssetRemove(button) {
     }
     button.disabled = false;
     window.alert(friendlyAdminDigitalAssetErrorMessage(error));
+  }
+}
+
+// Milestone 189, brief Part O: admin welcome-gift sample upload. Same
+// "re-render the whole page on success" pattern as digital assets
+// above — one file per asset key, so upload always means "upload or
+// replace".
+function friendlyAdminWelcomeGiftErrorMessage(error) {
+  if (error instanceof ApiError && error.status === 503) {
+    return "Digital file upload is not configured yet. Please finish Supabase Storage setup first.";
+  }
+  if (error instanceof ApiError && (error.status === 400 || error.status === 404)) {
+    return error.message;
+  }
+  if (error instanceof ApiUnavailableError) {
+    return "We could not connect to the admin system right now. Please try again shortly.";
+  }
+  return "Something went wrong. Please try again shortly.";
+}
+
+function setupAdminWelcomeGiftAssets() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-welcome-gift-asset-upload-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminWelcomeGiftAssetUploadSubmit(form);
+  });
+}
+
+async function handleAdminWelcomeGiftAssetUploadSubmit(form) {
+  if (form.dataset.uploading === "true") return;
+
+  const assetKey = form.dataset.assetKey;
+  const banner = form.querySelector("[data-welcome-gift-asset-banner]");
+  const fileInput = form.querySelector('input[type="file"]');
+  const file = fileInput?.files?.[0];
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  // Client-side validation is a UX convenience only, mirroring
+  // adminWelcomeGiftAsset.service.ts — the backend (including the real
+  // page-count parse) remains the final authority regardless of what
+  // passes here.
+  if (!file) {
+    if (banner) {
+      banner.textContent = "A file is required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+  if (file.type !== "application/pdf") {
+    if (banner) {
+      banner.textContent = "Unsupported file type. Only PDF is allowed.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  form.dataset.uploading = "true";
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Uploading file...";
+  }
+
+  try {
+    await uploadWelcomeGiftAsset(assetKey, file);
+    setPendingAdminMessage("Welcome-gift sample uploaded successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminWelcomeGiftErrorMessage(error);
+      banner.hidden = false;
+    }
+    form.dataset.uploading = "false";
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Upload File";
+    }
   }
 }
 

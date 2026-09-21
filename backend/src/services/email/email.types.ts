@@ -52,7 +52,13 @@ export type EmailTemplateName =
   // activation link, a reset link) that must never be persisted.
   | "admin-otp"
   | "admin-invitation"
-  | "admin-password-reset";
+  | "admin-password-reset"
+  // Milestone 189: both carry a one-time secret in the URL (a
+  // verification token, a welcome-gift download token) — same
+  // direct-path, never-through-notificationEngine reasoning as
+  // "password-reset" above.
+  | "customer-email-verification"
+  | "welcome-gift";
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
@@ -150,6 +156,28 @@ export interface PasswordResetEmailData {
   customerFirstName: string;
   customerEmail: string;
   resetUrl: string;
+}
+
+// Milestone 189: same "independent small shape" reasoning as
+// PasswordResetEmailData above. customerFirstName is null (not a
+// missing/empty string) whenever a first name isn't reliably
+// available — the template itself decides the "Hello," fallback, not
+// the caller, so that decision lives in exactly one place.
+export interface EmailVerificationEmailData {
+  customerFirstName: string | null;
+  customerEmail: string;
+  verificationUrl: string;
+}
+
+// Milestone 189: three download URLs, one per fixed sample — each
+// already a complete, ready-to-click backend link (token + asset key
+// baked in by welcomeGift.service.ts), never a raw storage path/bucket
+// name. asset display names are included so the template can label
+// each link without importing the asset-key allowlist itself.
+export interface WelcomeGiftEmailData {
+  customerFirstName: string | null;
+  customerEmail: string;
+  downloads: Array<{ displayName: string; downloadUrl: string }>;
 }
 
 // Version 7, Milestone 174B: courier/delivery-stage emails reuse

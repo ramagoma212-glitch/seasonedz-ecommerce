@@ -38,7 +38,14 @@
 // See backend/EMAIL_SETUP.md and VERSION_7_NOTIFICATION_AUDIT_174A.md.
 
 import { env } from "../../config/env.js";
-import { renderAdminInvitationEmail, renderAdminOtpEmail, renderAdminPasswordResetEmail, renderPasswordResetEmail } from "./emailTemplates.js";
+import {
+  renderAdminInvitationEmail,
+  renderAdminOtpEmail,
+  renderAdminPasswordResetEmail,
+  renderCustomerEmailVerificationEmail,
+  renderPasswordResetEmail,
+  renderWelcomeGiftEmail,
+} from "./emailTemplates.js";
 import { sendViaBrevo, BrevoSendError } from "./providers/brevo.provider.js";
 import type {
   AdminInvitationEmailData,
@@ -46,8 +53,10 @@ import type {
   AdminPasswordResetEmailData,
   EmailRecipientRole,
   EmailTemplateName,
+  EmailVerificationEmailData,
   PasswordResetEmailData,
   RenderedEmail,
+  WelcomeGiftEmailData,
 } from "./email.types.js";
 
 // Masks all but the first character of the local part and of the
@@ -262,5 +271,64 @@ export async function sendAdminPasswordResetEmail(data: AdminPasswordResetEmailD
   }
 
   console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "admin-password-reset".`);
+  return false;
+}
+
+// Milestone 189: same direct, swallow-on-failure path as
+// sendPasswordResetEmail() above — the verification link carries a raw,
+// one-time token that must never be persisted or logged. Called from
+// customerAuth.controller.ts immediately after registration.
+export async function sendCustomerEmailVerificationEmail(data: EmailVerificationEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
+
+  const rendered = renderCustomerEmailVerificationEmail(data);
+
+  if (env.emailProvider === "console") {
+    logConsoleEmail("customer-email-verification", "customer", data.customerEmail, "customer-email-verification", rendered);
+    return true;
+  }
+
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.customerEmail, name: data.customerFirstName ?? undefined }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="customer-email-verification" role="customer" to="${maskEmail(data.customerEmail)}" ref="customer-email-verification": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
+
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "customer-email-verification".`);
+  return false;
+}
+
+// Milestone 189: same direct path — each download link carries a raw,
+// one-time-issued (though longer-lived) token that must never be
+// persisted or logged. Never logs the token itself, only safe masked
+// metadata, same discipline as every other function in this file.
+// welcomeGift.service.ts is the only caller, and only ever calls this
+// once per customer ever — see WelcomeGiftDelivery's own schema comment
+// for the atomic one-time guarantee this relies on.
+export async function sendWelcomeGiftEmail(data: WelcomeGiftEmailData): Promise<boolean> {
+  if (!env.emailEnabled) return true;
+
+  const rendered = renderWelcomeGiftEmail(data);
+
+  if (env.emailProvider === "console") {
+    logConsoleEmail("welcome-gift", "customer", data.customerEmail, "welcome-gift", rendered);
+    return true;
+  }
+
+  if (env.emailProvider === "brevo") {
+    try {
+      await sendViaBrevo({ email: data.customerEmail, name: data.customerFirstName ?? undefined }, rendered);
+      return true;
+    } catch (error) {
+      console.warn(`[email:brevo] Send failed for template="welcome-gift" role="customer" to="${maskEmail(data.customerEmail)}" ref="welcome-gift": ${error instanceof Error ? error.message : "Unknown error"}`);
+      return false;
+    }
+  }
+
+  console.warn(`[email] EMAIL_PROVIDER="${env.emailProvider}" is not implemented yet — no email was sent for template "welcome-gift".`);
   return false;
 }

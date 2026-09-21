@@ -22,6 +22,7 @@ import type {
   AffiliateApplicationSubmittedEmailData,
   AffiliateEmailData,
   CommissionEmailData,
+  EmailVerificationEmailData,
   EnquiryEmailData,
   OrderEmailData,
   OrderEmailItem,
@@ -30,6 +31,7 @@ import type {
   ProductReviewRequestEmailData,
   RenderedEmail,
   StockAlertEmailData,
+  WelcomeGiftEmailData,
 } from "./email.types.js";
 import { preferredFrontendBaseUrl } from "../../utils/frontendUrl.js";
 import { formatSastDate } from "../../utils/southAfricaTime.js";
@@ -391,6 +393,60 @@ Reset your password using the link below:
 ${data.resetUrl}
 
 This link expires in 60 minutes. If you didn't request this, you can safely ignore this email. Your password won't be changed.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Milestone 189: mirrors renderPasswordResetEmail above closely — same
+// "one link, one expiry statement, one reassurance line" shape.
+// data.customerFirstName is null whenever a first name isn't reliably
+// available; the greeting falls back to a plain "Hello," rather than
+// guessing or omitting it, matching the milestone brief's own wording
+// for the welcome-gift email below.
+export function renderCustomerEmailVerificationEmail(data: EmailVerificationEmailData): RenderedEmail {
+  const subject = "Confirm your email — Seasonedz Group";
+  const greeting = data.customerFirstName ? `Hi ${data.customerFirstName},` : "Hello,";
+  const body = `${greeting}
+
+Thanks for creating a Seasonedz Group account. Please confirm your email address using the link below:
+
+${data.verificationUrl}
+
+This link expires in 7 days. If you didn't create this account, you can safely ignore this email.
+
+${CONTACT_LINE}
+
+Warm regards,
+Seasonedz Group`;
+
+  return { subject, body };
+}
+
+// Milestone 189, brief Part T: exact required subject, "samples"
+// throughout (never "full books"), no emojis, no licensing claims —
+// these are Seasonedz's own three free sample PDFs, not excerpts from
+// any third-party or Bible/ICB content. Greeting falls back to plain
+// "Hello," when no reliable first name is available, per the brief's
+// own instruction. Each download link is a ready-to-click backend URL
+// (welcomeGift.service.ts already baked the token and asset key in) —
+// this template never sees a raw storage path or signed URL itself.
+export function renderWelcomeGiftEmail(data: WelcomeGiftEmailData): RenderedEmail {
+  const subject = "Welcome to Seasonedz Group, your free colouring samples are ready";
+  const greeting = data.customerFirstName ? `Hi ${data.customerFirstName},` : "Hello,";
+  const downloadLines = data.downloads.map((item) => `${item.displayName}: ${item.downloadUrl}`).join("\n\n");
+
+  const body = `${greeting}
+
+Welcome to Seasonedz Group. As a thank you for joining us, here are three free samples to enjoy:
+
+${downloadLines}
+
+These links are just for you and don't require an account or login to use.
 
 ${CONTACT_LINE}
 

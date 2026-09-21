@@ -26,6 +26,10 @@ const MIN_PASSWORD_LENGTH = 8;
 // 60 is the more generous end, matching EMAIL_SETUP.md's own
 // documented default for this kind of link.
 const PASSWORD_RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+// Milestone 189: generous, unlike the password-reset link above — a
+// "confirm your email" link sitting unread in an inbox for a few days
+// is normal and must not force a customer to re-register.
+const EMAIL_VERIFICATION_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Shared cookie name/max-age so the controller (sets it) and
 // middleware (reads it) never drift apart — deliberately distinct from
@@ -209,6 +213,70 @@ export async function getCustomerBySessionToken(rawToken: string): Promise<SafeC
 // an error, it just means there is nothing left to clear.
 export async function destroyCustomerSession(rawToken: string): Promise<void> {
   await prisma.customerSession.deleteMany({ where: { tokenHash: hashToken(rawToken) } });
+}
+
+// Milestone 189: same "generate raw token, store only its hash" shape
+// as createCustomerSession() above. Called once, right after
+// registerCustomer() creates the row — kept as its own function rather
+// than folded into registerCustomer() so registration itself stays
+// focused on the account, and so a future caller (e.g. a "resend
+// verification email" action) can request a fresh token without
+// re-running registration. The raw token only ever exists in the
+// verification-link email the controller sends with it.
+export async function createEmailVerificationToken(customerId: string): Promise<string> {
+  const rawToken = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TOKEN_TTL_MS);
+
+  await prisma.customer.update({
+    where: { id: customerId },
+    data: { emailVerificationTokenHash: hashToken(rawToken), emailVerificationExpiresAt: expiresAt },
+  });
+
+  return rawToken;
+}
+
+export interface EmailVerificationResult {
+  customer: SafeCustomerProfile;
+  // true only the one time this call is what actually set
+  // emailVerifiedAt (a genuinely first-ever verification) — false if
+  // the account was already verified before this call (e.g. a
+  // double-clicked link, or the same link opened twice). Callers use
+  // this, not just "success", to decide whether to trigger the welcome
+  // gift — see welcomeGift.service.ts.
+  firstTimeVerified: boolean;
+}
+
+// Milestone 189: looks up a customer by hashing the incoming raw token,
+// same discipline as resetPasswordWithToken() above — a single generic
+// CustomerAuthError covers "no matching token", "token expired", and
+// "customer no longer active", never hinting at which. On success, the
+// token fields are cleared (single use, same as a password-reset
+// token) — a replayed/reused link then simply fails the lookup above
+// with the same generic error, rather than re-triggering anything.
+export async function verifyCustomerEmail(rawToken: string): Promise<EmailVerificationResult> {
+  const customer = await prisma.customer.findFirst({
+    where: { emailVerificationTokenHash: hashToken(rawToken), emailVerificationExpiresAt: { gt: new Date() }, isActive: true },
+  });
+
+  if (!customer) {
+    throw new CustomerAuthError("This verification link is invalid or has expired.", 400);
+  }
+
+  // Conditional update (WHERE emailVerifiedAt IS NULL), not a plain
+  // update — the actual atomicity guard against two concurrent requests
+  // racing on the exact same valid token (e.g. an email client's link
+  // scanner prefetching it, then the customer clicking it themselves).
+  // At most one of them can ever match a row here; the loser gets
+  // count 0 and is reported as firstTimeVerified: false, rather than
+  // both having read emailVerifiedAt as null beforehand and both
+  // believing they were first.
+  const { count } = await prisma.customer.updateMany({
+    where: { id: customer.id, emailVerifiedAt: null },
+    data: { emailVerifiedAt: new Date(), emailVerificationTokenHash: null, emailVerificationExpiresAt: null },
+  });
+
+  const updatedCustomer = await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } });
+  return { customer: toSafeProfile(updatedCustomer), firstTimeVerified: count > 0 };
 }
 
 export interface PasswordResetRequestResult {

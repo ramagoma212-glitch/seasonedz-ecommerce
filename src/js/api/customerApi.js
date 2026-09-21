@@ -52,6 +52,13 @@ export function resetPassword(token, password, confirmPassword) {
   });
 }
 
+// Milestone 189: same "no logged-in session required" reasoning as
+// forgot/reset password above — a customer clicking a verification
+// link may not be on the same browser/device they registered from.
+export function verifyCustomerEmail(token) {
+  return customerRequest(`/customers/verify-email?token=${encodeURIComponent(token)}`, { method: "GET" });
+}
+
 // Version 7, Milestone 152: secure digital downloads — both require the
 // caller to already be logged in (backend returns 401 otherwise), same
 // as getCustomerOrder(s) above. requestCustomerDownload() returns a

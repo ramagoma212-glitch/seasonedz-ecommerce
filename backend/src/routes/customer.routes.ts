@@ -11,6 +11,7 @@ import {
   meHandler,
   registerHandler,
   resetPasswordHandler,
+  verifyEmailHandler,
 } from "../controllers/customerAuth.controller.js";
 import { getCustomerOrderHandler, listCustomerOrdersHandler } from "../controllers/customerOrder.controller.js";
 import { getCustomerOrderDownloadsHandler, requestCustomerDownloadHandler } from "../controllers/digitalDownload.controller.js";
@@ -43,6 +44,7 @@ import {
   customerLoginRateLimiter,
   customerRegisterRateLimiter,
   customerResetPasswordRateLimiter,
+  customerVerifyEmailRateLimiter,
   productReviewCreationRateLimiter,
   customerAffiliateApplyRateLimiter,
   stockAlertSubscribeRateLimiter,
@@ -61,6 +63,12 @@ router.get("/me", requireCustomerAuth, meHandler);
 // customer forgetting their password is, by definition, not logged in.
 router.post("/forgot-password", customerForgotPasswordRateLimiter, forgotPasswordHandler);
 router.post("/reset-password", customerResetPasswordRateLimiter, resetPasswordHandler);
+
+// Milestone 189: neither requires requireCustomerAuth either — a
+// customer clicking a verification link isn't necessarily on the
+// device/browser they registered from, and the token itself is the
+// credential, same reasoning as reset-password above.
+router.get("/verify-email", customerVerifyEmailRateLimiter, verifyEmailHandler);
 
 // Version 7, Milestone 130: both require requireCustomerAuth — a
 // logged-out request never reaches customerOrder.controller.ts at all.

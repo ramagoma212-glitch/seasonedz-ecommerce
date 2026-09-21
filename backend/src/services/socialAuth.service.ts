@@ -147,6 +147,14 @@ export async function findOrCreateCustomerForProviderLogin(identity: VerifiedPro
       isActive: true,
       profileImageUrl: identity.profileImageUrl,
       lastLoginAt: new Date(),
+      // Milestone 189: this function is only ever reached with a
+      // provider-confirmed email (identity.email is null otherwise —
+      // see googleOAuth.service.ts's own emailVerified handling above),
+      // so the provider's own verification already satisfies what a
+      // password-account customer proves via the separate email-link
+      // flow (customerAuth.service.ts's verifyCustomerEmail()). No
+      // verification email is ever sent for a social sign-up.
+      emailVerifiedAt: new Date(),
       authAccounts: {
         create: { provider: identity.provider, providerUserId: identity.providerUserId },
       },

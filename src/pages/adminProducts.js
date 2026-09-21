@@ -171,6 +171,7 @@ export async function renderAdminProducts({ query } = {}) {
           <h1 class="admin-page__title">Products</h1>
           <div class="admin-section__header-actions">
             <a class="btn btn--secondary btn--sm" href="/admin/preorder-settings">Preorder Settings</a>
+            <a class="btn btn--secondary btn--sm" href="/admin/welcome-gift">Welcome Gift Samples</a>
             <a class="btn btn--primary btn--sm" href="/admin/products/new">Add Product</a>
           </div>
         </div>

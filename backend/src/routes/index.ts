@@ -26,6 +26,8 @@ import contentStudioRoutes from "./contentStudio.routes.js";
 import adminUsersRoutes from "./adminUsers.routes.js";
 import adminPreorderRoutes from "./adminPreorder.routes.js";
 import preorderRoutes from "./preorder.routes.js";
+import welcomeGiftRoutes from "./welcomeGift.routes.js";
+import adminWelcomeGiftRoutes from "./adminWelcomeGift.routes.js";
 
 const router = Router();
 
@@ -102,5 +104,12 @@ router.use("/admin/users", adminUsersRoutes);
 // any authenticated admin, PATCH ADMIN-only. See
 // adminPreorder.routes.ts's own header comment.
 router.use("/admin/preorder", adminPreorderRoutes);
+// Milestone 189: welcome-gift downloads — public, unauthenticated,
+// token-gated. See welcomeGift.routes.ts's own header comment.
+router.use("/welcome-gift", welcomeGiftRoutes);
+// Milestone 189: admin upload/activation of the three fixed
+// welcome-gift sample PDFs — requireAdminAuth applied at the router
+// level, see adminWelcomeGift.routes.ts's own header comment.
+router.use("/admin/welcome-gift", adminWelcomeGiftRoutes);
 
 export default router;

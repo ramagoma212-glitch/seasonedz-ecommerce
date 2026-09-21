@@ -20,6 +20,7 @@ import {
   createCustomerSession,
 } from "../services/customerAuth.service.js";
 import { sessionCookieOptions } from "./customerAuth.controller.js";
+import { maybeSendWelcomeGift } from "../services/welcomeGift.service.js";
 import { beginOAuthState, consumeOAuthState, OAuthStateError, type OAuthStatePayload } from "../services/oauthState.service.js";
 import {
   findOrCreateCustomerForProviderLogin,
@@ -133,12 +134,26 @@ export function oauthStartHandler(slug: ProviderSlug) {
 }
 
 async function completeLogin(res: Response, identity: VerifiedProviderIdentity): Promise<void> {
-  const { customer } = await findOrCreateCustomerForProviderLogin(identity);
+  const { customer, isNewCustomer } = await findOrCreateCustomerForProviderLogin(identity);
   const { rawToken } = await createCustomerSession(customer.id);
   res.cookie(CUSTOMER_SESSION_COOKIE_NAME, rawToken, {
     ...sessionCookieOptions(),
     maxAge: CUSTOMER_SESSION_COOKIE_MAX_AGE_MS,
   });
+
+  // Milestone 189: only a genuinely first-time account creation via a
+  // provider — never an existing customer's ordinary repeat sign-in.
+  // socialAuth.service.ts already set emailVerifiedAt at creation (the
+  // provider's own verification), so this is the direct equivalent of
+  // customerAuth.controller.ts's verifyEmailHandler trigger for the
+  // password-account path. maybeSendWelcomeGift() is independently
+  // one-time-only regardless (WelcomeGiftDelivery.customerId is
+  // @unique), so this is safe even if completeLogin were ever called
+  // twice for the same brand-new customer.
+  if (isNewCustomer) {
+    void maybeSendWelcomeGift(customer.id).catch(() => {});
+  }
+
   redirectToAccount(res);
 }
 

@@ -124,6 +124,34 @@ export const customerResetPasswordRateLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+// Customer verify-email (Milestone 189) — same reasoning as
+// customerResetPasswordRateLimiter above: a valid call already
+// requires a genuine 32-byte random token, so this is a generous
+// backstop, not a credential-guessing defence.
+export const customerVerifyEmailRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Welcome gift downloads (Milestone 189) — public, unauthenticated,
+// token-gated, clicked straight from an email (browser navigation, not
+// a frontend fetch() call) — same shape of risk as downloads.routes.ts's
+// own guest-token endpoints, which reuse customerLoginRateLimiter for
+// the identical reason. A dedicated limiter here since this is a GET
+// serving three assets per customer rather than a one-shot guest
+// order-download flow, so a slightly more generous ceiling than the
+// tight login limiter is appropriate while still bounding abuse.
+export const welcomeGiftDownloadRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
 // Newsletter subscription (Version 7, Milestone 168F) — own counter,
 // same shape of risk as enquiryCreationRateLimiter (unauthenticated,
 // write-only, no login required), not shared with any limiter above.

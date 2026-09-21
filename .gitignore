@@ -29,6 +29,17 @@ pnpm-debug.log*
 !.env.example
 !.env.*.example
 
+# Production database backups (pg_dump output) — contains real
+# customer/order data, must never be committed. See the milestone
+# deployment procedures that create these under backups/.
+backups/
+
+# Disposable local Postgres data directory (embedded-postgres package),
+# used only for safe local migration generation/verification — never
+# committed, never touches production.
+.embedded-pg-data/
+backend/.embedded-pg-data/
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
