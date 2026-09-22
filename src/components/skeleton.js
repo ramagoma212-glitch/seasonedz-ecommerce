@@ -105,6 +105,36 @@ export function renderProductDetailSkeleton() {
   `;
 }
 
+// Account page (Milestone 190 — URGENT account icon navigation UX
+// fix). renderAccount() (pages/accountPage.js) always awaits at least
+// one backend call (GET /api/customers/me) before it knows whether to
+// show the logged-in or logged-out view, so — same as every other
+// async page here — the header's real Account link could otherwise
+// appear to do nothing while that request is in flight, worse on a
+// slow/cold Render response. This one neutral shape (tab toggle + a
+// few field-shaped rows + a button) loosely matches the logged-out
+// view specifically, since that's the state an unauthenticated tap
+// most often lands on and the one where "did my tap even register"
+// anxiety matters most; the logged-in view simply replaces it wholesale
+// once the real content resolves, same as every other skeleton here.
+export function renderAccountSkeleton() {
+  return `
+    <section class="container account-page" data-account-skeleton aria-hidden="true">
+      <div class="skeleton-block skeleton-heading"></div>
+      <div class="skeleton-block skeleton-account__intro"></div>
+
+      <div class="skeleton-account__tabs">
+        <div class="skeleton-block skeleton-account__tab"></div>
+        <div class="skeleton-block skeleton-account__tab"></div>
+      </div>
+
+      <div class="skeleton-block skeleton-account__field"></div>
+      <div class="skeleton-block skeleton-account__field"></div>
+      <div class="skeleton-block skeleton-account__button"></div>
+    </section>
+  `;
+}
+
 // Homepage mixes static markup (hero, welcome text) with async
 // content (category grid, three product rails) in one atomic
 // render() — reproducing every static section exactly isn't

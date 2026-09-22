@@ -55,6 +55,7 @@ import {
   renderCategoryGridSkeleton,
   renderProductDetailSkeleton,
   renderHomeSkeleton,
+  renderAccountSkeleton,
 } from "../components/skeleton.js";
 import { renderHome } from "../pages/home.js";
 import { renderShop } from "../pages/shop.js";
@@ -221,7 +222,11 @@ const routeDefs = [
   // registration, and a simple logged-in overview only, no order
   // history yet. noindex like every other visitor-private/account page
   // here (cart, wishlist, checkout, track-order).
-  { pattern: "/account", render: renderAccount, title: "My Account", noindex: true },
+  // Milestone 190: skeleton shown immediately while renderAccount()'s
+  // GET /api/customers/me (and, if logged out, the auth-providers
+  // fetch it triggers) is in flight — see renderCurrentRoute()'s own
+  // comment on why this never delays that fetch by even a tick.
+  { pattern: "/account", render: renderAccount, title: "My Account", noindex: true, skeleton: "account" },
   // Version 7, Milestone 130: real order history — the backend already
   // scopes every lookup to the logged-in customer's own orders (see
   // backend/src/controllers/customerOrder.controller.ts), so this page
@@ -507,6 +512,7 @@ const SKELETON_RENDERERS = {
   "product-grid": renderProductGridSkeleton,
   "category-grid": renderCategoryGridSkeleton,
   "product-detail": renderProductDetailSkeleton,
+  account: renderAccountSkeleton,
 };
 
 async function renderCurrentRoute() {

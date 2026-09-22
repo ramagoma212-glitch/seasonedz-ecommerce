@@ -150,8 +150,17 @@ async function fetchAuthProviders() {
   }
 }
 
-async function renderLoggedOutView() {
-  const providers = await fetchAuthProviders();
+// Milestone 190: `providersPromise` is passed in already in flight
+// (started at the top of renderAccount(), in parallel with the
+// getCurrentCustomer() session check below) — awaiting it here adds no
+// further latency once it's already resolved or resolving, removing
+// what would otherwise be a fully sequential "check session, THEN
+// check providers" chain. The session check itself is completely
+// unaffected: this function is still only ever called after
+// getCurrentCustomer() has settled, so the logged-out UI never renders
+// before that check has completed.
+async function renderLoggedOutView(providersPromise) {
+  const providers = await providersPromise;
   const socialButtons = renderSocialAuthButtons(providers, { intent: "login" });
 
   return `
@@ -563,7 +572,26 @@ async function renderAffiliateProgrammeSection() {
   `;
 }
 
+// Milestone 190: these five sections are fully independent of each
+// other (each already has its own try/catch and best-effort fallback —
+// see their individual header comments) and were previously awaited
+// one at a time, turning five separate round trips into a stacked
+// sequential wait. Calling all five here without awaiting immediately
+// starts every one of their underlying fetch() calls in the same tick
+// (an async function body runs synchronously up to its first await —
+// same principle router.js's own skeleton-timing comment documents),
+// so Promise.all below waits only as long as the SLOWEST of the five,
+// not their sum. Behaviour is otherwise identical: same content, same
+// per-section failure handling, just dispatched in parallel.
 async function renderLoggedInView(customer) {
+  const [connectedAccounts, affiliateProgramme, myOrders, notifications, notificationPreferences] = await Promise.all([
+    renderConnectedAccountsSection(),
+    renderAffiliateProgrammeSection(),
+    renderMyOrdersSection(),
+    renderNotificationsSection(),
+    renderNotificationPreferencesSection(),
+  ]);
+
   return `
     <section class="container account-page">
       <h1 class="stub-page__title">My Account</h1>
@@ -578,15 +606,15 @@ async function renderLoggedInView(customer) {
         <div class="order-confirmation__row"><span>Account Status</span><span class="badge">Active</span></div>
       </div>
 
-      ${await renderConnectedAccountsSection()}
+      ${connectedAccounts}
 
-      ${await renderAffiliateProgrammeSection()}
+      ${affiliateProgramme}
 
-      ${await renderMyOrdersSection()}
+      ${myOrders}
 
-      ${await renderNotificationsSection()}
+      ${notifications}
 
-      ${await renderNotificationPreferencesSection()}
+      ${notificationPreferences}
 
       <button type="button" id="customer-logout-button" class="btn btn--secondary">Logout</button>
     </section>
@@ -594,17 +622,27 @@ async function renderLoggedInView(customer) {
 }
 
 export async function renderAccount() {
+  // Milestone 190: started immediately, in parallel with the session
+  // check below — genuinely used only if that check comes back
+  // logged-out, but kicking it off speculatively here means the two
+  // requests overlap instead of running one after the other. Safe to
+  // start unconditionally: it's a side-effect-free GET, discarded with
+  // no further cost if the customer turns out to be logged in, and the
+  // HttpOnly session check itself (the only thing that actually decides
+  // logged-in vs logged-out) is completely untouched by this.
+  const providersPromise = fetchAuthProviders();
+
   try {
     const response = await getCurrentCustomer();
     return await renderLoggedInView(response.data.customer);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
-      return await renderLoggedOutView();
+      return await renderLoggedOutView(providersPromise);
     }
     // Any other failure (network down, unexpected error) — safest
     // fallback is the logged-out view rather than a broken page; the
     // login/register forms themselves handle a backend-unavailable
     // error clearly if the visitor then tries to submit one.
-    return await renderLoggedOutView();
+    return await renderLoggedOutView(providersPromise);
   }
 }

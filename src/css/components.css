@@ -2490,6 +2490,40 @@ body.has-cookie-preferences-open {
   height: 56px;
 }
 
+/* Milestone 190: account page skeleton — loosely matches the
+   logged-out view's title, intro paragraph, tab toggle, a couple of
+   form fields and its submit button. See components/skeleton.js's
+   renderAccountSkeleton(). */
+.skeleton-account__intro {
+  width: 100%;
+  max-width: 480px;
+  height: 16px;
+  margin-bottom: var(--space-lg);
+}
+
+.skeleton-account__tabs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.skeleton-account__tab {
+  width: 140px;
+  height: 40px;
+}
+
+.skeleton-account__field {
+  width: 100%;
+  max-width: 420px;
+  height: 44px;
+  margin-bottom: var(--space-md);
+}
+
+.skeleton-account__button {
+  width: 160px;
+  height: 44px;
+}
+
 /* ---- Customer account page (Version 7, Milestone 128) --------------- */
 .account-auth-toggle {
   display: flex;

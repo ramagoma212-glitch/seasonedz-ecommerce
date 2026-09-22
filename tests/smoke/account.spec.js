@@ -55,6 +55,101 @@ test.describe("Customer account smoke checks", () => {
     await expect(page.locator("h1")).toBeVisible();
   });
 
+  // Milestone 190 — URGENT account icon navigation UX fix. /account
+  // always awaits at least GET /api/customers/me before it knows which
+  // view to render, so a slow/cold Render response could otherwise make
+  // tapping the Account icon look like nothing happened. Delays that
+  // one response by 3+ seconds and asserts two things separately: (1)
+  // immediately after the tap — before the delayed response ever
+  // resolves — the URL has already changed to /account AND the
+  // dedicated account skeleton (data-account-skeleton, distinct from
+  // the real logged-in/logged-out views which never carry that
+  // attribute — see components/skeleton.js's renderAccountSkeleton())
+  // is visible; (2) once the response finally resolves, the skeleton is
+  // gone and the real logged-out view has replaced it.
+  test("tapping the Account icon shows a loading skeleton immediately, even when /customers/me is slow", async ({ page }) => {
+    await page.route("**/api/customers/me", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({ success: false, message: "Not authenticated." }) });
+    });
+
+    await page.goto("/");
+    const accountLink = page.locator('.site-header a.icon-link[aria-label="Account"]');
+    await accountLink.click();
+
+    // Asserted before the 3s delay has elapsed — proves navigation and
+    // the skeleton both happen synchronously with the click, not after
+    // the backend call resolves.
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.locator("[data-account-skeleton]")).toBeVisible();
+
+    // Once the delayed response finally resolves, the skeleton is fully
+    // replaced by the real (logged-out, since this mock 401s) view.
+    await expect(page.locator("[data-account-skeleton]")).toBeHidden({ timeout: 8000 });
+    await expect(page.locator("#customer-login-form")).toBeVisible();
+  });
+
+  // Milestone 190: the exact real header anchor (never an onclick-only
+  // button — see header.js) at each viewport width the brief names,
+  // plus desktop. A successful, un-forced .click() here is itself proof
+  // that no invisible overlay/chatbot/cookie/mobile-menu/header element
+  // is intercepting pointer/touch events on the icon at that width —
+  // Playwright's actionability checks fail the click otherwise.
+  for (const width of [320, 375, 390, 430]) {
+    test(`Account icon tap navigates correctly at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/");
+
+      const cookieAccept = page.locator('[data-action="cookie-accept"]');
+      if ((await cookieAccept.count()) > 0) await cookieAccept.click();
+
+      const accountLink = page.locator('.site-header a.icon-link[aria-label="Account"]');
+      await expect(accountLink).toBeVisible();
+      await accountLink.click();
+
+      await expect(page).toHaveURL(/\/account$/);
+      await expect(page.locator("h1")).toBeVisible();
+    });
+  }
+
+  test("Account icon tap navigates correctly on desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/");
+
+    const accountLink = page.locator('.site-header a.icon-link[aria-label="Account"]');
+    await expect(accountLink).toBeVisible();
+    await accountLink.click();
+
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.locator("h1")).toBeVisible();
+  });
+
+  // Milestone 190, brief item 12 — the exact locator/flow requested,
+  // kept as its own explicit regression test even though the two tests
+  // above already exercise the same anchor, so a future change can't
+  // accidentally drop this specific check.
+  test("regression: .site-header a.icon-link[aria-label=Account] click navigates to /account and renders the Account page", async ({ page }) => {
+    await page.goto("/");
+    await page.locator('.site-header a.icon-link[aria-label="Account"]').click();
+    await expect(page).toHaveURL(/\/account$/);
+    await expect(page.locator(".account-page")).toBeVisible();
+  });
+
+  // Milestone 190, item 13: Wishlist and Cart icons must keep working
+  // exactly as before — same anchor shape, same header.
+  test("Wishlist and Cart header icons still navigate correctly", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.locator('.site-header a.icon-link[aria-label="Wishlist"]')).toHaveAttribute("href", "/wishlist");
+    await expect(page.locator('.site-header a.icon-link[aria-label="Cart"]')).toHaveAttribute("href", "/cart");
+
+    await page.locator('.site-header a.icon-link[aria-label="Wishlist"]').click();
+    await expect(page).toHaveURL(/\/wishlist$/);
+
+    await page.goto("/");
+    await page.locator('.site-header a.icon-link[aria-label="Cart"]').click();
+    await expect(page).toHaveURL(/\/cart$/);
+  });
+
   test("footer Help section has a My Account link that goes to /account", async ({ page }) => {
     await page.goto("/");
     const footerAccountLink = page.locator(".site-footer a", { hasText: "My Account" });
