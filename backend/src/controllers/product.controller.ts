@@ -3,6 +3,7 @@ import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import { parsePriceParam, parseSlugParam, parseSortParam, parseStockParam, parseStringParam } from "../utils/query.js";
 import * as productService from "../services/product.service.js";
 import { toProductOutput } from "../services/product.service.js";
+import { timed } from "../utils/serverTiming.js";
 
 export async function listProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -35,17 +36,19 @@ export async function listProducts(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const products = await productService.getProducts(
-      {
-        search,
-        categorySlug: category,
-        minPrice: minPrice.value,
-        maxPrice: maxPrice.value,
-        ageRange,
-        tagSlug: tag,
-        stock,
-      },
-      sort
+    const products = await timed(res, "db", () =>
+      productService.getProducts(
+        {
+          search,
+          categorySlug: category,
+          minPrice: minPrice.value,
+          maxPrice: maxPrice.value,
+          ageRange,
+          tagSlug: tag,
+          stock,
+        },
+        sort
+      )
     );
 
     sendSuccess(res, {
@@ -114,7 +117,7 @@ export async function getProduct(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const product = await productService.getProductBySlug(slug);
+    const product = await timed(res, "db", () => productService.getProductBySlug(slug));
 
     if (!product) {
       sendError(res, { message: `Product not found: ${slug}`, statusCode: 404 });

@@ -9,10 +9,11 @@
 import type { NextFunction, Request, Response } from "express";
 import { sendSuccess } from "../utils/apiResponse.js";
 import { getPreorderProgrammeSettings } from "../services/preorderProgrammeSettings.service.js";
+import { timed } from "../utils/serverTiming.js";
 
 export async function getPublicPreorderSettingsHandler(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const settings = await getPreorderProgrammeSettings();
+    const settings = await timed(res, "db", () => getPreorderProgrammeSettings());
     sendSuccess(res, {
       message: "Preorder programme settings retrieved successfully.",
       data: {

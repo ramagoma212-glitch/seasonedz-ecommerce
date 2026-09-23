@@ -3,10 +3,11 @@ import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import * as categoryService from "../services/category.service.js";
 import * as productService from "../services/product.service.js";
 import { toProductOutput } from "../services/product.service.js";
+import { timed } from "../utils/serverTiming.js";
 
 export async function listCategories(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const categories = await categoryService.getCategories();
+    const categories = await timed(res, "db", () => categoryService.getCategories());
     sendSuccess(res, {
       message: "Categories retrieved successfully",
       data: { categories, count: categories.length },
@@ -24,13 +25,13 @@ export async function getCategoryProducts(req: Request, res: Response, next: Nex
       return;
     }
 
-    const category = await categoryService.getCategoryBySlug(slug);
+    const category = await timed(res, "db", () => categoryService.getCategoryBySlug(slug));
     if (!category) {
       sendError(res, { message: `Category not found: ${slug}`, statusCode: 404 });
       return;
     }
 
-    const products = await productService.getProductsByCategorySlug(slug);
+    const products = await timed(res, "db", () => productService.getProductsByCategorySlug(slug));
 
     sendSuccess(res, {
       message: "Category products retrieved successfully",

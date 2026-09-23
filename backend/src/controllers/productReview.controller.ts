@@ -17,6 +17,7 @@ import {
   listReviewsForCustomer,
   submitProductReview,
 } from "../services/productReview.service.js";
+import { timed } from "../utils/serverTiming.js";
 
 const DEFAULT_LIST_LIMIT = 10;
 const MAX_LIST_LIMIT = 50;
@@ -38,7 +39,7 @@ export async function listPublicProductReviewsHandler(req: Request, res: Respons
     const page = parsePositiveIntParam(req.query.page) ?? 1;
     const limit = Math.min(parsePositiveIntParam(req.query.limit) ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
 
-    const result = await listApprovedReviewsForProduct(slug, page, limit);
+    const result = await timed(res, "db", () => listApprovedReviewsForProduct(slug, page, limit));
     sendSuccess(res, { message: "Reviews retrieved successfully", data: result });
   } catch (error) {
     if (error instanceof ProductReviewError) {
