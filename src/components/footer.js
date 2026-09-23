@@ -44,13 +44,23 @@ const PAYMENT_LOGO_ROWS = [
   ],
 ];
 
+// Milestone 190B: `loading="lazy"` removed — these 9 tiny icon files
+// (each well under 5 KB) have no explicit width/height attribute, so
+// the browser has no intrinsic size to reserve before decoding; lazy-
+// loading them meant the browser only ever decodes one once it judges
+// it "near the viewport," which never reliably happens for a footer
+// element on a single page.goto() with no scroll — found as a genuine,
+// reproducible (not flaky — confirmed in both local runs and a clean
+// GitHub Actions run) "hidden" (zero-area) failure across every tested
+// viewport, not a CLS/perf concern these files are too small to matter
+// for either way. Eager-loading a handful of tiny trust-badge icons
+// costs nothing meaningful and is the correct fix, not a workaround.
 function renderPaymentLogo({ name, label }) {
   return `
     <span class="footer-payment-grid__item">
       <img
         src="${withBase(`/images/payment/payment-${name}.webp`)}"
         alt="${label}"
-        loading="lazy"
         decoding="async"
       />
     </span>
