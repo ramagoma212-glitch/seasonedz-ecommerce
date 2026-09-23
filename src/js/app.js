@@ -25,7 +25,6 @@ import {
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "./variantSelector.js";
-import { renderOptionGroupRow } from "../pages/adminProductForm.js";
 import { SOUTH_AFRICAN_LANGUAGES } from "./southAfricanLanguages.js";
 import { initMetricoolTracking } from "./metricool.js";
 import { renderChatWidget } from "../components/chatWidget.js";
@@ -54,17 +53,6 @@ import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
 import { retryPayfastPayment } from "./payfastRetry.js";
 import {
-  adminLogin,
-  adminLogout,
-  adminVerifyOtp,
-  adminResendOtp,
-  adminLogoutAllSessions,
-  adminForgotPassword,
-  adminResetPassword,
-  activateAdminInvitation,
-} from "./api/adminAuthApi.js";
-import { inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive } from "./api/adminUsersApi.js";
-import {
   registerCustomer,
   loginCustomer,
   logoutCustomer,
@@ -87,9 +75,36 @@ import {
 } from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
-import { uploadWelcomeGiftAsset } from "./api/adminWelcomeGiftApi.js";
-import {
-  updateAdminOrderStatus,
+import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
+import { getDeliveryNote } from "../components/orderSummary.js";
+import { escapeHtml } from "./search.js";
+import { getConsent, needsConsentPrompt, acceptAllConsent, rejectNonEssentialConsent, saveConsent } from "./consent.js";
+import { renderCookieConsentBanner, renderCookiePreferencesModal } from "../components/cookieConsent.js";
+import { setupPasswordVisibilityToggles } from "./passwordToggle.js";
+
+// Milestone 190B — FULL WEBSITE PERFORMANCE OPTIMISATION, Part E.
+// Every identifier below is used ONLY inside an admin-only handler
+// function (confirmed one by one — see PERFORMANCE_AUDIT notes in the
+// final report), never by anything a customer route can reach. Kept as
+// plain `let` bindings, not imports, and populated once by
+// ensureAdminModulesLoaded() below, the first (and only) time this
+// page load's initial URL is under /admin — see that function's own
+// comment for why a single mount-time path check is sufficient rather
+// than a per-navigation guard. A function body only reads a closed-over
+// variable's CURRENT value at CALL time, not at definition time, so
+// every admin handler function further down this file that references
+// one of these names is completely unaffected by the fact that its
+// real value now arrives later (after the dynamic import resolves)
+// instead of at module-evaluation time — as long as it's never called
+// before that resolves, which the mount-time gate below guarantees
+// (no customer-facing page anywhere links to /admin, confirmed by
+// repo-wide search, so a customer session can never SPA-navigate into
+// admin territory without a full page reload that re-runs this file
+// from scratch with the new URL already known).
+let adminLogin, adminLogout, adminVerifyOtp, adminResendOtp, adminLogoutAllSessions, adminForgotPassword, adminResetPassword, activateAdminInvitation;
+let inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive;
+let uploadWelcomeGiftAsset;
+let updateAdminOrderStatus,
   updateAdminShipping,
   getAdminCourierQuote,
   bookAdminCourier,
@@ -106,18 +121,9 @@ import {
   confirmAdminManualPayment,
   generateAdminProductVariations,
   updateAdminProductVariant,
-  deleteAdminProductVariant,
-} from "./api/adminDashboardApi.js";
-import {
-  createAdminAffiliateProduct,
-  updateAdminAffiliateProduct,
-  activateAdminAffiliateProduct,
-  deactivateAdminAffiliateProduct,
-  featureAdminAffiliateProduct,
-  unfeatureAdminAffiliateProduct,
-} from "./api/adminAffiliateApi.js";
-import {
-  createAdminAffiliate,
+  deleteAdminProductVariant;
+let createAdminAffiliateProduct, updateAdminAffiliateProduct, activateAdminAffiliateProduct, deactivateAdminAffiliateProduct, featureAdminAffiliateProduct, unfeatureAdminAffiliateProduct;
+let createAdminAffiliate,
   updateAdminAffiliate,
   approveAdminAffiliate,
   rejectAdminAffiliate,
@@ -129,12 +135,10 @@ import {
   payAdminAffiliateCommissions,
   createAdminAffiliateProductSetting,
   updateAdminAffiliateProductSetting,
-  deleteAdminAffiliateProductSetting,
-} from "./api/adminReferralsApi.js";
-import { updatePreorderSettings } from "./api/adminPreorderApi.js";
-import { renderProductSearchResults, renderSelectedProductPreview } from "../pages/adminReferralAffiliateProductForm.js";
-import {
-  createAdminBrandKnowledgeEntry,
+  deleteAdminAffiliateProductSetting;
+let updatePreorderSettings;
+let renderProductSearchResults, renderSelectedProductPreview;
+let createAdminBrandKnowledgeEntry,
   updateAdminBrandKnowledgeEntry,
   deactivateAdminBrandKnowledgeEntry,
   reactivateAdminBrandKnowledgeEntry,
@@ -146,35 +150,120 @@ import {
   updateAdminAudience,
   deactivateAdminAudience,
   reactivateAdminAudience,
-  previewContentContext,
-} from "./api/contentStudioApi.js";
-import { renderContextPreviewResult } from "../pages/adminContentContextPreview.js";
-import { buildMarketingLink } from "./marketingLinks.js";
-import {
-  createAdminCampaignBrief,
-  updateAdminCampaignBrief,
-  regenerateAdminCampaignBrief,
-  updateAdminCampaignBriefStatus,
-  archiveAdminCampaignBrief,
-  createAdminCampaignContentRecord,
-  deleteAdminCampaignContentRecord,
-} from "./api/campaignBriefApi.js";
-import {
-  requestAdminAffiliateApplicationCorrection,
-  approveAdminAffiliateApplication,
-  rejectAdminAffiliateApplication,
-  revealAdminAffiliateApplicationIdentityNumber,
-  getAdminAffiliateApplicationDocumentSignedUrl,
-} from "./api/adminAffiliateApplicationsApi.js";
-import { isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } from "./adminGuard.js";
-import { humanizeEnum } from "./adminFormat.js";
-import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
-import { getDeliveryNote } from "../components/orderSummary.js";
-import { escapeHtml } from "./search.js";
-import { setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } from "./descriptionEditor.js";
-import { getConsent, needsConsentPrompt, acceptAllConsent, rejectNonEssentialConsent, saveConsent } from "./consent.js";
-import { renderCookieConsentBanner, renderCookiePreferencesModal } from "../components/cookieConsent.js";
-import { setupPasswordVisibilityToggles } from "./passwordToggle.js";
+  previewContentContext;
+let renderContextPreviewResult;
+let buildMarketingLink;
+let createAdminCampaignBrief, updateAdminCampaignBrief, regenerateAdminCampaignBrief, updateAdminCampaignBriefStatus, archiveAdminCampaignBrief, createAdminCampaignContentRecord, deleteAdminCampaignContentRecord;
+let requestAdminAffiliateApplicationCorrection, approveAdminAffiliateApplication, rejectAdminAffiliateApplication, revealAdminAffiliateApplicationIdentityNumber, getAdminAffiliateApplicationDocumentSignedUrl;
+let isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage;
+let humanizeEnum;
+let renderOptionGroupRow;
+let setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS;
+
+// Loaded once, only when mountApp() finds the page's initial URL is
+// under /admin (see the call site in mountApp() below) — never on a
+// customer route. One consolidated bundle (js/adminBundle.js, forced
+// into a single real chunk by vite.config.js's manualChunks), not ~17
+// separate dynamic import() calls: an isolated Playwright re-run
+// caught a real race where a fast admin click (page load -> immediate
+// action) could fire before that many parallel requests had all
+// settled, leaving the actual listener not yet registered. See
+// adminBundle.js's own header comment for why this is ONE chunk
+// (including Quill) rather than two — a two-chunk split was tried
+// first and produced a genuine circular chunk dependency instead.
+let adminModulesPromise = null;
+function ensureAdminModulesLoaded() {
+  if (!adminModulesPromise) {
+    adminModulesPromise = import("./adminBundle.js").then((bundle) => {
+      ({ adminLogin, adminLogout, adminVerifyOtp, adminResendOtp, adminLogoutAllSessions, adminForgotPassword, adminResetPassword, activateAdminInvitation } = bundle.adminAuthApi);
+      ({ inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive } = bundle.adminUsersApi);
+      ({ uploadWelcomeGiftAsset } = bundle.adminWelcomeGiftApi);
+      ({
+        updateAdminOrderStatus,
+        updateAdminShipping,
+        getAdminCourierQuote,
+        bookAdminCourier,
+        createAdminProduct,
+        updateAdminProduct,
+        getAdminProducts,
+        uploadProductImage,
+        updateProductImage,
+        deleteProductImage,
+        uploadAdminDigitalAsset,
+        deleteAdminDigitalAsset,
+        approveAdminReview,
+        rejectAdminReview,
+        confirmAdminManualPayment,
+        generateAdminProductVariations,
+        updateAdminProductVariant,
+        deleteAdminProductVariant,
+      } = bundle.adminDashboardApi);
+      ({
+        createAdminAffiliateProduct,
+        updateAdminAffiliateProduct,
+        activateAdminAffiliateProduct,
+        deactivateAdminAffiliateProduct,
+        featureAdminAffiliateProduct,
+        unfeatureAdminAffiliateProduct,
+      } = bundle.adminAffiliateApi);
+      ({
+        createAdminAffiliate,
+        updateAdminAffiliate,
+        approveAdminAffiliate,
+        rejectAdminAffiliate,
+        suspendAdminAffiliate,
+        reactivateAdminAffiliate,
+        updateReferralSettings,
+        approveAdminReferralCommission,
+        reverseAdminReferralCommission,
+        payAdminAffiliateCommissions,
+        createAdminAffiliateProductSetting,
+        updateAdminAffiliateProductSetting,
+        deleteAdminAffiliateProductSetting,
+      } = bundle.adminReferralsApi);
+      ({ updatePreorderSettings } = bundle.adminPreorderApi);
+      ({ renderProductSearchResults, renderSelectedProductPreview } = bundle.adminReferralAffiliateProductForm);
+      ({
+        createAdminBrandKnowledgeEntry,
+        updateAdminBrandKnowledgeEntry,
+        deactivateAdminBrandKnowledgeEntry,
+        reactivateAdminBrandKnowledgeEntry,
+        createAdminContentPillar,
+        updateAdminContentPillar,
+        deactivateAdminContentPillar,
+        reactivateAdminContentPillar,
+        createAdminAudience,
+        updateAdminAudience,
+        deactivateAdminAudience,
+        reactivateAdminAudience,
+        previewContentContext,
+      } = bundle.contentStudioApi);
+      ({ renderContextPreviewResult } = bundle.adminContentContextPreview);
+      ({ buildMarketingLink } = bundle.marketingLinksModule);
+      ({
+        createAdminCampaignBrief,
+        updateAdminCampaignBrief,
+        regenerateAdminCampaignBrief,
+        updateAdminCampaignBriefStatus,
+        archiveAdminCampaignBrief,
+        createAdminCampaignContentRecord,
+        deleteAdminCampaignContentRecord,
+      } = bundle.campaignBriefApi);
+      ({
+        requestAdminAffiliateApplicationCorrection,
+        approveAdminAffiliateApplication,
+        rejectAdminAffiliateApplication,
+        revealAdminAffiliateApplicationIdentityNumber,
+        getAdminAffiliateApplicationDocumentSignedUrl,
+      } = bundle.adminAffiliateApplicationsApi);
+      ({ isUnauthenticated, redirectToAdminLogin, setPendingAdminMessage } = bundle.adminGuard);
+      ({ humanizeEnum } = bundle.adminFormat);
+      ({ renderOptionGroupRow } = bundle.adminProductForm);
+      ({ setupDescriptionEditors, getDescriptionVisibleCharacterCount, MAX_DESCRIPTION_VISIBLE_CHARACTERS } = bundle.descriptionEditor);
+    });
+  }
+  return adminModulesPromise;
+}
 
 function mountApp() {
   const app = document.getElementById("app");
@@ -212,6 +301,7 @@ function mountApp() {
   setupMobileMenu();
   setupNavMoreMenu();
   setupImageFallback();
+  setupLazyLoadErrorRetry();
   setupHeaderSearch();
   setupFilterControls();
   setupCartQuantityInput();
@@ -224,56 +314,71 @@ function mountApp() {
   setupCustomerAccountForms();
   setupAffiliateApplicationForm();
   setupPasswordVisibilityToggles();
-  setupAdminLoginForm();
-  setupAdminForgotPasswordForm();
-  setupAdminResetPasswordForm();
-  setupAdminActivateAccountForm();
-  setupAdminUserInviteForm();
-  setupAdminUserActions();
-  setupAdminOrderStatusForm();
-  setupAdminShippingForm();
-  setupAdminCourierQuoteForm();
-  setupAdminBookCourierArea();
-  setupAdminProductFilterForm();
-  setupAdminProductForm();
-  setupAdminProductImages();
-  setupAdminProductVariants();
-  setupAdminDigitalAsset();
-  setupAdminWelcomeGiftAssets();
-  setupAdminReviewModeration();
-  setupAdminAffiliateFilterForm();
-  setupAdminAffiliateForm();
-  setupAdminAffiliateActions();
-  setupAdminReferralAffiliateFilterForm();
-  setupAdminReferralAffiliateForm();
-  setupAdminReferralAffiliateActions();
-  setupAdminAffiliateProductSettingFilterForm();
-  setupAdminAffiliateProductSettingForm();
-  setupAdminAffiliateProductSettingActions();
-  setupAdminAffiliateApplicationActions();
-  setupAdminReferralSettingsForm();
-  setupAdminPreorderSettingsForm();
-  setupAdminCommissionFilterForm();
-  setupAdminCommissionActions();
-  setupAdminCommissionReverseForm();
-  setupAdminPayoutActions();
-  setupAdminPaymentConfirmation();
-  setupDescriptionEditors();
-  setupAdminBrandKnowledgeFilterForm();
-  setupAdminBrandKnowledgeForm();
-  setupAdminBrandKnowledgeActions();
-  setupAdminContentPillarFilterForm();
-  setupAdminContentPillarForm();
-  setupAdminCampaignBriefFilterForm();
-  setupAdminCampaignBriefForm();
-  setupAdminCampaignBriefActions();
-  setupAdminContentRecordForm();
-  setupAdminContentPillarActions();
-  setupAdminAudienceFilterForm();
-  setupAdminAudienceForm();
-  setupAdminAudienceActions();
-  setupAdminContextPreviewForm();
-  setupMarketingLinkBuilder();
+
+  // Milestone 190B, Part E: every admin-only setup function (including
+  // Quill's setupDescriptionEditors) is deferred behind this one gate,
+  // checked once against the page's initial URL — never linked from
+  // any customer-facing page (confirmed repo-wide), so a customer
+  // session can never reach this branch. Fire-and-forget: registering
+  // these ~46 delegated listeners a network round trip after the page
+  // paints is invisible to a real admin (who still has to see the page
+  // and decide to interact with it), and every admin page render
+  // itself already shows its own content immediately regardless of
+  // whether these listeners have finished registering yet.
+  if (window.location.pathname.startsWith("/admin")) {
+    void ensureAdminModulesLoaded().then(() => {
+      setupAdminLoginForm();
+      setupAdminForgotPasswordForm();
+      setupAdminResetPasswordForm();
+      setupAdminActivateAccountForm();
+      setupAdminUserInviteForm();
+      setupAdminUserActions();
+      setupAdminOrderStatusForm();
+      setupAdminShippingForm();
+      setupAdminCourierQuoteForm();
+      setupAdminBookCourierArea();
+      setupAdminProductFilterForm();
+      setupAdminProductForm();
+      setupAdminProductImages();
+      setupAdminProductVariants();
+      setupAdminDigitalAsset();
+      setupAdminWelcomeGiftAssets();
+      setupAdminReviewModeration();
+      setupAdminAffiliateFilterForm();
+      setupAdminAffiliateForm();
+      setupAdminAffiliateActions();
+      setupAdminReferralAffiliateFilterForm();
+      setupAdminReferralAffiliateForm();
+      setupAdminReferralAffiliateActions();
+      setupAdminAffiliateProductSettingFilterForm();
+      setupAdminAffiliateProductSettingForm();
+      setupAdminAffiliateProductSettingActions();
+      setupAdminAffiliateApplicationActions();
+      setupAdminReferralSettingsForm();
+      setupAdminPreorderSettingsForm();
+      setupAdminCommissionFilterForm();
+      setupAdminCommissionActions();
+      setupAdminCommissionReverseForm();
+      setupAdminPayoutActions();
+      setupAdminPaymentConfirmation();
+      setupDescriptionEditors();
+      setupAdminBrandKnowledgeFilterForm();
+      setupAdminBrandKnowledgeForm();
+      setupAdminBrandKnowledgeActions();
+      setupAdminContentPillarFilterForm();
+      setupAdminContentPillarForm();
+      setupAdminCampaignBriefFilterForm();
+      setupAdminCampaignBriefForm();
+      setupAdminCampaignBriefActions();
+      setupAdminContentRecordForm();
+      setupAdminContentPillarActions();
+      setupAdminAudienceFilterForm();
+      setupAdminAudienceForm();
+      setupAdminAudienceActions();
+      setupAdminContextPreviewForm();
+      setupMarketingLinkBuilder();
+    });
+  }
 
   window.addEventListener("popstate", onRouteChange);
   onRouteChange();
@@ -385,6 +490,18 @@ function setupImageFallback() {
     },
     true
   );
+}
+
+// Milestone 190B, Part AS: the one action on pages/lazyLoadError.js's
+// safe fallback state (shown when a lazy-loaded route's dynamic
+// import() fails — see router.js's lazyPage()). A plain reload is the
+// correct fix specifically for the stale-chunk-after-a-redeploy case,
+// since it re-fetches the current index.html and its current chunk
+// hashes.
+function setupLazyLoadErrorRetry() {
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="reload-page"]')) window.location.reload();
+  });
 }
 
 // Delegated so it keeps working no matter which page is currently
@@ -3883,11 +4000,26 @@ async function handleAdminAffiliateFormSubmit(form) {
   }
 }
 
+// Milestone 190B: `apiCall` is a closure, not a direct function
+// reference — activateAdminAffiliateProduct etc. are the lazy-loaded
+// `let` bindings populated by ensureAdminModulesLoaded() (see that
+// function's own header comment). This object literal itself still
+// evaluates once, at module load, well before that promise resolves;
+// a direct reference (`apiCall: activateAdminAffiliateProduct`) would
+// permanently capture whatever that variable held at THAT instant —
+// always `undefined` — since object-literal property values are
+// copied once, not re-read later, unlike a function body's own
+// variable references. A closure defers the lookup to call time
+// instead, by which point the real function is in scope. Confirmed
+// this was a genuine bug, not just a theoretical one: an isolated
+// Playwright investigation caught the un-wrapped version of this exact
+// pattern (ADMIN_REFERRAL_AFFILIATE_ACTIONS below) silently no-op'ing
+// approve/reject/suspend/reactivate site-wide.
 const ADMIN_AFFILIATE_ACTIONS = {
-  "activate-affiliate-product": { apiCall: activateAdminAffiliateProduct, verb: "activated" },
-  "deactivate-affiliate-product": { apiCall: deactivateAdminAffiliateProduct, verb: "deactivated" },
-  "feature-affiliate-product": { apiCall: featureAdminAffiliateProduct, verb: "featured" },
-  "unfeature-affiliate-product": { apiCall: unfeatureAdminAffiliateProduct, verb: "unfeatured" },
+  "activate-affiliate-product": { apiCall: (id) => activateAdminAffiliateProduct(id), verb: "activated" },
+  "deactivate-affiliate-product": { apiCall: (id) => deactivateAdminAffiliateProduct(id), verb: "deactivated" },
+  "feature-affiliate-product": { apiCall: (id) => featureAdminAffiliateProduct(id), verb: "featured" },
+  "unfeature-affiliate-product": { apiCall: (id) => unfeatureAdminAffiliateProduct(id), verb: "unfeatured" },
 };
 
 function setupAdminAffiliateActions() {
@@ -4054,11 +4186,17 @@ async function handleAdminReferralAffiliateFormSubmit(form) {
   }
 }
 
+// Milestone 190B: closures, not direct references — see
+// ADMIN_AFFILIATE_ACTIONS's own comment above for why (this is the
+// exact pattern an isolated Playwright investigation caught actually
+// broken in production behaviour: every one of these four actions
+// silently no-op'd, never calling their real endpoint, with no visible
+// error beyond the handler's own generic catch-block banner).
 const ADMIN_REFERRAL_AFFILIATE_ACTIONS = {
-  "approve-affiliate": { apiCall: approveAdminAffiliate, verb: "approved" },
-  "reject-affiliate": { apiCall: rejectAdminAffiliate, verb: "rejected" },
-  "suspend-affiliate": { apiCall: suspendAdminAffiliate, verb: "suspended" },
-  "reactivate-affiliate": { apiCall: reactivateAdminAffiliate, verb: "reactivated" },
+  "approve-affiliate": { apiCall: (id) => approveAdminAffiliate(id), verb: "approved" },
+  "reject-affiliate": { apiCall: (id) => rejectAdminAffiliate(id), verb: "rejected" },
+  "suspend-affiliate": { apiCall: (id) => suspendAdminAffiliate(id), verb: "suspended" },
+  "reactivate-affiliate": { apiCall: (id) => reactivateAdminAffiliate(id), verb: "reactivated" },
 };
 
 function setupAdminReferralAffiliateActions() {
@@ -4892,9 +5030,11 @@ async function handleAdminBrandKnowledgeFormSubmit(form) {
   }
 }
 
+// Milestone 190B: closures, not direct references — see
+// ADMIN_AFFILIATE_ACTIONS's own comment for why.
 const ADMIN_BRAND_KNOWLEDGE_ACTIONS = {
-  "deactivate-entry": { apiCall: deactivateAdminBrandKnowledgeEntry, verb: "deactivated" },
-  "reactivate-entry": { apiCall: reactivateAdminBrandKnowledgeEntry, verb: "reactivated" },
+  "deactivate-entry": { apiCall: (id) => deactivateAdminBrandKnowledgeEntry(id), verb: "deactivated" },
+  "reactivate-entry": { apiCall: (id) => reactivateAdminBrandKnowledgeEntry(id), verb: "reactivated" },
 };
 
 function setupAdminBrandKnowledgeActions() {
@@ -5353,9 +5493,11 @@ async function handleCampaignContentRecordDelete(button) {
   }
 }
 
+// Milestone 190B: closures, not direct references — see
+// ADMIN_AFFILIATE_ACTIONS's own comment for why.
 const ADMIN_CONTENT_PILLAR_ACTIONS = {
-  "deactivate-pillar": { apiCall: deactivateAdminContentPillar, verb: "deactivated" },
-  "reactivate-pillar": { apiCall: reactivateAdminContentPillar, verb: "reactivated" },
+  "deactivate-pillar": { apiCall: (id) => deactivateAdminContentPillar(id), verb: "deactivated" },
+  "reactivate-pillar": { apiCall: (id) => reactivateAdminContentPillar(id), verb: "reactivated" },
 };
 
 function setupAdminContentPillarActions() {
@@ -5483,9 +5625,11 @@ async function handleAdminAudienceFormSubmit(form) {
   }
 }
 
+// Milestone 190B: closures, not direct references — see
+// ADMIN_AFFILIATE_ACTIONS's own comment for why.
 const ADMIN_AUDIENCE_ACTIONS = {
-  "deactivate-audience": { apiCall: deactivateAdminAudience, verb: "deactivated" },
-  "reactivate-audience": { apiCall: reactivateAdminAudience, verb: "reactivated" },
+  "deactivate-audience": { apiCall: (id) => deactivateAdminAudience(id), verb: "deactivated" },
+  "reactivate-audience": { apiCall: (id) => reactivateAdminAudience(id), verb: "reactivated" },
 };
 
 function setupAdminAudienceActions() {

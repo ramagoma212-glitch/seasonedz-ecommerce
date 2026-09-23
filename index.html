@@ -256,8 +256,20 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+      Milestone 190B, Part Q: Baloo 2 weight 500 removed — audited every
+      `font-family: var(--font-heading)` usage across the CSS (8 sites)
+      and confirmed each one either explicitly sets font-weight: 700/600
+      or applies to an h1-h4 tag, which base.css's own rule already
+      bolds to 700 — zero `font-weight: 500` declarations exist anywhere
+      in the codebase. Same visible typography, one fewer font-weight
+      file downloaded. Nunito Sans keeps all three weights (400/600/700)
+      — each is genuinely used (see components.css/layout.css/pages.css).
+      display=swap (unchanged) already avoids invisible text while the
+      fonts load; preconnect (unchanged) already exists for both hosts.
+    -->
     <link
-      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&family=Nunito+Sans:wght@400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700&family=Nunito+Sans:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
 

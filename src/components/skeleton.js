@@ -135,6 +135,26 @@ export function renderAccountSkeleton() {
   `;
 }
 
+// Milestone 190B, Part H/I: a small skeleton matching
+// pages/home.js's own .best-seller two-column layout (an image beside
+// a few text lines) — used only inside that one homepage section's own
+// placeholder now that the page shell itself renders immediately (see
+// home.js's own header comment for the full architecture).
+export function renderBestSellerSkeleton() {
+  return `
+    <div class="best-seller" aria-hidden="true">
+      <div class="best-seller__media">
+        <div class="skeleton-block skeleton-detail-image"></div>
+      </div>
+      <div class="best-seller__info">
+        <div class="skeleton-block skeleton-detail-line skeleton-detail-line--title"></div>
+        <div class="skeleton-block skeleton-detail-line skeleton-detail-line--desc"></div>
+        <div class="skeleton-block skeleton-detail-line skeleton-detail-line--price"></div>
+      </div>
+    </div>
+  `;
+}
+
 // Homepage mixes static markup (hero, welcome text) with async
 // content (category grid, three product rails) in one atomic
 // render() — reproducing every static section exactly isn't

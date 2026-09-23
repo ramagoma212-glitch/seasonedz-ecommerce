@@ -330,6 +330,21 @@ function replaceMetaContent(html, identifyingAttr, newContent) {
 // the "product" og:type namespace this site doesn't otherwise
 // declare). Every value is escaped (escapeHtmlAttribute) before
 // insertion — see this file's own HTML/JSON-LD safety section above.
+// Milestone 190B, Part P: index.html's own hero preload <link> (see
+// its own comment there — added in Milestone 149 as a deliberate,
+// then-accepted tradeoff: "this SPA has no per-route <head>, so this
+// is the one plain, zero-JS way to hint it early regardless of which
+// route a visitor lands on first"). writeRouteFile() below is the ONLY
+// caller of applyRouteMetadata(), and it is only ever called for a
+// non-homepage route — dist/index.html itself (the real homepage file
+// Vite built) is never touched by this script at all, so it keeps its
+// preload, fetchpriority="high" and all, completely unchanged. Every
+// OTHER generated route's own copy of that same shell had been
+// carrying this same tag forward unnecessarily; stripped here so e.g.
+// a direct /shop or /contact visit never preloads an image it will
+// never display.
+const HERO_PRELOAD_PATTERN = /\s*<link\s+rel="preload"\s+as="image"\s+href="\/images\/home\/seasonedz-group-educational-colouring-books-hero\.webp"\s+fetchpriority="high"\s*\/>\n?/;
+
 export function applyRouteMetadata(html, { routePath, title, description, ogImage }) {
   const canonicalUrl = `${SITE_URL}${withTrailingSlash(routePath)}`;
   const fullTitle = escapeHtmlAttribute(buildTitle(title));
@@ -337,7 +352,8 @@ export function applyRouteMetadata(html, { routePath, title, description, ogImag
   const safeCanonical = escapeHtmlAttribute(canonicalUrl);
   const safeOgImage = escapeHtmlAttribute(ogImage || DEFAULT_OG_IMAGE);
 
-  let result = html.replace(/<title>[\s\S]*?<\/title>/, `<title>${fullTitle}</title>`);
+  let result = html.replace(HERO_PRELOAD_PATTERN, "");
+  result = result.replace(/<title>[\s\S]*?<\/title>/, `<title>${fullTitle}</title>`);
   result = result.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${safeCanonical}" />`);
   result = replaceMetaContent(result, 'name="description"', safeDescription);
   result = replaceMetaContent(result, 'property="og:title"', fullTitle);

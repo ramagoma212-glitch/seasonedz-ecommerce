@@ -94,52 +94,45 @@ import { renderDistributor } from "../pages/distributor.js";
 import { renderBlog } from "../pages/blog.js";
 import { renderBlogPost } from "../pages/blogPost.js";
 import { renderNotFound } from "../pages/notFound.js";
-import { renderAdminLogin } from "../pages/adminLogin.js";
-import { renderAdminForgotPassword } from "../pages/adminForgotPasswordPage.js";
-import { renderAdminResetPassword } from "../pages/adminResetPasswordPage.js";
-import { renderAdminActivateAccount } from "../pages/adminActivateAccount.js";
-import { renderAdminUsers } from "../pages/adminUsers.js";
-import { renderAdminUserInviteForm } from "../pages/adminUserInviteForm.js";
-import { renderAdminHome } from "../pages/adminHome.js";
-import { renderAdminOrders } from "../pages/adminOrders.js";
-import { renderAdminOrderDetail } from "../pages/adminOrderDetail.js";
-import { renderAdminEnquiries } from "../pages/adminEnquiries.js";
-import { renderAdminReviews } from "../pages/adminReviews.js";
-import { renderAdminProducts } from "../pages/adminProducts.js";
-import { renderAdminProductCreate, renderAdminProductEdit, renderAdminProductRedirectToEdit } from "../pages/adminProductForm.js";
-import { renderAdminAffiliateProducts } from "../pages/adminAffiliateProducts.js";
-import { renderAdminAffiliateProductCreate, renderAdminAffiliateProductEdit } from "../pages/adminAffiliateProductForm.js";
-import { renderAdminReferralsOverview } from "../pages/adminReferralsOverview.js";
-import { renderAdminReferralAffiliates } from "../pages/adminReferralAffiliates.js";
-import { renderAdminReferralAffiliateCreate, renderAdminReferralAffiliateEdit } from "../pages/adminReferralAffiliateForm.js";
-import { renderAdminReferralAffiliateProducts } from "../pages/adminReferralAffiliateProducts.js";
-import { renderAdminReferralAffiliateProductCreate, renderAdminReferralAffiliateProductEdit } from "../pages/adminReferralAffiliateProductForm.js";
-import { renderAdminAffiliateApplications } from "../pages/adminAffiliateApplications.js";
-import { renderAdminAffiliateApplicationDetail } from "../pages/adminAffiliateApplicationDetail.js";
-import { renderAdminReferralSettings } from "../pages/adminReferralSettings.js";
-import { renderAdminReferralCommissions } from "../pages/adminReferralCommissions.js";
-import { renderAdminReferralCommissionDetail } from "../pages/adminReferralCommissionDetail.js";
-import { renderAdminReferralPayouts } from "../pages/adminReferralPayouts.js";
-// Milestone 181, Part D: the preorder programme's own settings page —
-// separate from Referrals above, reached from the Products page.
-import { renderAdminPreorderSettings } from "../pages/adminPreorderSettings.js";
-import { renderAdminWelcomeGiftAssets } from "../pages/adminWelcomeGiftAssets.js";
-// Milestone 182: Content Studio repurposed as the Seasonedz Marketing
-// Control Centre — see adminContentStudioHome.js's own header comment.
-import { renderAdminContentStudioHome } from "../pages/adminContentStudioHome.js";
-import { renderAdminCampaignBriefs } from "../pages/adminCampaignBriefs.js";
-import { renderAdminMarketingLinkBuilder } from "../pages/adminMarketingLinkBuilder.js";
-import { renderAdminCampaignBriefCreate, renderAdminCampaignBriefEdit } from "../pages/adminCampaignBriefForm.js";
-import { renderAdminCampaignBriefDetail } from "../pages/adminCampaignBriefDetail.js";
-// Content Studio Phase 2: Brand Knowledge Foundation only — no
-// campaign/generation/publishing page exists anywhere yet.
-import { renderAdminBrandKnowledge } from "../pages/adminBrandKnowledge.js";
-import { renderAdminBrandKnowledgeCreate, renderAdminBrandKnowledgeEdit } from "../pages/adminBrandKnowledgeForm.js";
-import { renderAdminContentPillars } from "../pages/adminContentPillars.js";
-import { renderAdminContentPillarCreate, renderAdminContentPillarEdit } from "../pages/adminContentPillarForm.js";
-import { renderAdminAudiences } from "../pages/adminAudiences.js";
-import { renderAdminAudienceCreate, renderAdminAudienceEdit } from "../pages/adminAudienceForm.js";
-import { renderAdminContentContextPreview } from "../pages/adminContentContextPreview.js";
+import { renderLazyLoadError } from "../pages/lazyLoadError.js";
+
+// Milestone 190B — FULL WEBSITE PERFORMANCE OPTIMISATION, Part C/AS.
+// Every /admin/* page (and only /admin/* pages — every customer-facing
+// route above stays a normal static import) is loaded through this one
+// helper instead of a top-level `import`. A static import anywhere in
+// the app pulls a module into the eagerly-loaded graph regardless of
+// which route actually uses it (confirmed empirically: leaving even
+// one admin page statically imported elsewhere, e.g. the old
+// `import { renderOptionGroupRow } from "../pages/adminProductForm.js"`
+// in app.js, was enough to make Vite merge that whole ~37 KB page back
+// into the main bundle) — every admin page's own static imports (its
+// admin-only API modules, adminGuard.js, etc.) come along with it, so
+// converting the ~50 admin routes here is what actually removes that
+// code from a customer's initial download, not just router.js's own
+// import lines.
+//
+// `importer` is called fresh on every navigation to that route (not
+// memoized here) — the browser's own module cache already makes a
+// repeat `import()` of the same specifier resolve instantly without a
+// second network request, so there's no need to duplicate that
+// caching. `pick` extracts the one render function this route needs
+// from the resolved module (several admin routes share one module,
+// e.g. adminProductForm.js exports three). On any import failure
+// (stale chunk after a redeploy, a network blip — Part AS) this
+// returns a safe, friendly retry page instead of leaving the screen
+// blank or surfacing a raw chunk filename/stack trace.
+function lazyPage(importer, pick) {
+  return async (params) => {
+    let mod;
+    try {
+      mod = await importer();
+    } catch (error) {
+      console.error("[router] Failed to load a page module:", error);
+      return renderLazyLoadError();
+    }
+    return pick(mod)(params);
+  };
+}
 
 // Version 7, Milestone 92B: an optional `skeleton` per route names an
 // entry in SKELETON_RENDERERS below — shown immediately, before
@@ -163,7 +156,12 @@ const routeDefs = [
     fullTitle: "Seasonedz Group | Colouring Books & Creative Products",
     description:
       "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.",
-    skeleton: "home",
+    // Milestone 190B, Part H/I: no `skeleton` here anymore —
+    // renderHome() is now synchronous (returns a real static shell
+    // immediately, with its own per-section skeletons for the parts
+    // that still depend on getCatalog() — see home.js's own header
+    // comment), so this route's render() never returns a Promise and
+    // this router-level skeleton mechanism no longer applies to it.
   },
   {
     pattern: "/shop",
@@ -358,20 +356,20 @@ const routeDefs = [
   // load-bearing, not just extra caution — never rely on it as the
   // actual security boundary though; requireAdminAuth (server-side
   // session check) remains that.
-  { pattern: "/admin/login", render: renderAdminLogin, title: "Admin Login", noindex: true },
+  { pattern: "/admin/login", render: lazyPage(() => import("../pages/adminLogin.js"), (m) => m.renderAdminLogin), title: "Admin Login", noindex: true },
   // Milestone 179, Part D/B: admin forgotten/reset password and
   // invitation activation — deliberately separate from the customer
   // equivalents (/account/forgot-password, /account/reset-password),
   // never reachable through them. reset-password/activate read their
   // token from the query string, same convention as the customer pages.
-  { pattern: "/admin/forgot-password", render: renderAdminForgotPassword, title: "Admin Forgot Password", noindex: true },
-  { pattern: "/admin/reset-password", render: renderAdminResetPassword, title: "Admin Reset Password", noindex: true },
-  { pattern: "/admin/activate", render: renderAdminActivateAccount, title: "Activate Admin Account", noindex: true },
-  { pattern: "/admin", render: renderAdminHome, title: "Admin", noindex: true },
-  { pattern: "/admin/orders/:orderNumber", render: renderAdminOrderDetail, title: "Admin Order", noindex: true },
-  { pattern: "/admin/orders", render: renderAdminOrders, title: "Admin Orders", noindex: true },
-  { pattern: "/admin/enquiries", render: renderAdminEnquiries, title: "Admin Enquiries", noindex: true },
-  { pattern: "/admin/reviews", render: renderAdminReviews, title: "Admin Reviews", noindex: true },
+  { pattern: "/admin/forgot-password", render: lazyPage(() => import("../pages/adminForgotPasswordPage.js"), (m) => m.renderAdminForgotPassword), title: "Admin Forgot Password", noindex: true },
+  { pattern: "/admin/reset-password", render: lazyPage(() => import("../pages/adminResetPasswordPage.js"), (m) => m.renderAdminResetPassword), title: "Admin Reset Password", noindex: true },
+  { pattern: "/admin/activate", render: lazyPage(() => import("../pages/adminActivateAccount.js"), (m) => m.renderAdminActivateAccount), title: "Activate Admin Account", noindex: true },
+  { pattern: "/admin", render: lazyPage(() => import("../pages/adminHome.js"), (m) => m.renderAdminHome), title: "Admin", noindex: true },
+  { pattern: "/admin/orders/:orderNumber", render: lazyPage(() => import("../pages/adminOrderDetail.js"), (m) => m.renderAdminOrderDetail), title: "Admin Order", noindex: true },
+  { pattern: "/admin/orders", render: lazyPage(() => import("../pages/adminOrders.js"), (m) => m.renderAdminOrders), title: "Admin Orders", noindex: true },
+  { pattern: "/admin/enquiries", render: lazyPage(() => import("../pages/adminEnquiries.js"), (m) => m.renderAdminEnquiries), title: "Admin Enquiries", noindex: true },
+  { pattern: "/admin/reviews", render: lazyPage(() => import("../pages/adminReviews.js"), (m) => m.renderAdminReviews), title: "Admin Reviews", noindex: true },
   // Version 7, Milestone 67: admin product management. "/new" (a
   // literal) is listed before "/:id" (a wildcard) — both have the same
   // segment count after /admin/products, so registration order is what
@@ -379,22 +377,22 @@ const routeDefs = [
   // "new". "/:id" has no separate read-only detail view — it redirects
   // straight to "/:id/edit" (VERSION_7_PRODUCT_MANAGEMENT_PLAN.md's
   // "keep it simple" allowance).
-  { pattern: "/admin/products/new", render: renderAdminProductCreate, title: "Add Product", noindex: true },
-  { pattern: "/admin/products/:id/edit", render: renderAdminProductEdit, title: "Edit Product", noindex: true },
-  { pattern: "/admin/products/:id", render: renderAdminProductRedirectToEdit, title: "Product", noindex: true },
-  { pattern: "/admin/preorder-settings", render: renderAdminPreorderSettings, title: "Preorder Settings", noindex: true },
+  { pattern: "/admin/products/new", render: lazyPage(() => import("../pages/adminProductForm.js"), (m) => m.renderAdminProductCreate), title: "Add Product", noindex: true },
+  { pattern: "/admin/products/:id/edit", render: lazyPage(() => import("../pages/adminProductForm.js"), (m) => m.renderAdminProductEdit), title: "Edit Product", noindex: true },
+  { pattern: "/admin/products/:id", render: lazyPage(() => import("../pages/adminProductForm.js"), (m) => m.renderAdminProductRedirectToEdit), title: "Product", noindex: true },
+  { pattern: "/admin/preorder-settings", render: lazyPage(() => import("../pages/adminPreorderSettings.js"), (m) => m.renderAdminPreorderSettings), title: "Preorder Settings", noindex: true },
   // Milestone 189, brief Part O: admin upload/activation of the three
   // fixed welcome-gift sample PDFs.
-  { pattern: "/admin/welcome-gift", render: renderAdminWelcomeGiftAssets, title: "Welcome Gift Samples", noindex: true },
-  { pattern: "/admin/products", render: renderAdminProducts, title: "Admin Products", noindex: true },
+  { pattern: "/admin/welcome-gift", render: lazyPage(() => import("../pages/adminWelcomeGiftAssets.js"), (m) => m.renderAdminWelcomeGiftAssets), title: "Welcome Gift Samples", noindex: true },
+  { pattern: "/admin/products", render: lazyPage(() => import("../pages/adminProducts.js"), (m) => m.renderAdminProducts), title: "Admin Products", noindex: true },
   // Version 7, Milestone 172B: admin affiliate-product management.
   // Same "/new" before "/:id/edit" ordering as /admin/products above.
   // Not linked from anywhere public, and no public route reads any of
   // this yet — the Recommended Books page and its own SEO metadata are
   // Milestone 172C.
-  { pattern: "/admin/affiliate/new", render: renderAdminAffiliateProductCreate, title: "Add Affiliate Product", noindex: true },
-  { pattern: "/admin/affiliate/:id/edit", render: renderAdminAffiliateProductEdit, title: "Edit Affiliate Product", noindex: true },
-  { pattern: "/admin/affiliate", render: renderAdminAffiliateProducts, title: "Admin Affiliate Products", noindex: true },
+  { pattern: "/admin/affiliate/new", render: lazyPage(() => import("../pages/adminAffiliateProductForm.js"), (m) => m.renderAdminAffiliateProductCreate), title: "Add Affiliate Product", noindex: true },
+  { pattern: "/admin/affiliate/:id/edit", render: lazyPage(() => import("../pages/adminAffiliateProductForm.js"), (m) => m.renderAdminAffiliateProductEdit), title: "Edit Affiliate Product", noindex: true },
+  { pattern: "/admin/affiliate", render: lazyPage(() => import("../pages/adminAffiliateProducts.js"), (m) => m.renderAdminAffiliateProducts), title: "Admin Affiliate Products", noindex: true },
   // Version 7, Milestone 172B.3: Seasonedz's own affiliate/referral
   // programme — a fully separate route tree from /admin/affiliate
   // above (see the 172B.2 audit). "/affiliates/new" before
@@ -402,55 +400,55 @@ const routeDefs = [
   // admin list/:id-wildcard pair in this file. No referral discount or
   // commission is live on the public storefront yet — that's 172B.4/
   // 172B.5, so nothing here is linked from anywhere public.
-  { pattern: "/admin/referrals/affiliates/new", render: renderAdminReferralAffiliateCreate, title: "Add Affiliate", noindex: true },
-  { pattern: "/admin/referrals/affiliates/:id/edit", render: renderAdminReferralAffiliateEdit, title: "Edit Affiliate", noindex: true },
-  { pattern: "/admin/referrals/affiliates", render: renderAdminReferralAffiliates, title: "Referral Affiliates", noindex: true },
-  { pattern: "/admin/referrals/applications/:id", render: renderAdminAffiliateApplicationDetail, title: "Affiliate Application", noindex: true },
-  { pattern: "/admin/referrals/applications", render: renderAdminAffiliateApplications, title: "Affiliate Applications", noindex: true },
+  { pattern: "/admin/referrals/affiliates/new", render: lazyPage(() => import("../pages/adminReferralAffiliateForm.js"), (m) => m.renderAdminReferralAffiliateCreate), title: "Add Affiliate", noindex: true },
+  { pattern: "/admin/referrals/affiliates/:id/edit", render: lazyPage(() => import("../pages/adminReferralAffiliateForm.js"), (m) => m.renderAdminReferralAffiliateEdit), title: "Edit Affiliate", noindex: true },
+  { pattern: "/admin/referrals/affiliates", render: lazyPage(() => import("../pages/adminReferralAffiliates.js"), (m) => m.renderAdminReferralAffiliates), title: "Referral Affiliates", noindex: true },
+  { pattern: "/admin/referrals/applications/:id", render: lazyPage(() => import("../pages/adminAffiliateApplicationDetail.js"), (m) => m.renderAdminAffiliateApplicationDetail), title: "Affiliate Application", noindex: true },
+  { pattern: "/admin/referrals/applications", render: lazyPage(() => import("../pages/adminAffiliateApplications.js"), (m) => m.renderAdminAffiliateApplications), title: "Affiliate Applications", noindex: true },
   // Version 7, Milestone 172B.5: commission lifecycle + payout. "/:id"
   // before the bare list, same ordering discipline as every other
   // admin list/:id-wildcard pair in this file.
-  { pattern: "/admin/referrals/commissions/:id", render: renderAdminReferralCommissionDetail, title: "Commission Detail", noindex: true },
-  { pattern: "/admin/referrals/commissions", render: renderAdminReferralCommissions, title: "Referral Commissions", noindex: true },
-  { pattern: "/admin/referrals/payouts", render: renderAdminReferralPayouts, title: "Referral Payouts", noindex: true },
+  { pattern: "/admin/referrals/commissions/:id", render: lazyPage(() => import("../pages/adminReferralCommissionDetail.js"), (m) => m.renderAdminReferralCommissionDetail), title: "Commission Detail", noindex: true },
+  { pattern: "/admin/referrals/commissions", render: lazyPage(() => import("../pages/adminReferralCommissions.js"), (m) => m.renderAdminReferralCommissions), title: "Referral Commissions", noindex: true },
+  { pattern: "/admin/referrals/payouts", render: lazyPage(() => import("../pages/adminReferralPayouts.js"), (m) => m.renderAdminReferralPayouts), title: "Referral Payouts", noindex: true },
   // Milestone 178, Part C: per-product commission configuration for
   // this same internal programme — "/new" before "/:id/edit", same
   // ordering discipline as every other admin list/:id-wildcard pair.
-  { pattern: "/admin/referrals/affiliate-products/new", render: renderAdminReferralAffiliateProductCreate, title: "Add Affiliate Product", noindex: true },
-  { pattern: "/admin/referrals/affiliate-products/:id/edit", render: renderAdminReferralAffiliateProductEdit, title: "Edit Affiliate Product", noindex: true },
-  { pattern: "/admin/referrals/affiliate-products", render: renderAdminReferralAffiliateProducts, title: "Affiliate Products", noindex: true },
-  { pattern: "/admin/referrals/settings", render: renderAdminReferralSettings, title: "Referral Programme Settings", noindex: true },
-  { pattern: "/admin/referrals", render: renderAdminReferralsOverview, title: "Referrals", noindex: true },
+  { pattern: "/admin/referrals/affiliate-products/new", render: lazyPage(() => import("../pages/adminReferralAffiliateProductForm.js"), (m) => m.renderAdminReferralAffiliateProductCreate), title: "Add Affiliate Product", noindex: true },
+  { pattern: "/admin/referrals/affiliate-products/:id/edit", render: lazyPage(() => import("../pages/adminReferralAffiliateProductForm.js"), (m) => m.renderAdminReferralAffiliateProductEdit), title: "Edit Affiliate Product", noindex: true },
+  { pattern: "/admin/referrals/affiliate-products", render: lazyPage(() => import("../pages/adminReferralAffiliateProducts.js"), (m) => m.renderAdminReferralAffiliateProducts), title: "Affiliate Products", noindex: true },
+  { pattern: "/admin/referrals/settings", render: lazyPage(() => import("../pages/adminReferralSettings.js"), (m) => m.renderAdminReferralSettings), title: "Referral Programme Settings", noindex: true },
+  { pattern: "/admin/referrals", render: lazyPage(() => import("../pages/adminReferralsOverview.js"), (m) => m.renderAdminReferralsOverview), title: "Referrals", noindex: true },
 
   // Content Studio Phase 2: Brand Knowledge Foundation only — no
   // campaign/generation/publishing route exists anywhere yet. Most
   // specific pattern first, same ordering discipline as every route
   // group above.
-  { pattern: "/admin/content-studio/brand-knowledge/new", render: renderAdminBrandKnowledgeCreate, title: "Add Brand Knowledge Entry", noindex: true },
-  { pattern: "/admin/content-studio/brand-knowledge/:id/edit", render: renderAdminBrandKnowledgeEdit, title: "Edit Brand Knowledge Entry", noindex: true },
-  { pattern: "/admin/content-studio/brand-knowledge", render: renderAdminBrandKnowledge, title: "Brand Knowledge", noindex: true },
-  { pattern: "/admin/content-studio/pillars/new", render: renderAdminContentPillarCreate, title: "Add Content Pillar", noindex: true },
-  { pattern: "/admin/content-studio/pillars/:id/edit", render: renderAdminContentPillarEdit, title: "Edit Content Pillar", noindex: true },
-  { pattern: "/admin/content-studio/pillars", render: renderAdminContentPillars, title: "Content Pillars", noindex: true },
-  { pattern: "/admin/content-studio/audiences/new", render: renderAdminAudienceCreate, title: "Add Audience", noindex: true },
-  { pattern: "/admin/content-studio/audiences/:id/edit", render: renderAdminAudienceEdit, title: "Edit Audience", noindex: true },
-  { pattern: "/admin/content-studio/audiences", render: renderAdminAudiences, title: "Audiences", noindex: true },
-  { pattern: "/admin/content-studio/context-preview", render: renderAdminContentContextPreview, title: "AI Context Preview", noindex: true },
+  { pattern: "/admin/content-studio/brand-knowledge/new", render: lazyPage(() => import("../pages/adminBrandKnowledgeForm.js"), (m) => m.renderAdminBrandKnowledgeCreate), title: "Add Brand Knowledge Entry", noindex: true },
+  { pattern: "/admin/content-studio/brand-knowledge/:id/edit", render: lazyPage(() => import("../pages/adminBrandKnowledgeForm.js"), (m) => m.renderAdminBrandKnowledgeEdit), title: "Edit Brand Knowledge Entry", noindex: true },
+  { pattern: "/admin/content-studio/brand-knowledge", render: lazyPage(() => import("../pages/adminBrandKnowledge.js"), (m) => m.renderAdminBrandKnowledge), title: "Brand Knowledge", noindex: true },
+  { pattern: "/admin/content-studio/pillars/new", render: lazyPage(() => import("../pages/adminContentPillarForm.js"), (m) => m.renderAdminContentPillarCreate), title: "Add Content Pillar", noindex: true },
+  { pattern: "/admin/content-studio/pillars/:id/edit", render: lazyPage(() => import("../pages/adminContentPillarForm.js"), (m) => m.renderAdminContentPillarEdit), title: "Edit Content Pillar", noindex: true },
+  { pattern: "/admin/content-studio/pillars", render: lazyPage(() => import("../pages/adminContentPillars.js"), (m) => m.renderAdminContentPillars), title: "Content Pillars", noindex: true },
+  { pattern: "/admin/content-studio/audiences/new", render: lazyPage(() => import("../pages/adminAudienceForm.js"), (m) => m.renderAdminAudienceCreate), title: "Add Audience", noindex: true },
+  { pattern: "/admin/content-studio/audiences/:id/edit", render: lazyPage(() => import("../pages/adminAudienceForm.js"), (m) => m.renderAdminAudienceEdit), title: "Edit Audience", noindex: true },
+  { pattern: "/admin/content-studio/audiences", render: lazyPage(() => import("../pages/adminAudiences.js"), (m) => m.renderAdminAudiences), title: "Audiences", noindex: true },
+  { pattern: "/admin/content-studio/context-preview", render: lazyPage(() => import("../pages/adminContentContextPreview.js"), (m) => m.renderAdminContentContextPreview), title: "AI Context Preview", noindex: true },
   // Milestone 182: Zeely Campaign Brief tool — "/new" before the
   // ":id" wildcard, same ordering discipline as every other admin
   // list/:id-wildcard pair in this file.
-  { pattern: "/admin/content-studio/campaign-briefs/new", render: renderAdminCampaignBriefCreate, title: "New Campaign Brief", noindex: true },
-  { pattern: "/admin/content-studio/campaign-briefs/:id/edit", render: renderAdminCampaignBriefEdit, title: "Edit Campaign Brief", noindex: true },
-  { pattern: "/admin/content-studio/campaign-briefs/:id", render: renderAdminCampaignBriefDetail, title: "Campaign Brief", noindex: true },
-  { pattern: "/admin/content-studio/campaign-briefs", render: renderAdminCampaignBriefs, title: "Campaign Briefs", noindex: true },
-  { pattern: "/admin/content-studio/marketing-links", render: renderAdminMarketingLinkBuilder, title: "Marketing Link Builder", noindex: true },
-  { pattern: "/admin/content-studio", render: renderAdminContentStudioHome, title: "Content Studio", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs/new", render: lazyPage(() => import("../pages/adminCampaignBriefForm.js"), (m) => m.renderAdminCampaignBriefCreate), title: "New Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs/:id/edit", render: lazyPage(() => import("../pages/adminCampaignBriefForm.js"), (m) => m.renderAdminCampaignBriefEdit), title: "Edit Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs/:id", render: lazyPage(() => import("../pages/adminCampaignBriefDetail.js"), (m) => m.renderAdminCampaignBriefDetail), title: "Campaign Brief", noindex: true },
+  { pattern: "/admin/content-studio/campaign-briefs", render: lazyPage(() => import("../pages/adminCampaignBriefs.js"), (m) => m.renderAdminCampaignBriefs), title: "Campaign Briefs", noindex: true },
+  { pattern: "/admin/content-studio/marketing-links", render: lazyPage(() => import("../pages/adminMarketingLinkBuilder.js"), (m) => m.renderAdminMarketingLinkBuilder), title: "Marketing Link Builder", noindex: true },
+  { pattern: "/admin/content-studio", render: lazyPage(() => import("../pages/adminContentStudioHome.js"), (m) => m.renderAdminContentStudioHome), title: "Content Studio", noindex: true },
   // Milestone 179, Part G: admin-user management — ADMIN-only,
   // backend-enforced (see adminUsers.routes.ts). "/invite" before the
   // bare list, same ordering discipline as every other admin
   // list/:id-wildcard pair in this file.
-  { pattern: "/admin/users/invite", render: renderAdminUserInviteForm, title: "Invite Admin User", noindex: true },
-  { pattern: "/admin/users", render: renderAdminUsers, title: "Admin Users", noindex: true },
+  { pattern: "/admin/users/invite", render: lazyPage(() => import("../pages/adminUserInviteForm.js"), (m) => m.renderAdminUserInviteForm), title: "Invite Admin User", noindex: true },
+  { pattern: "/admin/users", render: lazyPage(() => import("../pages/adminUsers.js"), (m) => m.renderAdminUsers), title: "Admin Users", noindex: true },
 ];
 
 // Reads "/product/abc?ref=home" style URLs straight from the address

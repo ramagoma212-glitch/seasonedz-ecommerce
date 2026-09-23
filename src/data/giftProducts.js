@@ -11,26 +11,35 @@
 // Idea): add an entry below with a real product slug, approved title/
 // description copy, and an approved wrapped-image asset — nothing
 // about renderGiftingSection() itself needs to change.
+//
+// Milestone 190B, Part K/L: wrappedImage now points at a WebP
+// conversion of the original PNG (same directory, same visual content
+// — see the milestone's own before/after report for exact sizes: each
+// original PNG was 2.5-2.9 MB; each WebP is under 200 KB at quality 82,
+// visually verified side by side with no perceptible loss). The
+// original PNGs are kept on disk (public/images/home/gifts/*.png) as
+// source/archive only — nothing references them anymore, so the
+// browser never downloads them.
 export const GIFT_PRODUCTS = [
   {
     productSlug: "abc-colouring-book-for-kids-with-fun-facts",
     title: "ABC Colouring Book Gift Idea",
     description: "A thoughtful learning gift for tracing, colouring and early alphabet practice.",
-    wrappedImage: "/images/home/gifts/gift-abc-colouring-book.png",
+    wrappedImage: "/images/home/gifts/gift-abc-colouring-book.webp",
     alt: "ABC Colouring Book for Kids shown in clear gift wrapping with a cream ribbon and gift tag.",
   },
   {
     productSlug: "little-hands-big-faith-new-testament-bible-colouring-book",
     title: "New Testament Bible Colouring Book Gift Idea",
     description: "A meaningful faith based gift that supports reading, writing, prayer and creativity.",
-    wrappedImage: "/images/home/gifts/gift-new-testament.png",
+    wrappedImage: "/images/home/gifts/gift-new-testament.webp",
     alt: "New Testament Bible Colouring Book for Kids shown in clear gift wrapping with a cream ribbon and gift tag.",
   },
   {
     productSlug: "little-hands-big-faith-old-testament-bible-colouring-book",
     title: "Old Testament Bible Colouring Book Gift Idea",
     description: "A thoughtful Christian gift filled with Bible stories, learning and creative activities.",
-    wrappedImage: "/images/home/gifts/gift-old-testament.png",
+    wrappedImage: "/images/home/gifts/gift-old-testament.webp",
     alt: "Old Testament Bible Colouring Book for Kids shown in clear gift wrapping with a cream ribbon and gift tag.",
   },
 ];

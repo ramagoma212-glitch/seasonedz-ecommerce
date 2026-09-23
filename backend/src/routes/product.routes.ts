@@ -1,8 +1,14 @@
 import { Router } from "express";
 import { getProduct, listBestSellers, listFeaturedProducts, listNewArrivals, listProducts } from "../controllers/product.controller.js";
 import { listPublicProductReviewsHandler } from "../controllers/productReview.controller.js";
+import { publicCache } from "../middleware/publicCache.middleware.js";
 
 const router = Router();
+
+// Milestone 190B, Part S: every route in this file is public,
+// unauthenticated and read-only — see publicCache.middleware.ts's own
+// header comment for the measured reasoning.
+router.use(publicCache(60));
 
 // The fixed sub-paths must be registered before the dynamic /:slug
 // route, otherwise Express would match e.g. "featured" as a slug.

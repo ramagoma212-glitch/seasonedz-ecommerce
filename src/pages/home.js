@@ -30,6 +30,7 @@ import { withBase } from "../js/paths.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { GIFT_PRODUCTS } from "../data/giftProducts.js";
 import { renderExpandableGrid } from "../components/expandableGrid.js";
+import { renderProductGridSkeleton, renderBestSellerSkeleton } from "../components/skeleton.js";
 
 // Exact order requested for the New Releases section.
 const NEW_RELEASE_SLUGS = [
@@ -376,8 +377,82 @@ function renderDigitalSection(digitalProducts = [], allProducts = []) {
   `;
 }
 
-export async function renderHome() {
-  const { products } = await getCatalog();
+// Milestone 190B, Part H/I: the four sections below are the ONLY part
+// of the homepage that ever depended on getCatalog() — every other
+// section (hero, Hi Friend, marketplace, Google Reviews, FAQ,
+// newsletter) is, and always was, static markup with no data
+// dependency of its own. Previously the whole page waited for
+// getCatalog() before returning ANY html, so a slow/cold Render
+// response delayed the hero itself, right along with the parts that
+// genuinely needed the network. Each one now renders a real skeleton
+// synchronously (stable ids below), and hydrateCatalogueSections()
+// fetches the catalogue exactly once (getCatalog()'s own page-lifetime
+// cache, unchanged) and replaces only these four containers' innerHTML
+// once it resolves — the rest of the page, its scroll position and
+// every other section's own event listeners are never touched. A null
+// check on each id (rather than a navigation-epoch guard) is enough
+// correctness here: if the customer has already navigated away by the
+// time this resolves, router.js has already replaced #main-content
+// wholesale and these ids simply no longer exist, so each assignment
+// safely no-ops. getCatalog() itself never rejects (falls back to
+// static data internally — see productsApi.js's own header comment),
+// so Part J's "API failure must never blank the homepage" requirement
+// holds structurally: there is no failure path here to handle.
+// Deliberately no heading here — each real section below (still fully
+// self-contained, unchanged from before this milestone) renders its
+// own "section class=section container" wrapper AND heading once
+// hydrated, exactly as it always has; duplicating that heading into
+// the pre-hydration skeleton would leave two of the same <h2> in the
+// DOM for the brief window before outerHTML replaces this whole div.
+// The section__header-shaped skeleton block below still reserves
+// roughly the right vertical space (Part G's CLS goal) without
+// pretending to show real heading text early.
+//
+// Deliberately a generic ".product-grid" only, never the real section's
+// own grid class (e.g. "new-releases-grid"/"gifting-grid"/"digital-grid")
+// — an earlier version passed the real class through for slightly
+// closer skeleton sizing, but that let the skeleton's own placeholder
+// satisfy a `.new-releases-grid`-style selector before real content
+// ever arrived, breaking tests/smoke/homeSections.spec.js's own
+// (correct) "wait for the real grid, then check section order"
+// assumption. `.product-grid` alone still reserves roughly the right
+// grid shape (Part G's own "roughly right," not pixel-perfect,
+// standard — same as every other skeleton in this app); only the real,
+// hydrated markup below ever carries the section-specific class.
+function renderCatalogueSectionSkeleton(id) {
+  return `
+    <section class="section container" id="${id}" aria-hidden="true">
+      <div class="skeleton-block skeleton-heading"></div>
+      <div class="product-grid">${renderProductGridSkeleton(3)}</div>
+    </section>
+  `;
+}
+
+function hydrateCatalogueSections() {
+  void getCatalog().then(({ products }) => {
+    const newReleasesEl = document.getElementById("home-new-releases");
+    if (newReleasesEl) newReleasesEl.outerHTML = renderNewReleasesSection(products);
+
+    const bestSellerEl = document.getElementById("home-best-seller");
+    if (bestSellerEl) bestSellerEl.outerHTML = renderBestSellerSection(products);
+
+    const giftingEl = document.getElementById("home-gifting");
+    if (giftingEl) giftingEl.outerHTML = renderGiftingSection(products);
+
+    const digitalEl = document.getElementById("home-digital");
+    if (digitalEl) digitalEl.outerHTML = renderDigitalSection(products.filter((product) => product.productType === "DIGITAL"), products);
+  });
+}
+
+export function renderHome() {
+  // Fire-and-forget: kicked off before returning so the fetch starts in
+  // the same tick as this render, same "no wasted time" reasoning as
+  // every skeleton elsewhere in this app — see router.js's own comment.
+  // Safe to call even though the DOM nodes it eventually patches don't
+  // exist yet: by the time getCatalog() actually resolves (a real
+  // network round trip), router.js has already synchronously written
+  // the string this function returns into #main-content.
+  hydrateCatalogueSections();
 
   return `
     <section class="container">
@@ -441,10 +516,13 @@ export async function renderHome() {
     </section>
 
     ${renderHiFriendSection()}
-    ${renderNewReleasesSection(products)}
-    ${renderBestSellerSection(products)}
-    ${renderGiftingSection(products)}
-    ${renderDigitalSection(products.filter((product) => product.productType === "DIGITAL"), products)}
+    ${renderCatalogueSectionSkeleton("home-new-releases")}
+    <section class="section container" id="home-best-seller" aria-hidden="true">
+      <div class="skeleton-block skeleton-heading"></div>
+      ${renderBestSellerSkeleton()}
+    </section>
+    ${renderCatalogueSectionSkeleton("home-gifting")}
+    ${renderCatalogueSectionSkeleton("home-digital")}
     ${renderMarketplaceHomeSection()}
     ${renderGoogleReviewsSection()}
     ${renderHomeFaqSection()}
