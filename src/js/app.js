@@ -103,7 +103,7 @@ import { setupPasswordVisibilityToggles } from "./passwordToggle.js";
 // from scratch with the new URL already known).
 let adminLogin, adminLogout, adminVerifyOtp, adminResendOtp, adminLogoutAllSessions, adminForgotPassword, adminResetPassword, activateAdminInvitation;
 let inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive;
-let uploadWelcomeGiftAsset;
+let uploadWelcomeGiftAsset, previewWelcomeGiftBulkSend, runWelcomeGiftBulkSend;
 let updateAdminOrderStatus,
   updateAdminShipping,
   getAdminCourierQuote,
@@ -177,7 +177,7 @@ function ensureAdminModulesLoaded() {
     adminModulesPromise = import("./adminBundle.js").then((bundle) => {
       ({ adminLogin, adminLogout, adminVerifyOtp, adminResendOtp, adminLogoutAllSessions, adminForgotPassword, adminResetPassword, activateAdminInvitation } = bundle.adminAuthApi);
       ({ inviteAdminUser, reissueAdminInvitation, changeAdminUserRole, setAdminUserActive } = bundle.adminUsersApi);
-      ({ uploadWelcomeGiftAsset } = bundle.adminWelcomeGiftApi);
+      ({ uploadWelcomeGiftAsset, previewWelcomeGiftBulkSend, runWelcomeGiftBulkSend } = bundle.adminWelcomeGiftApi);
       ({
         updateAdminOrderStatus,
         updateAdminShipping,
@@ -6574,6 +6574,106 @@ function setupAdminWelcomeGiftAssets() {
     event.preventDefault();
     handleAdminWelcomeGiftAssetUploadSubmit(form);
   });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="welcome-gift-bulk-preview"]')) {
+      handleWelcomeGiftBulkPreviewClick(event.target.closest('[data-action="welcome-gift-bulk-preview"]'));
+      return;
+    }
+    if (event.target.closest('[data-action="welcome-gift-bulk-send"]')) {
+      handleWelcomeGiftBulkSendClick(event.target.closest('[data-action="welcome-gift-bulk-send"]'));
+    }
+  });
+}
+
+function renderWelcomeGiftBulkPreviewSummary(preview) {
+  const guestLine = preview.guestPathAvailable
+    ? `<li>Guest checkouts (no account): ${preview.totalDistinctGuestEmails} distinct email(s), ${preview.guestsAlreadySent} already sent, <strong>${preview.guestsEligible} will receive it</strong>.</li>`
+    : `<li>Guest checkouts (no account): not available yet on this deployment.</li>`;
+  const sampleLine = preview.sampleGuestEmails.length
+    ? `<p class="admin-product-form__hint">Sample guest emails: ${preview.sampleGuestEmails.map(escapeHtml).join(", ")}${preview.totalDistinctGuestEmails > preview.sampleGuestEmails.length ? ", ..." : ""}</p>`
+    : "";
+  const totalEligible = preview.customersEligible + preview.guestsEligible;
+
+  return `
+    <ul>
+      <li>Customer accounts: ${preview.totalActiveCustomers} total, ${preview.customersAlreadySent} already sent, <strong>${preview.customersEligible} will receive it</strong>.</li>
+      ${guestLine}
+    </ul>
+    ${sampleLine}
+    <p><strong>${totalEligible} email(s) will be sent if you click "Send Now".</strong> Anyone already sent is skipped automatically.</p>
+  `;
+}
+
+async function handleWelcomeGiftBulkPreviewClick(button) {
+  const section = button.closest("[data-welcome-gift-bulk-send]");
+  const banner = section?.querySelector("[data-welcome-gift-bulk-send-banner]");
+  const previewEl = section?.querySelector("[data-welcome-gift-bulk-send-preview]");
+  const sendButton = section?.querySelector('[data-action="welcome-gift-bulk-send"]');
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = "Loading...";
+
+  try {
+    const response = await previewWelcomeGiftBulkSend();
+    if (previewEl) {
+      previewEl.innerHTML = renderWelcomeGiftBulkPreviewSummary(response.data);
+      previewEl.hidden = false;
+    }
+    if (sendButton) sendButton.hidden = false;
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminWelcomeGiftErrorMessage(error);
+      banner.hidden = false;
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
+
+async function handleWelcomeGiftBulkSendClick(button) {
+  const section = button.closest("[data-welcome-gift-bulk-send]");
+  const banner = section?.querySelector("[data-welcome-gift-bulk-send-banner]");
+  const previewEl = section?.querySelector("[data-welcome-gift-bulk-send-preview]");
+
+  if (!window.confirm("This will send real emails to every eligible customer and guest listed above. This cannot be undone. Continue?")) {
+    return;
+  }
+
+  button.disabled = true;
+  const originalLabel = button.textContent;
+  button.textContent = "Sending...";
+
+  try {
+    const response = await runWelcomeGiftBulkSend();
+    const { customersProcessed, guestsProcessed, guestPathAvailable } = response.data;
+    if (previewEl) {
+      previewEl.innerHTML = `<p class="form-banner form-banner--success">Done. Processed ${customersProcessed} account(s)${guestPathAvailable ? ` and ${guestsProcessed} guest email(s)` : " (guest path unavailable)"}. Anyone already sent was skipped.</p>`;
+      previewEl.hidden = false;
+    }
+    button.hidden = true;
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminWelcomeGiftErrorMessage(error);
+      banner.hidden = false;
+    }
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
 }
 
 async function handleAdminWelcomeGiftAssetUploadSubmit(form) {

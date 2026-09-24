@@ -31,6 +31,7 @@ import { prisma } from "../config/prisma.js";
 import { env } from "../config/env.js";
 import { digitalAssetStorage } from "./digitalAssetStorage.service.js";
 import { sendWelcomeGiftEmail } from "./email/email.service.js";
+import { preferredFrontendBaseUrl } from "../utils/frontendUrl.js";
 
 // Stable internal identifiers, independent of whatever filename an
 // admin eventually uploads — see adminWelcomeGiftAsset.service.ts.
@@ -158,6 +159,66 @@ export async function maybeSendWelcomeGift(customerId: string): Promise<void> {
   }
 }
 
+// Guest-order counterpart to maybeSendWelcomeGift() above — same
+// one-time-delivery guarantee, but keyed on (lowercased, trimmed) email
+// via GuestWelcomeGiftDelivery instead of customerId, since a guest
+// checkout has no Customer row to attach to (see that model's own
+// schema comment). Never throws, same fire-and-forget discipline.
+export async function maybeSendGuestWelcomeGift(rawEmail: string, firstName: string | null): Promise<void> {
+  try {
+    if (!env.welcomeGiftEnabled) return;
+    if (!(await allAssetsConfigured())) return;
+
+    const customerEmail = rawEmail.trim().toLowerCase();
+    if (!customerEmail) return;
+
+    const rawToken = randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + DOWNLOAD_TOKEN_TTL_MS);
+
+    let deliveryId: string;
+    try {
+      const delivery = await prisma.guestWelcomeGiftDelivery.create({
+        data: { customerEmail, tokenHash: hashToken(rawToken), expiresAt, status: WelcomeGiftDeliveryStatus.CLAIMED },
+      });
+      deliveryId = delivery.id;
+    } catch (error) {
+      // Same one-time gate as maybeSendWelcomeGift(): this email already
+      // holds a row (already sent previously, or a concurrent call).
+      if (isUniqueConstraintError(error)) return;
+      throw error;
+    }
+
+    const assets = await prisma.welcomeGiftAsset.findMany({
+      where: { assetKey: { in: [...WELCOME_GIFT_ASSET_KEYS] }, isConfigured: true },
+      select: { assetKey: true, displayName: true },
+    });
+    const displayNameByKey = new Map(assets.map((asset) => [asset.assetKey, asset.displayName]));
+
+    const downloads = WELCOME_GIFT_ASSET_KEYS.map((assetKey) => ({
+      displayName: displayNameByKey.get(assetKey) ?? assetKey,
+      downloadUrl: `${env.backendPublicUrl}/api/welcome-gift/download/${rawToken}/${assetKey}`,
+    }));
+
+    const reliableFirstName = firstName && firstName.trim() ? firstName.trim() : null;
+
+    const delivered = await sendWelcomeGiftEmail({
+      customerFirstName: reliableFirstName,
+      customerEmail,
+      downloads,
+      accountCreateUrl: `${preferredFrontendBaseUrl()}/account`,
+    });
+
+    await prisma.guestWelcomeGiftDelivery.update({
+      where: { id: deliveryId },
+      data: delivered
+        ? { status: WelcomeGiftDeliveryStatus.SENT, sentAt: new Date() }
+        : { status: WelcomeGiftDeliveryStatus.FAILED, failedAt: new Date(), lastError: "Email delivery failed. See server logs for the underlying error (never stored here)." },
+    });
+  } catch (error) {
+    console.warn(`[welcome-gift] maybeSendGuestWelcomeGift failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+  }
+}
+
 export interface WelcomeGiftDownloadResult {
   signedUrl: string;
   displayName: string;
@@ -174,10 +235,21 @@ export async function resolveWelcomeGiftDownload(rawToken: string, assetKey: str
   if (!rawToken || typeof rawToken !== "string") return null;
   if (!isWelcomeGiftAssetKey(assetKey)) return null;
 
-  const delivery = await prisma.welcomeGiftDelivery.findUnique({
-    where: { tokenHash: hashToken(rawToken) },
-    select: { expiresAt: true },
-  });
+  const tokenHash = hashToken(rawToken);
+  let delivery = await prisma.welcomeGiftDelivery.findUnique({ where: { tokenHash }, select: { expiresAt: true } });
+  if (!delivery) {
+    try {
+      // Falls back to the guest-order table (a token issued by
+      // maybeSendGuestWelcomeGift()). Wrapped defensively: if that
+      // table doesn't exist yet in this database (migration not yet
+      // applied), this must still behave exactly like "token not
+      // found" rather than throw — same "never throws" contract this
+      // function has always had.
+      delivery = await prisma.guestWelcomeGiftDelivery.findUnique({ where: { tokenHash }, select: { expiresAt: true } });
+    } catch {
+      delivery = null;
+    }
+  }
   if (!delivery) return null;
   if (delivery.expiresAt.getTime() <= Date.now()) return null;
 

@@ -61,6 +61,20 @@ export async function renderAdminWelcomeGiftAssets() {
         ${allConfigured ? `<div class="form-banner form-banner--success">All three samples are configured.</div>` : `<div class="form-banner form-banner--error">Not all three samples are configured yet — sends stay skipped until they are.</div>`}
 
         ${assets.map(renderAssetCard).join("")}
+
+        <div class="admin-product-form__section" data-welcome-gift-bulk-send>
+          <h2 class="admin-page__section-title">Send to Existing Customers &amp; Orders</h2>
+          <p class="admin-product-form__hint">
+            The gift is normally sent automatically, once, to a brand-new customer right after they verify their
+            email. Use this to send it to people who ordered or registered before that automatic trigger existed.
+            Anyone who has already received it (automatically or via this tool) is skipped — this can be clicked
+            again safely without duplicating anyone.
+          </p>
+          <div class="form-banner form-banner--error" data-welcome-gift-bulk-send-banner hidden></div>
+          <div data-welcome-gift-bulk-send-preview hidden></div>
+          <button type="button" class="btn btn--secondary" data-action="welcome-gift-bulk-preview">Preview Recipients</button>
+          <button type="button" class="btn btn--primary" data-action="welcome-gift-bulk-send" hidden>Send Now</button>
+        </div>
       </section>
     `;
   } catch (error) {

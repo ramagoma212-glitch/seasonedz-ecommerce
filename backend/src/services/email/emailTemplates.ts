@@ -440,13 +440,17 @@ export function renderWelcomeGiftEmail(data: WelcomeGiftEmailData): RenderedEmai
   const greeting = data.customerFirstName ? `Hi ${data.customerFirstName},` : "Hello,";
   const downloadLines = data.downloads.map((item) => `${item.displayName}: ${item.downloadUrl}`).join("\n\n");
 
+  const accountInvite = data.accountCreateUrl
+    ? `\n\nWhile you're here: creating a free account lets you track your orders and check out faster next time. You can set one up any time using this same email address: ${data.accountCreateUrl}`
+    : "";
+
   const body = `${greeting}
 
 Welcome to Seasonedz Group. As a thank you for joining us, here are three free samples to enjoy:
 
 ${downloadLines}
 
-These links are just for you and don't require an account or login to use.
+These links are just for you and don't require an account or login to use.${accountInvite}
 
 ${CONTACT_LINE}
 

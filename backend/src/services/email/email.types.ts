@@ -178,6 +178,11 @@ export interface WelcomeGiftEmailData {
   customerFirstName: string | null;
   customerEmail: string;
   downloads: Array<{ displayName: string; downloadUrl: string }>;
+  // Only set for a guest recipient (no Customer account) — when present,
+  // the template invites them to create an account using this same
+  // email address. Omitted/null for an existing account holder, whose
+  // email is unchanged from before this field existed.
+  accountCreateUrl?: string | null;
 }
 
 // Version 7, Milestone 174B: courier/delivery-stage emails reuse

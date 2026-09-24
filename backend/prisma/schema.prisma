@@ -998,6 +998,35 @@ model WelcomeGiftDelivery {
   @@index([expiresAt])
 }
 
+// Same one-time-delivery shape as WelcomeGiftDelivery above, for a
+// guest who ordered without ever creating a Customer account — keyed
+// by (lowercased, trimmed) email rather than customerId, since there is
+// no Customer row to attach to. Deliberately not tied to a specific
+// Order: a guest who has placed several orders still gets the gift
+// exactly once, matching the "one gift per person" behaviour the
+// customer-account path already gives via Customer's own uniqueness.
+// tokenHash lives in its own separate unique index from
+// WelcomeGiftDelivery.tokenHash (two different tables), so both are
+// checked when resolving a download — see welcomeGift.service.ts's
+// resolveWelcomeGiftDownload().
+model GuestWelcomeGiftDelivery {
+  id            String @id @default(cuid())
+  customerEmail String @unique
+
+  status    WelcomeGiftDeliveryStatus @default(CLAIMED)
+  tokenHash String                    @unique
+  expiresAt DateTime
+
+  sentAt    DateTime?
+  failedAt  DateTime?
+  lastError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
 enum WelcomeGiftDeliveryStatus {
   CLAIMED
   SENT

@@ -16,3 +16,11 @@ export function uploadWelcomeGiftAsset(assetKey, file) {
     body: formData,
   });
 }
+
+export function previewWelcomeGiftBulkSend() {
+  return adminRequest("/admin/welcome-gift/bulk-send/preview", { method: "GET" });
+}
+
+export function runWelcomeGiftBulkSend() {
+  return adminRequest("/admin/welcome-gift/bulk-send", { method: "POST" });
+}
