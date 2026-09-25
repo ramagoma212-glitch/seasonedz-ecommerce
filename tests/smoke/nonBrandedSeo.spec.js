@@ -24,21 +24,32 @@ function escapeXmlForMatch(value) {
     .replace(/'/g, "&apos;");
 }
 
+// `name` is the real, underlying Category.name (used for anything tied
+// to the database entity itself — e.g. the sitemap check below, keyed
+// on slug only, and the BreadcrumbList JSON-LD checks further down,
+// which deliberately still assert the real name). Milestone 196:
+// `pageTitle`, optional, mirrors categorySeoContent.js's own optional
+// field of the same name — when a category's long-form SEO content
+// overrides its customer-facing title/H1 (currently "bundles" and
+// "mindfulness-colouring"), the two are no longer required to be
+// identical, so this array needs its own way to represent that same
+// distinction rather than assuming they always match.
 const REAL_CATEGORIES = [
   { slug: "bible-colouring-books", name: "Bible Colouring Books" },
-  { slug: "mindfulness-colouring", name: "Mindfulness Colouring" },
+  { slug: "mindfulness-colouring", name: "Mindfulness Colouring", pageTitle: "Adult & Mindfulness Colouring" },
   { slug: "kids-colouring-books", name: "Kids Colouring Books" },
   { slug: "markers-and-crayons", name: "Markers and Crayons" },
 ];
 
 test.describe("Category landing pages (Milestone 171I)", () => {
   for (const category of REAL_CATEGORIES) {
+    const displayName = category.pageTitle || category.name;
     test(`/category/${category.slug} has a unique, correct title/H1 — never the generic "Home | Seasonedz Group" fallback`, async ({ page }) => {
       await page.goto(`/category/${category.slug}`);
-      await expect(page).toHaveTitle(`${category.name} | Seasonedz Group`);
+      await expect(page).toHaveTitle(`${displayName} | Seasonedz Group`);
       await expect(page).not.toHaveTitle(/^Home \|/);
       await expect(page).not.toHaveTitle(/^Category \|/);
-      await expect(page.locator("h1")).toHaveText(category.name);
+      await expect(page.locator("h1")).toHaveText(displayName);
     });
   }
 
@@ -107,7 +118,13 @@ test.describe("Category long-form SEO content (Growth Plan Phase 2)", () => {
   const CONTENT_CHECKS = [
     { slug: "bible-colouring-books", phrase: "Little Hands, Big Faith" },
     { slug: "kids-colouring-books", phrase: "foundation phase" },
-    { slug: "mindfulness-colouring", phrase: "screen free" },
+    // Milestone 196: "screen free" was the old, product-first copy's own
+    // phrase — the approved genre-first rewrite says "away from a
+    // screen" instead (paragraph 1). Deliberately kept this specific
+    // (not shortened to "screen" alone), so this still proves the real
+    // Mindfulness long-form content rendered, not just any paragraph
+    // containing the word "screen".
+    { slug: "mindfulness-colouring", phrase: "away from a screen" },
     { slug: "markers-and-crayons", phrase: "non bleed" },
   ];
 

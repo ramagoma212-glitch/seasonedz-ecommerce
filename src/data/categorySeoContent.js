@@ -34,15 +34,30 @@ export const CATEGORY_SEO_CONTENT = {
       "If you are buying for a classroom or a homeschool group, our markers and crayons range is a natural add on, sized and priced for exactly this kind of everyday use. Seasonedz Group ships countrywide with Courier Guy, or offers free collection in Pretoria and Thohoyandou for local buyers.",
     ],
   },
+  // Milestone 196: broader, category/genre-first copy (was product-first
+  // before this pass — see git history) — see the read-only investigation
+  // that preceded this: the product page's own description already
+  // explicitly owns "adult colouring book"/"colouring book for adults"/
+  // "mindfulness colouring book for adults" in its own closing keyword
+  // sentence, so this category deliberately stays at the broader
+  // "adult colouring"/"mindfulness colouring" concept level instead of
+  // restating the product's own exact phrases (avoids the two pages
+  // competing for the same primary term). `pageTitle` follows the same
+  // optional-field pattern "bundles" introduced — every other entry
+  // without one is unaffected. Deliberately no stress-relief/
+  // therapeutic/mental-health claim anywhere here (owner instruction),
+  // and deliberately never implies more than the one real dedicated
+  // adult title Seasonedz currently sells.
   "mindfulness-colouring": {
+    pageTitle: "Adult & Mindfulness Colouring",
     metaDescription:
-      "Adult mindfulness colouring books with calming designs for stress relief and relaxation. A screen free gift or self care activity for adults in South Africa.",
+      "Explore adult and mindfulness colouring for quiet, screen free creative time. Shop the Seasonedz mindfulness book, markers and bundle in South Africa.",
     body: [
-      "Our Mindfulness Colouring Book for Adults is built for exactly what the name says: a quiet, screen free way to slow down. The designs are intricate enough to hold your attention without needing any drawing skill, and simple enough that you can pick it up for ten minutes or an hour without pressure to finish anything.",
-      "It is a genuinely popular gift, and for good reason. It suits someone winding down after work, a parent who wants twenty minutes of quiet once the kids are asleep, or anyone who has been told to find a screen free way to relax and has not found one that actually holds their interest. There is no right way to use it and no deadline attached to any page.",
-      "Colouring as an adult is not childish. It occupies the part of your mind that would otherwise be scrolling, without demanding the concentration a full hobby project would. Many people find it easier to start a conversation, listen to a podcast, or simply sit quietly while their hands are busy with a page like this.",
-      "The book is written for ages 16 and up, with designs chosen for calm rather than complexity for its own sake. Our 24 colour acrylic marker set is the natural companion if you want richer, more saturated colour than pencil or crayon gives, and the two are also available together as a bundle at a better combined price.",
-      "Seasonedz Group ships this book countrywide through Courier Guy, with free collection available in Pretoria and Thohoyandou. It works equally well bought for yourself or given as a gift, and needs no explanation when you hand it over: everyone understands what a colouring book for relaxation is for.",
+      "Adult colouring, sometimes called mindfulness colouring, offers a simple way to spend quiet creative time away from a screen. Instead of starting with a blank page, you can choose colours and work through ready-made patterns and illustrations at your own pace.",
+      "Seasonedz currently offers one dedicated adult title, the Mindfulness Colouring Book for Adults. It has 92 single sided pages with 45 designs including flowers, animals, patterns, portraits and nature scenes.",
+      "You can colour for a few minutes or spend longer on a detailed page. There is no need to finish a design in one sitting, which makes adult colouring easy to fit around work, home life or other everyday routines.",
+      "For people who prefer markers, the book can be paired with our 24 colour acrylic marker set. The Mindfulness Colouring Book and markers are also available together as a bundle.",
+      "Seasonedz Group ships countrywide through Courier Guy, with free collection available in Pretoria and Thohoyandou. Our markers and crayons are also available separately for other colouring activities.",
     ],
   },
   "markers-and-crayons": {
