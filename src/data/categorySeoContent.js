@@ -56,6 +56,36 @@ export const CATEGORY_SEO_CONTENT = {
       "Seasonedz Group ships countrywide with Courier Guy, and offers free collection in Pretoria and Thohoyandou for anyone nearby who would rather collect than wait for delivery.",
     ],
   },
+  // Milestone 196: Growth Plan Phase 2 previously covered 4 of the 5
+  // real categories — this fills the one gap. `pageTitle` is a new,
+  // optional field (undefined/absent for every other entry above,
+  // which keeps reading the real Category.name exactly as before) —
+  // shop.js only ever uses it for the real /category/bundles page's
+  // own <title>/H1/visible breadcrumb text, never the Category
+  // entity's own name (unchanged everywhere else: /categories cards,
+  // nav, and the BreadcrumbList JSON-LD's own `name`, deliberately left
+  // alone — structured data is out of scope for this pass). "Bundles"
+  // alone doesn't say what's actually in the category to someone who's
+  // never heard of Seasonedz; "Colouring Book Bundles" does, without
+  // renaming the underlying category record itself.
+  bundles: {
+    pageTitle: "Colouring Book Bundles",
+    metaDescription:
+      "Shop colouring book bundles with books, markers and crayons for kids, Bible learning and mindful colouring. Available from Seasonedz Group South Africa.",
+    // Every product named below is a real, currently live item in this
+    // category (checked against the live catalogue before writing
+    // this) — the school-starter-colouring-pack product is referred to
+    // by what it actually is, the Old Testament bundle, never by its
+    // own slug's misleading name (a separate, already-flagged, not-yet-
+    // fixed issue this content deliberately doesn't touch or repeat).
+    body: [
+      "Our colouring book bundles pair one of our real colouring books with the markers or crayons it is meant to be used with, so there is nothing extra to buy before a child, a Sunday school class or an adult who wants to relax can start colouring straight away. Every bundle here is a genuine pairing we sell together, never two unrelated items grouped just for the sake of a bundle.",
+      "Buying the book and its markers or crayons together usually costs less than buying the same two items separately, which matters if you are equipping more than one child, a classroom, or simply want a complete, ready to give gift set arriving in one order.",
+      "For younger children we pair our ABC Colouring Book with 12 Rotating Wax Crayons, an easy grip set that suits a child who is still learning to hold a crayon properly. For a child ready for richer colour, our New Testament Bible Colouring Book comes with a full 24 colour acrylic marker set, giving a Sunday school class or a family devotion time both the story and the means to colour it well. Our kids colouring books and our markers and crayons are also available on their own, if you only need one part of the set.",
+      "The same pairing is available for the Old Testament, and for a family or class that wants both testaments together, the Old and New Testament Bible Colouring Books Bundle brings the two books into one set. Anyone looking specifically for Bible colouring books on their own can find those in our bible colouring books range too.",
+      "For adults, our Mindfulness Colouring Book for Adults comes bundled with the same 24 colour acrylic marker set from our mindfulness colouring range, for a richer colouring experience than pencil or plain crayon alone. Seasonedz Group ships every bundle countrywide with Courier Guy, with free collection available in Pretoria and Thohoyandou for anyone nearby.",
+    ],
+  },
 };
 
 export function getCategorySeoContent(slug) {

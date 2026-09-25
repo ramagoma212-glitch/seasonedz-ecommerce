@@ -50,10 +50,19 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
   const ageRanges = getDistinctAgeRanges(products);
   const tags = getDistinctTags(products);
   const seoContent = showLongFormContent && activeCategory ? getCategorySeoContent(activeCategory.slug) : null;
+  // Milestone 196: an optional, per-category override of the on-page
+  // title/H1/visible breadcrumb text — used only when the real
+  // long-form SEO content supplies one (currently just "bundles", see
+  // categorySeoContent.js's own comment on why). Never changes the
+  // underlying Category entity's own name — /categories cards, the
+  // generic /shop?category= view (seoContent is only ever set when
+  // showLongFormContent is true), and the BreadcrumbList JSON-LD below
+  // all keep reading activeCategory.name exactly as before.
+  const displayName = seoContent?.pageTitle || activeCategory?.name;
 
   if (activeCategory) {
     setPageMeta({
-      title: activeCategory.name,
+      title: displayName,
       description: seoContent ? seoContent.metaDescription : `Shop ${activeCategory.name} from Seasonedz Group. ${categoryIntro(activeCategory)}`.slice(0, 160),
     });
     // Version 7, Milestone 171I: real Home > Category hierarchy, now
@@ -62,6 +71,9 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
     // one level deeper (Home > Category > Product). Only added when a
     // real category is active; the generic /shop view has no
     // meaningful breadcrumb hierarchy above it, so none is fabricated.
+    // Deliberately always the real activeCategory.name here, never
+    // displayName — structured data is out of scope for the pageTitle
+    // override above (see this file's own comment on it).
     setPageStructuredData({
       "@context": "https://schema.org",
       "@type": "BreadcrumbList",
@@ -82,12 +94,12 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
         activeCategory
           ? `
       <nav class="shop-page__breadcrumb" aria-label="Breadcrumb">
-        <a href="/">Home</a><span aria-hidden="true"> / </span><span aria-current="page">${escapeHtml(activeCategory.name)}</span>
+        <a href="/">Home</a><span aria-hidden="true"> / </span><span aria-current="page">${escapeHtml(displayName)}</span>
       </nav>
       `
           : ""
       }
-      <h1 class="stub-page__title">${activeCategory ? activeCategory.name : "Shop"}</h1>
+      <h1 class="stub-page__title">${activeCategory ? displayName : "Shop"}</h1>
       <p class="stub-page__text">
         ${categoryIntro(activeCategory)}
       </p>
@@ -122,7 +134,7 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
       ${
         seoContent
           ? `
-      <section class="category-seo-content" aria-label="About ${escapeHtml(activeCategory.name)}">
+      <section class="category-seo-content" aria-label="About ${escapeHtml(displayName)}">
         ${seoContent.body.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}
       </section>
       `

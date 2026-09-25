@@ -867,8 +867,17 @@ async function main() {
       const seoContent = getCategorySeoContent(category.slug);
       const description = seoContent ? seoContent.metaDescription : category.description || DEFAULT_DESCRIPTION;
       const ogImage = findRepresentativeImage(category.slug, products) || (category.imageUrl ? resolveAssetUrl(category.imageUrl) : DEFAULT_OG_IMAGE);
+      // Milestone 196: mirrors shop.js's own displayName logic exactly
+      // (an optional per-category pageTitle override, currently only
+      // "bundles" — see categorySeoContent.js's own comment) — this is
+      // the raw, pre-JS <title> a crawler sees first, so it must agree
+      // with what the client-side render sets once JS runs, or this
+      // page would carry two different titles depending on whether a
+      // visitor's browser executed JS yet. The BreadcrumbList JSON-LD
+      // below deliberately still uses the real category.name, unchanged
+      // — structured data is out of scope for this pass.
       const jsonLdBlocks = [buildBreadcrumbJsonLd(buildCategoryBreadcrumbTrail({ name: category.name, slug: category.slug }))];
-      writeRouteFile(routePath, shellHtml, { title: category.name, description, ogImage, jsonLdBlocks });
+      writeRouteFile(routePath, shellHtml, { title: seoContent?.pageTitle || category.name, description, ogImage, jsonLdBlocks });
     } else {
       writeRouteFile(routePath, shellHtml, { title: "Category", description: DEFAULT_DESCRIPTION, ogImage: DEFAULT_OG_IMAGE, jsonLdBlocks: [] });
     }
