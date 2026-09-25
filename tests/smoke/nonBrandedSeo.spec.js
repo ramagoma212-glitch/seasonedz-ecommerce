@@ -391,11 +391,34 @@ test.describe("Sitemap and feed (Milestone 171I)", () => {
   });
 
   test("Milestone 171I.2: every g:id is <= 50 characters (Google's own limit), stable and SKU-based rather than the (sometimes longer) slug", async ({ request, baseURL }) => {
-    const resp = await request.get(`${baseURL}/google-merchant-feed.xml`);
-    const body = await resp.text();
+    const [feedResp, apiResp] = await Promise.all([
+      request.get(`${baseURL}/google-merchant-feed.xml`),
+      request.get("https://api.seasonedzgroup.co.za/api/products?limit=100"),
+    ]);
+    const body = await feedResp.text();
 
     const items = body.split("<item>").slice(1);
-    expect(items.length).toBe(11);
+    // Milestone 196 (SKU data-correction follow-up): the expected item
+    // count is derived from the same live API the feed itself is built
+    // from, using the exact same per-product rule
+    // generate-static-routes.mjs's buildMerchantFeedXml() uses — a
+    // simple product contributes one item, a variable product
+    // contributes one item per active variant (e.g. the Acrylic Marker
+    // Set's real 24/60 Colours variants, SG-0011/SG-0012, now each
+    // carry their own item instead of one shared parent item). This
+    // was a hardcoded 11 before those variants existed and their own
+    // SKUs were assigned; deriving it live means this test scales with
+    // legitimate catalogue growth instead of needing another manual
+    // bump the next time a variant product is added.
+    const apiJson = await apiResp.json();
+    const expectedItemCount = apiJson.data.products.reduce(
+      // Mirrors buildMerchantFeedXml()'s own flatMap exactly: a
+      // variable product contributes one item per active variant
+      // (zero if it somehow has none), never a fallback parent item.
+      (total, product) => total + (product.hasVariants ? (Array.isArray(product.variants) ? product.variants.length : 0) : 1),
+      0
+    );
+    expect(items.length).toBe(expectedItemCount);
 
     const ids = items.map((item) => item.match(/<g:id>(.*?)<\/g:id>/)?.[1]);
     for (const id of ids) {
