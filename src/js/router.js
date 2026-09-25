@@ -166,7 +166,15 @@ const routeDefs = [
   {
     pattern: "/shop",
     render: renderShop,
-    title: "Shop",
+    // Milestone 196: was the generic "Shop" (-> "Shop | Seasonedz
+    // Group") — this is the site's one browse-everything page and its
+    // most natural non-brand landing candidate for a broad "colouring
+    // books" search, so a generic title wasted that. Deliberately
+    // different in shape from the homepage's own title ("Seasonedz
+    // Group | Colouring Books & Creative Products") — brand-led there,
+    // shop-intent-led and category-specific here — so the two never
+    // read as duplicates of each other in a SERP.
+    title: "Shop Colouring Books, Markers & Crayons",
     description: "Browse educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons from Seasonedz Group.",
     skeleton: "product-grid",
   },

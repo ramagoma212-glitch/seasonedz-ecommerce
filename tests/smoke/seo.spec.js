@@ -406,6 +406,9 @@ test.describe("Google branded search appearance (Milestone 171G)", () => {
 
     await page.goto("/shop");
     await expect(page).not.toHaveTitle(HOMEPAGE_TITLE);
-    await expect(page).toHaveTitle("Shop | Seasonedz Group");
+    // Milestone 196: title deliberately changed from the generic "Shop"
+    // to a non-brand-search-targeted one — see router.js's own comment
+    // on this route.
+    await expect(page).toHaveTitle("Shop Colouring Books, Markers & Crayons | Seasonedz Group");
   });
 });
