@@ -212,14 +212,30 @@ test.describe("Homepage product grids: mobile column count", () => {
     await expect(grid.locator(".product-card:not([hidden])")).toHaveCount(2);
   });
 
+  // Document-relative Y (getBoundingClientRect().top + window.scrollY),
+  // not Playwright's own viewport-relative boundingBox() — the heading
+  // can genuinely sit below the fold on mobile (more so since Milestone
+  // 196 added the "Shop by Category" section above New Releases), and
+  // clicking a below-the-fold button makes the browser (Playwright's
+  // own pre-click actionability check, not this component's click
+  // handler, which never scrolls on expand) scroll the page to reach
+  // it. A viewport-relative measurement would then read as "the heading
+  // moved" even though nothing about the page's own layout changed —
+  // exactly the false positive this rewrite avoids, by measuring the
+  // heading's position in the DOCUMENT, which a same-page scroll never
+  // changes.
+  async function documentRelativeY(locator) {
+    return locator.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  }
+
   test("mobile expand/collapse does not leave a hidden empty grid cell or move the section heading", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 2400 });
     await page.goto("/");
-    const headingBefore = await page.locator("#new-releases-heading").boundingBox();
+    const headingBefore = await documentRelativeY(page.locator("#new-releases-heading"));
 
     await page.locator('[aria-controls="new-releases-grid"]').click();
-    const headingAfter = await page.locator("#new-releases-heading").boundingBox();
-    expect(headingAfter.y).toBeCloseTo(headingBefore.y, 0);
+    const headingAfter = await documentRelativeY(page.locator("#new-releases-heading"));
+    expect(headingAfter).toBeCloseTo(headingBefore, 0);
 
     // No stray empty track: the grid's own scrollHeight should grow
     // (a 2nd row appeared), not just gain invisible space.
