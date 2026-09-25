@@ -353,7 +353,22 @@ export function applyRouteMetadata(html, { routePath, title, description, ogImag
   const safeOgImage = escapeHtmlAttribute(ogImage || DEFAULT_OG_IMAGE);
 
   let result = html.replace(HERO_PRELOAD_PATTERN, "");
-  result = result.replace(/<title>[\s\S]*?<\/title>/, `<title>${fullTitle}</title>`);
+  // Milestone 196: index.html's own Milestone 171G comment (just above
+  // the real tag) explains the homepage's title/description handling
+  // in prose that itself contains the literal substring "<title>" —
+  // a naive /<title>[\s\S]*?<\/title>/ match (no line-start anchor)
+  // matched THAT occurrence first, then non-greedily searched forward
+  // for the next "</title>", which was the real tag's own closing tag —
+  // consuming everything in between (including the comment's closing
+  // "-->" and the real tag's own opening "<title>") and leaving every
+  // non-homepage generated route's <title> AND <meta name="description">
+  // sitting inside one large, never-closed HTML comment: invisible to
+  // every browser and crawler reading the raw HTML, even though
+  // buildSitemapXml/toProductOutput/etc. all had correct data the whole
+  // time. The real tag is always alone on its own line (see index.html);
+  // the comment's prose reference never is — anchoring to the start of
+  // the line (with the multiline flag) is what distinguishes them.
+  result = result.replace(/^[ \t]*<title>[\s\S]*?<\/title>[ \t]*$/m, `    <title>${fullTitle}</title>`);
   result = result.replace(/<link rel="canonical" href="[^"]*"\s*\/?>/, `<link rel="canonical" href="${safeCanonical}" />`);
   result = replaceMetaContent(result, 'name="description"', safeDescription);
   result = replaceMetaContent(result, 'property="og:title"', fullTitle);

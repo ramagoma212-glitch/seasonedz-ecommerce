@@ -178,6 +178,73 @@ test.describe("SEO smoke checks", () => {
   });
 });
 
+// Milestone 196: scripts/generate-static-routes.mjs's own title-
+// replacement regex (applyRouteMetadata()) used to match the FIRST
+// literal "<title>" substring anywhere in the built index.html shell —
+// including one that appears as plain prose inside an unrelated
+// Milestone 171G developer comment, well before the real tag. Because
+// that match was non-greedy, it then searched forward for the next
+// "</title>" (the real tag's own closing tag), consuming everything in
+// between — the comment's own closing "-->", the real tag's opening
+// "<title>", AND the <meta name="description"> tag that immediately
+// follows it. The net effect: on every non-homepage generated route,
+// the new title text got spliced into the middle of a still-open HTML
+// comment that then swallowed the description tag too, and never
+// closed until the NEXT unrelated comment's own "-->" — leaving both
+// tags completely invisible to any non-JS-executing crawler or raw
+// HTTP fetch reading the static file, even though a JS-executing
+// browser (and therefore every existing Playwright test above, which
+// all read the post-hydration DOM) never showed any symptom at all.
+// These tests read the RAW response text directly (Playwright's
+// `request` fixture never executes JS), which is the only way this
+// class of bug is ever actually caught.
+test.describe("Raw static HTML title/description (Milestone 196 regression guard)", () => {
+  async function rawHead(request, baseURL, path) {
+    const resp = await request.get(`${baseURL}${path}`);
+    expect(resp.ok(), `${path} must return a successful response`).toBeTruthy();
+    return resp.text();
+  }
+
+  test("a product page's raw HTML has a real, uncommented <title> and <meta name=\"description\">", async ({ request, baseURL }) => {
+    const html = await rawHead(request, baseURL, "/product/abc-colouring-book-for-kids-with-fun-facts/");
+    const titleMatch = html.match(/<title>([^<]*)<\/title>/);
+    expect(titleMatch, "a real <title>...</title> tag must exist").not.toBeNull();
+    expect(titleMatch[1]).toContain("ABC Colouring Book for Kids with Fun Facts");
+    expect(titleMatch[1]).not.toBe("Seasonedz Group | Colouring Books & Creative Products");
+
+    const descMatch = html.match(/<meta\s+name="description"\s+content="([^"]*)"/);
+    expect(descMatch, "a real <meta name=\"description\"> tag must exist").not.toBeNull();
+    expect(descMatch[1].length).toBeGreaterThan(0);
+
+    // The specific regression: neither tag's match may sit inside an
+    // unclosed HTML comment — every "<!--" before the tag's own index
+    // must have a "-->" before that same index too.
+    for (const match of [titleMatch, descMatch]) {
+      const before = html.slice(0, match.index);
+      const opens = (before.match(/<!--/g) || []).length;
+      const closes = (before.match(/-->/g) || []).length;
+      expect(opens, `${match[0].slice(0, 30)}... must not be inside an unclosed HTML comment`).toBe(closes);
+    }
+  });
+
+  test("a category page's and a blog post's raw HTML also have real, uncommented title/description tags", async ({ request, baseURL }) => {
+    for (const path of ["/category/kids-colouring-books/", "/blog/colouring-books-support-early-learning/"]) {
+      const html = await rawHead(request, baseURL, path);
+      const titleMatch = html.match(/<title>([^<]*)<\/title>/);
+      expect(titleMatch, `${path}: a real <title> tag must exist`).not.toBeNull();
+      expect(titleMatch[1]).not.toBe("Seasonedz Group | Colouring Books & Creative Products");
+
+      const descMatch = html.match(/<meta\s+name="description"\s+content="([^"]*)"/);
+      expect(descMatch, `${path}: a real <meta name="description"> tag must exist`).not.toBeNull();
+
+      const before = html.slice(0, titleMatch.index);
+      const opens = (before.match(/<!--/g) || []).length;
+      const closes = (before.match(/-->/g) || []).length;
+      expect(opens, `${path}: <title> must not be inside an unclosed HTML comment`).toBe(closes);
+    }
+  });
+});
+
 // Version 7, Milestone 171G: the target Google branded search
 // appearance — exact homepage title/description/Open Graph/structured
 // data, matching what's ultimately requested from Google (see the
