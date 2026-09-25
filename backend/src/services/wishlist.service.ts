@@ -35,7 +35,9 @@ const productSelect = {
   slug: true,
   price: true,
   stockQuantity: true,
-  images: { where: { isPrimary: true }, select: { url: true }, take: 1 },
+  // Milestone 197: variantId: null — wishlist always shows the
+  // product's own shared image, never a variant's dedicated one.
+  images: { where: { isPrimary: true, variantId: null }, select: { url: true }, take: 1 },
 } satisfies import("@prisma/client").Prisma.ProductSelect;
 
 export async function listWishlistForCustomer(customerId: string): Promise<WishlistItemOutput[]> {

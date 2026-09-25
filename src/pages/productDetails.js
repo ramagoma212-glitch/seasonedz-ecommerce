@@ -33,7 +33,6 @@ import { renderProductReviewsSection } from "../components/productReviews.js";
 import { isInWishlist } from "../js/wishlist.js";
 import { getCatalog, getProductReviews } from "../js/api/productsApi.js";
 import { setPageMeta, setPageStructuredData } from "../js/seo.js";
-import { getDetailImageUrl, getGalleryThumbUrl, getLightboxImageUrl } from "../js/imageTransforms.js";
 import { escapeHtml } from "../js/search.js";
 import { resolveDescriptionHtml } from "../js/descriptionFormat.js";
 import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
@@ -42,6 +41,7 @@ import { preorderAvailabilityText } from "../js/preorder.js";
 import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
 import { trackViewItem } from "../js/analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "../js/variantSelector.js";
+import { resolveGalleryImages, buildGalleryInner } from "../js/productGallery.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -152,12 +152,16 @@ function buildOffers(product) {
 // mistaken for an ISBN, and never a guess at which language edition a
 // crawler "should" see.
 function buildProductStructuredData(product, selectedVariant) {
+  // Milestone 197: a specifically selected/deep-linked variant with its
+  // own dedicated image(s) uses its own primary image here; otherwise
+  // this stays exactly the product's own image, unchanged.
+  const structuredDataImage = selectedVariant?.images?.length ? selectedVariant.images[0] : product.image;
   return {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
     description: product.shortDescription,
-    image: new URL(product.image, window.location.origin).href,
+    image: new URL(structuredDataImage, window.location.origin).href,
     url: window.location.href,
     category: product.category,
     brand: { "@type": "Brand", name: "Seasonedz Group" },
@@ -351,83 +355,18 @@ function renderSupportNote() {
 // images. escapeHtml() (not JSON's own escaping) is what makes this
 // safe to embed inside an HTML attribute — see js/search.js.
 function renderGallery(product, selectedVariant) {
-  // Milestone 188: when the selected variant has its own image, it
-  // leads the gallery (shown first, still within the same slider/
-  // lightbox) — never replaces the product's own gallery images, so
-  // switching variants never loses access to the product's other
-  // photos.
+  // Milestone 197: exact IF/ELSE fallback — a selected variant with its
+  // own dedicated images shows ONLY those; otherwise ONLY the product's
+  // own shared gallery. Never merged (see js/productGallery.js's own
+  // header comment) — replaces the old Milestone 188 behaviour, which
+  // incorrectly prepended a variant image onto the full base gallery.
   const baseImages = product.gallery?.length ? product.gallery : [product.image];
-  const images = selectedVariant?.imageUrl && !baseImages.includes(selectedVariant.imageUrl) ? [selectedVariant.imageUrl, ...baseImages] : baseImages;
-  const hasMultiple = images.length > 1;
-
-  const galleryData = images.map((img, index) => ({
-    src: getDetailImageUrl(img),
-    lightboxSrc: getLightboxImageUrl(img),
-    alt: images.length > 1 ? `${product.name} (image ${index + 1} of ${images.length})` : product.name,
-    original: img,
-  }));
+  const images = resolveGalleryImages(baseImages, selectedVariant?.images);
+  const { innerHtml, galleryData } = buildGalleryInner(images, product.name);
 
   return `
     <div class="product-details__gallery" data-gallery data-current-index="0" data-images="${escapeHtml(JSON.stringify(galleryData))}">
-      <div class="product-details__main-wrap">
-        ${
-          hasMultiple
-            ? `<button type="button" class="product-details__nav product-details__nav--prev" data-action="gallery-prev" aria-label="Previous product image">&lsaquo;</button>`
-            : ""
-        }
-        <!--
-          Version 7, Milestone 92A: this is the page's primary content
-          image (immediately visible, no scrolling needed) — eager, not
-          lazy. width/height=800 match .product-details__main-image's
-          own CSS (aspect-ratio: 1/1, width: 100%) as a same-ratio
-          reference size, not the actual served resolution.
-        -->
-        <button
-          type="button"
-          class="product-details__main-image-btn"
-          data-action="view-larger-image"
-          aria-label="View larger image of ${product.name}"
-        >
-          <img
-            class="product-details__main-image"
-            src="${galleryData[0].src}"
-            data-original-src="${images[0]}"
-            alt="${galleryData[0].alt}"
-            width="800"
-            height="800"
-            loading="eager"
-            decoding="async"
-          />
-        </button>
-        ${
-          hasMultiple
-            ? `<button type="button" class="product-details__nav product-details__nav--next" data-action="gallery-next" aria-label="Next product image">&rsaquo;</button>`
-            : ""
-        }
-      </div>
-      ${
-        hasMultiple
-          ? `
-            <div class="product-details__thumbs">
-              ${images
-                .map(
-                  (img, index) =>
-                    `<button
-                      type="button"
-                      class="product-details__thumb-btn${index === 0 ? " is-active" : ""}"
-                      data-action="gallery-select"
-                      data-index="${index}"
-                      aria-label="View image ${index + 1} of ${product.name}"
-                      aria-current="${index === 0}"
-                    >
-                      <img class="product-details__thumb" src="${getGalleryThumbUrl(img)}" alt="${product.name} thumbnail ${index + 1}" width="64" height="64" loading="lazy" decoding="async" />
-                    </button>`
-                )
-                .join("")}
-            </div>
-          `
-          : ""
-      }
+      ${innerHtml}
     </div>
   `;
 }
@@ -452,6 +391,7 @@ function renderVariantSelector(product, selection) {
       data-product-slug="${product.slug}"
       data-product-name="${escapeHtml(product.name)}"
       data-product-image="${product.image}"
+      data-product-gallery="${escapeHtml(JSON.stringify(product.gallery?.length ? product.gallery : [product.image]))}"
       data-product-type="${product.productType || "PHYSICAL"}"
       data-is-preorder="${product.isPreorder ? "true" : "false"}"
       data-preorder-release-at="${product.preorderReleaseAt || ""}"

@@ -99,7 +99,12 @@ export interface CustomerOrderDetail {
 const firstItemImageInclude = {
   product: {
     include: {
-      images: { orderBy: { sortOrder: "asc" as const }, take: 1 },
+      // Milestone 197: variantId: null — order history intentionally
+      // shows the product's own shared representative image, not the
+      // specific variant that was purchased (out of scope for this
+      // milestone; see OrderItem's own immutable variant snapshot for
+      // what was actually bought).
+      images: { where: { variantId: null }, orderBy: { sortOrder: "asc" as const }, take: 1 },
     },
   },
 } satisfies import("@prisma/client").Prisma.OrderItemInclude;

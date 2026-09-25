@@ -71,6 +71,12 @@ export function mapApiProductToFrontendShape(apiProduct) {
       price: variant.price,
       stockQuantity: variant.stockQuantity,
       imageUrl: variant.imageUrl ? withBase(variant.imageUrl) : "",
+      // Milestone 197: this variant's own dedicated images (primary
+      // first) if any exist, else a single-element array built from
+      // imageUrl, else empty — see product.service.ts's
+      // resolveVariantImages(). The gallery must show ONLY this array
+      // when non-empty, never merge it with the product's own gallery.
+      images: (variant.images || []).map(withBase),
       // Milestone 188A: optional book-language-edition metadata — null
       // for every non-book variant.
       languageCode: variant.languageCode || null,

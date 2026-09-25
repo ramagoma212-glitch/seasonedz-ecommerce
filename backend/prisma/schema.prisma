@@ -409,6 +409,18 @@ model ProductVariant {
 
   orderItems OrderItem[]
 
+  // Milestone 197: dedicated images for this variant (e.g. the "60
+  // Colours" pack looks visually different from "24 Colours" and must
+  // never share misleading images). Additive — every existing variant
+  // has zero rows here and keeps using imageUrl/the parent Product's
+  // own images exactly as before. See ProductImage.variantId below for
+  // the authoritative fallback rule (dedicated rows win; otherwise the
+  // parent Product's own variantId:null images are shown — never
+  // merged) and adminProductVariant.service.ts's removeVariant() for
+  // why onDelete: Cascade here is safe (never hard-deletes a variant
+  // that was ever actually ordered).
+  images ProductImage[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -450,6 +462,23 @@ model ProductImage {
   id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // Milestone 197: null means this is a normal, shared product-level
+  // image (every one of the 63 rows that existed before this
+  // migration, unchanged); set means this row belongs to exactly one
+  // ProductVariant and must never be shown as a shared product image
+  // or merged into another variant's gallery — see ProductVariant.images
+  // above. Cascade: deleting a variant deletes its own dedicated image
+  // rows (never a normal product image, since those have variantId
+  // null and belong to the Product relation instead); the storage
+  // objects themselves are cleaned up at the application layer in
+  // adminProductVariant.service.ts's removeVariant(), not by this DB
+  // cascade alone. isPrimary is scoped per (productId, variantId) pair,
+  // not per productId alone — a variant's own primary image is
+  // independent of the parent product's primary image.
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
   url       String
   altText   String?
   sortOrder Int     @default(0)
@@ -458,6 +487,7 @@ model ProductImage {
   createdAt DateTime @default(now())
 
   @@index([productId])
+  @@index([variantId])
 }
 
 model ProductTag {

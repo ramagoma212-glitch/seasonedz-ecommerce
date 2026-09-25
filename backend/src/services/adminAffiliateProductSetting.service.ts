@@ -28,7 +28,9 @@ const settingWithProductInclude = {
       sku: true,
       price: true,
       status: true,
-      images: { orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
+      // Milestone 197: variantId: null — the shared/product-level
+      // gallery only, never a variant's dedicated images.
+      images: { where: { variantId: null }, orderBy: { sortOrder: "asc" }, select: { url: true, isPrimary: true } },
     },
   },
 } satisfies Prisma.AffiliateProductSettingInclude;

@@ -128,3 +128,90 @@ export async function deleteAdminProductImageHandler(req: Request, res: Response
     next(error);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Milestone 197: variant-scoped image endpoints. Same handlers/middleware
+// discipline as the product-level ones above, with an extra variantId
+// path segment — the service layer (requireVariantBelongsToProduct)
+// is what actually enforces that variantId genuinely belongs to
+// product id, never trusted from the URL alone.
+// ---------------------------------------------------------------------------
+
+export async function listAdminVariantImagesHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, variantId } = req.params;
+    if (!id || !variantId) {
+      sendError(res, { message: "Product id and variant id are required", statusCode: 400 });
+      return;
+    }
+
+    const images = await adminProductImageService.listVariantImages(id, variantId);
+    sendSuccess(res, { message: "Variant images retrieved successfully", data: { images } });
+  } catch (error) {
+    if (handleKnownErrors(res, error)) return;
+    next(error);
+  }
+}
+
+export async function uploadAdminVariantImageHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, variantId } = req.params;
+    if (!id || !variantId) {
+      sendError(res, { message: "Product id and variant id are required", statusCode: 400 });
+      return;
+    }
+
+    const file = req.file;
+    if (!file) {
+      sendError(res, { message: "An image file is required (field name: image).", statusCode: 400 });
+      return;
+    }
+
+    const image = await adminProductImageService.uploadImageForVariant({
+      productId: id,
+      variantId,
+      buffer: file.buffer,
+      mimetype: file.mimetype,
+      size: file.size,
+      originalName: file.originalname,
+      altText: req.body?.altText,
+    });
+
+    sendSuccess(res, { message: "Image uploaded successfully", statusCode: 201, data: image });
+  } catch (error) {
+    if (handleKnownErrors(res, error)) return;
+    next(error);
+  }
+}
+
+export async function updateAdminVariantImageHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, variantId, imageId } = req.params;
+    if (!id || !variantId || !imageId) {
+      sendError(res, { message: "Product id, variant id and image id are required", statusCode: 400 });
+      return;
+    }
+
+    const result = await adminProductImageService.updateVariantImage(id, variantId, imageId, req.body ?? {});
+    sendSuccess(res, { message: "Image updated successfully", data: result });
+  } catch (error) {
+    if (handleKnownErrors(res, error)) return;
+    next(error);
+  }
+}
+
+export async function deleteAdminVariantImageHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id, variantId, imageId } = req.params;
+    if (!id || !variantId || !imageId) {
+      sendError(res, { message: "Product id, variant id and image id are required", statusCode: 400 });
+      return;
+    }
+
+    const result = await adminProductImageService.deleteVariantImage(id, variantId, imageId);
+    sendSuccess(res, { message: "Image removed successfully", data: result });
+  } catch (error) {
+    if (handleKnownErrors(res, error)) return;
+    next(error);
+  }
+}

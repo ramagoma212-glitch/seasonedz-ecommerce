@@ -13,7 +13,20 @@
 // This file never touches Product.name/price/stockQuantity/etc — it
 // only ever reads a product's id (existence check) and writes
 // ProductImage rows.
+//
+// Milestone 197: adds dedicated per-variant images, reusing this exact
+// same Supabase Storage pipeline (no new bucket, no new storage
+// provider). Every query below is now explicitly scoped by
+// `variantId` — `null` means "the shared/normal product gallery",
+// a real id means "this one variant's own dedicated images" — the two
+// are never merged (see ProductImage.variantId's schema comment). The
+// original product-level functions (listProductImages,
+// uploadImageForProduct, updateProductImage, deleteProductImage) keep
+// their exact existing signatures and behaviour, now with an explicit
+// `variantId: null` filter added so they can never accidentally read
+// or touch a variant's dedicated images once those exist.
 
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import {
   isProductImageUploadConfigured,
@@ -50,6 +63,7 @@ export type ProductImageKind = "main" | "gallery";
 export interface AdminProductImageRow {
   id: string;
   productId: string;
+  variantId: string | null;
   url: string;
   altText: string | null;
   sortOrder: number;
@@ -57,11 +71,50 @@ export interface AdminProductImageRow {
   createdAt: Date;
 }
 
+const IMAGE_ROW_SELECT = {
+  id: true,
+  productId: true,
+  variantId: true,
+  url: true,
+  altText: true,
+  sortOrder: true,
+  isPrimary: true,
+  createdAt: true,
+} as const;
+
 async function requireProductExists(productId: string): Promise<void> {
   const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
   if (!product) {
     throw new AdminProductImageError(`Product not found: ${productId}`, 404);
   }
+}
+
+// Milestone 197: the one place that decides "does this variant id
+// genuinely belong to this product id" — every variant-image route
+// calls this before touching any ProductImage row, so a variant id
+// belonging to a different product can never be used to read/write
+// images through this product's URL.
+async function requireVariantBelongsToProduct(
+  productId: string,
+  variantId: string
+): Promise<{ id: string; productId: string; optionValues: unknown; product: { name: string } }> {
+  const variant = await prisma.productVariant.findUnique({
+    where: { id: variantId },
+    select: { id: true, productId: true, optionValues: true, product: { select: { name: true } } },
+  });
+  if (!variant || variant.productId !== productId) {
+    throw new AdminProductImageError(`Variant not found on this product: ${variantId}`, 404);
+  }
+  return variant;
+}
+
+// Same "A4 / Framed" join the schema's own ProductVariant.optionValues
+// comment describes — kept local and simple since this is only ever
+// used to build a default alt-text fragment, never shown as the
+// variant's canonical label anywhere else.
+function formatVariantLabelForAltText(optionValues: unknown): string {
+  if (typeof optionValues !== "object" || optionValues === null) return "";
+  return Object.values(optionValues as Record<string, string>).join(" / ");
 }
 
 // ---------------------------------------------------------------------------
@@ -72,9 +125,23 @@ export async function listProductImages(productId: string): Promise<AdminProduct
   await requireProductExists(productId);
 
   return prisma.productImage.findMany({
-    where: { productId },
+    where: { productId, variantId: null },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, productId: true, url: true, altText: true, sortOrder: true, isPrimary: true, createdAt: true },
+    select: IMAGE_ROW_SELECT,
+  });
+}
+
+// Milestone 197: the variant-scoped counterpart — this variant's own
+// dedicated images only, never the shared product gallery and never
+// another variant's images.
+export async function listVariantImages(productId: string, variantId: string): Promise<AdminProductImageRow[]> {
+  await requireProductExists(productId);
+  await requireVariantBelongsToProduct(productId, variantId);
+
+  return prisma.productImage.findMany({
+    where: { productId, variantId },
+    orderBy: { sortOrder: "asc" },
+    select: IMAGE_ROW_SELECT,
   });
 }
 
@@ -91,6 +158,20 @@ function validateAltText(raw: unknown): string {
     throw new AdminProductImageError(`altText must be ${MAX_ALT_TEXT_LENGTH} characters or fewer.`);
   }
   return trimmed;
+}
+
+// Milestone 197: variant uploads may omit altText — a sensible default
+// ("<product name> — <variant option>") is generated instead, per the
+// brief's "default product name + variant option, admin-overridable"
+// rule. An explicitly supplied altText is still validated exactly like
+// the product-level path — no keyword stuffing beyond the same length
+// ceiling.
+function resolveVariantAltText(raw: unknown, productName: string, variantLabel: string): string {
+  if (raw === undefined || raw === null || (typeof raw === "string" && raw.trim().length === 0)) {
+    const fallback = variantLabel ? `${productName} — ${variantLabel}` : productName;
+    return fallback.slice(0, MAX_ALT_TEXT_LENGTH);
+  }
+  return validateAltText(raw);
 }
 
 function validateKind(raw: unknown): ProductImageKind | undefined {
@@ -139,6 +220,30 @@ function buildStoragePath(productId: string, kind: ProductImageKind, ext: string
   return `products/${productId}/${folder}/${timestamp}-${safeName}.${ext}`;
 }
 
+function buildVariantStoragePath(productId: string, variantId: string, ext: string, originalName: string | undefined): string {
+  const timestamp = Date.now();
+  const safeName = safeFileNameFragment(originalName);
+  return `products/${productId}/variants/${variantId}/${timestamp}-${safeName}.${ext}`;
+}
+
+// Milestone 197: recomputes ProductVariant.imageUrl from whichever
+// ProductImage row is currently primary for that variant (or null if
+// none) — called at the end of every variant-image create/update/
+// delete so the mirror can never drift from the dedicated rows it's
+// supposed to reflect. Deliberately a full recompute, not an
+// incremental patch, so it's correct regardless of which mutation
+// triggered it.
+async function syncVariantImageUrlMirror(tx: Prisma.TransactionClient, variantId: string): Promise<void> {
+  const primary = await tx.productImage.findFirst({
+    where: { variantId, isPrimary: true },
+    select: { url: true },
+  });
+  await tx.productVariant.update({
+    where: { id: variantId },
+    data: { imageUrl: primary?.url ?? null },
+  });
+}
+
 export interface UploadProductImageInput {
   productId: string;
   buffer: Buffer;
@@ -163,7 +268,7 @@ export async function uploadImageForProduct(input: UploadProductImageInput): Pro
     throw new ProductImageStorageError("Product image upload is not configured.");
   }
 
-  const existingCount = await prisma.productImage.count({ where: { productId } });
+  const existingCount = await prisma.productImage.count({ where: { productId, variantId: null } });
   const isFirstImage = existingCount === 0;
   // Explicit "main" always wins; otherwise the very first image for a
   // product becomes primary automatically (Plan Section 8); any other
@@ -175,7 +280,7 @@ export async function uploadImageForProduct(input: UploadProductImageInput): Pro
   const { publicUrl } = await uploadProductImage({ path, buffer, contentType: mimetype });
 
   const maxSortOrder = await prisma.productImage.aggregate({
-    where: { productId },
+    where: { productId, variantId: null },
     _max: { sortOrder: true },
   });
   const nextSortOrder = (maxSortOrder._max.sortOrder ?? -1) + 1;
@@ -184,7 +289,7 @@ export async function uploadImageForProduct(input: UploadProductImageInput): Pro
     return await prisma.$transaction(async (tx) => {
       if (willBePrimary) {
         await tx.productImage.updateMany({
-          where: { productId, isPrimary: true },
+          where: { productId, variantId: null, isPrimary: true },
           data: { isPrimary: false },
         });
       }
@@ -197,15 +302,7 @@ export async function uploadImageForProduct(input: UploadProductImageInput): Pro
           sortOrder: nextSortOrder,
           isPrimary: willBePrimary,
         },
-        select: {
-          id: true,
-          productId: true,
-          url: true,
-          altText: true,
-          sortOrder: true,
-          isPrimary: true,
-          createdAt: true,
-        },
+        select: IMAGE_ROW_SELECT,
       });
     });
   } catch (dbError) {
@@ -216,6 +313,79 @@ export async function uploadImageForProduct(input: UploadProductImageInput): Pro
     // and per VERSION_7_PRODUCT_IMAGE_UPLOAD_PLAN.md Section 10, an
     // occasional leftover unused file is an acceptable, low-risk
     // tradeoff for a simple first version — not left to fail loudly.
+    await removeProductImageObjectBestEffort(path);
+    throw dbError;
+  }
+}
+
+// Milestone 197: variant-scoped upload — same validation/storage/
+// primary-promotion discipline as uploadImageForProduct above, scoped
+// to (productId, variantId) throughout, plus the imageUrl mirror sync.
+export interface UploadVariantImageInput {
+  productId: string;
+  variantId: string;
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+  originalName?: string;
+  altText: unknown;
+}
+
+export async function uploadImageForVariant(input: UploadVariantImageInput): Promise<AdminProductImageRow> {
+  const { productId, variantId, buffer, mimetype, size, originalName } = input;
+
+  await requireProductExists(productId);
+  const variant = await requireVariantBelongsToProduct(productId, variantId);
+
+  const ext = validateMimeType(mimetype);
+  validateFileSize(size);
+  const altText = resolveVariantAltText(input.altText, variant.product.name, formatVariantLabelForAltText(variant.optionValues));
+
+  if (!isProductImageUploadConfigured()) {
+    throw new ProductImageStorageError("Product image upload is not configured.");
+  }
+
+  const existingCount = await prisma.productImage.count({ where: { productId, variantId } });
+  const isFirstImage = existingCount === 0;
+  const willBePrimary = isFirstImage;
+
+  const path = buildVariantStoragePath(productId, variantId, ext, originalName);
+  const { publicUrl } = await uploadProductImage({ path, buffer, contentType: mimetype });
+
+  const maxSortOrder = await prisma.productImage.aggregate({
+    where: { productId, variantId },
+    _max: { sortOrder: true },
+  });
+  const nextSortOrder = (maxSortOrder._max.sortOrder ?? -1) + 1;
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (willBePrimary) {
+        await tx.productImage.updateMany({
+          where: { productId, variantId, isPrimary: true },
+          data: { isPrimary: false },
+        });
+      }
+
+      const created = await tx.productImage.create({
+        data: {
+          productId,
+          variantId,
+          url: publicUrl,
+          altText,
+          sortOrder: nextSortOrder,
+          isPrimary: willBePrimary,
+        },
+        select: IMAGE_ROW_SELECT,
+      });
+
+      if (willBePrimary) {
+        await syncVariantImageUrlMirror(tx, variantId);
+      }
+
+      return created;
+    });
+  } catch (dbError) {
     await removeProductImageObjectBestEffort(path);
     throw dbError;
   }
@@ -237,18 +407,7 @@ export interface UpdateProductImageResult {
   images: AdminProductImageRow[];
 }
 
-export async function updateProductImage(
-  productId: string,
-  imageId: string,
-  input: UpdateProductImageInput
-): Promise<UpdateProductImageResult> {
-  await requireProductExists(productId);
-
-  const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
-  if (!existing || existing.productId !== productId) {
-    throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
-  }
-
+function parseUpdateImageData(input: UpdateProductImageInput): { altText?: string; sortOrder?: number; isPrimary?: boolean } {
   const data: { altText?: string; sortOrder?: number; isPrimary?: boolean } = {};
 
   if ("altText" in input && input.altText !== undefined) {
@@ -275,10 +434,27 @@ export async function updateProductImage(
     throw new AdminProductImageError("No recognised fields to update. Allowed: isPrimary, altText, sortOrder.");
   }
 
+  return data;
+}
+
+export async function updateProductImage(
+  productId: string,
+  imageId: string,
+  input: UpdateProductImageInput
+): Promise<UpdateProductImageResult> {
+  await requireProductExists(productId);
+
+  const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
+  if (!existing || existing.productId !== productId || existing.variantId !== null) {
+    throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
+  }
+
+  const data = parseUpdateImageData(input);
+
   const image = await prisma.$transaction(async (tx) => {
     if (data.isPrimary) {
       await tx.productImage.updateMany({
-        where: { productId, isPrimary: true, id: { not: imageId } },
+        where: { productId, variantId: null, isPrimary: true, id: { not: imageId } },
         data: { isPrimary: false },
       });
     }
@@ -286,19 +462,56 @@ export async function updateProductImage(
     return tx.productImage.update({
       where: { id: imageId },
       data,
-      select: {
-        id: true,
-        productId: true,
-        url: true,
-        altText: true,
-        sortOrder: true,
-        isPrimary: true,
-        createdAt: true,
-      },
+      select: IMAGE_ROW_SELECT,
     });
   });
 
   const images = await listProductImages(productId);
+
+  return { image, images };
+}
+
+// Milestone 197: variant-scoped counterpart of updateProductImage —
+// same field rules, scoped primary-reset, plus the imageUrl mirror
+// sync whenever the primary changes.
+export async function updateVariantImage(
+  productId: string,
+  variantId: string,
+  imageId: string,
+  input: UpdateProductImageInput
+): Promise<UpdateProductImageResult> {
+  await requireProductExists(productId);
+  await requireVariantBelongsToProduct(productId, variantId);
+
+  const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
+  if (!existing || existing.productId !== productId || existing.variantId !== variantId) {
+    throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
+  }
+
+  const data = parseUpdateImageData(input);
+
+  const image = await prisma.$transaction(async (tx) => {
+    if (data.isPrimary) {
+      await tx.productImage.updateMany({
+        where: { productId, variantId, isPrimary: true, id: { not: imageId } },
+        data: { isPrimary: false },
+      });
+    }
+
+    const updated = await tx.productImage.update({
+      where: { id: imageId },
+      data,
+      select: IMAGE_ROW_SELECT,
+    });
+
+    if (data.isPrimary) {
+      await syncVariantImageUrlMirror(tx, variantId);
+    }
+
+    return updated;
+  });
+
+  const images = await listVariantImages(productId, variantId);
 
   return { image, images };
 }
@@ -319,7 +532,7 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
   await requireProductExists(productId);
 
   const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
-  if (!existing || existing.productId !== productId) {
+  if (!existing || existing.productId !== productId || existing.variantId !== null) {
     throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
   }
 
@@ -332,7 +545,7 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
 
     if (existing.isPrimary) {
       const nextPrimary = await tx.productImage.findFirst({
-        where: { productId },
+        where: { productId, variantId: null },
         orderBy: { sortOrder: "asc" },
       });
       if (nextPrimary) {
@@ -357,6 +570,52 @@ export async function deleteProductImage(productId: string, imageId: string): Pr
   }
 
   const images = await listProductImages(productId);
+
+  return { deletedImageId: imageId, images };
+}
+
+// Milestone 197: variant-scoped counterpart of deleteProductImage —
+// same delete-then-promote-then-cleanup sequence, plus the imageUrl
+// mirror sync (becomes the new primary's url, or null when the last
+// dedicated image is removed — never a stale/restored value, see
+// ProductVariant.imageUrl's schema comment).
+export async function deleteVariantImage(
+  productId: string,
+  variantId: string,
+  imageId: string
+): Promise<DeleteProductImageResult> {
+  await requireProductExists(productId);
+  await requireVariantBelongsToProduct(productId, variantId);
+
+  const existing = await prisma.productImage.findUnique({ where: { id: imageId } });
+  if (!existing || existing.productId !== productId || existing.variantId !== variantId) {
+    throw new AdminProductImageError(`Image not found: ${imageId}`, 404);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.productImage.delete({ where: { id: imageId } });
+
+    if (existing.isPrimary) {
+      const nextPrimary = await tx.productImage.findFirst({
+        where: { productId, variantId },
+        orderBy: { sortOrder: "asc" },
+      });
+      if (nextPrimary) {
+        await tx.productImage.update({ where: { id: nextPrimary.id }, data: { isPrimary: true } });
+      }
+    }
+
+    await syncVariantImageUrlMirror(tx, variantId);
+  });
+
+  if (isSupabaseStorageUrl(existing.url)) {
+    const path = extractStoragePathFromPublicUrl(existing.url);
+    if (path) {
+      await removeProductImageObjectBestEffort(path);
+    }
+  }
+
+  const images = await listVariantImages(productId, variantId);
 
   return { deletedImageId: imageId, images };
 }

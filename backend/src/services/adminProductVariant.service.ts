@@ -25,6 +25,7 @@ import {
 } from "./adminProduct.service.js";
 import { validateAndNormalizeIsbn, validateAndNormalizeGtin, ProductIdentifierError } from "../utils/productIdentifiers.js";
 import { lookupSouthAfricanLanguageCode } from "../utils/southAfricanLanguages.js";
+import { isSupabaseStorageUrl, extractStoragePathFromPublicUrl, removeProductImageObjectBestEffort } from "./supabaseStorage.service.js";
 
 const MAX_SHORT_TEXT_LENGTH = 200;
 const MAX_IMAGE_URL_LENGTH = 2000;
@@ -137,7 +138,10 @@ async function loadVariableProduct(productId: string) {
       // English variant from the existing product" convenience in
       // generateVariations() below — never written back to Product.
       stockQuantity: true,
-      images: { where: { isPrimary: true }, take: 1, select: { url: true } },
+      // Milestone 197: variantId: null — this is the parent Product's
+      // own shared primary image, never another variant's dedicated
+      // image (see ProductImage.variantId's schema comment).
+      images: { where: { isPrimary: true, variantId: null }, take: 1, select: { url: true } },
     },
   });
   if (!product) {
@@ -358,7 +362,21 @@ export async function updateVariant(productId: string, variantId: string, rawInp
   if ("price" in input) data.price = requirePositiveNumber(input.price, "price");
   if ("stockQuantity" in input) data.stockQuantity = requiredNonNegativeInteger(input.stockQuantity, "stockQuantity");
   if ("weight" in input) data.weight = optionalPositiveNumber(input.weight, "weight");
-  if ("imageUrl" in input) data.imageUrl = optionalTrimmedString(input.imageUrl, "imageUrl", MAX_IMAGE_URL_LENGTH);
+  if ("imageUrl" in input) {
+    // Milestone 197: once this variant has dedicated ProductImage rows,
+    // imageUrl is a backend-maintained mirror of the current primary
+    // one (see adminProductImage.service.ts's syncVariantImageUrlMirror)
+    // — Admin can no longer save a conflicting arbitrary value here.
+    // Legacy variants with zero dedicated images keep this field freely
+    // editable exactly as before.
+    const dedicatedImageCount = await prisma.productImage.count({ where: { variantId } });
+    if (dedicatedImageCount > 0) {
+      throw new AdminProductError(
+        "This variant has dedicated images — manage them from the Variant Images section instead."
+      );
+    }
+    data.imageUrl = optionalTrimmedString(input.imageUrl, "imageUrl", MAX_IMAGE_URL_LENGTH);
+  }
   if ("isActive" in input) data.isActive = Boolean(input.isActive);
   if ("sortOrder" in input) data.sortOrder = requiredNonNegativeInteger(input.sortOrder, "sortOrder");
 
@@ -404,7 +422,29 @@ export async function removeVariant(productId: string, variantId: string): Promi
   if (referencedByOrder) {
     await prisma.productVariant.update({ where: { id: variantId }, data: { isActive: false } });
   } else {
+    // Milestone 197: this variant's own dedicated images (if any) are
+    // fetched BEFORE the delete, so their Supabase Storage objects can
+    // still be cleaned up afterward — the DB rows themselves are
+    // guaranteed gone by the ProductImage.variantId onDelete: Cascade
+    // FK regardless of whether this best-effort step below succeeds.
+    // A deleted variant's images must never survive as orphaned storage
+    // objects, and must never become a shared/normal product image
+    // (SetNull was explicitly ruled out — see the schema comment).
+    const variantImages = await prisma.productImage.findMany({
+      where: { variantId },
+      select: { url: true },
+    });
+
     await prisma.productVariant.delete({ where: { id: variantId } });
+
+    for (const image of variantImages) {
+      if (isSupabaseStorageUrl(image.url)) {
+        const path = extractStoragePathFromPublicUrl(image.url);
+        if (path) {
+          await removeProductImageObjectBestEffort(path);
+        }
+      }
+    }
   }
 
   const product = await getProductForAdmin(productId);

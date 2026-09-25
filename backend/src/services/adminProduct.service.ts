@@ -503,15 +503,29 @@ export async function listProductsForAdmin(filters: AdminProductListFilters): Pr
 
 const adminProductDetailInclude = {
   category: { select: { id: true, name: true, slug: true } },
+  // Milestone 197: variantId: null restricts this to the shared/
+  // product-level gallery — a variant's own dedicated images are never
+  // mixed in here, they're only ever read via the nested variants.images
+  // include below (see ProductImage.variantId's own schema comment).
   images: {
+    where: { variantId: null },
     orderBy: { sortOrder: "asc" },
-    select: { url: true, altText: true, isPrimary: true, sortOrder: true },
+    select: { id: true, url: true, altText: true, isPrimary: true, sortOrder: true },
   },
   // Milestone 188: every variant, active or not — Admin needs to see
   // and manage inactive/retired ones too (Part P), unlike the public
   // API's active-only view (see product.service.ts's own include).
+  // Milestone 197: each variant's own dedicated images, nested — this
+  // relation is inherently scoped to that one variant's own rows, no
+  // extra filter needed (unlike the flat Product.images include above).
   variants: {
     orderBy: { sortOrder: "asc" },
+    include: {
+      images: {
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, url: true, altText: true, isPrimary: true, sortOrder: true },
+      },
+    },
   },
 } satisfies Prisma.ProductInclude;
 
@@ -544,6 +558,11 @@ export interface AdminProductVariantRow {
   languageCode: string | null;
   isbn: string | null;
   gtin: string | null;
+  // Milestone 197: this variant's own dedicated images, if any — see
+  // ProductImage.variantId's schema comment. Empty for every variant
+  // that has never had a dedicated image uploaded, which currently
+  // means every existing variant.
+  images: { id: string; url: string; altText: string | null; isPrimary: boolean; sortOrder: number }[];
 }
 
 export interface AdminProductDetail {
@@ -566,7 +585,7 @@ export interface AdminProductDetail {
   isFeatured: boolean;
   isBestSeller: boolean;
   isNewArrival: boolean;
-  images: { url: string; altText: string | null; isPrimary: boolean; sortOrder: number }[];
+  images: { id: string; url: string; altText: string | null; isPrimary: boolean; sortOrder: number }[];
   createdAt: Date;
   updatedAt: Date;
   productType: ProductType;
@@ -652,6 +671,7 @@ function toAdminProductDetail(product: AdminProductDetailRow): AdminProductDetai
       languageCode: variant.languageCode,
       isbn: variant.isbn,
       gtin: variant.gtin,
+      images: variant.images,
     })),
   };
 }

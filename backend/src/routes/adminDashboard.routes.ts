@@ -45,6 +45,10 @@ import {
   updateAdminProductImageHandler,
   uploadAdminProductImageHandler,
   uploadProductImageMiddleware,
+  deleteAdminVariantImageHandler,
+  listAdminVariantImagesHandler,
+  updateAdminVariantImageHandler,
+  uploadAdminVariantImageHandler,
 } from "../controllers/adminProductImage.controller.js";
 import {
   deleteAdminDigitalAssetHandler,
@@ -122,6 +126,14 @@ router.post("/products/:id/variants/generate", generateVariationsHandler);
 router.post("/products/:id/variants", createVariantHandler);
 router.patch("/products/:id/variants/:variantId", updateVariantHandler);
 router.delete("/products/:id/variants/:variantId", removeVariantHandler);
+// Milestone 197: variant image sub-routes — one more path segment
+// again, same no-ordering-conflict reasoning as /images and /variants
+// above. The service layer verifies variantId genuinely belongs to
+// product :id on every one of these (never trusted from the URL alone).
+router.get("/products/:id/variants/:variantId/images", listAdminVariantImagesHandler);
+router.post("/products/:id/variants/:variantId/images", uploadProductImageMiddleware, uploadAdminVariantImageHandler);
+router.patch("/products/:id/variants/:variantId/images/:imageId", updateAdminVariantImageHandler);
+router.delete("/products/:id/variants/:variantId/images/:imageId", deleteAdminVariantImageHandler);
 // Version 7, Milestone 171C: review moderation only (approve/reject an
 // existing PENDING review) — no route anywhere lets an admin create a
 // review. See adminProductReview.service.ts's own header comment.

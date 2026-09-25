@@ -25,6 +25,7 @@ import {
 import { toggleWishlist, removeFromWishlist, clearWishlist, getWishlistCount, getWishlist } from "./wishlist.js";
 import { initializeAnalytics, trackAddToCart, trackRemoveFromCart } from "./analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "./variantSelector.js";
+import { resolveGalleryImages, buildGalleryInner } from "./productGallery.js";
 import { SOUTH_AFRICAN_LANGUAGES } from "./southAfricanLanguages.js";
 import { initMetricoolTracking } from "./metricool.js";
 import { renderChatWidget } from "../components/chatWidget.js";
@@ -121,7 +122,10 @@ let updateAdminOrderStatus,
   confirmAdminManualPayment,
   generateAdminProductVariations,
   updateAdminProductVariant,
-  deleteAdminProductVariant;
+  deleteAdminProductVariant,
+  uploadVariantImage,
+  updateVariantImage,
+  deleteVariantImage;
 let createAdminAffiliateProduct, updateAdminAffiliateProduct, activateAdminAffiliateProduct, deactivateAdminAffiliateProduct, featureAdminAffiliateProduct, unfeatureAdminAffiliateProduct;
 let createAdminAffiliate,
   updateAdminAffiliate,
@@ -197,6 +201,9 @@ function ensureAdminModulesLoaded() {
         generateAdminProductVariations,
         updateAdminProductVariant,
         deleteAdminProductVariant,
+        uploadVariantImage,
+        updateVariantImage,
+        deleteVariantImage,
       } = bundle.adminDashboardApi);
       ({
         createAdminAffiliateProduct,
@@ -976,12 +983,29 @@ function handleSelectVariantOption(buttonEl) {
     }
   }
 
-  if (selectedVariant?.imageUrl) {
-    const mainImage = root.querySelector(".product-details__main-image");
-    if (mainImage) {
-      mainImage.src = selectedVariant.imageUrl;
-      mainImage.dataset.originalSrc = selectedVariant.imageUrl;
+  // Milestone 197: rebuilds the ENTIRE gallery — main image, thumbnail
+  // strip, prev/next state and the data-images blob the lightbox/slider
+  // reads from — not just mainImage.src, so a variant's own thumbnails
+  // actually appear and switching back to a variant (or "no selection")
+  // with no dedicated images correctly restores the full product-level
+  // gallery rather than leaving a stale single image behind. Uses the
+  // exact same resolveGalleryImages()/buildGalleryInner() helpers as
+  // the initial page render (pages/productDetails.js's renderGallery())
+  // so the two can never disagree on which images should be showing.
+  const galleryEl = root.querySelector("[data-gallery]");
+  if (galleryEl) {
+    let baseGallery;
+    try {
+      baseGallery = JSON.parse(container.dataset.productGallery);
+    } catch {
+      baseGallery = [container.dataset.productImage];
     }
+    const productName = container.dataset.productName;
+    const images = resolveGalleryImages(baseGallery, selectedVariant?.images);
+    const { innerHtml, galleryData } = buildGalleryInner(images, productName);
+    galleryEl.innerHTML = innerHtml;
+    galleryEl.dataset.currentIndex = "0";
+    galleryEl.dataset.images = JSON.stringify(galleryData);
   }
 
   try {
@@ -6280,6 +6304,62 @@ function setupAdminProductVariants() {
     const removeButton = event.target.closest('[data-action="remove-variant-row"]');
     if (removeButton) {
       handleRemoveVariantRow(removeButton);
+      return;
+    }
+
+    // Milestone 197: variant images. Same delegated-click discipline as
+    // the rest of this function — the panel toggle is purely visual (no
+    // API call), everything else re-renders the whole edit page on
+    // success, same pattern as every other admin image/variant action.
+    const toggleButton = event.target.closest('[data-action="toggle-variant-images"]');
+    if (toggleButton) {
+      const panel = document.querySelector(`[data-admin-variant-images-panel="${CSS.escape(toggleButton.dataset.variantId)}"]`);
+      if (panel) panel.hidden = !panel.hidden;
+      return;
+    }
+
+    const setPrimaryButton = event.target.closest("[data-admin-variant-image-set-primary]");
+    if (setPrimaryButton) {
+      handleAdminVariantImageSetPrimary(setPrimaryButton);
+      return;
+    }
+
+    const altToggleButton = event.target.closest("[data-admin-variant-image-alt-toggle]");
+    if (altToggleButton) {
+      const card = altToggleButton.closest("[data-admin-variant-image-card]");
+      const form = card?.querySelector("[data-admin-variant-image-alt-form]");
+      if (form) form.hidden = !form.hidden;
+      return;
+    }
+
+    const altCancelButton = event.target.closest("[data-admin-variant-image-alt-cancel]");
+    if (altCancelButton) {
+      const card = altCancelButton.closest("[data-admin-variant-image-card]");
+      const form = card?.querySelector("[data-admin-variant-image-alt-form]");
+      const input = form?.querySelector("[data-admin-image-alt-input]");
+      if (input) input.value = input.defaultValue;
+      if (form) form.hidden = true;
+      return;
+    }
+
+    const removeImageButton = event.target.closest("[data-admin-variant-image-remove]");
+    if (removeImageButton) {
+      handleAdminVariantImageRemove(removeImageButton);
+    }
+  });
+
+  document.addEventListener("submit", (event) => {
+    const uploadForm = event.target.closest("[data-admin-variant-image-upload-form]");
+    if (uploadForm) {
+      event.preventDefault();
+      handleAdminVariantImageUploadSubmit(uploadForm);
+      return;
+    }
+
+    const altForm = event.target.closest("[data-admin-variant-image-alt-form]");
+    if (altForm) {
+      event.preventDefault();
+      handleAdminVariantImageAltSubmit(altForm);
     }
   });
 }
@@ -6336,21 +6416,31 @@ function readVariantRowValues(row) {
   const price = row.querySelector('[data-variant-field="price"]')?.value;
   const stockQuantity = row.querySelector('[data-variant-field="stockQuantity"]')?.value;
   const weight = row.querySelector('[data-variant-field="weight"]')?.value;
-  const imageUrl = row.querySelector('[data-variant-field="imageUrl"]')?.value.trim() || "";
+  const imageUrlInput = row.querySelector('[data-variant-field="imageUrl"]');
   const isbn = row.querySelector('[data-variant-field="isbn"]')?.value.trim() || "";
   const gtin = row.querySelector('[data-variant-field="gtin"]')?.value.trim() || "";
   const isActive = row.querySelector('[data-variant-field="isActive"]')?.checked || false;
 
-  return {
+  const values = {
     sku: sku || null,
     price: price === "" ? NaN : Number(price),
     stockQuantity: stockQuantity === "" ? NaN : Number(stockQuantity),
     weight: weight === "" ? null : Number(weight),
-    imageUrl: imageUrl || null,
     isbn: isbn || null,
     gtin: gtin || null,
     isActive,
   };
+
+  // Milestone 197: once a variant has dedicated images, imageUrl is a
+  // backend-maintained mirror and the field is rendered disabled (see
+  // adminProductForm.js's renderVariantRow) — omitted here entirely so
+  // Save never trips the backend's "conflicting arbitrary imageUrl"
+  // rejection for a field the admin never actually edited.
+  if (imageUrlInput && !imageUrlInput.disabled) {
+    values.imageUrl = imageUrlInput.value.trim() || null;
+  }
+
+  return values;
 }
 
 async function handleSaveVariantRow(button) {
@@ -6412,6 +6502,153 @@ async function handleRemoveVariantRow(button) {
     }
     button.disabled = false;
     showAdminVariantsBanner(section, friendlyAdminVariantErrorMessage(error));
+  }
+}
+
+// Milestone 197: per-variant dedicated images. Same "re-render the
+// whole edit page on success" pattern, Supabase Storage pipeline, and
+// friendly-error-message discipline as the product-level image
+// handlers above — the only difference is the extra variantId, which
+// the backend independently re-verifies belongs to this product (never
+// trusted from these data attributes alone).
+function getAdminVariantIdFromCard(el) {
+  return el.closest("[data-admin-variant-image-card]")?.dataset.variantId || null;
+}
+
+async function handleAdminVariantImageUploadSubmit(form) {
+  if (form.dataset.uploading === "true") return;
+
+  const productId = getAdminVariantsProductId(form);
+  const variantId = form.dataset.variantId;
+  const banner = form.querySelector("[data-admin-variant-image-upload-banner]");
+  const fileInput = form.querySelector("[data-variant-image-file]");
+  const altTextInput = form.querySelector("[data-variant-image-alt-text]");
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const file = fileInput?.files?.[0];
+  const altText = altTextInput?.value.trim() || "";
+
+  let validationError = null;
+  if (!file) {
+    validationError = "An image file is required.";
+  } else if (!ALLOWED_ADMIN_IMAGE_MIME_TYPES.includes(file.type)) {
+    validationError = "Unsupported image type. Allowed types: JPG, PNG, or WebP.";
+  } else if (file.size > MAX_ADMIN_IMAGE_FILE_SIZE_BYTES) {
+    validationError = "Image file is too large. Maximum size is 5 MB.";
+  }
+
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (!productId || !variantId) return;
+
+  form.dataset.uploading = "true";
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await uploadVariantImage(productId, variantId, file, altText);
+    setPendingAdminMessage("Variant image uploaded successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = friendlyAdminImageErrorMessage(error);
+      banner.hidden = false;
+    }
+    form.dataset.uploading = "false";
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleAdminVariantImageSetPrimary(button) {
+  const card = button.closest("[data-admin-variant-image-card]");
+  const imageId = card?.dataset.adminVariantImageCard;
+  const variantId = getAdminVariantIdFromCard(button);
+  const productId = getAdminVariantsProductId(button);
+  if (!card || !imageId || !variantId || !productId) return;
+
+  button.disabled = true;
+  try {
+    await updateVariantImage(productId, variantId, imageId, { isPrimary: true });
+    setPendingAdminMessage("Primary variant image updated.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    window.alert(friendlyAdminImageErrorMessage(error));
+  }
+}
+
+async function handleAdminVariantImageAltSubmit(form) {
+  const card = form.closest("[data-admin-variant-image-card]");
+  const imageId = card?.dataset.adminVariantImageCard;
+  const variantId = getAdminVariantIdFromCard(form);
+  const productId = getAdminVariantsProductId(form);
+  const input = form.querySelector("[data-admin-image-alt-input]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (!card || !imageId || !variantId || !productId) return;
+
+  const altText = input?.value.trim() || "";
+  if (!altText) {
+    window.alert("Alt text is required.");
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateVariantImage(productId, variantId, imageId, { altText });
+    setPendingAdminMessage("Variant image alt text updated.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    window.alert(friendlyAdminImageErrorMessage(error));
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+async function handleAdminVariantImageRemove(button) {
+  const card = button.closest("[data-admin-variant-image-card]");
+  const imageId = card?.dataset.adminVariantImageCard;
+  const variantId = getAdminVariantIdFromCard(button);
+  const productId = getAdminVariantsProductId(button);
+  if (!card || !imageId || !variantId || !productId) return;
+
+  const confirmed = window.confirm("Remove this image from this variant?\nThis cannot be undone.");
+  if (!confirmed) return;
+
+  button.disabled = true;
+  try {
+    await deleteVariantImage(productId, variantId, imageId);
+    setPendingAdminMessage("Variant image removed successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    button.disabled = false;
+    window.alert(friendlyAdminImageErrorMessage(error));
   }
 }
 

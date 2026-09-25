@@ -197,6 +197,40 @@ export function deleteProductImage(productId, imageId) {
   });
 }
 
+// Milestone 197: admin variant image management. Same shape/pattern as
+// the product-level image functions just above, reusing the exact same
+// Supabase Storage upload pipeline — one more path segment
+// (variants/:variantId) scopes every call to that one variant's own
+// dedicated images.
+export function getVariantImages(productId, variantId) {
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}/images`, { method: "GET" });
+}
+
+export function uploadVariantImage(productId, variantId, file, altText) {
+  const formData = new FormData();
+  formData.append("image", file);
+  if (altText) formData.append("altText", altText);
+
+  return adminRequest(`/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}/images`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function updateVariantImage(productId, variantId, imageId, payload) {
+  return adminRequest(
+    `/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}/images/${encodeURIComponent(imageId)}`,
+    { method: "PATCH", body: JSON.stringify(payload) }
+  );
+}
+
+export function deleteVariantImage(productId, variantId, imageId) {
+  return adminRequest(
+    `/admin/products/${encodeURIComponent(productId)}/variants/${encodeURIComponent(variantId)}/images/${encodeURIComponent(imageId)}`,
+    { method: "DELETE" }
+  );
+}
+
 // Version 7, Milestone 152: admin digital-asset (file) management for
 // DIGITAL products. One file per product — POST always uploads OR
 // replaces the existing one (see adminDigitalAsset.service.ts).

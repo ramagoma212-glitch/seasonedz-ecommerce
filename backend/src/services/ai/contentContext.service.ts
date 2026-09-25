@@ -106,7 +106,10 @@ export interface ContentContext {
 export async function buildProductContentContext(productId: string): Promise<ProductContentContext> {
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    include: { images: { orderBy: { sortOrder: "asc" } } },
+    // Milestone 197: variantId: null — this AI context is built from
+    // the product's own shared images only, never a variant's
+    // dedicated ones.
+    include: { images: { where: { variantId: null }, orderBy: { sortOrder: "asc" } } },
   });
   if (!product) {
     throw new ContentContextError(`No product found with id "${productId}".`, 404);

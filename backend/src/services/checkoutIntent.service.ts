@@ -184,7 +184,9 @@ export async function getRecoverableCartByToken(token: string): Promise<Recovere
 
   const products = await prisma.product.findMany({
     where: { slug: { in: items.map((item) => item.productSlug) } },
-    select: { slug: true, name: true, price: true, images: { where: { isPrimary: true }, select: { url: true }, take: 1 } },
+    // Milestone 197: variantId: null — abandoned-checkout recovery
+    // always shows the product's own shared image, never a variant's.
+    select: { slug: true, name: true, price: true, images: { where: { isPrimary: true, variantId: null }, select: { url: true }, take: 1 } },
   });
   const productsBySlug = new Map(products.map((product) => [product.slug, product]));
 

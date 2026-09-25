@@ -259,9 +259,43 @@ test("updateVariant: a valid price/stock update writes only those fields and ret
   findUnique.restore();
 });
 
+// Milestone 197: imageUrl is a backend-maintained mirror once dedicated
+// ProductImage rows exist — Admin must never be able to overwrite it
+// with a conflicting arbitrary value through this route.
+test("updateVariant: rejects an imageUrl write once this variant has dedicated ProductImage rows", async () => {
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ id: "variant-1", productId: "product-1" }));
+  const imageCount = stub(prisma.productImage, "count", async () => 2);
+
+  await assert.rejects(
+    () => updateVariant("product-1", "variant-1", { imageUrl: "https://example.com/hijacked.jpg" }),
+    (error: unknown) => error instanceof AdminProductError && /dedicated images/i.test(error.message)
+  );
+
+  variantFindUnique.restore();
+  imageCount.restore();
+});
+
+test("updateVariant: a legacy variant with zero dedicated images can still freely edit imageUrl", async () => {
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ id: "variant-1", productId: "product-1" }));
+  const imageCount = stub(prisma.productImage, "count", async () => 0);
+  const update = stub(prisma.productVariant, "update", async ({ data }: { data: Record<string, unknown> }) => data);
+  const findUnique = stubProductFindUnique();
+
+  await updateVariant("product-1", "variant-1", { imageUrl: "https://example.com/legacy.jpg" });
+
+  assert.equal(update.fn.mock.callCount(), 1);
+  assert.equal(update.fn.mock.calls[0]!.arguments[0].data.imageUrl, "https://example.com/legacy.jpg");
+
+  variantFindUnique.restore();
+  imageCount.restore();
+  update.restore();
+  findUnique.restore();
+});
+
 test("removeVariant: hard-deletes a variant that has never been ordered", async () => {
   const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ id: "variant-1", productId: "product-1" }));
   const orderItemFindFirst = stub(prisma.orderItem, "findFirst", async () => null);
+  const imageFindMany = stub(prisma.productImage, "findMany", async () => []);
   const deleteFn = stub(prisma.productVariant, "delete", async () => ({}));
   const updateFn = stub(prisma.productVariant, "update", async () => {
     throw new Error("must never deactivate a variant with no orders — it should be hard-deleted instead");
@@ -275,8 +309,53 @@ test("removeVariant: hard-deletes a variant that has never been ordered", async 
 
   variantFindUnique.restore();
   orderItemFindFirst.restore();
+  imageFindMany.restore();
   deleteFn.restore();
   updateFn.restore();
+  findUnique.restore();
+});
+
+// Milestone 197: the storage-cleanup sequence itself — fetch this
+// variant's dedicated ProductImage rows BEFORE deleting it (so their
+// Storage objects can still be resolved afterward), then delete the
+// variant. Never converts a deleted variant's images into shared
+// product images (there is no code path here that clears variantId or
+// reassigns these rows to the product — the DB cascade removes them
+// outright). The actual Supabase Storage call
+// (removeProductImageObjectBestEffort) is deliberately never stubbed —
+// under native ESM its export is a read-only binding a test file
+// cannot reassign (unlike `prisma`, a genuinely mutable object) — but
+// it safely no-ops in this test environment (no SUPABASE_URL
+// configured), so calling the real function here is itself proof the
+// code path completes without throwing.
+test("removeVariant: fetches this variant's own dedicated images BEFORE deleting it — never after", async () => {
+  const variantFindUnique = stub(prisma.productVariant, "findUnique", async () => ({ id: "variant-1", productId: "product-1" }));
+  const orderItemFindFirst = stub(prisma.orderItem, "findFirst", async () => null);
+  const callOrder: string[] = [];
+  const imageFindMany = stub(prisma.productImage, "findMany", async (args: { where?: { variantId?: string } }) => {
+    callOrder.push("findMany");
+    assert.equal(args.where?.variantId, "variant-1");
+    return [
+      { url: "https://mswnhwsksocsrbcrdzyb.supabase.co/storage/v1/object/public/product-images/products/product-1/variants/variant-1/1-a.jpg" },
+      { url: "/images/legacy-static-asset.jpg" },
+    ];
+  });
+  const deleteFn = stub(prisma.productVariant, "delete", async () => {
+    callOrder.push("delete");
+    return {};
+  });
+  const findUnique = stubProductFindUnique();
+
+  await removeVariant("product-1", "variant-1");
+
+  // Fetch happens before delete — the images are never re-read after
+  // the variant (and, via cascade, its ProductImage rows) is gone.
+  assert.deepEqual(callOrder, ["findMany", "delete"]);
+
+  variantFindUnique.restore();
+  orderItemFindFirst.restore();
+  imageFindMany.restore();
+  deleteFn.restore();
   findUnique.restore();
 });
 

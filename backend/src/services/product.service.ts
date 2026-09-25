@@ -15,7 +15,12 @@ import { isActivePreorder, isActivePreorderDiscountEligible } from "./preorder.s
 // storefront ever shows).
 const productInclude = {
   category: true,
-  images: { orderBy: { sortOrder: "asc" } },
+  // Milestone 197: variantId: null — the shared/product-level gallery
+  // only. A selected variant's own dedicated images (if any) come
+  // through variants.images below instead, and the two are never
+  // merged (see ProductImage.variantId's schema comment and
+  // toProductOutput's own variant-images mapping).
+  images: { where: { variantId: null }, orderBy: { sortOrder: "asc" } },
   tags: true,
   digitalAsset: {
     select: { displayName: true, mimeType: true, fileSizeBytes: true, pageCount: true, version: true, isActive: true },
@@ -27,6 +32,12 @@ const productInclude = {
   variants: {
     where: { isActive: true },
     orderBy: { sortOrder: "asc" },
+    include: {
+      // Milestone 197: this variant's own dedicated images, nested —
+      // inherently scoped to that one variant's own rows already, no
+      // extra filter needed (unlike the flat Product.images include).
+      images: { orderBy: { sortOrder: "asc" } },
+    },
   },
 } satisfies Prisma.ProductInclude;
 
@@ -177,6 +188,20 @@ function getPrimaryImageUrl(images: ProductWithRelations["images"]): string | nu
   return primary ? primary.url : null;
 }
 
+// Milestone 197: dedicated ProductImage rows are authoritative — sorted
+// primary-first (they already arrive sortOrder-ascending from the
+// include, so this only ever reorders one element, never re-sorts the
+// rest). A legacy variant with zero dedicated rows falls back to its
+// own imageUrl field, exactly as it always has.
+function resolveVariantImages(variant: ProductWithRelations["variants"][number]): string[] {
+  if (variant.images.length > 0) {
+    const primary = variant.images.find((image) => image.isPrimary);
+    const rest = variant.images.filter((image) => image !== primary);
+    return (primary ? [primary, ...rest] : variant.images).map((image) => image.url);
+  }
+  return variant.imageUrl ? [variant.imageUrl] : [];
+}
+
 export interface ProductOutput {
   id: string;
   name: string;
@@ -245,6 +270,12 @@ export interface PublicProductVariant {
   price: number;
   stockQuantity: number;
   imageUrl: string | null;
+  // Milestone 197: this variant's own dedicated images, primary first,
+  // if any exist; otherwise a single-element array built from imageUrl
+  // (or empty). The storefront gallery must show ONLY this array when
+  // it is non-empty, and fall back to the product's own gallery
+  // otherwise — never merge the two. See resolveVariantImages().
+  images: string[];
   // Milestone 188A: optional book-language-edition metadata — null for
   // every non-book variant. Safe to expose publicly (never internal
   // pricing data like costPrice) — a book's ISBN is ordinary public
@@ -299,6 +330,7 @@ export function toProductOutput(product: ProductWithRelations): ProductOutput {
         price: variant.price.toNumber(),
         stockQuantity: variant.stockQuantity,
         imageUrl: variant.imageUrl,
+        images: resolveVariantImages(variant),
         languageCode: variant.languageCode,
         isbn: variant.isbn,
         gtin: variant.gtin,

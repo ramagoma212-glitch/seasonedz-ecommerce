@@ -175,7 +175,105 @@ function renderVariationOptionsSection(product) {
 // price/stock/etc.) — safe to re-run after adding a new option value.
 // ---------------------------------------------------------------------------
 
-function renderVariantRow(variant, groups) {
+// Milestone 197: this variant's own dedicated images — same card shape
+// as renderProductImageCard above, scoped with data-variant-id so the
+// delegated handlers in app.js know which variant (and which product)
+// each action belongs to.
+function renderVariantImageCard(variant, image) {
+  const resolvedUrl = withBase(image.url);
+  const altText = image.altText ? escapeHtml(image.altText) : "";
+
+  return `
+    <li class="admin-image-card" data-admin-variant-image-card="${escapeHtml(image.id)}" data-variant-id="${escapeHtml(variant.id)}">
+      <img class="admin-image-card__preview" src="${escapeHtml(resolvedUrl)}" alt="${altText}" loading="lazy" />
+      <div class="admin-image-card__meta">
+        ${image.isPrimary ? '<span class="admin-badge admin-badge--success">Primary</span>' : ""}
+        <p class="admin-image-card__alt">${altText || '<span class="admin-image-card__alt--empty">No alt text</span>'}</p>
+        <p class="admin-image-card__order">Sort order: ${Number(image.sortOrder)}</p>
+      </div>
+      <div class="admin-image-card__actions">
+        ${
+          image.isPrimary
+            ? ""
+            : `<button type="button" class="btn btn--secondary" data-admin-variant-image-set-primary="${escapeHtml(image.id)}">Set as primary</button>`
+        }
+        <button type="button" class="btn btn--secondary" data-admin-variant-image-alt-toggle="${escapeHtml(image.id)}">Edit alt text</button>
+        <button type="button" class="btn btn--danger" data-admin-variant-image-remove="${escapeHtml(image.id)}">Remove</button>
+      </div>
+      <form class="admin-image-alt-form" data-admin-variant-image-alt-form="${escapeHtml(image.id)}" hidden>
+        <label class="form-field__label" for="variantAltText-${escapeHtml(image.id)}">Alt text</label>
+        <input
+          type="text"
+          id="variantAltText-${escapeHtml(image.id)}"
+          class="form-field__input"
+          maxlength="200"
+          value="${altText}"
+          data-admin-image-alt-input
+        />
+        <div class="admin-image-alt-form__actions">
+          <button type="submit" class="btn btn--primary">Save</button>
+          <button type="button" class="btn btn--secondary" data-admin-variant-image-alt-cancel="${escapeHtml(image.id)}">Cancel</button>
+        </div>
+      </form>
+    </li>
+  `;
+}
+
+// Milestone 197: reuses the exact same Supabase Storage upload
+// pipeline as the product-level image form above — no "kind" (main/
+// gallery) choice here, since a variant's own primary image is set via
+// "Set as primary" instead, same as the product-level form's own
+// promote-after-upload convenience for the very first image. altText is
+// optional here (the backend fills in a "<product name> — <variant
+// option>" default when left blank — see adminProductImage.service.ts's
+// resolveVariantAltText()).
+function renderVariantImageUploadForm(productId, variant) {
+  return `
+    <form class="admin-image-upload-form" data-admin-variant-image-upload-form data-product-id="${escapeHtml(productId)}" data-variant-id="${escapeHtml(variant.id)}" novalidate>
+      <div class="form-field">
+        <label class="form-field__label" for="variantImageFile-${escapeHtml(variant.id)}">Image file <span class="form-field__required">*</span></label>
+        <input type="file" id="variantImageFile-${escapeHtml(variant.id)}" accept="image/jpeg,image/png,image/webp" data-variant-image-file />
+      </div>
+      <div class="form-field">
+        <label class="form-field__label" for="variantImageAltText-${escapeHtml(variant.id)}">Alt text <span class="form-field__optional">(optional — defaults to product name + variant option)</span></label>
+        <input type="text" id="variantImageAltText-${escapeHtml(variant.id)}" class="form-field__input" maxlength="200" data-variant-image-alt-text />
+      </div>
+      <p class="admin-product-form__hint">Allowed files: JPG, PNG or WebP, up to 5 MB.</p>
+      <div class="form-banner form-banner--error" data-admin-variant-image-upload-banner hidden></div>
+      <button type="submit" class="btn btn--primary btn--sm">Upload Image</button>
+    </form>
+  `;
+}
+
+// Milestone 197: the per-variant "Variant Images" panel the brief asks
+// for — collapsed by default (toggled via the "Manage Images" button in
+// the row above), rendered as its own full-width table row so it sits
+// directly beneath the variant it belongs to without breaking the
+// table's column layout.
+function renderVariantImagesPanel(productId, variant) {
+  const images = Array.isArray(variant.images) ? variant.images : [];
+  return `
+    <tr class="admin-variant-images-row" data-admin-variant-images-panel="${escapeHtml(variant.id)}" hidden>
+      <td colspan="11">
+        <div class="admin-product-images admin-product-images--nested">
+          <h3 class="admin-page__section-subtitle">Variant Images</h3>
+          <p class="admin-product-form__hint">
+            When this variant has its own images, the storefront shows ONLY these images for it — never the product's
+            own gallery, and never another variant's images.
+          </p>
+          ${
+            images.length > 0
+              ? `<ul class="admin-image-card-list">${images.map((image) => renderVariantImageCard(variant, image)).join("")}</ul>`
+              : `<p class="admin-product-images__empty">No dedicated images yet for this variant — it currently falls back to the product's own gallery.</p>`
+          }
+          ${renderVariantImageUploadForm(productId, variant)}
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderVariantRow(productId, variant, groups) {
   const label = groups
     .filter((group) => group.name in (variant.optionValues || {}))
     .map((group) => variant.optionValues[group.name])
@@ -186,6 +284,15 @@ function renderVariantRow(variant, groups) {
   // service.ts's own comment on why).
   const labelWithCode = variant.languageCode ? `${label} (${escapeHtml(variant.languageCode)})` : escapeHtml(label);
 
+  // Milestone 197: once this variant has dedicated images, the legacy
+  // imageUrl field is a backend-maintained mirror (never a second,
+  // independently-editable image source) — disabled here to match, with
+  // a hint pointing at the real control.
+  const hasDedicatedImages = Array.isArray(variant.images) && variant.images.length > 0;
+  const imageUrlCell = hasDedicatedImages
+    ? `<input type="text" class="form-field__input" value="${escapeHtml(variant.imageUrl || "")}" data-variant-field="imageUrl" disabled title="Managed via Variant Images below" />`
+    : `<input type="text" class="form-field__input" maxlength="2000" value="${escapeHtml(variant.imageUrl || "")}" data-variant-field="imageUrl" placeholder="Image URL (optional)" />`;
+
   return `
     <tr data-admin-variant-row data-variant-id="${escapeHtml(variant.id)}">
       <td>${labelWithCode}</td>
@@ -193,7 +300,12 @@ function renderVariantRow(variant, groups) {
       <td><input type="number" class="form-field__input" min="0.01" step="0.01" value="${variant.price}" data-variant-field="price" /></td>
       <td><input type="number" class="form-field__input" min="0" step="1" value="${variant.stockQuantity}" data-variant-field="stockQuantity" /></td>
       <td><input type="number" class="form-field__input" min="0" step="0.001" value="${variant.weight ?? ""}" data-variant-field="weight" /></td>
-      <td><input type="text" class="form-field__input" maxlength="2000" value="${escapeHtml(variant.imageUrl || "")}" data-variant-field="imageUrl" placeholder="Image URL (optional)" /></td>
+      <td>${imageUrlCell}</td>
+      <td>
+        <button type="button" class="btn btn--secondary btn--sm" data-action="toggle-variant-images" data-variant-id="${escapeHtml(variant.id)}">
+          ${hasDedicatedImages ? `Manage Images (${variant.images.length})` : "Add Images"}
+        </button>
+      </td>
       <td><input type="text" class="form-field__input" maxlength="20" value="${escapeHtml(variant.isbn || "")}" data-variant-field="isbn" placeholder="978-0-..." /></td>
       <td><input type="text" class="form-field__input" maxlength="20" value="${escapeHtml(variant.gtin || "")}" data-variant-field="gtin" placeholder="Barcode (optional)" /></td>
       <td><label class="admin-variant-active-toggle"><input type="checkbox" ${variant.isActive ? "checked" : ""} data-variant-field="isActive" /> Active</label></td>
@@ -202,6 +314,7 @@ function renderVariantRow(variant, groups) {
         <button type="button" class="btn btn--danger btn--sm" data-action="remove-variant-row">Remove</button>
       </td>
     </tr>
+    ${renderVariantImagesPanel(productId, variant)}
   `;
 }
 
@@ -223,13 +336,13 @@ function renderProductVariantsSection(product) {
       <div class="admin-table-wrap">
         <table class="admin-table" data-admin-variants-table>
           <thead>
-            <tr><th>Combination</th><th>SKU</th><th>Price (R)</th><th>Stock</th><th>Weight (kg)</th><th>Image URL</th><th>ISBN</th><th>Barcode/GTIN</th><th>Active</th><th>Actions</th></tr>
+            <tr><th>Combination</th><th>SKU</th><th>Price (R)</th><th>Stock</th><th>Weight (kg)</th><th>Legacy Image URL</th><th>Images</th><th>ISBN</th><th>Barcode/GTIN</th><th>Active</th><th>Actions</th></tr>
           </thead>
           <tbody data-admin-variants-tbody>
             ${
               variants.length > 0
-                ? variants.map((variant) => renderVariantRow(variant, groups)).join("")
-                : `<tr><td colspan="10">No variants yet. Use Generate Variations above.</td></tr>`
+                ? variants.map((variant) => renderVariantRow(product.id, variant, groups)).join("")
+                : `<tr><td colspan="11">No variants yet. Use Generate Variations above.</td></tr>`
             }
           </tbody>
         </table>
@@ -433,7 +546,8 @@ function renderProductForm(mode, product, categories) {
       ${renderVariationOptionsSection(product)}
 
       <div class="admin-product-form__image-note">
-        Image upload is coming later. For now, product images are managed separately.
+        Product images are managed in the Product Images section below, once this product has been saved. Variant
+        images (for products with variations) are managed per variant in the Variants section below that.
       </div>
 
       <div class="form-banner form-banner--error" data-admin-product-banner hidden></div>
