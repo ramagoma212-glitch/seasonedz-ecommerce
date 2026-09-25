@@ -589,13 +589,14 @@
     max-width: none;
   }
 
-  /* Version 7, Milestone 171B.0.3, Part 14: below 1024px the three
-     equal nav columns plus the wider payment column no longer fit one
-     comfortable row — 2 columns x 2 rows (General+Orders & Support,
-     Account+Payment Methods) tested as the cleaner of the brief's two
+  /* Version 7, Milestone 171B.0.3, Part 14: below 1024px the equal nav
+     columns plus the wider payment column no longer fit one comfortable
+     row — 2 columns per row (now Shop+General, Orders & Support+
+     Account, Payment Methods alone on its own row since Milestone 196
+     added the Shop column) tested as the cleaner of the brief's two
      suggested tablet options, keeping every column readable instead of
-     squeezing four narrow tracks into a shrinking container. Desktop
-     (1024px+, see Part 9) keeps the full 4-across row since the
+     squeezing narrow tracks into a shrinking container. Desktop
+     (1024px+, see Part 9) keeps the full across-row layout since the
      site's own capped 1200px container still has enough room there. */
   .site-footer__inner {
     grid-template-columns: repeat(2, 1fr);
@@ -622,7 +623,7 @@
   }
 
   /* Version 7, Milestone 171B.0.3: tighter vertical rhythm for the
-     four stacked footer sections (General/Orders & Support/Account/
+     stacked footer sections (Shop/General/Orders & Support/Account/
      Payment Methods) on small mobile — comfortable without excessive
      vertical spacing (Part 15 of the brief). */
   .site-footer__inner {

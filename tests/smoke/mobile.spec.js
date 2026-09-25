@@ -93,7 +93,7 @@ test.describe("Mobile smoke checks", () => {
     await page.goto("/");
     const footer = page.locator(".site-footer");
     await footer.scrollIntoViewIfNeeded();
-    await expect(footer.locator(".footer-heading")).toHaveCount(4);
+    await expect(footer.locator(".footer-heading")).toHaveCount(5);
     await expect(footer.locator("a", { hasText: "My Account" })).toBeVisible();
     await expect(footer.locator("a", { hasText: "Privacy Policy" })).toBeVisible();
     await expect(footer.locator(".footer-payment-grid img").first()).toBeVisible();

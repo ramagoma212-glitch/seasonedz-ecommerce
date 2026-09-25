@@ -20,6 +20,7 @@
 // js/api/productsApi.js.
 
 import { renderProductCard } from "../components/productCard.js";
+import { renderCategoryCard } from "../components/categoryCard.js";
 import { renderMarketplaceHomeSection } from "../components/marketplaceLinks.js";
 import { renderGoogleReviewsSection } from "../components/googleReviews.js";
 import { renderHomeFaqSection } from "../components/homeFaqAccordion.js";
@@ -95,6 +96,34 @@ function renderHiFriendSection() {
           <p>Our books help children trace letters, discover new facts and explore Bible stories, while our mindfulness pages give adults a calm moment to slow down.</p>
           <p>Every Seasonedz book is created with care for families, classrooms, churches and anyone who enjoys learning through creativity.</p>
         </div>
+      </div>
+    </section>
+  `;
+}
+
+// Milestone 196 (internal linking): a real, crawlable route from the
+// homepage into the 5 real /category/:slug pages — reuses the exact
+// same categoryCard.js component and .category-grid CSS the existing
+// /categories page already uses (both already responsive-tested at
+// every breakpoint, see layout.css's own comment on .category-grid),
+// rather than inventing new markup/styling. Excludes any zero-product
+// category (matches categories.js's own productCount > 0 filter — a
+// category with nothing in it gets no card and no link anywhere).
+// Category order already matches the priority the brief asked for
+// (Kids, Bible, Mindfulness, Markers and Crayons, Bundles), since the
+// API already returns categories in that same real sortOrder.
+function renderCategoriesSection(categories) {
+  const items = categories.filter((category) => category.productCount > 0);
+  if (!items.length) return "";
+
+  return `
+    <section class="section container">
+      <div class="section__header">
+        <h2 id="home-categories-heading">Shop by Category</h2>
+        <p>Find the right colouring books and creative supplies for your family, classroom or church.</p>
+      </div>
+      <div class="category-grid">
+        ${items.map((category, index) => renderCategoryCard(category, { eager: index < 3 })).join("")}
       </div>
     </section>
   `;
@@ -429,7 +458,10 @@ function renderCatalogueSectionSkeleton(id) {
 }
 
 function hydrateCatalogueSections() {
-  void getCatalog().then(({ products }) => {
+  void getCatalog().then(({ products, categories }) => {
+    const categoriesEl = document.getElementById("home-categories");
+    if (categoriesEl) categoriesEl.outerHTML = renderCategoriesSection(categories);
+
     const newReleasesEl = document.getElementById("home-new-releases");
     if (newReleasesEl) newReleasesEl.outerHTML = renderNewReleasesSection(products);
 
@@ -516,6 +548,7 @@ export function renderHome() {
     </section>
 
     ${renderHiFriendSection()}
+    ${renderCatalogueSectionSkeleton("home-categories")}
     ${renderCatalogueSectionSkeleton("home-new-releases")}
     <section class="section container" id="home-best-seller" aria-hidden="true">
       <div class="skeleton-block skeleton-heading"></div>

@@ -150,11 +150,12 @@ test.describe("Footer owner layout refinement (Milestone 171B.0.3)", () => {
     const inner = page.locator(".site-footer__inner");
     const columnCount = await inner.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length);
     const colCount = await page.locator(".site-footer__col").count();
-    // 4 real sections (General, Orders & Support, Account, Payment
-    // Methods) in a grid with exactly that many tracks — a clean
-    // single row, no empty trailing gap.
-    expect(colCount).toBe(4);
-    expect(columnCount).toBe(4);
+    // 5 real sections (Shop, General, Orders & Support, Account,
+    // Payment Methods — Milestone 196 added Shop) in a grid with
+    // exactly that many tracks — a clean single row, no empty trailing
+    // gap.
+    expect(colCount).toBe(5);
+    expect(columnCount).toBe(5);
   });
 
   test("footer copyright line keeps real Seasonedz Group wording, with nothing else beside it", async ({ page }) => {
@@ -174,16 +175,16 @@ test.describe("Footer owner layout refinement (Milestone 171B.0.3)", () => {
     }
   });
 
-  test("tablet (1024px): all four sections still distribute across one row", async ({ page }) => {
+  test("tablet (1024px): all five sections still distribute across one row", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 900 });
     await page.goto("/");
     const inner = page.locator(".site-footer__inner");
     const columnCount = await inner.evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length);
-    expect(columnCount).toBe(4);
+    expect(columnCount).toBe(5);
     await expect(page.locator(".footer-payment-grid img").first()).toBeVisible();
   });
 
-  test("tablet (768px): sections stack 2x2, payment logos stay legible", async ({ page }) => {
+  test("tablet (768px): sections stack 2 per row, payment logos stay legible", async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 900 });
     await page.goto("/");
     const inner = page.locator(".site-footer__inner");
@@ -196,11 +197,11 @@ test.describe("Footer owner layout refinement (Milestone 171B.0.3)", () => {
     }
   });
 
-  test("mobile (375px): sections stack in order General -> Orders & Support -> Account -> Payment Methods, payment logos in a 3-column grid", async ({ page }) => {
+  test("mobile (375px): sections stack in order Shop -> General -> Orders & Support -> Account -> Payment Methods, payment logos in a 3-column grid", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1600 });
     await page.goto("/");
     const headings = await page.locator("footer.site-footer .footer-heading").allTextContents();
-    expect(headings).toEqual(["General", "Orders & Support", "Account", "Payment Methods"]);
+    expect(headings).toEqual(["Shop", "General", "Orders & Support", "Account", "Payment Methods"]);
 
     const columnCount = await page.locator(".footer-payment-grid").evaluate((el) =>
       getComputedStyle(el).gridTemplateColumns.split(" ").filter(Boolean).length

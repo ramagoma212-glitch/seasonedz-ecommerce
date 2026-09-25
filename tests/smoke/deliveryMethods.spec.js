@@ -39,7 +39,7 @@ test.describe("Desktop header More menu", () => {
     await expect(panel).toBeHidden();
   });
 
-  test("More panel contains real internal links to Colouring Books, Creative Supplies, Schools & Churches, Affiliate Programme, About", async ({ page }) => {
+  test("More panel contains real internal links to Colouring Books, the 5 real category pages, Schools & Churches, Affiliate Programme, About", async ({ page }) => {
     await page.goto("/");
     await page.locator("#nav-more-trigger").click();
     const panel = page.locator("#nav-more-panel");
@@ -47,12 +47,25 @@ test.describe("Desktop header More menu", () => {
     // Version 7, Milestone 175: Affiliate Programme added between
     // Schools & Churches and About — see components/header.js's own
     // NAV_LINKS.
+    // Milestone 196: 4 more real /category/:slug links added (Kids,
+    // Bible, Mindfulness, Bundles) alongside the pre-existing Markers &
+    // Crayons one (renamed from the vague "Creative Supplies") — see
+    // components/header.js's own NAV_LINKS.
     const links = panel.locator("a");
-    await expect(links).toHaveCount(5);
-    await expect(panel.locator('a:has-text("Colouring Books")')).toHaveAttribute("href", "/shop");
+    await expect(links).toHaveCount(9);
+    // Exact-text (:text-is), not the substring :has-text used elsewhere
+    // in this file — "Colouring Books" is now itself a substring of
+    // "Kids Colouring Books"/"Bible Colouring Books", which would
+    // otherwise match more than one link and fail Playwright's strict
+    // mode.
+    await expect(panel.locator('a:text-is("Colouring Books")')).toHaveAttribute("href", "/shop");
+    await expect(panel.locator('a:text-is("Kids Colouring Books")')).toHaveAttribute("href", "/category/kids-colouring-books");
+    await expect(panel.locator('a:text-is("Bible Colouring Books")')).toHaveAttribute("href", "/category/bible-colouring-books");
+    await expect(panel.locator('a:text-is("Adult & Mindfulness Colouring")')).toHaveAttribute("href", "/category/mindfulness-colouring");
     // Version 7, Milestone 171I: real /category/:slug page now, not a
     // "/shop?category=" query filter — see categoryPage.js.
-    await expect(panel.locator('a:has-text("Creative Supplies")')).toHaveAttribute("href", "/category/markers-and-crayons");
+    await expect(panel.locator('a:text-is("Markers & Crayons")')).toHaveAttribute("href", "/category/markers-and-crayons");
+    await expect(panel.locator('a:text-is("Colouring Book Bundles")')).toHaveAttribute("href", "/category/bundles");
     await expect(panel.locator('a:has-text("Schools & Churches")')).toHaveAttribute("href", "/schools");
     await expect(panel.locator('a:has-text("Affiliate Programme")')).toHaveAttribute("href", "/account");
     await expect(panel.locator('a:has-text("About")')).toHaveAttribute("href", "/about");
@@ -107,13 +120,17 @@ test.describe("Desktop header More menu", () => {
   });
 });
 
-test.describe("Mobile header keeps all 9 links directly visible", () => {
+test.describe("Mobile header keeps all 13 links directly visible", () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
-  // Version 7, Milestone 175: Affiliate Programme is now a 9th direct
+  // Version 7, Milestone 175: Affiliate Programme is now a direct
   // mobile link (between Schools & Churches and About) — see
   // components/header.js's own NAV_LINKS.
-  test("no More trigger on mobile; all 9 destinations are direct links in the open menu", async ({ page }) => {
+  // Milestone 196: 4 more real /category/:slug links (Kids, Bible,
+  // Mindfulness, Bundles) plus the renamed Markers & Crayons link
+  // bring the mobile total from 9 to 13 — same NAV_LINKS array, so
+  // mobile and desktop can never drift apart.
+  test("no More trigger on mobile; all 13 destinations are direct links in the open menu", async ({ page }) => {
     await page.goto("/");
     await expect(page.locator("#nav-more-trigger")).toBeHidden();
 
@@ -121,8 +138,22 @@ test.describe("Mobile header keeps all 9 links directly visible", () => {
     const panel = page.locator("#site-header-collapsible");
     await expect(panel).toBeVisible();
 
-    for (const label of ["Home", "Shop", "Colouring Books", "Creative Supplies", "Digital Downloads", "Schools & Churches", "Affiliate Programme", "About", "Contact"]) {
-      await expect(panel.locator(`a.nav-link:has-text("${label}")`)).toBeVisible();
+    for (const label of [
+      "Home",
+      "Shop",
+      "Colouring Books",
+      "Kids Colouring Books",
+      "Bible Colouring Books",
+      "Adult & Mindfulness Colouring",
+      "Markers & Crayons",
+      "Colouring Book Bundles",
+      "Digital Downloads",
+      "Schools & Churches",
+      "Affiliate Programme",
+      "About",
+      "Contact",
+    ]) {
+      await expect(panel.locator(`a.nav-link:text-is("${label}")`)).toBeVisible();
     }
   });
 

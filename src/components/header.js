@@ -16,10 +16,6 @@ import { withBase } from "../js/paths.js";
 // once a more specific route exists:
 //  - "Colouring Books" has no single matching category (there are
 //    three: Kids/Bible/Mindfulness) — links to /shop.
-//  - "Creative Supplies" maps to the real "Markers and Crayons"
-//    category (closest existing match) — Version 7, Milestone 171I:
-//    now its own real page at /category/markers-and-crayons rather
-//    than a "/shop?category=" query filter, see categoryPage.js.
 //  - "Digital Downloads" has no route at all yet (no digital product
 //    records exist — see pages/home.js's Digital Colouring Books
 //    section) — links to /shop.
@@ -41,11 +37,27 @@ import { withBase } from "../js/paths.js";
 // more inside the new "More" dropdown (see MORE_NAV_LINKS/renderMoreMenu
 // below) — CSS (.nav-link--in-more, responsive.css) is what actually
 // hides them on desktop; this file just marks which ones qualify.
+//
+// Milestone 196 (internal linking): the 5 real, indexed
+// /category/:slug pages (categoryPage.js) each now get their own real,
+// descriptively-labelled nav entry here — before this, only
+// "markers-and-crayons" had one (under the vague, non-descriptive
+// label "Creative Supplies", now renamed). All 5 are `inMore: true` —
+// the primary desktop bar's visible item count (Home/Shop/Digital
+// Downloads/Contact) is deliberately left unchanged so the added
+// destinations never crowd it; they only ever appear inside the
+// existing "More" dropdown on desktop, and as ordinary top-level links
+// in the mobile panel exactly like every other inMore item already
+// does.
 const NAV_LINKS = [
   { href: "/", label: "Home", inMore: false },
   { href: "/shop", label: "Shop", inMore: false },
   { href: "/shop", label: "Colouring Books", inMore: true },
-  { href: "/category/markers-and-crayons", label: "Creative Supplies", inMore: true },
+  { href: "/category/kids-colouring-books", label: "Kids Colouring Books", inMore: true },
+  { href: "/category/bible-colouring-books", label: "Bible Colouring Books", inMore: true },
+  { href: "/category/mindfulness-colouring", label: "Adult & Mindfulness Colouring", inMore: true },
+  { href: "/category/markers-and-crayons", label: "Markers & Crayons", inMore: true },
+  { href: "/category/bundles", label: "Colouring Book Bundles", inMore: true },
   { href: "/shop", label: "Digital Downloads", inMore: false },
   { href: "/schools", label: "Schools & Churches", inMore: true },
   // Version 7, Milestone 175: links to the existing customer-account

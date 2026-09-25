@@ -134,6 +134,19 @@ export function renderFooter() {
 
       <div class="container site-footer__inner">
         <div class="site-footer__col">
+          <h4 class="footer-heading">Shop</h4>
+          <ul class="footer-links">
+            <li><a href="/shop">Shop All</a></li>
+            <li><a href="/category/kids-colouring-books">Kids Colouring Books</a></li>
+            <li><a href="/category/bible-colouring-books">Bible Colouring Books</a></li>
+            <li><a href="/category/mindfulness-colouring">Adult &amp; Mindfulness Colouring</a></li>
+            <li><a href="/category/markers-and-crayons">Markers &amp; Crayons</a></li>
+            <li><a href="/category/bundles">Colouring Book Bundles</a></li>
+            <li><a href="/categories">Browse All Categories</a></li>
+          </ul>
+        </div>
+
+        <div class="site-footer__col">
           <h4 class="footer-heading">General</h4>
           <ul class="footer-links">
             <li><a href="/about">About Us</a></li>

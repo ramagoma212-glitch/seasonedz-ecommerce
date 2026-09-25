@@ -195,27 +195,39 @@ test.describe("Category page internal linking (Milestone 171I)", () => {
     }
   });
 
-  test("the header's Creative Supplies nav item links to /category/markers-and-crayons", async ({ page }) => {
+  test("the header's Markers & Crayons nav item links to /category/markers-and-crayons", async ({ page }) => {
     await page.goto("/");
     await page.setViewportSize({ width: 1440, height: 900 });
     // Desktop "More" dropdown holds this item — open it first (see
     // components/header.js's renderMoreMenu()).
     await page.locator('[data-action="toggle-nav-more"]').click();
     const link = page.locator('a.nav-more__link[href="/category/markers-and-crayons"]');
-    await expect(link).toHaveText("Creative Supplies");
+    // Milestone 196: renamed from the vague "Creative Supplies" to a
+    // real, descriptive anchor text — see components/header.js's own
+    // NAV_LINKS.
+    await expect(link).toHaveText("Markers & Crayons");
   });
 
+  // Milestone 196: scoped to #main-content (the page's own content, not
+  // the site-wide header/footer chrome) — the header's "More" menu and
+  // footer's new Shop column now legitimately link to these same
+  // category/product URLs on every page (see components/header.js's
+  // NAV_LINKS and components/footer.js), which would otherwise make an
+  // unscoped `page.locator('a[href="..."]')` match more than one
+  // element and fail Playwright's strict mode. Same pattern
+  // homeSections.spec.js's own #main-content-scoped blog-link check
+  // already uses.
   test("Schools & Churches page links to a real product, a real category, and no longer links to the empty category filter", async ({ page }) => {
     await page.goto("/schools");
-    await expect(page.locator('a[href="/product/school-starter-colouring-pack"]')).toBeVisible();
-    await expect(page.locator('a[href="/category/bundles"]')).toBeVisible();
+    await expect(page.locator('#main-content a[href="/product/school-starter-colouring-pack"]')).toBeVisible();
+    await expect(page.locator('#main-content a[href="/category/bundles"]')).toBeVisible();
     await expect(page.locator('a[href="/shop?category=schools-and-wholesale"]')).toHaveCount(0);
   });
 
   test("Wholesale page links to real product categories", async ({ page }) => {
     await page.goto("/wholesale");
-    await expect(page.locator('a[href="/category/bible-colouring-books"]')).toBeVisible();
-    await expect(page.locator('a[href="/category/mindfulness-colouring"]')).toBeVisible();
+    await expect(page.locator('#main-content a[href="/category/bible-colouring-books"]')).toBeVisible();
+    await expect(page.locator('#main-content a[href="/category/mindfulness-colouring"]')).toBeVisible();
   });
 
   test("blog posts link to a relevant category or page instead of a generic Shop Now everywhere", async ({ page }) => {
