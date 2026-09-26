@@ -188,7 +188,14 @@ test.describe("Checkout: referral discount preview and submission", () => {
     );
 
     await addToCartAndGoToCheckout(page);
-    await expect(page.locator("[data-order-summary-discount-row]")).toHaveCount(0);
+    // Milestone 197: the checkout page's order summary now always keeps
+    // this row in the DOM (hidden, never removed) so a coupon
+    // applied/removed after page load can toggle it live without a full
+    // re-render — see components/orderSummary.js's own comment. "No
+    // discount shown" is now expressed as hidden, not absent; the
+    // customer-facing outcome this test actually cares about (nothing
+    // visible) is unchanged.
+    await expect(page.locator("[data-order-summary-discount-row]")).toBeHidden();
   });
 
   test("no stored referral: checkout never calls the preview endpoint, and shows no discount row", async ({ page }) => {
@@ -200,7 +207,9 @@ test.describe("Checkout: referral discount preview and submission", () => {
 
     await addToCartAndGoToCheckout(page);
     expect(previewCalled).toBe(false);
-    await expect(page.locator("[data-order-summary-discount-row]")).toHaveCount(0);
+    // Milestone 197: see the comment on the identical assertion above —
+    // this row now always exists (hidden) on the checkout page.
+    await expect(page.locator("[data-order-summary-discount-row]")).toBeHidden();
   });
 
   test("checkout submission relays the stored referralAttribution to the backend unchanged, and clears it from Local Storage on success", async ({ page }) => {
