@@ -74,7 +74,7 @@ export const blogPosts = [
     relatedLink: { href: "/schools", label: "See Schools & Churches Bulk Packs" },
     content: [
       "Creative activities like colouring give children a break from structured tasks while still keeping them engaged and calm, useful for transitions between lessons or as an early-finisher activity.",
-      "Classroom colouring packs, like our School Starter Colouring Pack, are designed to make this easy: a set of colouring books and crayons ready to hand out without extra prep.",
+      "Ready-made bundles, like our Old Testament Bible Colouring Book and 24 Acrylic Markers Bundle, are designed to make this easy: a colouring book and markers ready to hand out without extra prep.",
       "Consider setting up a small 'creative corner' with colouring supplies that children can use during quiet time. It's a simple way to bring a bit of calm and creativity into a busy school day.",
       "If you're planning for a full class or grade, our Schools page has more on bulk packs and how to get in touch for a quote.",
     ],
@@ -90,7 +90,7 @@ export const blogPosts = [
     relatedLink: { href: "/category/markers-and-crayons", label: "Shop Markers & Crayons" },
     content: [
       "Not all colouring supplies are created equal, especially for younger children. Chunky, twist-up crayons like our Rotating Wax Crayons are easier for little hands to grip and don't need sharpening.",
-      "For older children who want bolder colour, acrylic markers offer vibrant, richly pigmented lines. Our 24-colour set includes both fine and broad tips for different styles of colouring.",
+      "For older children who want bolder colour, acrylic markers offer vibrant, richly pigmented lines, available in our 24 or 60 colour sets.",
       "It's worth matching supplies to the activity: crayons for everyday colouring books, and markers for bigger, bolder projects or mindfulness patterns where colour saturation matters more.",
       "Whatever you choose, always check the recommended age range on the product page before buying.",
     ],

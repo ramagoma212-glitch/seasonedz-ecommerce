@@ -180,11 +180,19 @@ const productSeeds = [
     shortDescription: "A vibrant 24-colour acrylic marker set for bold, long-lasting colour.",
     description:
       "Bring any colouring book to life with this 24-colour acrylic marker set. Quick-drying, richly pigmented and long-lasting, these markers work beautifully on paper, card and craft projects.",
+    // Milestone 196A: replaced the placeholder "Fine and broad dual
+    // tips" claim (never verified against the real physical product —
+    // see that milestone's own tip-construction audit) with the same
+    // seven features approved and applied to the live production
+    // record, so a fresh local/dev seed can never reintroduce it.
     features: [
-      "24 vibrant, richly pigmented colours",
-      "Quick-drying acrylic ink",
-      "Fine and broad dual tips",
-      "Comes in a reusable storage case",
+      "Water based acrylic ink",
+      "Non-toxic formula",
+      "Quick drying colour",
+      "Non-bleed, for clean colour on the page",
+      "Smooth ink flow",
+      "Suitable for paper, canvas, wood, stone, glass and other craft surfaces",
+      "Comes in a reusable carry case",
     ],
     ageRange: "6+ years",
     stockQuantity: 50,

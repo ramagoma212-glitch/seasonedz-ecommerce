@@ -35,11 +35,11 @@ export function renderSchools() {
 
         <h2>Ready-Made School Packs</h2>
         <p>
-          Our <a href="/product/school-starter-colouring-pack">School Starter Colouring Pack</a>
-          bundles our most popular colouring books with crayons, ready to
-          hand out to a class. It's a simple starting point for classroom
-          use, or browse our full range of
-          <a href="/category/bundles">colouring book and marker bundles</a>.
+          Our <a href="/product/school-starter-colouring-pack">Old Testament Bible Colouring Book and 24 Acrylic Markers Bundle</a>
+          is a ready-made pack for Sunday school and classroom use. Browse
+          our full range of
+          <a href="/category/bundles">colouring book and marker bundles</a>
+          for other book, marker and crayon pairings.
         </p>
 
         <h2>Who We Work With</h2>

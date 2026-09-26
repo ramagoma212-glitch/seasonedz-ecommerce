@@ -149,23 +149,46 @@ export const products = [
     discountLabel: null,
   },
   {
+    // Milestone 196A: synchronised with the corrected, variant-neutral
+    // production record (name/shortDescription/description/features/
+    // price all mirror the live Product row — see that milestone's own
+    // report for the full before/after). hasVariants/variantOptions/
+    // variants/variantPriceRange are new here — every consumer
+    // (productDetails.js, productCard.js, app.js's variant selector,
+    // search.js) already handles these fields generically regardless of
+    // where the product came from (see mapApiProductToFrontendShape's
+    // own header comment), so this is real data in the SAME existing
+    // shape, not a new architecture. Variant `images`/`imageUrl` are
+    // deliberately left empty — this file has no distinct 60-colour
+    // photo of its own, and the gallery correctly falls back to the
+    // shared product gallery below in that case (same rule as the live
+    // site's own resolveGalleryImages()), rather than fabricating a
+    // fake per-variant image.
     id: "acrylic-marker-set-24-colours",
     slug: "acrylic-marker-set-24-colours",
-    name: "Acrylic Marker Set 24 Colours",
+    name: "Seasonedz Creative Acrylic Paint Marker Set, Non-Bleed",
     category: "Markers and Crayons",
     categorySlug: "markers-and-crayons",
-    price: 249.0,
+    price: 120.0,
     oldPrice: 299.0,
-    image: "/images/product-4.jpg",
-    gallery: ["/images/product-4.jpg", "/images/product-5.jpg"],
-    shortDescription: "A vibrant 24-colour acrylic marker set for bold, long-lasting colour.",
+    image: "/images/home/gifts/gift-acrylic-markers.png",
+    gallery: ["/images/home/gifts/gift-acrylic-markers.png"],
+    shortDescription:
+      "Create bold art on paper, canvas, wood, stone and glass with acrylic paint markers in 24 or 60 colour sets. Water based, non-toxic, quick drying and packed in a reusable carry case.",
     description:
-      "Bring any colouring book to life with this 24-colour acrylic marker set. Quick-drying, richly pigmented and long-lasting, these markers work beautifully on paper, card and craft projects.",
+      "Create bold, colourful artwork with the Seasonedz Creative Acrylic Marker Set. This versatile acrylic paint marker set is ideal for colouring, drawing, lettering, rock painting, school projects, handmade gifts and everyday arts and crafts.\n\nAvailable in 24 or 60 colour sets, these non bleed acrylic markers are suitable for use on paper, card, canvas, wood, stones, glass, ceramic, plastic and selected fabric craft projects.\n\nWater based, non-toxic and quick drying, each set is packed in a reusable carry case for easy storage.",
+    // Milestone 196A: the seven Product.features entries approved and
+    // applied to the live production record — kept in exact sync, no
+    // tip-construction claim (unverified — see that milestone's own
+    // tip-construction audit).
     features: [
-      "24 vibrant, richly pigmented colours",
-      "Quick-drying acrylic ink",
-      "Fine and broad dual tips",
-      "Comes in a reusable storage case",
+      "Water based acrylic ink",
+      "Non-toxic formula",
+      "Quick drying colour",
+      "Non-bleed, for clean colour on the page",
+      "Smooth ink flow",
+      "Suitable for paper, canvas, wood, stone, glass and other craft surfaces",
+      "Comes in a reusable carry case",
     ],
     ageRange: "6+ years",
     stockStatus: "In Stock",
@@ -175,7 +198,40 @@ export const products = [
     isFeatured: true,
     isBestSeller: false,
     isNewArrival: false,
-    discountLabel: "Save R50",
+    // Milestone 196A: "Save R50" was only ever accurate against this
+    // file's own old, unrelated R249/R299 sample prices — never
+    // reintroduced against the real R120/R299, which the live
+    // production record itself also shows with no discountLabel set.
+    discountLabel: null,
+    hasVariants: true,
+    variantOptions: [{ name: "Pack Size", values: ["24 Colours", "60 Colours"] }],
+    variants: [
+      {
+        id: "SG-0011",
+        optionValues: { "Pack Size": "24 Colours" },
+        sku: "SG-0011",
+        price: 99.99,
+        stockQuantity: 150,
+        imageUrl: "",
+        images: [],
+        languageCode: null,
+        isbn: null,
+        gtin: null,
+      },
+      {
+        id: "SG-0012",
+        optionValues: { "Pack Size": "60 Colours" },
+        sku: "SG-0012",
+        price: 249.99,
+        stockQuantity: 150,
+        imageUrl: "",
+        images: [],
+        languageCode: null,
+        isbn: null,
+        gtin: null,
+      },
+    ],
+    variantPriceRange: { min: 99.99, max: 249.99 },
   },
   {
     id: "rotating-wax-crayons-12-colours",
@@ -294,37 +350,42 @@ export const products = [
     discountLabel: "Bundle & Save",
   },
   {
+    // Milestone 196C: synchronised with the real production record —
+    // this fallback entry previously described a fictional "School
+    // Starter Colouring Pack" (ABC book + rotating crayons) that has
+    // never been the real SG-0010 product; the slug is an unrelated
+    // historical leftover (see that milestone's own School Starter
+    // forensic audit), kept as-is since the URL itself is correct and
+    // already indexed — only this file's stale name/price/description/
+    // features are corrected here, to match the real Old Testament +
+    // Acrylic Markers bundle now live at this same URL.
     id: "school-starter-colouring-pack",
     slug: "school-starter-colouring-pack",
-    name: "School Starter Colouring Pack",
-    // Milestone 172B.4.2A: was "Schools and Wholesale" — stale. The
-    // live catalogue moved this product to "Bundles" at some point
-    // after this fallback file was last synced, and "Schools and
-    // Wholesale" is genuinely empty in production (confirmed live:
-    // productCount 0). This mismatch surfaced as a CI-only sitemap
-    // test failure whenever a build happens to fall back to this local
-    // data (e.g. a brief live-API outage during an unrelated deploy) —
-    // see nonBrandedSeo.spec.js's "no thin/empty content" assertion.
+    name: "Old Testament Bible Colouring Book and 24 Acrylic Markers Bundle for Kids Ages 6 to 10",
     category: "Bundles",
     categorySlug: "bundles",
-    price: 459.0,
+    price: 230.0,
     oldPrice: null,
     image: "/images/product-1.jpg",
     gallery: ["/images/product-1.jpg", "/images/product-5.jpg", "/images/product-6.jpg"],
-    shortDescription: "A ready-made classroom pack of colouring books and crayons for schools.",
+    shortDescription:
+      "Explore Old Testament Bible stories through reading, writing, prayer and colouring with this Christian activity bundle for kids ages 6 to 10, complete with 24 vibrant acrylic markers.",
     description:
-      "Designed for teachers and classrooms, this starter pack combines our most popular colouring books with rotating wax crayons, ready to hand out to a class. Wholesale and bulk pricing available on request.",
+      "Help children discover the Old Testament in a creative and meaningful way with this Christian learning set. It combines 30 Old Testament Bible stories with reading, memory verse, writing, prayer and colouring activities, plus a 24 colour acrylic marker set for bringing every page to life.",
     features: [
-      "Includes a set of ABC Colouring Books",
-      "Includes Rotating Wax Crayons 12 Colours",
-      "Designed for classroom use",
-      "Wholesale pricing available for schools and churches",
+      "Old Testament Bible colouring book and 24 acrylic markers",
+      "Designed for children ages 6 to 10",
+      "30 Old Testament Bible stories",
+      "Read, memorise, write, pray and colour activities",
+      "24 vibrant acrylic marker colours",
+      "Water based and non-toxic markers",
+      "Ideal for home, church and Sunday school",
     ],
-    ageRange: "5-12 years",
+    ageRange: "6+ years",
     stockStatus: "In Stock",
     rating: 0,
     reviewCount: 0,
-    tags: ["schools", "wholesale", "classroom", "bundle"],
+    tags: ["bundle", "schools", "wholesale", "classroom"],
     isFeatured: true,
     isBestSeller: true,
     isNewArrival: false,

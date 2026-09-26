@@ -74,14 +74,40 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
     // Deliberately always the real activeCategory.name here, never
     // displayName — structured data is out of scope for the pageTitle
     // override above (see this file's own comment on it).
-    setPageStructuredData({
+    // Milestone 196C: mirrors scripts/generate-static-routes.mjs's own
+    // buildCategoryCollectionPageJsonLd() field-for-field (see that
+    // function's comment for why `name` uses displayName here, unlike
+    // the BreadcrumbList above) — built only from `results`, the
+    // products actually rendered in the grid below (respects whatever
+    // filters/sort are active on this exact page load), never a
+    // fabricated full-category list. A lightweight, URL-only ItemList —
+    // never a nested Product type, so this can't duplicate or drift
+    // from each product's own Product JSON-LD on its own page.
+    const categoryCollectionPage = {
       "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: [
-        { "@type": "ListItem", position: 1, name: "Home", item: new URL("/", window.location.origin).href },
-        { "@type": "ListItem", position: 2, name: activeCategory.name, item: new URL(`/category/${activeCategory.slug}`, window.location.origin).href },
-      ],
-    });
+      "@type": "CollectionPage",
+      name: displayName,
+      url: new URL(`/category/${activeCategory.slug}`, window.location.origin).href,
+      mainEntity: {
+        "@type": "ItemList",
+        itemListElement: results.map((product, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          url: new URL(`/product/${product.slug}`, window.location.origin).href,
+        })),
+      },
+    };
+    setPageStructuredData([
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: new URL("/", window.location.origin).href },
+          { "@type": "ListItem", position: 2, name: activeCategory.name, item: new URL(`/category/${activeCategory.slug}`, window.location.origin).href },
+        ],
+      },
+      categoryCollectionPage,
+    ]);
   }
   // No else branch needed for the generic /shop view — router.js
   // already clears any previous page's structured data unconditionally

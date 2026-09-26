@@ -42,6 +42,7 @@ import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
 import { trackViewItem } from "../js/analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "../js/variantSelector.js";
 import { resolveGalleryImages, buildGalleryInner } from "../js/productGallery.js";
+import { getProductSeoContent } from "../data/productSeoContent.js";
 
 function renderNotFound() {
   setPageMeta({ title: "Product Not Found", noindex: true });
@@ -418,10 +419,19 @@ function renderVariantSelector(product, selection) {
   `;
 }
 
+// Milestone 196B, Part 9: an explicit relatedSlugs override (see
+// productSeoContent.js's own header comment) takes priority when
+// present — used only for a product whose own category currently has
+// no other real product to recommend. Resolved against the live
+// products array (never a hardcoded card), so it can never show stale
+// data and silently drops any slug that no longer exists. Every other
+// product's behaviour (the plain same-category filter) is completely
+// unchanged.
 function renderRelatedProducts(product, products) {
-  const related = products
-    .filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id)
-    .slice(0, 4);
+  const seoContent = getProductSeoContent(product.slug);
+  const related = seoContent?.relatedSlugs
+    ? seoContent.relatedSlugs.map((slug) => products.find((item) => item.slug === slug)).filter(Boolean)
+    : products.filter((item) => item.categorySlug === product.categorySlug && item.id !== product.id).slice(0, 4);
 
   if (!related.length) return "";
 
@@ -429,7 +439,7 @@ function renderRelatedProducts(product, products) {
     <section class="section">
       <div class="section__header">
         <h2>You May Also Like</h2>
-        <p>More from ${product.category}.</p>
+        <p>${seoContent?.relatedSlugs ? "Pairs well with this product." : `More from ${product.category}.`}</p>
       </div>
       <div class="product-grid">
         ${related.map((item) => renderProductCard(item)).join("")}
@@ -460,7 +470,16 @@ export async function renderProductDetails({ slug, query } = {}) {
   }
   const selectedVariant = product.hasVariants ? findVariantForSelection(product.variants, groupNames, initialSelection) : null;
 
-  setPageMeta({ title: product.name, description: product.shortDescription });
+  // Milestone 196B, Part 3: an optional, SEO-only title override (see
+  // productSeoContent.js's own header comment) — used ONLY for the
+  // page <title>/og:title/twitter:title below. The H1 a few lines down,
+  // Product JSON-LD's own `name` (buildProductStructuredData()), the
+  // Add to Cart/cart/wishlist datasets, and every other reference to
+  // this product all still read product.name directly, completely
+  // unchanged — never this override.
+  const seoContent = getProductSeoContent(product.slug);
+  const pageTitle = seoContent?.pageTitle || product.name;
+  setPageMeta({ title: pageTitle, description: product.shortDescription });
   const breadcrumbTrail = buildBreadcrumbTrail(product);
   setPageStructuredData([buildProductStructuredData(product, selectedVariant), buildBreadcrumbStructuredData(breadcrumbTrail)]);
   // Milestone 188: view_item reports the initially-resolved variant's

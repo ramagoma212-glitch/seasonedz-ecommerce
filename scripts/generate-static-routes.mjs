@@ -52,6 +52,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { getCategorySeoContent } from "../src/data/categorySeoContent.js";
+import { getProductSeoContent } from "../src/data/productSeoContent.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
@@ -514,6 +515,42 @@ function buildCategoryBreadcrumbTrail(category) {
   ];
 }
 
+// Milestone 196C: CollectionPage + a lightweight, URL-only ItemList —
+// deliberately the minimal documented Google pattern for "this page
+// lists these other pages" (no nested Product type, no name/price/
+// image per item), so this never duplicates or risks disagreeing with
+// each product's own full Product JSON-LD on its own page. Built only
+// from the products actually shown for this category (never a
+// fabricated/complete catalogue), mirrored field-for-field by shop.js's
+// own client-side buildCategoryCollectionPageJsonLd() so the static and
+// hydrated versions always agree.
+//
+// `name` deliberately uses the customer-facing display name (the same
+// pageTitle override the visible <title>/H1 already use — see
+// categorySeoContent.js), NOT the real category.name BreadcrumbList
+// intentionally keeps using above — a CollectionPage describes the
+// page itself and must match what a visitor/crawler actually sees on
+// it (Google's own "structured data must reflect visible content"
+// guidance), whereas a breadcrumb trail is signalling site taxonomy,
+// a deliberately different, already-established convention this pass
+// doesn't change.
+export function buildCategoryCollectionPageJsonLd(displayName, canonicalUrl, categoryProducts) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: displayName,
+    url: canonicalUrl,
+    mainEntity: {
+      "@type": "ItemList",
+      itemListElement: categoryProducts.map((product, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `${SITE_URL}${withTrailingSlash(`/product/${product.slug}`)}`,
+      })),
+    },
+  };
+}
+
 export function buildBlogPostingJsonLd(post) {
   return {
     "@context": "https://schema.org",
@@ -849,8 +886,16 @@ async function main() {
     const routePath = `/product/${product.slug}`;
     if (isEnrichedProduct(product)) {
       const canonicalUrl = `${SITE_URL}${withTrailingSlash(routePath)}`;
+      // Milestone 196B, Part 3: mirrors productDetails.js's own
+      // pageTitle resolution exactly — title-only, so the raw pre-JS
+      // <title> a crawler sees first always agrees with what the
+      // client-side render sets once JS runs. buildProductJsonLd()
+      // below is untouched and still reads product.name directly, so
+      // this override never reaches structured data.
+      const seoContent = getProductSeoContent(product.slug);
+      const pageTitle = seoContent?.pageTitle || product.name;
       const jsonLdBlocks = [buildProductJsonLd(product, canonicalUrl), buildBreadcrumbJsonLd(buildProductBreadcrumbTrail(product))];
-      writeRouteFile(routePath, shellHtml, { title: product.name, description: product.shortDescription, ogImage: product.image, jsonLdBlocks });
+      writeRouteFile(routePath, shellHtml, { title: pageTitle, description: product.shortDescription, ogImage: product.image, jsonLdBlocks });
     } else {
       // Local-fallback build: file still generated (HTTP 200 fix
       // preserved), generic metadata only — see isEnrichedProduct().
@@ -876,8 +921,13 @@ async function main() {
       // visitor's browser executed JS yet. The BreadcrumbList JSON-LD
       // below deliberately still uses the real category.name, unchanged
       // — structured data is out of scope for this pass.
-      const jsonLdBlocks = [buildBreadcrumbJsonLd(buildCategoryBreadcrumbTrail({ name: category.name, slug: category.slug }))];
-      writeRouteFile(routePath, shellHtml, { title: seoContent?.pageTitle || category.name, description, ogImage, jsonLdBlocks });
+      const categoryDisplayName = seoContent?.pageTitle || category.name;
+      const categoryProducts = products.filter((product) => product.category?.slug === category.slug);
+      const jsonLdBlocks = [
+        buildBreadcrumbJsonLd(buildCategoryBreadcrumbTrail({ name: category.name, slug: category.slug })),
+        buildCategoryCollectionPageJsonLd(categoryDisplayName, canonicalUrl, categoryProducts),
+      ];
+      writeRouteFile(routePath, shellHtml, { title: categoryDisplayName, description, ogImage, jsonLdBlocks });
     } else {
       writeRouteFile(routePath, shellHtml, { title: "Category", description: DEFAULT_DESCRIPTION, ogImage: DEFAULT_OG_IMAGE, jsonLdBlocks: [] });
     }

@@ -97,6 +97,57 @@ test.describe("Category landing pages (Milestone 171I)", () => {
     expect(parsed.filter((entry) => entry["@type"] === "WebSite")).toHaveLength(1);
   });
 
+  // Milestone 196C: adds CollectionPage + ItemList alongside the
+  // existing BreadcrumbList — never replacing it, never a second
+  // competing BreadcrumbList.
+  test("a category page emits exactly one CollectionPage with an ItemList of its own real products, as canonical product URLs", async ({ page }) => {
+    await page.goto("/category/kids-colouring-books");
+    await page.locator(".product-card").first().waitFor();
+    const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+    const parsed = scripts.map((raw) => JSON.parse(raw));
+
+    const collectionPages = parsed.filter((entry) => entry["@type"] === "CollectionPage");
+    expect(collectionPages).toHaveLength(1);
+    const collectionPage = collectionPages[0];
+    // Same "contains the real path" check the BreadcrumbList test above
+    // uses (never a hardcoded SITE_URL prefix) — this runs against the
+    // local build's own origin, not the live production domain.
+    expect(collectionPage.url).toContain("/category/kids-colouring-books");
+    expect(collectionPage.mainEntity["@type"]).toBe("ItemList");
+
+    const items = collectionPage.mainEntity.itemListElement;
+    expect(items.length).toBeGreaterThan(0);
+    items.forEach((item, index) => {
+      expect(item.position).toBe(index + 1);
+      expect(item.url).toContain("/product/");
+      // Deliberately lightweight — never a nested Product type/name/
+      // price, so this can never duplicate or drift from each
+      // product's own Product JSON-LD on its own page.
+      expect(item.name).toBeUndefined();
+      expect(item.image).toBeUndefined();
+    });
+
+    // Still exactly one BreadcrumbList, unaffected by the new block.
+    expect(parsed.filter((entry) => entry["@type"] === "BreadcrumbList")).toHaveLength(1);
+  });
+
+  // Milestone 196C, Part 6: CollectionPage.name deliberately uses the
+  // customer-facing display name (matching the visible <title>/H1),
+  // never the real Category.name BreadcrumbList intentionally keeps
+  // using — the two categories with a pageTitle override are the ones
+  // that actually prove this distinction.
+  test("CollectionPage.name uses the customer-facing display name, never the real Category.name, for a category with a pageTitle override", async ({ page }) => {
+    await page.goto("/category/bundles");
+    await page.locator(".product-card").first().waitFor();
+    const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
+    const parsed = scripts.map((raw) => JSON.parse(raw));
+    const collectionPage = parsed.find((entry) => entry["@type"] === "CollectionPage");
+    const breadcrumb = parsed.find((entry) => entry["@type"] === "BreadcrumbList");
+
+    expect(collectionPage.name).toBe("Colouring Book Bundles");
+    expect(breadcrumb.itemListElement[1].name).toBe("Bundles");
+  });
+
   test("the empty 'Schools and Wholesale' category is never given its own indexable page or sitemap entry — no thin/empty content", async ({ request, baseURL }) => {
     const resp = await request.get(`${baseURL}/sitemap.xml`);
     const body = await resp.text();
