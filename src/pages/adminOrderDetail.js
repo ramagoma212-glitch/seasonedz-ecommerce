@@ -653,7 +653,7 @@ export async function renderAdminOrderDetail({ orderNumber } = {}) {
           ${order.preorderDiscountTotal ? `<div class="order-confirmation__row"><span>First Preorder Discount</span><span>-${formatCurrency(order.preorderDiscountTotal)}</span></div>` : ""}
           ${
             order.discountTotal - (order.preorderDiscountTotal || 0) > 0
-              ? `<div class="order-confirmation__row"><span>Referral Discount</span><span>-${formatCurrency(order.discountTotal - (order.preorderDiscountTotal || 0))}</span></div>`
+              ? `<div class="order-confirmation__row"><span>${order.couponCode ? `Coupon Discount (${escapeHtml(order.couponCode)})` : "Referral Discount"}</span><span>-${formatCurrency(order.discountTotal - (order.preorderDiscountTotal || 0))}</span></div>`
               : ""
           }
           <div class="order-confirmation__row admin-total-row"><span>Total</span><span>${formatCurrency(order.total)}</span></div>

@@ -28,6 +28,8 @@ import adminPreorderRoutes from "./adminPreorder.routes.js";
 import preorderRoutes from "./preorder.routes.js";
 import welcomeGiftRoutes from "./welcomeGift.routes.js";
 import adminWelcomeGiftRoutes from "./adminWelcomeGift.routes.js";
+import couponRoutes from "./coupon.routes.js";
+import adminCouponRoutes from "./adminCoupon.routes.js";
 
 const router = Router();
 
@@ -71,6 +73,11 @@ router.use("/admin/affiliate", adminAffiliateRoutes);
 // requireAdminAuth applied at the router level, see
 // adminReferrals.routes.ts's own header comment.
 router.use("/admin/referrals", adminReferralsRoutes);
+// Milestone 197: admin-managed coupon codes — requireAdminAuth applied
+// at the router level, see adminCoupon.routes.ts's own header comment.
+// /coupons (public, preview-only) is a completely separate router/path.
+router.use("/admin/coupons", adminCouponRoutes);
+router.use("/coupons", couponRoutes);
 // Version 7, Milestone 176: affiliate application/document review —
 // upgrades ONLY the onboarding process; the existing /admin/referrals
 // Affiliate management above is completely unchanged. Fully separate

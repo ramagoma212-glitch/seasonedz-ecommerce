@@ -21,7 +21,7 @@ import { getStoredReferralAttribution } from "../referral.js";
 // for COLLECTION. Still no price/fee/total field is ever sent — the
 // backend independently recomputes and validates every fee itself,
 // exactly as before.
-export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, collectionCity, deliveryNotes, paymentMethod, items }) {
+export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, collectionCity, deliveryNotes, paymentMethod, items, couponCode }) {
   const requiresAddress = deliveryMethod === "COURIER_LOCKER" || deliveryMethod === "COURIER_DOOR";
   const referralAttribution = getStoredReferralAttribution();
 
@@ -68,6 +68,16 @@ export function buildOrderPayload({ customer, deliveryMethod, deliveryAddress, c
     // nothing is stored, so an order placed with no referral looks
     // exactly like it did before this milestone.
     ...(referralAttribution ? { referralAttribution } : {}),
+    // Milestone 197, Part 7/8: the coupon-code system's ONLY input from
+    // this frontend — a plain string the customer typed and the
+    // checkout page's own "Apply" preview already confirmed valid, never
+    // any discount amount or eligibility this file computes itself.
+    // order.service.ts re-validates and re-resolves everything from
+    // scratch at real order-creation time regardless of what this
+    // preview showed. Omitted entirely (not even sent as null) when no
+    // coupon is applied, so an order placed without one looks exactly
+    // like it did before this milestone.
+    ...(couponCode ? { couponCode } : {}),
   };
 }
 

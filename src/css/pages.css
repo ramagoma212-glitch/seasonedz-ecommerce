@@ -1080,6 +1080,40 @@
   border-bottom: none;
 }
 
+/* Milestone 197, Part 13/14: the variant editor's own price/stock/SKU/
+   GTIN/weight inputs (adminProductForm.js's renderVariantRow()) had no
+   minimum width of their own — form-field__input's width:100% left
+   each one entirely at the mercy of this table's auto column-sizing,
+   which (with 11 columns competing for space, and this owner managing
+   the site heavily from a phone — see the Milestone 147/148 mobile-
+   overflow fixes) could shrink a price/stock/SKU cell down to only a
+   couple of visible characters. .admin-table-wrap's own
+   `overflow-x: auto` already exists precisely so a wide table can
+   scroll horizontally on a narrow viewport instead of every column
+   shrinking to fit — the actual fix is making sure these inputs
+   participate in that same scroll instead of collapsing first, by
+   giving each one a floor width big enough for its real values
+   (R10000.00, a stock quantity of 10000, a SKU like SG-0011, a full
+   ISBN/barcode) to stay fully visible and legible at any viewport.
+   Milestone 181, Part T's own admin-checkbox/select convention (small,
+   intrinsically-sized controls) is left alone — this is only ever
+   about the free-text/numeric inputs a value gets typed into. */
+[data-admin-variant-row] input[data-variant-field="sku"] {
+  min-width: 7.5rem;
+}
+[data-admin-variant-row] input[data-variant-field="price"],
+[data-admin-variant-row] input[data-variant-field="stockQuantity"],
+[data-admin-variant-row] input[data-variant-field="weight"] {
+  min-width: 6rem;
+}
+[data-admin-variant-row] input[data-variant-field="isbn"],
+[data-admin-variant-row] input[data-variant-field="gtin"] {
+  min-width: 8rem;
+}
+[data-admin-variant-row] input[data-variant-field="imageUrl"] {
+  min-width: 11rem;
+}
+
 /* Milestone 178, Part C: a small live-product thumbnail in the
    Affiliate Products list and picker — never a stored/copied image,
    just how the table renders whatever Product.images currently has. */

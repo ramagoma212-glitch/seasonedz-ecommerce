@@ -36,6 +36,7 @@ export * as adminWelcomeGiftApi from "./api/adminWelcomeGiftApi.js";
 export * as adminDashboardApi from "./api/adminDashboardApi.js";
 export * as adminAffiliateApi from "./api/adminAffiliateApi.js";
 export * as adminReferralsApi from "./api/adminReferralsApi.js";
+export * as adminCouponApi from "./api/adminCouponApi.js";
 export * as adminPreorderApi from "./api/adminPreorderApi.js";
 export * as adminReferralAffiliateProductForm from "../pages/adminReferralAffiliateProductForm.js";
 export * as contentStudioApi from "./api/contentStudioApi.js";

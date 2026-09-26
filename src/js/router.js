@@ -408,6 +408,12 @@ const routeDefs = [
   // admin list/:id-wildcard pair in this file. No referral discount or
   // commission is live on the public storefront yet — that's 172B.4/
   // 172B.5, so nothing here is linked from anywhere public.
+  // Milestone 197, Part 4: admin coupon management — "/new" before
+  // "/:id/edit", same ordering discipline as every other admin
+  // list/:id-wildcard pair in this file.
+  { pattern: "/admin/coupons/new", render: lazyPage(() => import("../pages/adminCouponForm.js"), (m) => m.renderAdminCouponCreate), title: "Add Coupon", noindex: true },
+  { pattern: "/admin/coupons/:id/edit", render: lazyPage(() => import("../pages/adminCouponForm.js"), (m) => m.renderAdminCouponEdit), title: "Edit Coupon", noindex: true },
+  { pattern: "/admin/coupons", render: lazyPage(() => import("../pages/adminCoupons.js"), (m) => m.renderAdminCoupons), title: "Coupons", noindex: true },
   { pattern: "/admin/referrals/affiliates/new", render: lazyPage(() => import("../pages/adminReferralAffiliateForm.js"), (m) => m.renderAdminReferralAffiliateCreate), title: "Add Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates/:id/edit", render: lazyPage(() => import("../pages/adminReferralAffiliateForm.js"), (m) => m.renderAdminReferralAffiliateEdit), title: "Edit Affiliate", noindex: true },
   { pattern: "/admin/referrals/affiliates", render: lazyPage(() => import("../pages/adminReferralAffiliates.js"), (m) => m.renderAdminReferralAffiliates), title: "Referral Affiliates", noindex: true },

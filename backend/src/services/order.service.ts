@@ -13,6 +13,7 @@ import { calculateProductCommissions, type AffiliateProductSettingSnapshot, type
 import { isActivePreorder, isActivePreorderDiscountEligible } from "./preorder.service.js";
 import { getPreorderProgrammeSettings } from "./preorderProgrammeSettings.service.js";
 import { hasActivePreorderDiscountRedemption, reservePreorderDiscount } from "./preorderDiscountRedemption.service.js";
+import { resolveCouponForOrder, redeemCoupon } from "./coupon.service.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
 // insufficient stock, etc.) — distinct from an unexpected error, so
@@ -306,6 +307,9 @@ const orderInclude = {
   items: true,
   payment: true,
   shipping: true,
+  // Milestone 197: the immutable coupon-redemption snapshot for this
+  // order, if any — see CouponRedemption's own schema comment.
+  couponRedemption: true,
 } satisfies Prisma.OrderInclude;
 
 type OrderWithRelations = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
@@ -411,6 +415,12 @@ export interface OrderOutput {
   // qualification"), never a live re-check of today's customer state.
   preorderDiscountApplied: boolean;
   preorderDiscountTotal: number;
+  // Milestone 197, Part 11: the immutable coupon snapshot for this order
+  // — null/0 for every order with no coupon applied, including every
+  // order placed before this milestone existed. Never re-derived from
+  // the coupon's current (possibly since-changed) configuration.
+  couponCode: string | null;
+  couponDiscountTotal: number;
   // Version 7, Milestone 157: order composition, derived from `items`
   // on every response — lets every caller (order-confirmation,
   // account order detail, Track Order, admin order detail) branch on
@@ -489,6 +499,8 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
     latestPreorderReleaseAt: order.latestPreorderReleaseAt,
     preorderDiscountApplied: order.items.some((item) => item.preorderDiscountAmountApplied !== null),
     preorderDiscountTotal: order.items.reduce((sum, item) => sum + (item.preorderDiscountAmountApplied?.toNumber() ?? 0), 0),
+    couponCode: order.couponRedemption?.codeSnapshot ?? null,
+    couponDiscountTotal: order.couponRedemption?.discountAmountSnapshot.toNumber() ?? 0,
     payment: order.payment
       ? {
           method: order.payment.method,
@@ -852,8 +864,28 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   //
   // Milestone 181, Part H: `referralEligibleSubtotal` (not `subtotal`)
   // is the whole-subtotal figure this now sees — see the comment above.
-  const referral = await resolveReferralForOrder(input.referralAttribution, { customerId, email: input.customer.email }, referralEligibleSubtotal);
-  const discountTotal = (preorderDiscount?.totalDiscountAmount ?? new Prisma.Decimal(0)).plus(referral ? referral.pricing.discountAmount : new Prisma.Decimal(0));
+  // Milestone 197, Part 3/9: the coupon system's own stacking policy —
+  // resolved against the exact same post-preorder `referralEligibleSubtotal`/
+  // lines the referral discount already uses below, so a coupon can never
+  // stack with the preorder discount on the same line. Only ONE of
+  // {coupon, referral} is ever actually applied to any order (see
+  // coupon.service.ts's own header comment for the full reasoning): a
+  // successfully-applied coupon takes priority, and the referral
+  // resolution below is skipped entirely in that case — its own code path
+  // is completely unchanged otherwise, so an order with no coupon behaves
+  // exactly as it always has.
+  const couponEligibleLines = verifiedItems
+    .filter((_, index) => !preorderDiscount?.perLineDiscountAmount.has(index))
+    .map((item) => ({ productId: item.productId, lineTotal: item.lineTotal }));
+  const couponResolution = input.couponCode
+    ? await resolveCouponForOrder(input.couponCode, customerId, input.customer.email, couponEligibleLines)
+    : null;
+  const appliedCoupon = couponResolution?.valid ? couponResolution : null;
+
+  const referral = appliedCoupon ? null : await resolveReferralForOrder(input.referralAttribution, { customerId, email: input.customer.email }, referralEligibleSubtotal);
+  const discountTotal = (preorderDiscount?.totalDiscountAmount ?? new Prisma.Decimal(0))
+    .plus(appliedCoupon ? appliedCoupon.discountAmount : new Prisma.Decimal(0))
+    .plus(referral ? referral.pricing.discountAmount : new Prisma.Decimal(0));
   const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
 
   const orderNumber = await generateOrderNumber();
@@ -994,6 +1026,38 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         discountPercent: preorderDiscount.discountPercent,
         discountAmount: preorderDiscount.totalDiscountAmount,
       });
+    }
+
+    // Milestone 197, Part 11: a coupon is only ever actually consumed
+    // here, inside this same transaction, now that the order row exists
+    // — never merely because a customer typed a code into the cart (see
+    // coupon.service.ts's own redeemCoupon() comment for the full
+    // concurrency reasoning). If a genuinely concurrent order pushed the
+    // coupon over its total-use limit between the earlier preview/
+    // resolution and this exact moment, this throws and rolls back the
+    // whole transaction, the same discipline as the preorder reservation
+    // immediately above.
+    if (appliedCoupon?.coupon) {
+      await redeemCoupon(tx, appliedCoupon.coupon.id, createdOrder.id, customerId, input.customer.email, appliedCoupon.code, appliedCoupon.discountAmount);
+      // `createdOrder` was captured (with include: orderInclude) at the
+      // tx.order.create() call above — BEFORE this CouponRedemption row
+      // existed, so its own couponRedemption relation is still null at
+      // this point in memory. Rather than pay for a second round-trip to
+      // re-fetch the whole order just to pick up one relation whose
+      // exact values are already known (we just wrote them, right
+      // above), attach the equivalent object directly — toOrderOutput()
+      // below only ever reads codeSnapshot/discountAmountSnapshot off
+      // it, so this is a complete, correct substitute for a re-fetch.
+      createdOrder.couponRedemption = {
+        id: "",
+        couponId: appliedCoupon.coupon.id,
+        orderId: createdOrder.id,
+        customerId,
+        customerEmail: input.customer.email.trim().toLowerCase(),
+        codeSnapshot: appliedCoupon.code,
+        discountAmountSnapshot: appliedCoupon.discountAmount,
+        createdAt: new Date(),
+      };
     }
 
     // Version 7, Milestone 172B.4: exactly one commission row per

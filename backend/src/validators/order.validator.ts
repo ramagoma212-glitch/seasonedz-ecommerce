@@ -85,6 +85,15 @@ export interface ValidatedOrderInput {
   // signature itself is verified by order.service.ts, which needs the
   // server secret this file deliberately never touches.
   referralAttribution: ValidatedReferralAttribution | null;
+  // Milestone 197: the ONLY coupon-related input this endpoint ever
+  // accepts from the client — a plain code string, shape-checked only.
+  // No discount type/value/amount/eligibility is ever accepted here or
+  // anywhere else in this request; order.service.ts re-derives every one
+  // of those itself from the code and the database, the exact same
+  // "never trust the body for money" discipline referralAttribution above
+  // already documents. A missing/blank code is never a validation error
+  // — it simply means no coupon was applied, same as an absent referral.
+  couponCode: string | null;
 }
 
 export interface ValidatedReferralAttribution {
@@ -322,6 +331,7 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
       paymentMethod: root.paymentMethod as PaymentMethod,
       items: validatedItems,
       referralAttribution: extractReferralAttribution(root.referralAttribution),
+      couponCode: isNonEmptyString(root.couponCode) ? root.couponCode.trim() : null,
     },
   };
 }

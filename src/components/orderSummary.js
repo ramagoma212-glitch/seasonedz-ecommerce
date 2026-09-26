@@ -4,6 +4,7 @@
 
 import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 import { preorderAvailabilityText } from "../js/preorder.js";
+import { escapeHtml } from "../js/search.js";
 //
 // Version 7, Milestone 168C: delivery fee now depends on which of the
 // three owner-approved fulfilment methods was chosen (Courier Guy
@@ -111,6 +112,35 @@ export function getRegistrationDeliveryPrompt({ isRegisteredCustomer, physicalSu
 // summing to the same total either way. Every existing caller that
 // doesn't pass `preorderDiscountTotal` renders exactly as before (a
 // single "Referral discount" row, or none at all).
+// Milestone 197, Part 7: the coupon-code input/applied-state block —
+// checkout-page-only (showCouponInput), never shown on the cart page or
+// the post-purchase order-confirmation page, which pass nothing here and
+// render exactly as before. Both states are always in the markup at once
+// (one `hidden`) rather than one being swapped in via a replaceHTML —
+// the same "toggle `hidden`, never re-render" convention every other
+// live checkout-page state change already uses (see js/app.js's
+// updateCheckoutDeliveryMethodUI()). `couponCode` non-null at initial
+// render means a coupon is already applied — never true for a fresh
+// checkout-page load today (checkoutPage.js always passes null), but
+// supported here so a future "coupon persisted across a page reload"
+// enhancement has somewhere correct to plug in.
+function renderCouponBlock(couponCode) {
+  return `
+    <form class="order-summary__coupon" data-coupon-apply-form novalidate ${couponCode ? "hidden" : ""}>
+      <label class="form-field__label" for="couponCodeInput">Have a coupon?</label>
+      <div class="order-summary__coupon-row">
+        <input type="text" id="couponCodeInput" class="form-field__input" placeholder="Enter code" maxlength="32" autocomplete="off" />
+        <button type="submit" class="btn btn--secondary btn--sm">Apply</button>
+      </div>
+    </form>
+    <div class="order-summary__coupon" data-coupon-applied-block ${couponCode ? "" : "hidden"}>
+      <span class="order-summary__coupon-applied">Coupon <strong data-coupon-applied-code>${escapeHtml(couponCode || "")}</strong> applied</span>
+      <button type="button" class="btn btn--secondary btn--sm" data-action="remove-coupon">Remove</button>
+    </div>
+    <p class="form-field__error" data-coupon-error></p>
+  `;
+}
+
 export function renderOrderSummary({
   subtotal,
   giftWrapTotal = 0,
@@ -126,6 +156,8 @@ export function renderOrderSummary({
   showItems = false,
   omitDeliveryUntilSelected = false,
   isRegisteredCustomer = false,
+  showCouponInput = false,
+  couponCode = null,
 }) {
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0) - discountTotal;
   const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
@@ -194,10 +226,10 @@ export function renderOrderSummary({
           : ""
       }
       ${
-        referralDiscountTotal > 0
+        referralDiscountTotal > 0 || showCouponInput
           ? `
-        <div class="order-summary__row order-summary__row--discount" data-order-summary-discount-row>
-          <span>Referral discount</span>
+        <div class="order-summary__row order-summary__row--discount" data-order-summary-discount-row ${referralDiscountTotal > 0 ? "" : "hidden"}>
+          <span data-order-summary-discount-label>${couponCode ? `Coupon discount (${escapeHtml(couponCode)})` : "Referral discount"}</span>
           <span data-order-summary-discount-value>-R${referralDiscountTotal.toFixed(2)}</span>
         </div>
       `
@@ -211,6 +243,8 @@ export function renderOrderSummary({
       <p class="order-summary__note" data-order-summary-delivery-note>
         ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer })}
       </p>
+
+      ${showCouponInput ? renderCouponBlock(couponCode) : ""}
 
       ${
         showCheckoutButton

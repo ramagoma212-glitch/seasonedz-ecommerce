@@ -1478,6 +1478,35 @@ body.has-cookie-preferences-open {
   margin-top: var(--space-sm);
 }
 
+/* Milestone 197, Part 7: checkout-page-only coupon-code input/applied
+   state — see components/orderSummary.js's own renderCouponBlock(). */
+.order-summary__coupon {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.order-summary__coupon-row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.order-summary__coupon-row .form-field__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.order-summary__coupon[data-coupon-applied-block] {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.order-summary__coupon-applied {
+  font-size: var(--font-size-sm);
+}
+
 /* Version 7, Milestone 171E: shown under a blocked "Proceed to
    Checkout" button (an unavailable cart item) — the one place this
    note needs to read as a real blocker, not a passive aside. */

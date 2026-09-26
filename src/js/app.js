@@ -49,6 +49,7 @@ import {
 } from "./validation.js";
 import { ApiError, ApiUnavailableError } from "./apiClient.js";
 import { buildOrderPayload, createOrder } from "./api/ordersApi.js";
+import { previewCouponCode } from "./api/couponApi.js";
 import { clearReferralAttribution, markReferralAttributionPendingOrder } from "./referral.js";
 import { submitEnquiry } from "./api/enquiriesApi.js";
 import { subscribeToNewsletter } from "./api/newsletterApi.js";
@@ -140,6 +141,7 @@ let createAdminAffiliate,
   createAdminAffiliateProductSetting,
   updateAdminAffiliateProductSetting,
   deleteAdminAffiliateProductSetting;
+let createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon;
 let updatePreorderSettings;
 let renderProductSearchResults, renderSelectedProductPreview;
 let createAdminBrandKnowledgeEntry,
@@ -228,6 +230,7 @@ function ensureAdminModulesLoaded() {
         updateAdminAffiliateProductSetting,
         deleteAdminAffiliateProductSetting,
       } = bundle.adminReferralsApi);
+      ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
       ({ updatePreorderSettings } = bundle.adminPreorderApi);
       ({ renderProductSearchResults, renderSelectedProductPreview } = bundle.adminReferralAffiliateProductForm);
       ({
@@ -315,6 +318,7 @@ function mountApp() {
   setupProductActions();
   setupProductImageLightbox();
   setupCheckoutForm();
+  setupCheckoutCouponForm();
   setupTrackOrderForm();
   setupNewsletterForm();
   setupEnquiryForms();
@@ -357,6 +361,8 @@ function mountApp() {
       setupAdminReferralAffiliateFilterForm();
       setupAdminReferralAffiliateForm();
       setupAdminReferralAffiliateActions();
+      setupAdminCouponForm();
+      setupAdminCouponActions();
       setupAdminAffiliateProductSettingFilterForm();
       setupAdminAffiliateProductSettingForm();
       setupAdminAffiliateProductSettingActions();
@@ -1274,11 +1280,14 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   const hasPhysicalItems = form.dataset.hasPhysicalItems === "true";
   const subtotal = parseFloat(form.dataset.subtotal || "0");
   const giftWrapTotal = parseFloat(form.dataset.giftWrapTotal || "0");
-  // Version 7, Milestone 172B.4: the checkout page's own referral
+  // Version 7, Milestone 172B.4: the checkout page's own referral/preorder
   // discount PREVIEW (see checkoutPage.js's getReferralDiscountPreview())
   // — never recomputed here on a delivery-method change, since the
   // discount is based on the qualifying product subtotal, which a
-  // delivery method choice never affects.
+  // delivery method choice never affects. Milestone 197: kept in sync by
+  // refreshCheckoutDiscountDisplay() whenever a coupon is applied/
+  // removed, so this always reads the current, correct combined amount
+  // regardless of which changed most recently.
   const discountTotal = parseFloat(form.dataset.discountTotal || "0");
   // Version 7, Milestone 180, Part A: read straight off the form's own
   // data attribute (set once at render time from the actual logged-in-
@@ -1295,6 +1304,11 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   };
 
   const deliveryFee = feeForMethod(method);
+  // Milestone 197, Part 7: read back by refreshCheckoutDiscountDisplay()
+  // so a coupon applied/removed AFTER a delivery method is already
+  // chosen recomputes the same total this function would — never a
+  // second, independently-guessed delivery fee.
+  form.dataset.deliveryFee = deliveryFee;
 
   form.querySelectorAll("[data-delivery-method-fee]").forEach((el) => {
     const fee = feeForMethod(el.dataset.deliveryMethodFee);
@@ -1322,6 +1336,143 @@ function updateCheckoutDeliveryMethodUI(form, method) {
 
   const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
   if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, { isRegisteredCustomer }).trim();
+}
+
+// Milestone 197, Part 7: recomputes the order summary's discount row and
+// total after a coupon is applied/removed. Deliberately narrow — this
+// never touches the delivery-method display (updateCheckoutDeliveryMethodUI's
+// own job), only the discount row and the final total, both of which a
+// coupon change (and only a coupon change) can affect. Coupon beats
+// referral (Milestone 197's own documented stacking policy, mirrored
+// exactly from order.service.ts's real createOrder() logic): whenever a
+// coupon is currently applied, the referral preview amount is simply not
+// used, never added on top.
+function refreshCheckoutDiscountDisplay(form) {
+  const subtotal = parseFloat(form.dataset.subtotal || "0");
+  const giftWrapTotal = parseFloat(form.dataset.giftWrapTotal || "0");
+  const deliveryFee = parseFloat(form.dataset.deliveryFee || "0");
+  const preorderDiscountTotal = parseFloat(form.dataset.preorderDiscountTotal || "0");
+  const referralDiscountTotal = parseFloat(form.dataset.referralDiscountTotal || "0");
+  const couponCode = form.dataset.couponCode || "";
+  const couponDiscountTotal = parseFloat(form.dataset.couponDiscountTotal || "0");
+
+  const remainderDiscountTotal = couponCode ? couponDiscountTotal : referralDiscountTotal;
+  const discountTotal = preorderDiscountTotal + remainderDiscountTotal;
+  form.dataset.discountTotal = discountTotal;
+
+  const summary = document.querySelector(".order-summary");
+  if (!summary) return;
+
+  const row = summary.querySelector("[data-order-summary-discount-row]");
+  if (row) {
+    row.hidden = remainderDiscountTotal <= 0;
+    const labelEl = row.querySelector("[data-order-summary-discount-label]");
+    if (labelEl) labelEl.textContent = couponCode ? `Coupon discount (${couponCode})` : "Referral discount";
+    const valueEl = row.querySelector("[data-order-summary-discount-value]");
+    if (valueEl) valueEl.textContent = `-R${remainderDiscountTotal.toFixed(2)}`;
+  }
+
+  const totalEl = summary.querySelector("[data-order-summary-total-value]");
+  if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee - discountTotal).toFixed(2)}`;
+}
+
+// Milestone 197, Part 7/9: mirrors order.service.ts's own
+// couponEligibleLines filter exactly — a line the preorder discount will
+// actually cover at real order creation must never also be offered to
+// this preview, or the preview could show a bigger coupon discount than
+// the real, authoritative order-creation calculation will actually grant.
+function getCheckoutCouponEligibleItems(form) {
+  const excludedIds = new Set((form.dataset.preorderExcludedProductIds || "").split(",").filter(Boolean));
+  return getCart()
+    .filter((item) => !excludedIds.has(item.productId))
+    .map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      ...(item.variantId ? { variantId: item.variantId } : {}),
+    }));
+}
+
+function setupCheckoutCouponForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-coupon-apply-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleCouponApply(form);
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest('[data-action="remove-coupon"]');
+    if (!button) return;
+    handleCouponRemove();
+  });
+}
+
+async function handleCouponApply(applyForm) {
+  const checkoutForm = document.getElementById("checkout-form");
+  if (!checkoutForm) return;
+
+  const errorEl = document.querySelector("[data-coupon-error]");
+  if (errorEl) errorEl.textContent = "";
+
+  const codeInput = applyForm.querySelector("#couponCodeInput");
+  const code = codeInput?.value.trim() || "";
+  if (!code) {
+    if (errorEl) errorEl.textContent = "Enter a coupon code.";
+    return;
+  }
+
+  const submitButton = applyForm.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    const items = getCheckoutCouponEligibleItems(checkoutForm);
+    const response = await previewCouponCode(code, items);
+    const result = response.data;
+
+    if (!result.valid) {
+      if (errorEl) errorEl.textContent = result.message;
+      return;
+    }
+
+    checkoutForm.dataset.couponCode = result.code;
+    checkoutForm.dataset.couponDiscountTotal = result.discountAmount;
+    refreshCheckoutDiscountDisplay(checkoutForm);
+
+    applyForm.hidden = true;
+    const appliedBlock = document.querySelector("[data-coupon-applied-block]");
+    if (appliedBlock) {
+      appliedBlock.hidden = false;
+      const codeEl = appliedBlock.querySelector("[data-coupon-applied-code]");
+      if (codeEl) codeEl.textContent = result.code;
+    }
+  } catch (error) {
+    if (errorEl) {
+      errorEl.textContent = error instanceof ApiError ? error.message : "Could not check that coupon right now. Please try again shortly.";
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+function handleCouponRemove() {
+  const checkoutForm = document.getElementById("checkout-form");
+  if (!checkoutForm) return;
+
+  checkoutForm.dataset.couponCode = "";
+  checkoutForm.dataset.couponDiscountTotal = "0";
+  refreshCheckoutDiscountDisplay(checkoutForm);
+
+  const errorEl = document.querySelector("[data-coupon-error]");
+  if (errorEl) errorEl.textContent = "";
+
+  const appliedBlock = document.querySelector("[data-coupon-applied-block]");
+  if (appliedBlock) appliedBlock.hidden = true;
+  const applyForm = document.querySelector("[data-coupon-apply-form]");
+  if (applyForm) {
+    applyForm.hidden = false;
+    const codeInput = applyForm.querySelector("#couponCodeInput");
+    if (codeInput) codeInput.value = "";
+  }
 }
 
 function clearFieldError(form, fieldName) {
@@ -1488,6 +1639,7 @@ async function handleCheckoutSubmit(form) {
     deliveryNotes: (data.deliveryNotes || "").trim(),
     paymentMethod: data.paymentMethod,
     items,
+    couponCode: form.dataset.couponCode || null,
   });
 
   const submitButton = form.querySelector('button[type="submit"]');
@@ -4246,6 +4398,200 @@ async function handleAdminReferralAffiliateAction(button, apiCall, verb) {
   try {
     await apiCall(affiliateId);
     setPendingAdminMessage(`Affiliate ${verb}.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    rowButtons.forEach((btn) => (btn.disabled = false));
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+// Milestone 197: admin coupon-code discount system. Same filter/form/
+// action wiring shape as the Referral Affiliate section above — no
+// checkout/discount math lives here, this only ever relays the admin's
+// create/edit/activate/deactivate/delete action to coupon.service.ts,
+// which remains the sole authority on every validation rule.
+function setupAdminCouponForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-coupon-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminCouponFormSubmit(form);
+  });
+
+  // UX-only: keeps the Discount Value hint accurate as the admin
+  // switches between Percentage and Fixed Amount — coupon.service.ts's
+  // own parseCouponInput() is what actually enforces either range.
+  document.addEventListener("change", (event) => {
+    const select = event.target.closest("[data-admin-coupon-discount-type]");
+    if (!select) return;
+    const form = select.closest("[data-admin-coupon-form]");
+    const hint = form?.querySelector("[data-admin-coupon-discount-value-hint]");
+    if (!hint) return;
+    hint.textContent = select.value === "PERCENTAGE" ? "A whole percentage between 1 and 100." : "A Rand amount greater than 0.";
+  });
+}
+
+function readAdminCouponCheckedValues(form, name) {
+  return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
+}
+
+function readAdminCouponFormValues(form) {
+  const code = form.querySelector("#couponCode")?.value.trim() || "";
+  const description = form.querySelector("#couponDescription")?.value.trim() || "";
+  const isActive = form.querySelector("#couponIsActive")?.checked ?? true;
+  const discountType = form.querySelector("#couponDiscountType")?.value || "PERCENTAGE";
+  const discountValueRaw = form.querySelector("#couponDiscountValue")?.value;
+  const minimumOrderSubtotalRaw = form.querySelector("#couponMinimumOrderSubtotal")?.value;
+  const maximumDiscountAmountRaw = form.querySelector("#couponMaximumDiscountAmount")?.value;
+  const maxTotalUsesRaw = form.querySelector("#couponMaxTotalUses")?.value;
+  const maxUsesPerCustomerRaw = form.querySelector("#couponMaxUsesPerCustomer")?.value;
+  const customerEligibility = form.querySelector("#couponCustomerEligibility")?.value || "ALL";
+
+  return {
+    code,
+    description: description || null,
+    isActive,
+    discountType,
+    discountValue: discountValueRaw === "" ? null : Number(discountValueRaw),
+    minimumOrderSubtotal: minimumOrderSubtotalRaw === "" ? null : Number(minimumOrderSubtotalRaw),
+    maximumDiscountAmount: maximumDiscountAmountRaw === "" ? null : Number(maximumDiscountAmountRaw),
+    startsAt: readAdminDatetimeLocalField(form, "couponStartsAt"),
+    expiresAt: readAdminDatetimeLocalField(form, "couponExpiresAt"),
+    maxTotalUses: maxTotalUsesRaw === "" ? null : Number(maxTotalUsesRaw),
+    maxUsesPerCustomer: maxUsesPerCustomerRaw === "" ? null : Number(maxUsesPerCustomerRaw),
+    customerEligibility,
+    productIds: readAdminCouponCheckedValues(form, "couponProductIds"),
+    categoryIds: readAdminCouponCheckedValues(form, "couponCategoryIds"),
+    excludedProductIds: readAdminCouponCheckedValues(form, "couponExcludedProductIds"),
+  };
+}
+
+// Client-side validation is a UX convenience only — coupon.service.ts's
+// own parseCouponInput() independently re-validates every field and
+// remains the final authority, with the exact same wording used here
+// (Milestone 197, Part 5's own "specific message, not a generic Invalid
+// input" requirement).
+function validateAdminCouponForm(values) {
+  if (!values.code || !/^[A-Z0-9_-]{3,32}$/i.test(values.code)) {
+    return "Coupon code must be 3-32 characters, letters/numbers/hyphens/underscores only.";
+  }
+  if (values.discountValue === null || Number.isNaN(values.discountValue)) return "Discount value must be a valid number.";
+  if (values.discountType === "PERCENTAGE" && (values.discountValue <= 0 || values.discountValue > 100)) {
+    return "Percentage must be between 1 and 100.";
+  }
+  if (values.discountType === "FIXED_AMOUNT" && values.discountValue <= 0) {
+    return "Fixed amount must be greater than 0.";
+  }
+  if (values.minimumOrderSubtotal !== null && (Number.isNaN(values.minimumOrderSubtotal) || values.minimumOrderSubtotal <= 0)) {
+    return "Minimum order amount must be greater than 0.";
+  }
+  if (values.maximumDiscountAmount !== null && (Number.isNaN(values.maximumDiscountAmount) || values.maximumDiscountAmount <= 0)) {
+    return "Maximum discount must be greater than 0.";
+  }
+  if (values.startsAt && values.expiresAt && new Date(values.expiresAt) <= new Date(values.startsAt)) {
+    return "Expiry date must be after the start date.";
+  }
+  if (values.maxTotalUses !== null && (!Number.isInteger(values.maxTotalUses) || values.maxTotalUses <= 0)) {
+    return "Maximum total uses must be a whole number greater than 0.";
+  }
+  if (values.maxUsesPerCustomer !== null && (!Number.isInteger(values.maxUsesPerCustomer) || values.maxUsesPerCustomer <= 0)) {
+    return "Maximum uses per customer must be a whole number greater than 0.";
+  }
+  return null;
+}
+
+async function handleAdminCouponFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-coupon-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminCouponFormValues(form);
+  const validationError = validateAdminCouponForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminCoupon(values);
+      setPendingAdminMessage(`Coupon "${response.data.code}" created successfully.`);
+      navigateTo(`/admin/coupons/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const couponId = form.dataset.couponId;
+      await updateAdminCoupon(couponId, values);
+      setPendingAdminMessage("Coupon updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiError && error.status === 404) {
+      message = "Coupon not found.";
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+function setupAdminCouponActions() {
+  document.addEventListener("click", (event) => {
+    const activateButton = event.target.closest('[data-action="activate-coupon"]');
+    if (activateButton) {
+      handleAdminCouponAction(activateButton, (id) => activateAdminCoupon(id), "activated");
+      return;
+    }
+    const deactivateButton = event.target.closest('[data-action="deactivate-coupon"]');
+    if (deactivateButton) {
+      handleAdminCouponAction(deactivateButton, (id) => deactivateAdminCoupon(id), "deactivated");
+      return;
+    }
+    const deleteButton = event.target.closest('[data-action="delete-coupon"]');
+    if (deleteButton) {
+      const confirmed = window.confirm("Delete this coupon?\nThis cannot be undone. A coupon that has ever been used cannot be deleted — deactivate it instead.");
+      if (!confirmed) return;
+      handleAdminCouponAction(deleteButton, (id) => deleteAdminCoupon(id), "deleted");
+    }
+  });
+}
+
+async function handleAdminCouponAction(button, apiCall, verb) {
+  const couponId = button.dataset.couponId;
+  const row = button.closest("[data-coupon-row]");
+  const banner = document.querySelector("[data-admin-coupon-banner]");
+  const rowButtons = row?.querySelectorAll("button") || [];
+
+  rowButtons.forEach((btn) => (btn.disabled = true));
+  if (banner) banner.hidden = true;
+
+  try {
+    await apiCall(couponId);
+    setPendingAdminMessage(`Coupon ${verb}.`);
     rerenderCurrentRoute();
   } catch (error) {
     rowButtons.forEach((btn) => (btn.disabled = false));

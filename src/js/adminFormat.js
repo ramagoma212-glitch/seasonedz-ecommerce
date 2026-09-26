@@ -7,8 +7,12 @@
 // Version 7, Milestone 171C: APPROVED/REJECTED added for the genuine
 // product review moderation queue (pages/adminReviews.js) — the same
 // generic tone convention every other admin status badge already uses.
+// Milestone 197: EXPIRED/INACTIVE for the coupon list's own derived
+// (never stored) display status — SCHEDULED deliberately left out of
+// both sets, rendering as the same default neutral tone as any other
+// unrecognised value (an upcoming coupon isn't a failure state).
 const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED"]);
-const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED"]);
+const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED", "EXPIRED", "INACTIVE"]);
 
 export function humanizeEnum(value) {
   return value

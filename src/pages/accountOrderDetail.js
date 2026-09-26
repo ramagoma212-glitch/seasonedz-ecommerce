@@ -154,6 +154,11 @@ function renderOrderDetail(order, digitalItems, reviewPromptsForOrder) {
             ? `<div class="order-confirmation__row"><span>First Preorder Discount</span><span>-${formatRand(order.preorderDiscountTotal)}</span></div>`
             : ""
         }
+        ${
+          order.couponCode
+            ? `<div class="order-confirmation__row"><span>Coupon Discount (${escapeHtml(order.couponCode)})</span><span>-${formatRand(order.couponDiscountTotal)}</span></div>`
+            : ""
+        }
         <div class="order-confirmation__row"><span>Delivery Method</span><span>${escapeHtml(formatDeliveryMethodLabel(order.deliveryMethod))}</span></div>
         <div class="order-confirmation__row"><span>Delivery Fee</span><span>${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)}</span></div>
         <div class="order-confirmation__row"><span>Total</span><span>${formatRand(order.total)}</span></div>

@@ -39,6 +39,7 @@ function baseInput(overrides: Partial<ValidatedOrderInput> = {}): ValidatedOrder
     paymentMethod: "BANK_TRANSFER" as ValidatedOrderInput["paymentMethod"],
     items: [{ productSlug: "test-product", quantity: 1, giftWrap: false, giftMessage: null, variantId: null }],
     referralAttribution: null,
+    couponCode: null,
     ...overrides,
   };
 }
@@ -1674,5 +1675,163 @@ test("a variant with no isbn/gtin snapshots null for both, never a fabricated va
   variantFindUnique.restore();
   transactionStub.restore();
   variantUpdateMany.restore();
+  orderCreate.restore();
+});
+
+// ---------------------------------------------------------------------------
+// Coupon system (Milestone 197) — stacking policy and money-safety
+// integration at the actual order-creation point. coupon.service.ts's own
+// test file covers the validation/calculation logic in isolation; these
+// prove createOrder() wires it in correctly, including the mutual-
+// exclusion stacking rule against preorder/referral discounts.
+// ---------------------------------------------------------------------------
+
+function stubCouponLookup(couponRow: Record<string, unknown> | null) {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => couponRow);
+  const couponProduct = stub(prisma.couponProduct, "findMany", async () => []);
+  const couponCategory = stub(prisma.couponCategory, "findMany", async () => []);
+  const couponExcluded = stub(prisma.couponExcludedProduct, "findMany", async () => []);
+  return {
+    restore: () => {
+      findUnique.restore();
+      couponProduct.restore();
+      couponCategory.restore();
+      couponExcluded.restore();
+    },
+  };
+}
+
+function baseCoupon(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "coupon-1",
+    code: "WELCOME10",
+    isActive: true,
+    discountType: "PERCENTAGE",
+    discountValue: new Prisma.Decimal(10),
+    minimumOrderSubtotal: null,
+    maximumDiscountAmount: null,
+    startsAt: null,
+    expiresAt: null,
+    maxTotalUses: null,
+    maxUsesPerCustomer: null,
+    timesRedeemed: 0,
+    customerEligibility: "ALL",
+    ...overrides,
+  };
+}
+
+test("a valid coupon reduces subtotal correctly and the resulting total is what would be sent to PayFast", async () => {
+  const coupon = stubCouponLookup(baseCoupon());
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(100) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "welcome10", deliveryMethod: "COLLECTION" }), null);
+
+  // R100 subtotal, 10% coupon = R10 discount, delivery COLLECTION = R0.
+  assert.equal(order.subtotal, 100);
+  assert.equal(order.discountTotal, 10);
+  assert.equal(order.total, 90, "the authoritative total — exactly what payfast.service.ts sends as `amount` to PayFast");
+  assert.equal(order.couponCode, "WELCOME10");
+  assert.equal(order.couponDiscountTotal, 10);
+  assert.equal(couponUpdateMany.fn.mock.callCount(), 1, "the usage counter must be incremented exactly once");
+  assert.equal(couponRedemptionCreate.fn.mock.callCount(), 1, "exactly one redemption row must be created");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("STACKING: a coupon never applies on top of an already preorder-discounted line — the line gets only the (larger) preorder discount", async () => {
+  const settings = stubPreorderProgrammeSettings({ minimumEligiblePreorderSubtotal: new Prisma.Decimal("0.00") });
+  const noRedemption = stubNoActiveRedemption();
+  const reservationCreate = stubReservationCreate();
+  const coupon = stubCouponLookup(baseCoupon());
+  const stubs = stubPreorderOrderCreation(200); // preorder-eligible, 10% preorder discount = R20
+
+  const order = await createOrder(baseInput({ couponCode: "WELCOME10" }), "customer-1");
+
+  assert.equal(order.preorderDiscountApplied, true);
+  assert.equal(order.preorderDiscountTotal, 20, "10% of R200 preorder discount");
+  // The coupon's own eligible-line pool excludes the preorder-discounted
+  // line entirely — with no other lines in the cart, there is nothing
+  // left for the coupon to discount at all.
+  assert.equal(order.couponCode, null, "a coupon that resolves to zero eligible subtotal is never applied/redeemed");
+  assert.equal(order.couponDiscountTotal, 0);
+  assert.equal(order.discountTotal, 20, "discountTotal is preorder's R20 only — never R20 + a second coupon discount on the same line");
+
+  settings.restore();
+  noRedemption.restore();
+  reservationCreate.restore();
+  coupon.restore();
+  stubs.restore();
+});
+
+test("STACKING: when both a coupon and a referral are present, the coupon wins and the referral discount is never applied", async () => {
+  const coupon = stubCouponLookup(baseCoupon());
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(500) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  // If resolveReferralForOrder were reached, it would look up an
+  // affiliate — stubbed to throw so this test fails loudly if the
+  // referral path is ever reached when a coupon already won.
+  const affiliateFindUnique = stub(prisma.affiliate, "findUnique", async () => {
+    throw new Error("must never be called — a successfully-applied coupon must skip the referral resolution entirely");
+  });
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const validSignedReferral = signReferralCapture("SOMEAFFILIATE");
+  const order = await createOrder(baseInput({ couponCode: "WELCOME10", referralAttribution: validSignedReferral }), null);
+
+  assert.equal(order.couponCode, "WELCOME10");
+  assert.equal(order.couponDiscountTotal, 50, "10% of R500");
+  assert.equal(order.discountTotal, 50, "coupon only — no referral discount stacked on top");
+  assert.equal(affiliateFindUnique.fn.mock.callCount(), 0);
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  affiliateFindUnique.restore();
+  orderCreate.restore();
+});
+
+test("an invalid/unknown coupon code never blocks checkout — the order is still created, with no discount applied", async () => {
+  const coupon = stubCouponLookup(null);
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(100) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "MADEUPCODE", deliveryMethod: "COLLECTION" }), null);
+
+  assert.equal(order.couponCode, null);
+  assert.equal(order.discountTotal, 0);
+  assert.equal(order.total, 100);
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
   orderCreate.restore();
 });

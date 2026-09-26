@@ -238,6 +238,17 @@ export const referralCaptureRateLimiter = rateLimit({
   handler: rateLimitHandler,
 });
 
+// Milestone 197: coupon code preview/validation — public, unauthenticated,
+// and a plausible brute-force target (guessing valid codes) without its
+// own limiter, same reasoning as referralCaptureRateLimiter above.
+export const couponPreviewRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
 // Version 7, Milestone 174C: back-in-stock subscribe — authenticated,
 // but still a write, and worth its own tighter counter separate from
 // the general per-customer-route budget.

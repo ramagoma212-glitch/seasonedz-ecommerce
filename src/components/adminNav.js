@@ -36,6 +36,8 @@ const NAV_LINKS = [
   // Settings live under this one flat link, with their own local
   // sub-navigation (components/referralsSubNav.js) once inside it.
   { key: "referrals", href: "/admin/referrals", label: "Referrals" },
+  // Milestone 197: admin-managed coupon-code discount system.
+  { key: "coupons", href: "/admin/coupons", label: "Coupons" },
   // Content Studio Phase 2: Brand Knowledge Foundation only — no
   // campaign/generation/scheduling/publishing feature exists behind
   // this link yet. See components/contentStudioSubNav.js.

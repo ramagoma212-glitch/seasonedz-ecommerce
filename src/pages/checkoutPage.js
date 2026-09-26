@@ -397,12 +397,14 @@ export async function renderCheckoutPage() {
   let latestPreorderReleaseAt = null;
   let hasEligiblePreorderItems = false;
   let preorderEligibleSubtotal = 0;
+  let preorderEligibleProductIds = [];
   try {
     const { products } = await getCatalog();
     const productsBySlug = new Map(
       products.map((product) => [
         product.slug,
         {
+          id: product.id,
           stockStatus: product.stockStatus,
           productType: product.productType,
           isPreorder: product.isPreorder,
@@ -429,6 +431,13 @@ export async function renderCheckoutPage() {
       (sum, item) => (productsBySlug.get(item.slug)?.isPreorderDiscountEligible ? sum + item.price * item.quantity : sum),
       0
     );
+    // Milestone 197, Part 9: the same lines the preorder discount will
+    // actually cover (order.service.ts's own couponEligibleLines filter)
+    // must never also be offered to the coupon-preview call below — a
+    // customer must never see a coupon preview claim a bigger discount
+    // than the real, backend-authoritative order-creation calculation
+    // will actually grant.
+    preorderEligibleProductIds = items.filter((item) => productsBySlug.get(item.slug)?.isPreorderDiscountEligible).map((item) => item.productId);
   } catch {
     unavailableItems = [];
   }
@@ -473,6 +482,11 @@ export async function renderCheckoutPage() {
           data-gift-wrap-total="${giftWrapTotal}"
           data-discount-total="${discountTotal}"
           data-is-registered-customer="${isRegisteredCustomer}"
+          data-preorder-discount-total="${preorderPreview.discountAmount}"
+          data-referral-discount-total="${referralDiscountTotal}"
+          data-preorder-excluded-product-ids="${preorderPreview.qualifies ? preorderEligibleProductIds.join(",") : ""}"
+          data-coupon-code=""
+          data-coupon-discount-total="0"
         >
           <div class="checkout-section">
             <h2 class="checkout-section__label">Delivery Details</h2>
@@ -557,6 +571,8 @@ export async function renderCheckoutPage() {
           showItems: true,
           items,
           isRegisteredCustomer,
+          showCouponInput: true,
+          couponCode: null,
         })}
       </div>
     </section>

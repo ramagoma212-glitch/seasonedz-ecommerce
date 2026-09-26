@@ -233,6 +233,7 @@ function renderBackendOrderConfirmation(order) {
           giftWrapTotal: order.giftWrapTotal,
           discountTotal: order.discountTotal,
           preorderDiscountTotal: order.preorderDiscountTotal,
+          couponCode: order.couponCode,
           deliveryFee: order.deliveryFee,
           deliveryMethodLabel: formatDeliveryMethodLabel(order.deliveryMethod),
           showCheckoutButton: false,

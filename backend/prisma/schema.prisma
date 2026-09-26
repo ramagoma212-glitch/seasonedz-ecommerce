@@ -161,6 +161,10 @@ model Category {
 
   products Product[]
 
+  // Milestone 197: this category's own appearances in a Coupon's
+  // category-restriction list — see CouponCategory's own header comment.
+  couponCategories CouponCategory[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -245,6 +249,13 @@ model Product {
   // and one-to-one: most products have no override at all.
   affiliateProductSetting          AffiliateProductSetting?
   orderAffiliateProductCommissions OrderAffiliateProductCommission[]
+
+  // Milestone 197: this product's own appearances in a Coupon's include/
+  // exclude restriction lists — see CouponProduct/CouponExcludedProduct's
+  // own header comments. Empty for every product no coupon has ever
+  // restricted itself to.
+  couponIncludes CouponProduct[]
+  couponExcludes CouponExcludedProduct[]
 
   // Milestone 181, Part B: reusable, admin-controlled preorder
   // configuration. Additive-only — Product remains the sole source of
@@ -583,6 +594,9 @@ model Customer {
   // comment for the full lifecycle. Usually zero or one row; may
   // accumulate several RELEASED rows over time from abandoned orders.
   preorderDiscountRedemptions PreorderDiscountRedemption[]
+  // Milestone 197: this customer's own coupon-redemption history — see
+  // CouponRedemption's own header comment.
+  couponRedemptions CouponRedemption[]
   // Milestone 189: at most one ever, per customer — see
   // WelcomeGiftDelivery's own header comment for why customerId is
   // @unique there (the one-time-delivery guarantee itself).
@@ -780,6 +794,10 @@ model Order {
   // PreorderDiscountRedemption's own header comment for the full
   // reserve/consume/release lifecycle.
   preorderDiscountRedemption PreorderDiscountRedemption?
+
+  // Milestone 197: at most one redemption row per order — see
+  // CouponRedemption's own header comment.
+  couponRedemption CouponRedemption?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3013,4 +3031,179 @@ model CampaignContentRecord {
   updatedAt DateTime @updatedAt
 
   @@index([campaignBriefId])
+}
+
+// ============================================================================
+// COUPONS (Milestone 197) — a generic, admin-managed, code-based discount
+// system. Deliberately separate from the existing preorder discount
+// (PreorderDiscountRedemption/PreorderProgrammeSettings above) and the
+// affiliate/referral discount (Affiliate.discountRateOverride) — those two
+// remain completely unchanged; this is a THIRD, independent discount
+// mechanism that order.service.ts's createOrder() combines with them under
+// one explicit, documented non-stacking policy (see that file's own comment
+// at the point coupon/referral/preorder discounts are resolved): at most
+// ONE promotional discount ever applies to any given eligible amount. A
+// coupon is never consumed merely because a customer typed it in — only a
+// real, committed order (inside the same transaction as order creation,
+// mirroring PreorderDiscountRedemption's own reserve-inside-transaction
+// discipline) ever creates a CouponRedemption row or increments
+// Coupon.timesRedeemed.
+// ============================================================================
+
+enum CouponDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+// V1 deliberately ships only these two — see this milestone's own report
+// for why "first order only" was classified as a separate, not-yet-built
+// option rather than implemented unreliably under time pressure.
+enum CouponCustomerEligibility {
+  ALL
+  LOGGED_IN_ONLY
+}
+
+model Coupon {
+  id String @id @default(cuid())
+
+  // Always stored upper-cased and trimmed by the service layer before
+  // every write/lookup (coupon.service.ts's own normalizeCouponCode()) —
+  // the same "one canonical form, never two codes that quietly mean the
+  // same thing" discipline NewsletterSubscriber.email/Affiliate.email
+  // already document elsewhere in this file. WELCOME10/welcome10/Welcome10
+  // all resolve to the one row with code "WELCOME10".
+  code String @unique
+
+  // Admin-only internal label — never shown to a customer.
+  description String?
+
+  isActive Boolean @default(true)
+
+  discountType CouponDiscountType
+  // PERCENTAGE: 0 < value <= 100. FIXED_AMOUNT: value > 0, in Rand.
+  // Validated in coupon.service.ts, never trusted from a raw request body.
+  discountValue Decimal @db.Decimal(10, 2)
+
+  // Optional — null means no minimum. Judged against the same
+  // "coupon-eligible subtotal" order.service.ts already computes for the
+  // referral discount (gift wrap/delivery excluded, and net of whatever a
+  // line already received from the preorder discount — see that file).
+  minimumOrderSubtotal Decimal? @db.Decimal(10, 2)
+
+  // Only meaningful for PERCENTAGE (ignored for FIXED_AMOUNT, since a
+  // fixed discount is already its own cap) — e.g. "10% off, up to R100".
+  maximumDiscountAmount Decimal? @db.Decimal(10, 2)
+
+  // Both optional and independent — a coupon with neither is usable any
+  // time it's ACTIVE. Stored as real UTC instants, same convention as
+  // every other DateTime in this schema (Product.preorderReleaseAt etc.)
+  // — the admin UI is responsible for converting to/from SAST for display
+  // and input, exactly like backend/src/utils/southAfricaTime.ts already
+  // does for preorder dates, never a second, DB-level timezone concept.
+  startsAt  DateTime?
+  expiresAt DateTime?
+
+  // Optional caps. null means unlimited. timesRedeemed is a denormalised,
+  // atomically-incremented counter (see coupon.service.ts's redeemCoupon())
+  // — always incremented via a conditional updateMany() that only succeeds
+  // while still under maxTotalUses, the exact same race-safe pattern
+  // order.service.ts's own stock-decrement guard already uses, so two
+  // simultaneous checkouts can never both push a total-use coupon over its
+  // limit.
+  maxTotalUses       Int?
+  maxUsesPerCustomer Int?
+  timesRedeemed      Int @default(0)
+
+  customerEligibility CouponCustomerEligibility @default(ALL)
+
+  // Empty relations below mean "no restriction" (applies to every
+  // eligible product) — never an empty-string/empty-array sentinel value
+  // on the Coupon row itself, so "not configured yet" and "restricted to
+  // zero products" can never be confused.
+  includedProducts   CouponProduct[]
+  includedCategories CouponCategory[]
+  excludedProducts   CouponExcludedProduct[]
+
+  redemptions CouponRedemption[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+model CouponProduct {
+  id        String  @id @default(cuid())
+  couponId  String
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, productId])
+}
+
+model CouponCategory {
+  id         String   @id @default(cuid())
+  couponId   String
+  coupon     Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, categoryId])
+}
+
+// Deliberately its own table, not a boolean flag on CouponProduct — an
+// excluded product is a completely different rule (subtract from an
+// otherwise-eligible set) from an included one (define the eligible set),
+// and a coupon may one day want both a category-level include AND a
+// specific-product-level exclude within it (e.g. "10% off all Bundles
+// except the Mindfulness bundle") — never expressible as one table with a
+// type flag without ambiguity about which list an admin is looking at.
+model CouponExcludedProduct {
+  id        String  @id @default(cuid())
+  couponId  String
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, productId])
+}
+
+// One row per order that actually redeemed a coupon (orderId unique below)
+// — created inside the SAME transaction as order creation, alongside the
+// Coupon.timesRedeemed increment, mirroring PreorderDiscountRedemption's
+// own "never consume merely because a checkout attempt started" discipline.
+// codeSnapshot/discountAmountSnapshot are captured at redemption time so a
+// later admin edit to the Coupon row (e.g. changing its discount value or
+// even its description) can never reinterpret a historical order's own
+// receipt — the exact same "never depend on a live, changeable value"
+// philosophy every other snapshot field in this schema already documents.
+model CouponRedemption {
+  id String @id @default(cuid())
+
+  couponId String
+  coupon   Coupon @relation(fields: [couponId], references: [id])
+  orderId  String @unique
+  order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Nullable — a guest checkout has no Customer row. customerEmail is
+  // always set (guest or registered alike) so a per-customer usage limit
+  // can still be enforced for a guest by email, the same "email is the
+  // one guest-safe identity we have" discipline NewsletterSubscriber and
+  // GuestDownloadToken already rely on elsewhere in this file. This is a
+  // best-effort limit for guests (a customer could in principle check out
+  // with a different email each time) — documented as a known V1
+  // limitation in this milestone's own report, not silently pretended to
+  // be bulletproof.
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerEmail String
+
+  codeSnapshot           String
+  discountAmountSnapshot Decimal @db.Decimal(10, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([couponId, customerId])
+  @@index([couponId, customerEmail])
 }
