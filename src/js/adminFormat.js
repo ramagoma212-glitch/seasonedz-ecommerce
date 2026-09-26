@@ -11,8 +11,12 @@
 // (never stored) display status — SCHEDULED deliberately left out of
 // both sets, rendering as the same default neutral tone as any other
 // unrecognised value (an upcoming coupon isn't a failure state).
-const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED"]);
-const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED", "EXPIRED", "INACTIVE"]);
+// Milestone 198: COMPLETED/SENT for outreach campaigns/recipients;
+// UNSUBSCRIBED/BOUNCED/INVALID/SUPPRESSED/PARTIALLY_FAILED join the
+// danger set below — the same generic tone convention, so a suppressed
+// contact or a failed send reads as a problem state at a glance.
+const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED", "COMPLETED", "SENT"]);
+const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED", "EXPIRED", "INACTIVE", "UNSUBSCRIBED", "BOUNCED", "INVALID", "SUPPRESSED", "PARTIALLY_FAILED"]);
 
 export function humanizeEnum(value) {
   return value

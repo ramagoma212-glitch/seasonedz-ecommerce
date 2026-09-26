@@ -62,8 +62,11 @@ export type EmailTemplateName =
 
 // Which side of the conversation a template's recipient is — used only
 // for dry-run log clarity (see email.service.ts's logConsoleEmail),
-// never to change what actually gets sent.
-export type EmailRecipientRole = "customer" | "admin";
+// never to change what actually gets sent. Milestone 198: "contact" is
+// an external B2B outreach contact (school/church/NGO/etc.) — never a
+// Customer or AdminUser row, so it gets its own value rather than being
+// mislabelled as either.
+export type EmailRecipientRole = "customer" | "admin" | "contact";
 
 export interface RenderedEmail {
   subject: string;

@@ -249,6 +249,11 @@ const routeDefs = [
   // above. Logged-out-safe (no requireCustomerAuth anywhere in this
   // flow) — see verifyEmailPage.js's own header comment.
   { pattern: "/account/verify-email", render: renderVerifyEmail, title: "Verify Email", noindex: true },
+  // Milestone 198, Part 12: same query-string-token convention as
+  // verify-email above — a real outreach recipient clicking the
+  // unsubscribe link in a campaign email lands here. Never inside
+  // /account (a B2B outreach contact is never a Customer account).
+  { pattern: "/unsubscribe", render: lazyPage(() => import("../pages/unsubscribePage.js"), (m) => m.renderUnsubscribePage), title: "Unsubscribe", noindex: true },
   // Version 7, Milestone 176: affiliate application/document
   // verification — logged-in only (the page itself shows a sign-in
   // prompt on a 401, same discipline as accountOrderDetail.js).
@@ -411,6 +416,20 @@ const routeDefs = [
   // Milestone 197, Part 4: admin coupon management — "/new" before
   // "/:id/edit", same ordering discipline as every other admin
   // list/:id-wildcard pair in this file.
+  // Milestone 198: B2B outreach — "/new" before "/:id/edit", and
+  // "/import" before "/:id/edit" too (a literal path segment, never
+  // matched as an id), same ordering discipline as every other admin
+  // list/:id-wildcard pair in this file.
+  { pattern: "/admin/outreach/contacts/import", render: lazyPage(() => import("../pages/adminOutreachImport.js"), (m) => m.renderAdminOutreachImport), title: "Import Contacts", noindex: true },
+  { pattern: "/admin/outreach/contacts/new", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactCreate), title: "Add Contact", noindex: true },
+  { pattern: "/admin/outreach/contacts/:id/edit", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactEdit), title: "Edit Contact", noindex: true },
+  { pattern: "/admin/outreach/contacts", render: lazyPage(() => import("../pages/adminOutreachContacts.js"), (m) => m.renderAdminOutreachContacts), title: "Outreach Contacts", noindex: true },
+  { pattern: "/admin/outreach/suppressed", render: lazyPage(() => import("../pages/adminOutreachSuppressionList.js"), (m) => m.renderAdminOutreachSuppressionList), title: "Outreach Suppression List", noindex: true },
+  { pattern: "/admin/outreach/history", render: lazyPage(() => import("../pages/adminOutreachCampaigns.js"), (m) => m.renderAdminOutreachHistory), title: "Outreach Sending History", noindex: true },
+  { pattern: "/admin/outreach/campaigns/new", render: lazyPage(() => import("../pages/adminOutreachCampaignForm.js"), (m) => m.renderAdminOutreachCampaignCreate), title: "New Outreach Campaign", noindex: true },
+  { pattern: "/admin/outreach/campaigns/:id/edit", render: lazyPage(() => import("../pages/adminOutreachCampaignForm.js"), (m) => m.renderAdminOutreachCampaignEdit), title: "Edit Outreach Campaign", noindex: true },
+  { pattern: "/admin/outreach/campaigns/:id", render: lazyPage(() => import("../pages/adminOutreachCampaignDetail.js"), (m) => m.renderAdminOutreachCampaignDetail), title: "Outreach Campaign", noindex: true },
+  { pattern: "/admin/outreach/campaigns", render: lazyPage(() => import("../pages/adminOutreachCampaigns.js"), (m) => m.renderAdminOutreachCampaigns), title: "Outreach Campaigns", noindex: true },
   { pattern: "/admin/coupons/new", render: lazyPage(() => import("../pages/adminCouponForm.js"), (m) => m.renderAdminCouponCreate), title: "Add Coupon", noindex: true },
   { pattern: "/admin/coupons/:id/edit", render: lazyPage(() => import("../pages/adminCouponForm.js"), (m) => m.renderAdminCouponEdit), title: "Edit Coupon", noindex: true },
   { pattern: "/admin/coupons", render: lazyPage(() => import("../pages/adminCoupons.js"), (m) => m.renderAdminCoupons), title: "Coupons", noindex: true },

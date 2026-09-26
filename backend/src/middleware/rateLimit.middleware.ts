@@ -349,3 +349,40 @@ export const adminResetPasswordRateLimiter = rateLimit({
   legacyHeaders: false,
   handler: rateLimitHandler,
 });
+
+// Milestone 198: B2B outreach. Import/audience-preview are ordinary
+// admin writes/reads — generous, matching couponPreviewRateLimiter's
+// own "not the sensitive part" reasoning. Sending (batch/test) is the
+// genuinely sensitive action: each call can trigger up to a whole
+// batch of real emails to external organisations, so it gets its own
+// tight counter, deliberately separate from every other admin limiter
+// in this file, the same "shape of risk decides the counter" discipline
+// this file's own header comment already documents.
+export const outreachImportRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+export const outreachSendRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});
+
+// Public, unauthenticated — a real recipient clicking a real link in
+// their inbox. Generous enough that a genuine click is never
+// accidentally blocked, tight enough that the token-verification cost
+// (cheap HMAC, but still a DB lookup on success) can't be trivially
+// hammered.
+export const outreachUnsubscribeRateLimiter = rateLimit({
+  windowMs: FIFTEEN_MINUTES_MS,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: rateLimitHandler,
+});

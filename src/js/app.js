@@ -142,6 +142,17 @@ let createAdminAffiliate,
   updateAdminAffiliateProductSetting,
   deleteAdminAffiliateProductSetting;
 let createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon;
+let createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport;
+let createAdminOutreachCampaign,
+  updateAdminOutreachCampaign,
+  deleteAdminOutreachCampaign,
+  previewAdminOutreachAudience,
+  buildAdminOutreachCampaignRecipients,
+  sendAdminOutreachCampaignTest,
+  sendAdminOutreachCampaignBatch,
+  retryAdminOutreachCampaignFailed,
+  cancelAdminOutreachCampaign;
+let renderImportPreviewSummary, renderImportPreviewRows;
 let updatePreorderSettings;
 let renderProductSearchResults, renderSelectedProductPreview;
 let createAdminBrandKnowledgeEntry,
@@ -231,6 +242,19 @@ function ensureAdminModulesLoaded() {
         deleteAdminAffiliateProductSetting,
       } = bundle.adminReferralsApi);
       ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
+      ({ createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport } = bundle.adminOutreachContactApi);
+      ({
+        createAdminOutreachCampaign,
+        updateAdminOutreachCampaign,
+        deleteAdminOutreachCampaign,
+        previewAdminOutreachAudience,
+        buildAdminOutreachCampaignRecipients,
+        sendAdminOutreachCampaignTest,
+        sendAdminOutreachCampaignBatch,
+        retryAdminOutreachCampaignFailed,
+        cancelAdminOutreachCampaign,
+      } = bundle.adminOutreachCampaignApi);
+      ({ renderImportPreviewSummary, renderImportPreviewRows } = bundle.adminOutreachImport);
       ({ updatePreorderSettings } = bundle.adminPreorderApi);
       ({ renderProductSearchResults, renderSelectedProductPreview } = bundle.adminReferralAffiliateProductForm);
       ({
@@ -363,6 +387,12 @@ function mountApp() {
       setupAdminReferralAffiliateActions();
       setupAdminCouponForm();
       setupAdminCouponActions();
+      setupAdminOutreachContactFilterForm();
+      setupAdminOutreachContactForm();
+      setupAdminOutreachSuppressionFilterForm();
+      setupAdminOutreachImport();
+      setupAdminOutreachCampaignForm();
+      setupAdminOutreachCampaignDetailActions();
       setupAdminAffiliateProductSettingFilterForm();
       setupAdminAffiliateProductSettingForm();
       setupAdminAffiliateProductSettingActions();
@@ -4599,6 +4629,473 @@ async function handleAdminCouponAction(button, apiCall, verb) {
       banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
       banner.hidden = false;
     }
+  }
+}
+
+// Milestone 198: B2B outreach — contacts, bulk import, campaigns and
+// sending. Same filter/form/action wiring shape as the Coupons section
+// above; no email is ever sent from this file directly — everything
+// routes through the existing admin API, which is the only place
+// authorization and the real Brevo dispatch happen.
+function setupAdminOutreachContactFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-outreach-contact-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const params = new URLSearchParams();
+    ["search", "organisationType", "province", "source", "tag"].forEach((name) => {
+      const value = form.querySelector(`[name="${name}"]`)?.value.trim();
+      if (value) params.set(name, value);
+    });
+    params.set("page", "1");
+    navigateTo(`/admin/outreach/contacts?${params.toString()}`);
+  });
+}
+
+function setupAdminOutreachSuppressionFilterForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-outreach-suppression-filter-form]");
+    if (!form) return;
+    event.preventDefault();
+
+    const status = form.querySelector('[name="status"]')?.value || "";
+    navigateTo(status ? `/admin/outreach/suppressed?status=${encodeURIComponent(status)}` : "/admin/outreach/suppressed");
+  });
+}
+
+function readAdminOutreachContactFormValues(form) {
+  const tagsRaw = form.querySelector("#outreachContactTags")?.value || "";
+  return {
+    organisationName: form.querySelector("#outreachContactOrganisationName")?.value.trim() || null,
+    contactName: form.querySelector("#outreachContactName")?.value.trim() || null,
+    email: form.querySelector("#outreachContactEmail")?.value.trim() || "",
+    phone: form.querySelector("#outreachContactPhone")?.value.trim() || null,
+    organisationType: form.querySelector("#outreachContactType")?.value.trim() || null,
+    province: form.querySelector("#outreachContactProvince")?.value.trim() || null,
+    city: form.querySelector("#outreachContactCity")?.value.trim() || null,
+    website: form.querySelector("#outreachContactWebsite")?.value.trim() || null,
+    source: form.querySelector("#outreachContactSource")?.value.trim() || null,
+    sourceUrl: form.querySelector("#outreachContactSourceUrl")?.value.trim() || null,
+    notes: form.querySelector("#outreachContactNotes")?.value.trim() || null,
+    tags: tagsRaw
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  };
+}
+
+function setupAdminOutreachContactForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-outreach-contact-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminOutreachContactFormSubmit(form);
+  });
+}
+
+async function handleAdminOutreachContactFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-outreach-contact-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminOutreachContactFormValues(form);
+  if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
+    if (banner) {
+      banner.textContent = "Enter a valid email address.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminOutreachContact(values);
+      setPendingAdminMessage(`Contact "${response.data.organisationName || response.data.email}" created successfully.`);
+      navigateTo(`/admin/outreach/contacts/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const contactId = form.dataset.contactId;
+      await updateAdminOutreachContact(contactId, values);
+
+      const statusSelect = form.querySelector("#outreachContactStatus");
+      const originalStatus = form.dataset.originalStatus;
+      if (statusSelect && statusSelect.value !== originalStatus) {
+        const reason = form.querySelector("#outreachContactSuppressedReason")?.value.trim() || undefined;
+        await setAdminOutreachContactStatus(contactId, statusSelect.value, reason);
+      }
+
+      setPendingAdminMessage("Contact updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiError && error.status === 404) {
+      message = "Contact not found.";
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 198, Part 6: bulk import — preview then commit are always
+// two separate clicks/calls. lastOutreachImportPayload holds whatever
+// was actually previewed, so "Import Valid Contacts" commits the exact
+// same rows the admin just reviewed, never a re-read of a possibly-
+// changed textarea/file input.
+let lastOutreachImportPayload = null;
+
+function setupAdminOutreachImport() {
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="outreach-import-preview"]')) {
+      handleOutreachImportPreview();
+    } else if (event.target.closest('[data-action="outreach-import-commit"]')) {
+      handleOutreachImportCommit();
+    }
+  });
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.readAsText(file);
+  });
+}
+
+async function handleOutreachImportPreview() {
+  const banner = document.querySelector("[data-admin-outreach-import-banner]");
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const fileInput = document.getElementById("outreachImportCsvFile");
+  const pastedText = document.getElementById("outreachImportPastedText")?.value.trim() || "";
+  const file = fileInput?.files?.[0];
+
+  if (!file && !pastedText) {
+    if (banner) {
+      banner.textContent = "Choose a CSV file or paste some contacts first.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  try {
+    const payload = file ? { csvText: await readFileAsText(file) } : { pastedText };
+    const response = await previewAdminOutreachImport(payload);
+    lastOutreachImportPayload = payload;
+
+    const section = document.querySelector("[data-admin-outreach-import-preview-section]");
+    const summaryEl = document.querySelector("[data-admin-outreach-import-summary]");
+    const rowsEl = document.querySelector("[data-admin-outreach-import-preview-rows]");
+    if (section) section.hidden = false;
+    if (summaryEl) {
+      const { counts } = response.data;
+      summaryEl.innerHTML = renderImportPreviewSummary({
+        valid: counts.valid,
+        duplicateInDb: counts.duplicateInDb,
+        duplicateInUpload: counts.duplicateInUpload,
+        invalidEmail: counts.invalidEmail,
+        suppressed: counts.suppressed,
+      });
+    }
+    if (rowsEl) rowsEl.innerHTML = renderImportPreviewRows(response.data.rows);
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Could not preview this import. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleOutreachImportCommit() {
+  const banner = document.querySelector("[data-admin-outreach-import-banner]");
+  if (!lastOutreachImportPayload) {
+    if (banner) {
+      banner.textContent = "Preview the import first.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  try {
+    const response = await commitAdminOutreachImport(lastOutreachImportPayload);
+    lastOutreachImportPayload = null;
+    setPendingAdminMessage(`Imported ${response.data.created} contact(s). Skipped ${response.data.skipped} (duplicate, invalid or suppressed).`);
+    navigateTo("/admin/outreach/contacts");
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Could not complete this import. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+// Milestone 198, Part 7/8: reads the audience-filter checkboxes shared
+// by the campaign form's "Preview Audience Size"/"Build Recipient List"
+// actions — same shape for both, since a preview must always reflect
+// exactly what a build would actually snapshot.
+function readOutreachAudienceFilter(form) {
+  function checkedValues(name) {
+    return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`)).map((input) => input.value);
+  }
+  return {
+    organisationTypes: checkedValues("outreachAudienceOrganisationTypes"),
+    provinces: checkedValues("outreachAudienceProvinces"),
+    sources: checkedValues("outreachAudienceSources"),
+    tags: checkedValues("outreachAudienceTags"),
+  };
+}
+
+function setupAdminOutreachCampaignForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-outreach-campaign-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleAdminOutreachCampaignFormSubmit(form);
+  });
+
+  document.addEventListener("click", (event) => {
+    const previewButton = event.target.closest('[data-action="outreach-preview-audience"]');
+    if (previewButton) {
+      handleOutreachPreviewAudience(previewButton.closest("[data-admin-outreach-campaign-form]"));
+      return;
+    }
+    const buildButton = event.target.closest('[data-action="outreach-build-recipients"]');
+    if (buildButton) {
+      handleOutreachBuildRecipients(buildButton.closest("[data-admin-outreach-campaign-form]"), buildButton.dataset.campaignId);
+    }
+  });
+}
+
+async function handleOutreachPreviewAudience(form) {
+  if (!form) return;
+  const target = form.querySelector("[data-admin-outreach-audience-preview]");
+  if (target) target.textContent = "Checking...";
+
+  try {
+    const response = await previewAdminOutreachAudience(readOutreachAudienceFilter(form));
+    if (target) target.textContent = `${response.data.count} active contact${response.data.count === 1 ? "" : "s"} match this audience.`;
+  } catch (error) {
+    if (target) target.textContent = error instanceof ApiError ? error.message : "Could not calculate audience size.";
+  }
+}
+
+async function handleOutreachBuildRecipients(form, campaignId) {
+  if (!form || !campaignId) return;
+  const filter = readOutreachAudienceFilter(form);
+  const confirmed = window.confirm("Build the recipient list from the current audience selection?\nThis snapshots the matching active contacts now — adding contacts later will not add them to this campaign.");
+  if (!confirmed) return;
+
+  const banner = form.querySelector("[data-admin-outreach-campaign-form-banner]");
+  try {
+    const response = await buildAdminOutreachCampaignRecipients(campaignId, filter);
+    setPendingAdminMessage(`Recipient list built: ${response.data.total} contact(s).`);
+    navigateTo(`/admin/outreach/campaigns/${encodeURIComponent(campaignId)}`);
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Could not build the recipient list. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleAdminOutreachCampaignFormSubmit(form) {
+  const mode = form.dataset.mode;
+  const banner = form.querySelector("[data-admin-outreach-campaign-form-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = {
+    name: form.querySelector("#outreachCampaignName")?.value.trim() || "",
+    subject: form.querySelector("#outreachCampaignSubject")?.value.trim() || "",
+    body: form.querySelector("#outreachCampaignBody")?.value || "",
+  };
+  if (!values.name || !values.subject || !values.body.trim()) {
+    if (banner) {
+      banner.textContent = "Campaign name, subject and body are all required.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    if (mode === "create") {
+      const response = await createAdminOutreachCampaign(values);
+      setPendingAdminMessage(`Campaign "${response.data.name}" created as a draft.`);
+      navigateTo(`/admin/outreach/campaigns/${encodeURIComponent(response.data.id)}/edit`);
+    } else {
+      const campaignId = form.dataset.campaignId;
+      await updateAdminOutreachCampaign(campaignId, values);
+      setPendingAdminMessage("Campaign updated successfully.");
+      rerenderCurrentRoute();
+    }
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 198, Part 14/15/19/20: the campaign detail page's own
+// sending controls — every real bulk action (send batch/retry/cancel)
+// requires an explicit window.confirm() first, the same "never an
+// accidental single click" discipline used for every other destructive/
+// high-consequence admin action in this codebase (e.g. removing a
+// variant, paying out commissions).
+function setupAdminOutreachCampaignDetailActions() {
+  document.addEventListener("click", (event) => {
+    const sendButton = event.target.closest('[data-action="outreach-send-batch"]');
+    if (sendButton) {
+      handleOutreachSendBatch(sendButton);
+      return;
+    }
+    const retryButton = event.target.closest('[data-action="outreach-retry-failed"]');
+    if (retryButton) {
+      handleOutreachRetryFailed(retryButton);
+      return;
+    }
+    const cancelButton = event.target.closest('[data-action="outreach-cancel-campaign"]');
+    if (cancelButton) {
+      handleOutreachCancelCampaign(cancelButton);
+    }
+  });
+
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-outreach-test-send-form]");
+    if (!form) return;
+    event.preventDefault();
+    handleOutreachSendTest(form);
+  });
+}
+
+async function handleOutreachSendBatch(button) {
+  const campaignId = button.dataset.campaignId;
+  const confirmed = window.confirm(`${button.textContent.trim()}?\nThis sends real email to real organisations right now.`);
+  if (!confirmed) return;
+
+  const banner = document.querySelector("[data-admin-outreach-send-banner]");
+  button.disabled = true;
+  try {
+    const result = await sendAdminOutreachCampaignBatch(campaignId);
+    setPendingAdminMessage(`Batch sent: ${result.data.sent} sent, ${result.data.failed} failed, ${result.data.suppressed} suppressed.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong sending this batch. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleOutreachRetryFailed(button) {
+  const campaignId = button.dataset.campaignId;
+  const confirmed = window.confirm("Retry every failed recipient?\nSuccessfully-sent recipients are never re-sent.");
+  if (!confirmed) return;
+
+  const banner = document.querySelector("[data-admin-outreach-send-banner]");
+  button.disabled = true;
+  try {
+    const result = await retryAdminOutreachCampaignFailed(campaignId);
+    setPendingAdminMessage(`${result.data.requeued} recipient(s) re-queued for sending.`);
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleOutreachCancelCampaign(button) {
+  const campaignId = button.dataset.campaignId;
+  const confirmed = window.confirm("Cancel this campaign?\nAny recipient still Pending will not be sent to.");
+  if (!confirmed) return;
+
+  const banner = document.querySelector("[data-admin-outreach-send-banner]");
+  button.disabled = true;
+  try {
+    await cancelAdminOutreachCampaign(campaignId);
+    setPendingAdminMessage("Campaign cancelled.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    button.disabled = false;
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+async function handleOutreachSendTest(form) {
+  const campaignId = form.dataset.campaignId;
+  const testEmailAddress = form.querySelector("#outreachTestEmailAddress")?.value.trim() || "";
+  const banner = form.querySelector("[data-admin-outreach-test-send-banner]");
+  const successEl = form.querySelector("[data-admin-outreach-test-send-success]");
+  if (banner) banner.hidden = true;
+  if (successEl) successEl.hidden = true;
+
+  if (!testEmailAddress || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testEmailAddress)) {
+    if (banner) {
+      banner.textContent = "Enter a valid test email address.";
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+  try {
+    await sendAdminOutreachCampaignTest(campaignId, testEmailAddress);
+    if (successEl) {
+      successEl.textContent = `Test sent to ${testEmailAddress}.`;
+      successEl.hidden = false;
+    }
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Could not send the test email. Please try again shortly.";
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 

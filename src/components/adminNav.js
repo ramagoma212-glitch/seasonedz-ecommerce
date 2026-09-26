@@ -38,6 +38,11 @@ const NAV_LINKS = [
   { key: "referrals", href: "/admin/referrals", label: "Referrals" },
   // Milestone 197: admin-managed coupon-code discount system.
   { key: "coupons", href: "/admin/coupons", label: "Coupons" },
+  // Milestone 198: B2B outreach contact/campaign management —
+  // Contacts/Campaigns/Suppression List/Sending History live under this
+  // one flat link, with their own local sub-navigation
+  // (components/outreachSubNav.js) once inside it.
+  { key: "outreach", href: "/admin/outreach/contacts", label: "Outreach" },
   // Content Studio Phase 2: Brand Knowledge Foundation only — no
   // campaign/generation/scheduling/publishing feature exists behind
   // this link yet. See components/contentStudioSubNav.js.

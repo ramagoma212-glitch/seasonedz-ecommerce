@@ -1347,6 +1347,10 @@ model AdminUser {
   campaignBriefsCreated         CampaignBrief[]         @relation("CampaignBriefCreatedBy")
   campaignBriefsUpdated         CampaignBrief[]         @relation("CampaignBriefUpdatedBy")
   campaignContentRecordsCreated CampaignContentRecord[] @relation("CampaignContentRecordCreatedBy")
+  // Milestone 198: same SetNull discipline as campaignBriefsCreated
+  // above — deleting an admin must never delete a B2B outreach
+  // campaign's own history of who created it.
+  outreachCampaignsCreated OutreachCampaign[] @relation("OutreachCampaignCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3206,4 +3210,191 @@ model CouponRedemption {
 
   @@index([couponId, customerId])
   @@index([couponId, customerEmail])
+}
+
+// ============================================================================
+// MILESTONE 198: B2B OUTREACH & EMAIL CAMPAIGN SYSTEM
+//
+// A completely separate contact/sending system from every existing email
+// path (Notification/email.service.ts's own transactional order/OTP/
+// password sends, and NewsletterSubscriber, which is collection-only and
+// never emailed in bulk). outreachEmail.service.ts (application code, not
+// this schema) talks to Brevo through its OWN isolated function — it never
+// calls or shares code with email.service.ts/brevo.provider.ts, so a bug
+// here can never affect an order confirmation, OTP, or password-reset
+// email. See that file's own header comment for the full reasoning.
+//
+// Sending has no queue/background-worker to lean on (none exists in this
+// codebase — see NOTIFICATIONS_SETUP.md and this milestone's own report for
+// the infrastructure audit) — OutreachCampaignRecipient's own per-row
+// status is what makes sending safely resumable across multiple bounded,
+// admin-triggered HTTP requests instead of one unreliable giant request.
+// ============================================================================
+
+enum OutreachContactStatus {
+  ACTIVE
+  UNSUBSCRIBED
+  BOUNCED
+  INVALID
+  SUPPRESSED
+}
+
+model OutreachContact {
+  id String @id @default(cuid())
+
+  // Optional, not required — Part 6 of this milestone's own brief
+  // explicitly wants a bare "one email address per line" bulk-paste
+  // format to work with no organisation name at all. The admin UI falls
+  // back to showing the email address itself wherever a display name
+  // would otherwise be blank; nothing here invents a guessed name.
+  organisationName String?
+  contactName      String?
+  // Always stored lowercased/trimmed (outreachContact.service.ts's own
+  // normalizeEmail()) so two casings of the same address can never be
+  // treated as two different contacts or two different suppression
+  // states — the same "one canonical form" discipline Coupon.code and
+  // NewsletterSubscriber.email already document elsewhere in this file.
+  email String @unique
+
+  phone String?
+  // Free text, not an enum — Part 3 of this milestone's own brief:
+  // "do not hard-code these if the existing architecture has a better
+  // extensible pattern" (the same choice NewsletterSubscriber.source
+  // already made). The frontend offers a fixed suggested list plus a
+  // free "Other" fallback; nothing here enforces a closed set.
+  organisationType String?
+  province         String?
+  city             String?
+  website          String?
+  // Where this contact came from (e.g. "Google Maps", "Referral",
+  // "Manual research") — also free text, same reasoning as
+  // organisationType above.
+  source    String?
+  sourceUrl String?
+  notes     String? @db.Text
+  // Native Postgres array — a full Tag entity/join table would be
+  // premature for a V1 "filter/label contacts" feature with no
+  // per-tag metadata of its own; Prisma's array `has`/`hasSome`
+  // operators are enough to filter and to build a campaign audience.
+  tags String[] @default([])
+
+  status OutreachContactStatus @default(ACTIVE)
+  // Set once, the first time status ever moves away from ACTIVE — never
+  // overwritten by a later status change, so "when did this contact
+  // first stop being contactable" stays answerable regardless of how
+  // many times status changes afterward.
+  suppressedAt     DateTime?
+  suppressedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients OutreachCampaignRecipient[]
+
+  @@index([status])
+  @@index([organisationType])
+  @@index([province])
+  @@index([city])
+  @@index([source])
+  @@index([createdAt])
+}
+
+enum OutreachCampaignStatus {
+  DRAFT
+  READY
+  SENDING
+  COMPLETED
+  PARTIALLY_FAILED
+  CANCELLED
+}
+
+model OutreachCampaign {
+  id String @id @default(cuid())
+
+  name    String
+  subject String
+  // Plain text only, matching the existing Brevo integration's own
+  // plain-text-only body (brevo.provider.ts's own comment: "v1:
+  // plain-text body only") — never HTML, so this milestone introduces
+  // no new HTML-sanitization surface at all. {{organisation_name}}/
+  // {{contact_name}} tokens are rendered by outreachCampaign.service.ts's
+  // renderPersonalizedBody() as plain substring replacement, never
+  // interpreted as markup.
+  body String @db.Text
+
+  status OutreachCampaignStatus @default(DRAFT)
+
+  // The filter criteria (organisation type/province/city/source/tag/
+  // explicit contact ids) used to build the recipient snapshot below —
+  // stored purely so the admin can see what was selected. Never re-read
+  // live at send time: recipients are a durable, one-time snapshot, the
+  // same "resolve once, never silently re-derive" discipline
+  // CouponRedemption's own codeSnapshot already documents elsewhere in
+  // this file.
+  audienceFilter Json?
+
+  createdByAdminId String?
+  createdByAdmin   AdminUser? @relation("OutreachCampaignCreatedBy", fields: [createdByAdminId], references: [id], onDelete: SetNull)
+
+  // Set once, when "Build Recipient List" actually creates the
+  // OutreachCampaignRecipient rows below (moving DRAFT -> READY).
+  recipientsBuiltAt DateTime?
+  // First set the moment a send batch is first triggered; sendCompletedAt
+  // is set only once zero PENDING rows remain (whether or not some ended
+  // FAILED — see status, which distinguishes COMPLETED from
+  // PARTIALLY_FAILED at that point).
+  sendStartedAt   DateTime?
+  sendCompletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recipients OutreachCampaignRecipient[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum OutreachRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  SUPPRESSED
+  INVALID
+}
+
+// One row per (campaign, contact) pair, created only once — at "Build
+// Recipient List" time — never re-created or duplicated afterward
+// (@@unique below is the actual duplicate-protection mechanism: Part 13
+// of this milestone's own brief). status is what makes a send batch
+// resumable and idempotent: a batch only ever processes rows still
+// PENDING (or explicitly re-queued FAILED -> PENDING by a deliberate
+// "Retry Failed" action — see outreachCampaign.service.ts), and only
+// ever moves a row to SENT after Brevo has genuinely accepted it — a
+// crash or timeout mid-batch leaves affected rows exactly where they
+// were, never double-sent, never silently lost.
+model OutreachCampaignRecipient {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   OutreachCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    OutreachContact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  // Captured at snapshot time so this row's own history reads correctly
+  // even if the contact's organisation name is edited afterward — the
+  // same snapshot discipline OrderItem/CouponRedemption already use.
+  organisationNameSnapshot String?
+  emailSnapshot            String
+
+  status            OutreachRecipientStatus @default(PENDING)
+  providerMessageId String?
+  failureReason     String?
+  sentAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, contactId])
+  @@index([campaignId, status])
 }

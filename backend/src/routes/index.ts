@@ -30,6 +30,9 @@ import welcomeGiftRoutes from "./welcomeGift.routes.js";
 import adminWelcomeGiftRoutes from "./adminWelcomeGift.routes.js";
 import couponRoutes from "./coupon.routes.js";
 import adminCouponRoutes from "./adminCoupon.routes.js";
+import adminOutreachContactRoutes from "./adminOutreachContact.routes.js";
+import adminOutreachCampaignRoutes from "./adminOutreachCampaign.routes.js";
+import outreachUnsubscribeRoutes from "./outreachUnsubscribe.routes.js";
 
 const router = Router();
 
@@ -78,6 +81,15 @@ router.use("/admin/referrals", adminReferralsRoutes);
 // /coupons (public, preview-only) is a completely separate router/path.
 router.use("/admin/coupons", adminCouponRoutes);
 router.use("/coupons", couponRoutes);
+// Milestone 198: B2B outreach — requireAdminAuth applied at each admin
+// router's own level (see adminOutreachContact.routes.ts/
+// adminOutreachCampaign.routes.ts's own header comments). /outreach
+// (public, unsubscribe-only) is a completely separate router/path —
+// the same "admin surface and its one public counterpart, two
+// routers" pattern /coupons above already established.
+router.use("/admin/outreach/contacts", adminOutreachContactRoutes);
+router.use("/admin/outreach/campaigns", adminOutreachCampaignRoutes);
+router.use("/outreach", outreachUnsubscribeRoutes);
 // Version 7, Milestone 176: affiliate application/document review —
 // upgrades ONLY the onboarding process; the existing /admin/referrals
 // Affiliate management above is completely unchanged. Fully separate

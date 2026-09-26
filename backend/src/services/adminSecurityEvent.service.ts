@@ -30,7 +30,19 @@ export type AdminSecurityEventType =
   | "ADMIN_ACCOUNT_DEACTIVATED"
   | "ADMIN_ACCOUNT_REACTIVATED"
   | "ADMIN_ROLE_CHANGED"
-  | "ADMIN_SESSIONS_REVOKED";
+  | "ADMIN_SESSIONS_REVOKED"
+  // Milestone 198: B2B outreach — Part 24's own "campaign
+  // created/edited/sent, recipient counts, contact imported,
+  // suppression changes" audit-logging requirement, using this
+  // existing table rather than a new one (that same Part's explicit
+  // "do not create a huge new audit platform" instruction).
+  | "OUTREACH_CONTACT_IMPORTED"
+  | "OUTREACH_CONTACT_SUPPRESSION_CHANGED"
+  | "OUTREACH_CAMPAIGN_CREATED"
+  | "OUTREACH_CAMPAIGN_EDITED"
+  | "OUTREACH_CAMPAIGN_RECIPIENTS_BUILT"
+  | "OUTREACH_CAMPAIGN_SEND_BATCH"
+  | "OUTREACH_CAMPAIGN_TEST_SENT";
 
 export interface RecordAdminSecurityEventInput {
   // Null for events with no real admin to attach to yet — an unknown-
