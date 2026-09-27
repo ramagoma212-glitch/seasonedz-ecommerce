@@ -294,11 +294,10 @@ function renderDemoNotice() {
       <div>
         <strong>Your order is placed with our team, not shipped automatically.</strong>
         <p>
-          Bank Transfer and Cash / Card on Delivery place a real order.
-          No online charge is taken for either, and payment happens by
-          manual bank transfer or on delivery. If PayFast is available
-          and selected, you'll be redirected to PayFast's own payment
-          page to complete a real payment.
+          Bank Transfer places a real order with no online charge taken
+          — payment happens by manual bank transfer. If PayFast is
+          available and selected, you'll be redirected to PayFast's own
+          payment page to complete a real payment.
         </p>
       </div>
     </div>

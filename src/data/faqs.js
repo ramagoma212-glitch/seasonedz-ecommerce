@@ -109,7 +109,7 @@ export const faqs = [
     category: "Guest Checkout",
     question: "Is guest checkout secure?",
     answer:
-      "Yes. Guest checkout sends your order details securely to the Seasonedz Group backend, no account or password needed. Bank Transfer and Cash / Card on Delivery place a real order without taking an online payment. See our Privacy Policy for more detail.",
+      "Yes. Guest checkout sends your order details securely to the Seasonedz Group backend, no account or password needed. Bank Transfer places a real order without taking an online payment. See our Privacy Policy for more detail.",
   },
   {
     category: "Order Tracking",
