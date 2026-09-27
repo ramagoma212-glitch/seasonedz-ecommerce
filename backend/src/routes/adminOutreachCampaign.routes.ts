@@ -12,6 +12,8 @@ import { requireAdminRole } from "../middleware/requireAdminRole.middleware.js";
 import { outreachSendRateLimiter } from "../middleware/rateLimit.middleware.js";
 import {
   buildRecipientsHandler,
+  bulkPreviewHandler,
+  bulkStartHandler,
   cancelCampaignHandler,
   createCampaignHandler,
   deleteCampaignHandler,
@@ -34,6 +36,11 @@ const adminOnly = requireAdminRole(UserRole.ADMIN);
 router.get("/", listCampaignsHandler);
 router.post("/", createCampaignHandler);
 router.post("/preview-audience", previewAudienceHandler);
+// Milestone 198.1: multi-select bulk sending. Preview is a read-only
+// STAFF-accessible calculation; the real bulk-start is ADMIN-only and
+// rate-limited, same split as send-test/send-batch below.
+router.post("/bulk-preview", bulkPreviewHandler);
+router.post("/bulk-start", adminOnly, outreachSendRateLimiter, bulkStartHandler);
 router.get("/:id", getCampaignHandler);
 router.patch("/:id", updateCampaignHandler);
 router.delete("/:id", deleteCampaignHandler);

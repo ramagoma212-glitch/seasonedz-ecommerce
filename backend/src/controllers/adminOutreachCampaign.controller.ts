@@ -137,6 +137,46 @@ export async function listRecipientsHandler(req: Request, res: Response, next: N
   }
 }
 
+function parseCampaignIds(req: Request): string[] {
+  const { campaignIds } = req.body ?? {};
+  if (!Array.isArray(campaignIds) || campaignIds.length === 0 || !campaignIds.every((id) => typeof id === "string")) {
+    throw new OutreachCampaignError("A non-empty list of campaign ids is required.", 400);
+  }
+  return campaignIds;
+}
+
+// Milestone 198.1: read-only preview — safe for any authenticated admin
+// (STAFF included), same "preview never mutates, only the real send
+// does" split as previewAudienceHandler above.
+export async function bulkPreviewHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const campaignIds = parseCampaignIds(req);
+    const preview = await outreachCampaignService.previewBulkSend(campaignIds);
+    sendSuccess(res, { message: "Bulk send preview generated successfully", data: preview });
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+}
+
+// Milestone 198.1: the real, binding multi-campaign send — ADMIN-only
+// and rate-limited (see routes/adminOutreachCampaign.routes.ts), and
+// re-derives every campaign's real, current eligibility itself rather
+// than trusting whatever the browser's own preview screen showed.
+export async function bulkStartHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const campaignIds = parseCampaignIds(req);
+    const result = await outreachCampaignService.bulkStartCampaigns(campaignIds);
+    void recordAdminSecurityEvent({
+      adminUserId: req.adminUser?.id ?? null,
+      eventType: "OUTREACH_CAMPAIGN_SEND_BATCH",
+      summary: `Bulk send: ${result.campaignsProcessed.length} campaign(s) processed, ${result.totalSent} sent, ${result.totalFailed} failed, ${result.campaignsSkippedIneligible.length} skipped ineligible`,
+    });
+    sendSuccess(res, { message: "Bulk send batch processed successfully", data: result });
+  } catch (error) {
+    handleServiceError(error, res, next);
+  }
+}
+
 export async function sendTestHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;

@@ -62,3 +62,16 @@ export function retryAdminOutreachCampaignFailed(id) {
 export function cancelAdminOutreachCampaign(id) {
   return adminRequest(`/admin/outreach/campaigns/${encodeURIComponent(id)}/cancel`, { method: "POST" });
 }
+
+// Milestone 198.1: multi-select bulk sending. previewBulkOutreachSend is
+// a read-only calculation (eligibility, cross-campaign duplicates,
+// recipient totals); bulkStartAdminOutreachCampaigns is the real,
+// binding send — ADMIN-only server-side regardless of what this page
+// shows.
+export function previewBulkOutreachSend(campaignIds) {
+  return adminRequest("/admin/outreach/campaigns/bulk-preview", { method: "POST", body: JSON.stringify({ campaignIds }) });
+}
+
+export function bulkStartAdminOutreachCampaigns(campaignIds) {
+  return adminRequest("/admin/outreach/campaigns/bulk-start", { method: "POST", body: JSON.stringify({ campaignIds }) });
+}

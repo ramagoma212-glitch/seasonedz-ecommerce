@@ -86,6 +86,10 @@ export async function getCampaign(id: string) {
   return prisma.outreachCampaign.findUnique({ where: { id } });
 }
 
+// Milestone 198.1, Part 10: the list view needs each campaign's own
+// recipient counts (sent/pending/failed) to be genuinely useful for
+// picking a bulk selection — one groupBy across every listed campaign's
+// id at once, never a separate query per row.
 export async function listCampaigns(filters: { status?: OutreachCampaignStatus; page?: number; limit?: number } = {}) {
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(filters.limit ?? 20, 100);
@@ -95,7 +99,27 @@ export async function listCampaigns(filters: { status?: OutreachCampaignStatus; 
     prisma.outreachCampaign.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
     prisma.outreachCampaign.count({ where }),
   ]);
-  return { campaigns, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+
+  const campaignIds = campaigns.map((c) => c.id);
+  const grouped = campaignIds.length
+    ? await prisma.outreachCampaignRecipient.groupBy({ by: ["campaignId", "status"], where: { campaignId: { in: campaignIds } }, _count: { _all: true } })
+    : [];
+  const countsByCampaign = new Map<string, OutreachRecipientCounts>();
+  for (const id of campaignIds) countsByCampaign.set(id, { total: 0, pending: 0, sent: 0, failed: 0, suppressed: 0, invalid: 0 });
+  for (const row of grouped) {
+    const counts = countsByCampaign.get(row.campaignId);
+    if (!counts) continue;
+    const count = row._count._all;
+    counts.total += count;
+    if (row.status === OutreachRecipientStatus.PENDING) counts.pending = count;
+    if (row.status === OutreachRecipientStatus.SENT) counts.sent = count;
+    if (row.status === OutreachRecipientStatus.FAILED) counts.failed = count;
+    if (row.status === OutreachRecipientStatus.SUPPRESSED) counts.suppressed = count;
+    if (row.status === OutreachRecipientStatus.INVALID) counts.invalid = count;
+  }
+
+  const campaignsWithCounts = campaigns.map((campaign) => ({ ...campaign, recipientCounts: countsByCampaign.get(campaign.id)! }));
+  return { campaigns: campaignsWithCounts, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
 }
 
 export interface OutreachAudienceFilter {
@@ -235,6 +259,8 @@ export interface SendBatchResult {
   sent: number;
   failed: number;
   suppressed: number;
+  skippedCrossCampaignDuplicate: number;
+  sentContactIds: string[];
   campaignStatus: OutreachCampaignStatus;
   recipientCounts: OutreachRecipientCounts;
 }
@@ -248,7 +274,16 @@ export interface SendBatchResult {
 // before sending — a contact snapshotted as ACTIVE when the recipient
 // list was built, but unsubscribed/suppressed since, is marked
 // SUPPRESSED here and skipped, never sent to.
-export async function sendCampaignBatch(campaignId: string, batchSize: number = DEFAULT_BATCH_SIZE): Promise<SendBatchResult> {
+//
+// Milestone 198.1: `excludeContactIds` is purely additive — every
+// existing single-campaign caller (the campaign detail page's own
+// "Continue Sending" button) omits it and behaves exactly as before.
+// It exists only for bulkStartCampaigns() below: when starting several
+// campaigns together, a contact already sent to by an EARLIER campaign
+// in that same bulk run is left PENDING here (never marked anything),
+// so the admin can see and consciously decide on it afterward, instead
+// of a second automatic send to the same person within one bulk action.
+export async function sendCampaignBatch(campaignId: string, batchSize: number = DEFAULT_BATCH_SIZE, excludeContactIds: Set<string> = new Set()): Promise<SendBatchResult> {
   // The check-then-add must happen with no `await` in between — two
   // concurrent calls could otherwise both pass the `has()` check before
   // either reaches `add()` (exactly the race an earlier version of this
@@ -280,8 +315,18 @@ export async function sendCampaignBatch(campaignId: string, batchSize: number = 
     let sent = 0;
     let failed = 0;
     let suppressed = 0;
+    let skippedCrossCampaignDuplicate = 0;
+    const sentContactIds: string[] = [];
 
     for (const recipient of batch) {
+      if (excludeContactIds.has(recipient.contactId)) {
+        // Left exactly as PENDING — not sent, not suppressed, not
+        // failed. A real, deliberate state an admin can act on
+        // afterward, never a silent double-send within this bulk run.
+        skippedCrossCampaignDuplicate++;
+        continue;
+      }
+
       const contact = await prisma.outreachContact.findUnique({ where: { id: recipient.contactId } });
 
       if (!contact || contact.status !== OutreachContactStatus.ACTIVE) {
@@ -306,6 +351,7 @@ export async function sendCampaignBatch(campaignId: string, batchSize: number = 
       if (result.success) {
         await prisma.outreachCampaignRecipient.update({ where: { id: recipient.id }, data: { status: OutreachRecipientStatus.SENT, sentAt: new Date(), failureReason: null } });
         sent++;
+        sentContactIds.push(contact.id);
       } else {
         await prisma.outreachCampaignRecipient.update({ where: { id: recipient.id }, data: { status: OutreachRecipientStatus.FAILED, failureReason: result.errorMessage ?? "Unknown error" } });
         failed++;
@@ -323,10 +369,227 @@ export async function sendCampaignBatch(campaignId: string, batchSize: number = 
       campaignStatus = OutreachCampaignStatus.SENDING;
     }
 
-    return { processed: batch.length, sent, failed, suppressed, campaignStatus, recipientCounts };
+    return { processed: batch.length, sent, failed, suppressed, skippedCrossCampaignDuplicate, sentContactIds, campaignStatus, recipientCounts };
   } finally {
     campaignsCurrentlySending.delete(campaignId);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 198.1: multi-select bulk sending — a convenience layer over
+// the exact same per-campaign sendCampaignBatch() above, never a
+// replacement for it. Selecting several campaigns never combines them:
+// each keeps its own subject/body/recipient rows untouched; this only
+// automates clicking "Continue Sending" on each one in turn, with the
+// same bounded-batch, resumable, never-trust-the-browser discipline.
+// ---------------------------------------------------------------------------
+
+function isEligibleForBulkSend(status: OutreachCampaignStatus, pending: number): boolean {
+  return (status === OutreachCampaignStatus.READY || status === OutreachCampaignStatus.SENDING) && pending > 0;
+}
+
+export interface BulkSendCampaignPreview {
+  id: string;
+  name: string;
+  subject: string;
+  status: OutreachCampaignStatus;
+  eligible: boolean;
+  ineligibleReason: string | null;
+  recipientCounts: OutreachRecipientCounts;
+}
+
+export interface CrossCampaignDuplicate {
+  contactId: string;
+  email: string;
+  organisationName: string | null;
+  campaignIds: string[];
+  campaignNames: string[];
+}
+
+export interface BulkSendPreview {
+  campaigns: BulkSendCampaignPreview[];
+  totalCampaigns: number;
+  eligibleCampaigns: number;
+  totalPendingRecipients: number;
+  uniqueEligibleRecipients: number;
+  crossCampaignDuplicates: CrossCampaignDuplicate[];
+}
+
+// Never trusts the browser's own idea of which campaigns are still
+// eligible or how many recipients they have — always re-derived fresh
+// from the database, the same "never trust the client for money/state"
+// discipline this codebase already applies to checkout/coupons. Part
+// 13's own "server-side revalidation" requirement is satisfied by this
+// being the SAME function both the preview screen and (indirectly,
+// via bulkStartCampaigns() below re-deriving its own fresh state)
+// the real execution path are built on.
+export async function previewBulkSend(campaignIds: string[]): Promise<BulkSendPreview> {
+  const uniqueIds = Array.from(new Set(campaignIds));
+  const campaigns = await prisma.outreachCampaign.findMany({ where: { id: { in: uniqueIds } } });
+
+  const campaignPreviews: BulkSendCampaignPreview[] = [];
+  const eligibleCampaignIds: string[] = [];
+
+  for (const id of uniqueIds) {
+    const campaign = campaigns.find((c) => c.id === id);
+    if (!campaign) {
+      // CANCELLED is a placeholder here, not a real status — this
+      // branch only fires for a stale/deleted campaign id (e.g. it was
+      // removed between page load and clicking Preview); `eligible:
+      // false` is the field that actually matters, and it's correctly
+      // set.
+      campaignPreviews.push({ id, name: "(not found)", subject: "", status: OutreachCampaignStatus.CANCELLED, eligible: false, ineligibleReason: "Campaign not found.", recipientCounts: { total: 0, pending: 0, sent: 0, failed: 0, suppressed: 0, invalid: 0 } });
+      continue;
+    }
+    const recipientCounts = await getCampaignRecipientCounts(id);
+    const eligible = isEligibleForBulkSend(campaign.status, recipientCounts.pending);
+    let ineligibleReason: string | null = null;
+    if (!eligible) {
+      if (campaign.status === OutreachCampaignStatus.DRAFT) ineligibleReason = "Recipient list not built yet.";
+      else if (campaign.status === OutreachCampaignStatus.COMPLETED) ineligibleReason = "Already fully sent.";
+      else if (campaign.status === OutreachCampaignStatus.CANCELLED) ineligibleReason = "Cancelled.";
+      else if (recipientCounts.pending === 0) ineligibleReason = "No pending recipients left.";
+      else ineligibleReason = "Not eligible.";
+    }
+    if (eligible) eligibleCampaignIds.push(id);
+    campaignPreviews.push({ id: campaign.id, name: campaign.name, subject: campaign.subject, status: campaign.status, eligible, ineligibleReason, recipientCounts });
+  }
+
+  const pendingRecipients = eligibleCampaignIds.length
+    ? await prisma.outreachCampaignRecipient.findMany({
+        where: { campaignId: { in: eligibleCampaignIds }, status: OutreachRecipientStatus.PENDING },
+        select: { contactId: true, campaignId: true, emailSnapshot: true, organisationNameSnapshot: true },
+      })
+    : [];
+
+  const byContact = new Map<string, { campaignIds: Set<string>; email: string; organisationName: string | null }>();
+  for (const row of pendingRecipients) {
+    const entry = byContact.get(row.contactId) ?? { campaignIds: new Set<string>(), email: row.emailSnapshot, organisationName: row.organisationNameSnapshot };
+    entry.campaignIds.add(row.campaignId);
+    byContact.set(row.contactId, entry);
+  }
+
+  const campaignNameById = new Map(campaigns.map((c) => [c.id, c.name]));
+  const crossCampaignDuplicates: CrossCampaignDuplicate[] = [];
+  for (const [contactId, entry] of byContact) {
+    if (entry.campaignIds.size > 1) {
+      const ids = Array.from(entry.campaignIds);
+      crossCampaignDuplicates.push({ contactId, email: entry.email, organisationName: entry.organisationName, campaignIds: ids, campaignNames: ids.map((id) => campaignNameById.get(id) ?? id) });
+    }
+  }
+
+  return {
+    campaigns: campaignPreviews,
+    totalCampaigns: uniqueIds.length,
+    eligibleCampaigns: eligibleCampaignIds.length,
+    totalPendingRecipients: pendingRecipients.length,
+    uniqueEligibleRecipients: byContact.size,
+    crossCampaignDuplicates,
+  };
+}
+
+export interface BulkSendCampaignResult extends SendBatchResult {
+  campaignId: string;
+  campaignName: string;
+}
+
+export interface BulkSendResult {
+  campaignsProcessed: BulkSendCampaignResult[];
+  campaignsSkippedIneligible: { id: string; name: string; reason: string }[];
+  // Part 9: a campaign whose own sendCampaignBatch() call threw (e.g.
+  // its re-entrancy guard rejected a genuinely concurrent single-
+  // campaign send happening at the same moment) lands here, never
+  // aborts the loop — every other selected campaign is still attempted.
+  campaignsErrored: { id: string; name: string; error: string }[];
+  totalSent: number;
+  totalFailed: number;
+  totalSuppressed: number;
+  totalSkippedCrossCampaignDuplicate: number;
+  stoppedEarly: boolean;
+}
+
+const DEFAULT_MAX_RECIPIENTS_PER_BULK_CALL = 50;
+
+// Milestone 198.1, Part 7: sequential, never parallel — one campaign's
+// batch fully completes (through the exact same sendCampaignBatch()
+// every single-campaign send already uses) before the next campaign's
+// batch even starts, so this is never "50 simultaneous Brevo requests,"
+// just the existing one-at-a-time sender called several times in a row
+// with no admin click needed between campaigns.
+//
+// Bounded by `maxRecipientsPerCall`, the bulk-level equivalent of a
+// single campaign's own batchSize: once that many recipients have been
+// processed across ALL selected campaigns combined, this stops and
+// returns — the remaining, not-yet-started campaigns are reported in
+// `campaignsSkippedIneligible`... no: they are simply absent from
+// `campaignsProcessed`, and the caller (the admin, via the UI) calls
+// this again with the same campaignIds to continue, the same
+// resumable-batch discipline as a single campaign's own "Continue
+// Sending" button, just extended across a whole selection.
+//
+// Part 5/9: `sentInThisRun` accumulates every contact id actually sent
+// to as this loop proceeds through the selected campaigns in order —
+// passed to each subsequent sendCampaignBatch() call as
+// `excludeContactIds`, so a contact appearing (however unexpectedly)
+// in two selected campaigns can only ever receive this bulk action's
+// email once, never twice.
+export async function bulkStartCampaigns(campaignIds: string[], maxRecipientsPerCall: number = DEFAULT_MAX_RECIPIENTS_PER_BULK_CALL): Promise<BulkSendResult> {
+  const uniqueIds = Array.from(new Set(campaignIds));
+  const campaignsProcessed: BulkSendCampaignResult[] = [];
+  const campaignsSkippedIneligible: { id: string; name: string; reason: string }[] = [];
+  const campaignsErrored: { id: string; name: string; error: string }[] = [];
+  const sentInThisRun = new Set<string>();
+  let totalProcessedThisCall = 0;
+  let stoppedEarly = false;
+
+  for (const campaignId of uniqueIds) {
+    if (totalProcessedThisCall >= maxRecipientsPerCall) {
+      stoppedEarly = true;
+      break;
+    }
+
+    // Re-fetched fresh for THIS campaign, right before acting on it —
+    // never trusts a status computed earlier in this same loop or, even
+    // more importantly, anything the browser sent (Part 13: "campaign
+    // still READY/eligible... do not trust the browser's selection").
+    const campaign = await prisma.outreachCampaign.findUnique({ where: { id: campaignId } });
+    if (!campaign) {
+      campaignsSkippedIneligible.push({ id: campaignId, name: "(not found)", reason: "Campaign not found." });
+      continue;
+    }
+    const recipientCountsBefore = await getCampaignRecipientCounts(campaignId);
+    if (!isEligibleForBulkSend(campaign.status, recipientCountsBefore.pending)) {
+      campaignsSkippedIneligible.push({ id: campaignId, name: campaign.name, reason: campaign.status === OutreachCampaignStatus.COMPLETED ? "Already fully sent." : campaign.status === OutreachCampaignStatus.CANCELLED ? "Cancelled." : campaign.status === OutreachCampaignStatus.DRAFT ? "Recipient list not built yet." : "No pending recipients left." });
+      continue;
+    }
+
+    // Part 9: isolated per campaign — a thrown error here (e.g. this
+    // exact campaign is ALSO, at this same moment, being sent via the
+    // single-campaign "Continue Sending" button elsewhere, so its own
+    // re-entrancy guard rejects this call) is recorded and the loop
+    // moves on to the next selected campaign, never aborting the whole
+    // bulk run over one campaign's problem.
+    try {
+      const remainingBudget = maxRecipientsPerCall - totalProcessedThisCall;
+      const result = await sendCampaignBatch(campaignId, Math.min(recipientCountsBefore.pending, remainingBudget), sentInThisRun);
+      campaignsProcessed.push({ ...result, campaignId, campaignName: campaign.name });
+      totalProcessedThisCall += result.processed;
+      result.sentContactIds.forEach((id) => sentInThisRun.add(id));
+    } catch (error) {
+      campaignsErrored.push({ id: campaignId, name: campaign.name, error: error instanceof Error ? error.message : "Unknown error" });
+    }
+  }
+
+  return {
+    campaignsProcessed,
+    campaignsSkippedIneligible,
+    campaignsErrored,
+    totalSent: campaignsProcessed.reduce((sum, r) => sum + r.sent, 0),
+    totalFailed: campaignsProcessed.reduce((sum, r) => sum + r.failed, 0),
+    totalSuppressed: campaignsProcessed.reduce((sum, r) => sum + r.suppressed, 0),
+    totalSkippedCrossCampaignDuplicate: campaignsProcessed.reduce((sum, r) => sum + r.skippedCrossCampaignDuplicate, 0),
+    stoppedEarly,
+  };
 }
 
 // Part 20: a deliberate, explicit action — re-queues FAILED rows back to

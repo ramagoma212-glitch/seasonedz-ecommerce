@@ -23,6 +23,8 @@ test("every expected outreach campaign admin route is registered", () => {
     ["get", "/"],
     ["post", "/"],
     ["post", "/preview-audience"],
+    ["post", "/bulk-preview"],
+    ["post", "/bulk-start"],
     ["get", "/:id"],
     ["patch", "/:id"],
     ["delete", "/:id"],
@@ -46,7 +48,7 @@ function findRouteLayer(method: string, path: string) {
   return (adminOutreachCampaignRoutes as AnyRouter).stack.find((entry: any) => entry.route?.path === path && entry.route.methods[method]);
 }
 
-test("draft/read/build-recipient routes have no extra role-gate middleware — STAFF can use them", () => {
+test("draft/read/build-recipient/bulk-preview routes have no extra role-gate middleware — STAFF can use them", () => {
   for (const [method, path] of [
     ["get", "/"],
     ["post", "/"],
@@ -54,6 +56,7 @@ test("draft/read/build-recipient routes have no extra role-gate middleware — S
     ["patch", "/:id"],
     ["post", "/:id/build-recipients"],
     ["get", "/:id/recipients"],
+    ["post", "/bulk-preview"],
   ] as const) {
     const layer = findRouteLayer(method, path);
     assert.ok(layer, `expected route ${method.toUpperCase()} ${path} to be registered`);
@@ -61,10 +64,11 @@ test("draft/read/build-recipient routes have no extra role-gate middleware — S
   }
 });
 
-test("sending routes (test-send/batch-send) are gated by requireAdminRole AND their own rate limiter — STAFF is rejected before the controller", () => {
+test("sending routes (test-send/batch-send/bulk-start) are gated by requireAdminRole AND their own rate limiter — STAFF is rejected before the controller", () => {
   for (const [method, path] of [
     ["post", "/:id/send-test"],
     ["post", "/:id/send-batch"],
+    ["post", "/bulk-start"],
   ] as const) {
     const layer = findRouteLayer(method, path);
     assert.ok(layer, `expected route ${method.toUpperCase()} ${path} to be registered`);

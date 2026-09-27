@@ -151,7 +151,9 @@ let createAdminOutreachCampaign,
   sendAdminOutreachCampaignTest,
   sendAdminOutreachCampaignBatch,
   retryAdminOutreachCampaignFailed,
-  cancelAdminOutreachCampaign;
+  cancelAdminOutreachCampaign,
+  previewBulkOutreachSend,
+  bulkStartAdminOutreachCampaigns;
 let renderImportPreviewSummary, renderImportPreviewRows;
 let updatePreorderSettings;
 let renderProductSearchResults, renderSelectedProductPreview;
@@ -253,6 +255,8 @@ function ensureAdminModulesLoaded() {
         sendAdminOutreachCampaignBatch,
         retryAdminOutreachCampaignFailed,
         cancelAdminOutreachCampaign,
+        previewBulkOutreachSend,
+        bulkStartAdminOutreachCampaigns,
       } = bundle.adminOutreachCampaignApi);
       ({ renderImportPreviewSummary, renderImportPreviewRows } = bundle.adminOutreachImport);
       ({ updatePreorderSettings } = bundle.adminPreorderApi);
@@ -393,6 +397,7 @@ function mountApp() {
       setupAdminOutreachImport();
       setupAdminOutreachCampaignForm();
       setupAdminOutreachCampaignDetailActions();
+      setupAdminOutreachBulkSend();
       setupAdminAffiliateProductSettingFilterForm();
       setupAdminAffiliateProductSettingForm();
       setupAdminAffiliateProductSettingActions();
@@ -5096,6 +5101,229 @@ async function handleOutreachSendTest(form) {
     }
   } finally {
     if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 198.1: multi-select bulk campaign sending. A checkbox only
+// ever exists in the DOM for a campaign the page already decided is
+// eligible (adminOutreachCampaigns.js's own isCampaignEligibleForBulkSend())
+// — "Select All" therefore never needs its own eligibility check, it
+// just checks every checkbox that's actually present. The real
+// eligibility gate that matters is server-side (bulkStartCampaigns()
+// re-derives everything fresh) — this is only ever a convenience layer
+// on top of that, never a security boundary.
+function getOutreachSelectedCampaignIds() {
+  return Array.from(document.querySelectorAll("[data-outreach-campaign-checkbox]:checked")).map((el) => el.value);
+}
+
+function updateOutreachBulkBar() {
+  const bar = document.querySelector("[data-admin-outreach-bulk-bar]");
+  if (!bar) return;
+  const selected = getOutreachSelectedCampaignIds();
+  const summary = bar.querySelector("[data-admin-outreach-bulk-summary]");
+  bar.hidden = selected.length === 0;
+  if (summary) summary.textContent = `${selected.length} campaign${selected.length === 1 ? "" : "s"} selected`;
+}
+
+function setupAdminOutreachBulkSend() {
+  document.addEventListener("change", (event) => {
+    if (event.target.matches("[data-outreach-campaign-checkbox]")) {
+      updateOutreachBulkBar();
+      return;
+    }
+    if (event.target.matches("[data-outreach-select-all-ready]")) {
+      const checked = event.target.checked;
+      document.querySelectorAll("[data-outreach-campaign-checkbox]").forEach((checkbox) => {
+        checkbox.checked = checked;
+      });
+      updateOutreachBulkBar();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest('[data-action="outreach-clear-selection"]')) {
+      document.querySelectorAll("[data-outreach-campaign-checkbox]").forEach((checkbox) => {
+        checkbox.checked = false;
+      });
+      const selectAll = document.querySelector("[data-outreach-select-all-ready]");
+      if (selectAll) selectAll.checked = false;
+      updateOutreachBulkBar();
+      return;
+    }
+    if (event.target.closest('[data-action="outreach-preview-bulk-send"]')) {
+      handleOutreachPreviewBulkSend();
+      return;
+    }
+    if (event.target.closest('[data-action="outreach-cancel-bulk-confirm"]')) {
+      const confirmSection = document.querySelector("[data-admin-outreach-bulk-confirm-section]");
+      if (confirmSection) confirmSection.hidden = true;
+      updateOutreachBulkBar();
+      return;
+    }
+    const startButton = event.target.closest('[data-action="outreach-start-bulk-send"]');
+    if (startButton) {
+      handleOutreachStartBulkSend(startButton);
+      return;
+    }
+    const continueButton = event.target.closest('[data-action="outreach-continue-bulk-send"]');
+    if (continueButton) {
+      handleOutreachStartBulkSend(continueButton);
+    }
+  });
+}
+
+// Milestone 198.1, Part 3/4: never sends anything — this only ever
+// calls the read-only bulk-preview endpoint and renders what it
+// returns. The real send is a separate action (handleOutreachStartBulkSend
+// below), only reachable from the button this function itself renders.
+async function handleOutreachPreviewBulkSend() {
+  const selected = getOutreachSelectedCampaignIds();
+  if (selected.length === 0) return;
+
+  const confirmSection = document.querySelector("[data-admin-outreach-bulk-confirm-section]");
+  const bar = document.querySelector("[data-admin-outreach-bulk-bar]");
+  const banner = document.querySelector("[data-admin-outreach-bulk-banner]");
+  if (banner) banner.hidden = true;
+
+  try {
+    const response = await previewBulkOutreachSend(selected);
+    const preview = response.data;
+
+    const summaryEl = document.querySelector("[data-admin-outreach-bulk-confirm-summary]");
+    if (summaryEl) {
+      const totalSuppressed = preview.campaigns.reduce((sum, c) => sum + (c.recipientCounts?.suppressed || 0), 0);
+      const totalInvalid = preview.campaigns.reduce((sum, c) => sum + (c.recipientCounts?.invalid || 0), 0);
+      const statCard = (label, value) => `<div class="admin-card"><p class="admin-card__label">${label}</p><p class="admin-card__value">${value}</p></div>`;
+      summaryEl.innerHTML = [
+        statCard("Campaigns Selected", preview.eligibleCampaigns),
+        statCard("Unique Eligible Recipients", preview.uniqueEligibleRecipients),
+        statCard("Suppressed", totalSuppressed),
+        statCard("Invalid", totalInvalid),
+      ].join("");
+    }
+
+    const duplicatesEl = document.querySelector("[data-admin-outreach-bulk-duplicates]");
+    if (duplicatesEl) {
+      duplicatesEl.innerHTML =
+        preview.crossCampaignDuplicates.length > 0
+          ? `<div class="form-banner form-banner--error">
+              ${preview.crossCampaignDuplicates.length} contact(s) appear in more than one selected campaign — each will only be emailed once:
+              <ul>${preview.crossCampaignDuplicates.map((d) => `<li>${escapeHtml(d.email)} (${escapeHtml(d.organisationName || "no organisation name")}) in: ${d.campaignNames.map((n) => escapeHtml(n)).join(", ")}</li>`).join("")}</ul>
+            </div>`
+          : "";
+    }
+
+    const rowsEl = document.querySelector("[data-admin-outreach-bulk-confirm-rows]");
+    if (rowsEl) {
+      rowsEl.innerHTML = preview.campaigns
+        .map(
+          (c) => `
+        <tr>
+          <td>${escapeHtml(c.name)}</td>
+          <td>${c.eligible ? "Eligible" : `Skipped — ${escapeHtml(c.ineligibleReason || "not eligible")}`}</td>
+          <td>${c.eligible ? c.recipientCounts.pending : 0}</td>
+        </tr>
+      `
+        )
+        .join("");
+    }
+
+    const statementEl = document.querySelector("[data-admin-outreach-bulk-confirm-statement]");
+    if (statementEl) {
+      statementEl.textContent = `You are about to start ${preview.eligibleCampaigns} campaign${preview.eligibleCampaigns === 1 ? "" : "s"} to ${preview.uniqueEligibleRecipients} eligible recipient${preview.uniqueEligibleRecipients === 1 ? "" : "s"}.`;
+    }
+
+    const startButton = document.querySelector('[data-action="outreach-start-bulk-send"]');
+    if (startButton) {
+      startButton.dataset.campaignIds = JSON.stringify(preview.campaigns.filter((c) => c.eligible).map((c) => c.id));
+      startButton.textContent = `START ${preview.eligibleCampaigns} CAMPAIGN${preview.eligibleCampaigns === 1 ? "" : "S"}`;
+      startButton.disabled = preview.eligibleCampaigns === 0;
+    }
+
+    if (bar) bar.hidden = true;
+    if (confirmSection) confirmSection.hidden = false;
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Could not calculate the bulk send preview. Please try again shortly.";
+      banner.hidden = false;
+    }
+  }
+}
+
+// Milestone 198.1, Part 4/13: the owner's own explicit click, gated by
+// a native confirm() too (the same "deliberate friction before a real
+// send" discipline every other real-send action on this page already
+// uses — send-test/send-batch/retry/cancel). The server independently
+// re-derives eligibility from scratch regardless of what this button's
+// own data-campaign-ids attribute claims (Part 13's own "do not trust
+// the browser's selection" requirement) — this is convenience, not the
+// actual safety boundary.
+async function handleOutreachStartBulkSend(button) {
+  let campaignIds = [];
+  try {
+    campaignIds = JSON.parse(button.dataset.campaignIds || "[]");
+  } catch {
+    campaignIds = [];
+  }
+  if (campaignIds.length === 0) return;
+
+  const confirmed = window.confirm(`Send the selected campaigns now?\nThis sends real email to real organisations right now and cannot be undone.`);
+  if (!confirmed) return;
+
+  const banner = document.querySelector("[data-admin-outreach-bulk-banner]");
+  if (banner) banner.hidden = true;
+  button.disabled = true;
+
+  try {
+    const response = await bulkStartAdminOutreachCampaigns(campaignIds);
+    const result = response.data;
+    renderOutreachBulkProgress(result, campaignIds);
+  } catch (error) {
+    if (banner) {
+      banner.textContent = error instanceof ApiError ? error.message : "Something went wrong starting these campaigns. Please try again shortly.";
+      banner.hidden = false;
+    }
+  } finally {
+    button.disabled = false;
+  }
+}
+
+// Part 8: uses only real, already-known recipient statuses from the
+// bulk-start response — never a fabricated "Delivered", only ever
+// "Sent" (what this system genuinely knows, see outreachSending.
+// service.ts's own comment on why no delivery-confirmation claim is
+// ever made).
+function renderOutreachBulkProgress(result, requestedCampaignIds) {
+  const confirmSection = document.querySelector("[data-admin-outreach-bulk-confirm-section]");
+  const progressSection = document.querySelector("[data-admin-outreach-bulk-progress-section]");
+  if (confirmSection) confirmSection.hidden = true;
+  if (!progressSection) return;
+  progressSection.hidden = false;
+
+  const rowsEl = progressSection.querySelector("[data-admin-outreach-bulk-progress-rows]");
+  if (rowsEl) {
+    const rows = result.campaignsProcessed
+      .map((c) => `<tr><td>${escapeHtml(c.campaignName)}</td><td>${c.recipientCounts.sent}/${c.recipientCounts.total}</td><td>${c.recipientCounts.pending}</td><td>${c.recipientCounts.failed}</td></tr>`)
+      .concat(result.campaignsSkippedIneligible.map((c) => `<tr><td>${escapeHtml(c.name)}</td><td colspan="3">Skipped — ${escapeHtml(c.reason)}</td></tr>`))
+      .concat(result.campaignsErrored.map((c) => `<tr><td>${escapeHtml(c.name)}</td><td colspan="3">Error — ${escapeHtml(c.error)}</td></tr>`));
+    rowsEl.innerHTML = rows.join("");
+  }
+
+  const overallEl = progressSection.querySelector("[data-admin-outreach-bulk-progress-overall]");
+  if (overallEl) {
+    const totalSentAllTime = result.campaignsProcessed.reduce((sum, c) => sum + c.recipientCounts.sent, 0);
+    const totalAcrossCampaigns = result.campaignsProcessed.reduce((sum, c) => sum + c.recipientCounts.total, 0);
+    let text = `${totalSentAllTime} / ${totalAcrossCampaigns} sent across ${result.campaignsProcessed.length} campaign${result.campaignsProcessed.length === 1 ? "" : "s"}.`;
+    if (result.stoppedEarly) {
+      text += " More recipients remain — click Continue to keep sending.";
+    }
+    overallEl.textContent = text;
+  }
+
+  const continueButton = progressSection.querySelector('[data-action="outreach-continue-bulk-send"]');
+  if (continueButton) {
+    continueButton.hidden = !result.stoppedEarly;
+    continueButton.dataset.campaignIds = JSON.stringify(requestedCampaignIds);
   }
 }
 
