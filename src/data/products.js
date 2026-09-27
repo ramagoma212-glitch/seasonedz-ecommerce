@@ -364,7 +364,13 @@ export const products = [
     name: "Old Testament Bible Colouring Book and 24 Acrylic Markers Bundle for Kids Ages 6 to 10",
     category: "Bundles",
     categorySlug: "bundles",
-    price: 230.0,
+    // Milestone 198.2 pre-launch audit: price lowered from R230 to
+    // R200 (owner decision — R230 was actually R10.01 MORE than buying
+    // the book and markers separately; R200 now genuinely saves).
+    // ageRange corrected from "6+ years" to "6-10 years" to match the
+    // real standalone product and this bundle's own name — same fix
+    // already applied to the live production record.
+    price: 200.0,
     oldPrice: null,
     image: "/images/product-1.jpg",
     gallery: ["/images/product-1.jpg", "/images/product-5.jpg", "/images/product-6.jpg"],
@@ -381,7 +387,7 @@ export const products = [
       "Water based and non-toxic markers",
       "Ideal for home, church and Sunday school",
     ],
-    ageRange: "6+ years",
+    ageRange: "6-10 years",
     stockStatus: "In Stock",
     rating: 0,
     reviewCount: 0,
