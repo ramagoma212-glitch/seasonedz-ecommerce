@@ -263,31 +263,45 @@ export const products = [
     discountLabel: null,
   },
   {
+    // Milestone 198.2 pre-launch cleanup: this fallback entry
+    // previously described a fictional "ABC Book and Markers Bundle"
+    // (ABC book + 24-colour acrylic markers, R329/R398) that has never
+    // been the real SG-0007 product — the real bundle at this slug is
+    // ABC book + 12 rotating crayons, R160, no oldPrice. Corrected
+    // field-by-field against the live production API/DB (never
+    // guessed from the stale values it replaces).
     id: "abc-book-and-markers-bundle",
     slug: "abc-book-and-markers-bundle",
-    name: "ABC Book and Markers Bundle",
+    name: "ABC Colouring Book and 12 Rotating Crayons Bundle for Kids",
     category: "Bundles",
     categorySlug: "bundles",
-    price: 329.0,
-    oldPrice: 398.0,
+    price: 160.0,
+    oldPrice: null,
     image: "/images/product-6.jpg",
     gallery: ["/images/product-6.jpg", "/images/product-1.jpg", "/images/product-4.jpg"],
-    shortDescription: "Our ABC colouring book paired with the 24-colour acrylic marker set.",
+    shortDescription:
+      "Make learning A to Z fun with an ABC colouring book and 12 rotating crayons. Kids can trace letters, practise handwriting, colour pictures, learn words and enjoy screen free creative learning at home.",
     description:
-      "Everything a young learner needs in one bundle: the ABC Colouring Book for Kids with Fun Facts, paired with our 24-colour acrylic marker set, at a better price than buying separately.",
+      "Make learning the alphabet fun with the ABC Colouring Book and 12 Rotating Crayons Bundle for Kids. This ready-to-use educational colouring set combines alphabet tracing, handwriting practice and creative colouring in one bundle, with 12 bright, assorted rotating crayons in an easy-twist design and a clear reusable storage case. A4, 30 pages, 80gsm, saddle-stitched paperback with a certificate page.",
     features: [
-      "Includes ABC Colouring Book for Kids with Fun Facts",
-      "Includes Acrylic Marker Set 24 Colours",
-      "Better value than buying individually",
-      "A ready-made gift for birthdays or school",
+      "ABC tracing and colouring activities",
+      "Uppercase and lowercase letter practice",
+      "Early handwriting support",
+      "Words, sounds and fun facts",
+      "12 bright rotating crayons",
+      "Easy twist crayon design",
+      "Fine motor skill practice",
+      "Screen free learning activity",
+      "Ideal for preschool and Grade R",
+      "Great for home, school and travel",
     ],
-    ageRange: "3-8 years",
+    ageRange: "3-7 years",
     stockStatus: "In Stock",
     rating: 0,
     reviewCount: 0,
-    tags: ["bundle", "kids", "gift", "markers"],
-    isFeatured: false,
-    isBestSeller: true,
+    tags: ["kids", "markers", "bundle", "gift"],
+    isFeatured: true,
+    isBestSeller: false,
     isNewArrival: false,
     discountLabel: "Bundle & Save",
   },
