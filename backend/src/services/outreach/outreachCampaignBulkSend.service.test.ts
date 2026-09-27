@@ -350,3 +350,139 @@ test("bulkStartCampaigns: one campaign throwing (e.g. a genuine concurrent singl
   contactFindUnique.restore();
   groupBy.restore();
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 198.1, final eligibility correction: bulk selection is
+// READY-only. SENDING is deliberately excluded — a campaign already
+// partway through is only ever resumed via its own dedicated "Continue
+// Sending" action (sendCampaignBatch(), tested directly against a
+// SENDING campaign in outreachCampaign.service.test.ts — that path is
+// completely unaffected by this correction, since isEligibleForBulkSend()
+// is only ever consulted by previewBulkSend()/bulkStartCampaigns()
+// below, never by sendCampaignBatch() itself).
+// ---------------------------------------------------------------------------
+
+test("previewBulkSend: a READY campaign is eligible", async () => {
+  const findMany = stub(prisma.outreachCampaign, "findMany", async () => [campaignRow("c1", { status: OutreachCampaignStatus.READY })]);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => [{ status: OutreachRecipientStatus.PENDING, _count: { _all: 2 } }]);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => [
+    { contactId: "contact-1", campaignId: "c1", emailSnapshot: "a@example.com", organisationNameSnapshot: "A" },
+    { contactId: "contact-2", campaignId: "c1", emailSnapshot: "b@example.com", organisationNameSnapshot: "B" },
+  ]);
+
+  const preview = await previewBulkSend(["c1"]);
+  assert.equal(preview.campaigns[0]?.eligible, true);
+  assert.equal(preview.eligibleCampaigns, 1);
+
+  findMany.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});
+
+test("previewBulkSend: a SENDING campaign (even with PENDING recipients) is never eligible — only its own Continue Sending action can resume it", async () => {
+  const findMany = stub(prisma.outreachCampaign, "findMany", async () => [campaignRow("c1", { status: OutreachCampaignStatus.SENDING, sendStartedAt: new Date() })]);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => [{ status: OutreachRecipientStatus.PENDING, _count: { _all: 4 } }]);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => {
+    throw new Error("must never be called for an ineligible campaign — a SENDING campaign contributes nothing to the eligible-recipient/duplicate calculation");
+  });
+
+  const preview = await previewBulkSend(["c1"]);
+  assert.equal(preview.campaigns[0]?.eligible, false);
+  assert.equal(preview.eligibleCampaigns, 0);
+  assert.match(preview.campaigns[0]?.ineligibleReason ?? "", /Continue Sending/);
+
+  findMany.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});
+
+test("previewBulkSend: DRAFT, COMPLETED and CANCELLED all remain ineligible", async () => {
+  const findMany = stub(prisma.outreachCampaign, "findMany", async () => [
+    campaignRow("draft", { status: OutreachCampaignStatus.DRAFT }),
+    campaignRow("completed", { status: OutreachCampaignStatus.COMPLETED }),
+    campaignRow("cancelled", { status: OutreachCampaignStatus.CANCELLED }),
+  ]);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => []);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => []);
+
+  const preview = await previewBulkSend(["draft", "completed", "cancelled"]);
+  assert.equal(preview.eligibleCampaigns, 0);
+  assert.ok(preview.campaigns.every((c) => c.eligible === false));
+
+  findMany.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});
+
+test("bulkStartCampaigns: a SENDING campaign in the selection is skipped, never touched, its PENDING recipients left exactly as they were", async () => {
+  const restoreEmail = withEmailDisabled();
+  const campaigns = new Map([["c1", campaignRow("c1", { status: OutreachCampaignStatus.SENDING, sendStartedAt: new Date() })]]);
+  const campaignFindUnique = stub(prisma.outreachCampaign, "findUnique", async (args: { where: { id: string } }) => campaigns.get(args.where.id) ?? null);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => [{ status: OutreachRecipientStatus.PENDING, _count: { _all: 3 } }]);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => {
+    throw new Error("must never be called — a SENDING campaign must never be touched by bulk-start");
+  });
+
+  const result = await bulkStartCampaigns(["c1"]);
+  assert.equal(result.campaignsProcessed.length, 0);
+  assert.equal(result.totalSent, 0);
+  assert.equal(result.campaignsSkippedIneligible.length, 1);
+  assert.match(result.campaignsSkippedIneligible[0]?.reason ?? "", /Continue Sending/);
+
+  restoreEmail.restore();
+  campaignFindUnique.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});
+
+test("bulkStartCampaigns: a campaign that was READY when selected but has since moved to SENDING (a genuinely concurrent single-campaign send) is excluded at execution, never started twice", async () => {
+  const restoreEmail = withEmailDisabled();
+  // The campaign's CURRENT server-side state, at the moment bulk-start
+  // actually queries it, is already SENDING — simulating that a
+  // single-campaign "Continue Sending"/send-batch click elsewhere
+  // reached it first, between the owner's selection/confirmation and
+  // this execution. bulkStartCampaigns() always re-fetches fresh
+  // (never trusts anything computed earlier), so this is exactly what
+  // that re-fetch would see.
+  const campaigns = new Map([["c1", campaignRow("c1", { status: OutreachCampaignStatus.SENDING, sendStartedAt: new Date() })]]);
+  const campaignFindUnique = stub(prisma.outreachCampaign, "findUnique", async (args: { where: { id: string } }) => campaigns.get(args.where.id) ?? null);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => [{ status: OutreachRecipientStatus.PENDING, _count: { _all: 5 } }]);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => {
+    throw new Error("must never be called — this campaign must be excluded before any recipient is even read");
+  });
+
+  // The owner's own browser still believes c1 was READY when they
+  // clicked "Start" — it sends the same campaignIds regardless.
+  const result = await bulkStartCampaigns(["c1"]);
+  assert.equal(result.campaignsProcessed.length, 0);
+  assert.equal(result.campaignsSkippedIneligible.length, 1);
+  assert.equal(result.campaignsSkippedIneligible[0]?.id, "c1");
+
+  restoreEmail.restore();
+  campaignFindUnique.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});
+
+test("bulkStartCampaigns: DRAFT/COMPLETED/CANCELLED are all skipped as ineligible in one selection, none touched", async () => {
+  const restoreEmail = withEmailDisabled();
+  const campaigns = new Map([
+    ["draft", campaignRow("draft", { status: OutreachCampaignStatus.DRAFT })],
+    ["completed", campaignRow("completed", { status: OutreachCampaignStatus.COMPLETED })],
+    ["cancelled", campaignRow("cancelled", { status: OutreachCampaignStatus.CANCELLED })],
+  ]);
+  const campaignFindUnique = stub(prisma.outreachCampaign, "findUnique", async (args: { where: { id: string } }) => campaigns.get(args.where.id) ?? null);
+  const groupBy = stub(prisma.outreachCampaignRecipient, "groupBy", async () => []);
+  const recipientFindMany = stub(prisma.outreachCampaignRecipient, "findMany", async () => {
+    throw new Error("must never be called for any of these three ineligible campaigns");
+  });
+
+  const result = await bulkStartCampaigns(["draft", "completed", "cancelled"]);
+  assert.equal(result.campaignsProcessed.length, 0);
+  assert.equal(result.campaignsSkippedIneligible.length, 3);
+
+  restoreEmail.restore();
+  campaignFindUnique.restore();
+  groupBy.restore();
+  recipientFindMany.restore();
+});

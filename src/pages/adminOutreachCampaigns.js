@@ -4,15 +4,15 @@
 // historyOnly flag) — every non-draft campaign, so an admin can see what
 // has actually gone out without a second table.
 //
-// Milestone 198.1: a checkbox per ELIGIBLE campaign (READY, or SENDING
-// with recipients still PENDING — a genuinely "partway through, more to
-// go" campaign is exactly the resumable-continuation case this bulk
-// feature exists to make convenient; a campaign actively being touched
-// by another request right now is a separate, transient concern the
-// backend's own re-entrancy guard already handles, isolated per
-// campaign — see outreachCampaign.service.ts's own comments).
-// DRAFT/COMPLETED/CANCELLED campaigns never get a checkbox at all —
-// there is nothing here for the owner to accidentally select.
+// Milestone 198.1, final eligibility correction: a checkbox only ever
+// exists for a READY campaign. DRAFT/SENDING/COMPLETED/CANCELLED never
+// get one — a SENDING campaign (already partway through) is deliberately
+// excluded from this bulk workflow entirely; its own dedicated
+// "Continue Sending" button on the campaign detail page remains the
+// only way to resume it, never this multi-select list. The backend
+// independently enforces the exact same READY-only rule (see
+// outreachCampaign.service.ts's isEligibleForBulkSend()) — this
+// frontend check is convenience only, never the real boundary.
 
 import { getAdminOutreachCampaigns } from "../js/api/adminOutreachCampaignApi.js";
 import { isBackendUnavailable, isUnauthenticated, redirectToAdminLogin, renderAdminConnectionError, renderAdminRedirecting, consumePendingAdminMessage } from "../js/adminGuard.js";
@@ -24,7 +24,7 @@ import { escapeHtml } from "../js/search.js";
 const NON_DRAFT_STATUSES = ["READY", "SENDING", "COMPLETED", "PARTIALLY_FAILED", "CANCELLED"];
 
 export function isCampaignEligibleForBulkSend(campaign) {
-  return (campaign.status === "READY" || campaign.status === "SENDING") && (campaign.recipientCounts?.pending ?? 0) > 0;
+  return campaign.status === "READY" && (campaign.recipientCounts?.pending ?? 0) > 0;
 }
 
 function renderCampaignsTable(campaigns, showCheckboxes) {

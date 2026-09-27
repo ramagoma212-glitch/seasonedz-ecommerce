@@ -384,8 +384,19 @@ export async function sendCampaignBatch(campaignId: string, batchSize: number = 
 // same bounded-batch, resumable, never-trust-the-browser discipline.
 // ---------------------------------------------------------------------------
 
+// Milestone 198.1, final eligibility correction: READY only. A SENDING
+// campaign (already partway through, or genuinely being processed right
+// now) is deliberately excluded from bulk selection entirely — its own
+// dedicated "Continue Sending" action on the campaign detail page
+// remains the one way to resume it. This is never enforced only here:
+// both previewBulkSend() and bulkStartCampaigns() below re-check this
+// same rule against a FRESH read of the campaign's current status, so
+// a campaign that was READY at selection time but has since moved to
+// SENDING (e.g. a single-campaign send started elsewhere in the
+// meantime) is excluded at execution regardless of what the browser's
+// own preview showed.
 function isEligibleForBulkSend(status: OutreachCampaignStatus, pending: number): boolean {
-  return (status === OutreachCampaignStatus.READY || status === OutreachCampaignStatus.SENDING) && pending > 0;
+  return status === OutreachCampaignStatus.READY && pending > 0;
 }
 
 export interface BulkSendCampaignPreview {
@@ -448,6 +459,7 @@ export async function previewBulkSend(campaignIds: string[]): Promise<BulkSendPr
       if (campaign.status === OutreachCampaignStatus.DRAFT) ineligibleReason = "Recipient list not built yet.";
       else if (campaign.status === OutreachCampaignStatus.COMPLETED) ineligibleReason = "Already fully sent.";
       else if (campaign.status === OutreachCampaignStatus.CANCELLED) ineligibleReason = "Cancelled.";
+      else if (campaign.status === OutreachCampaignStatus.SENDING) ineligibleReason = "Already sending — use Continue Sending on the campaign's own page.";
       else if (recipientCounts.pending === 0) ineligibleReason = "No pending recipients left.";
       else ineligibleReason = "Not eligible.";
     }
@@ -520,12 +532,17 @@ const DEFAULT_MAX_RECIPIENTS_PER_BULK_CALL = 50;
 // Bounded by `maxRecipientsPerCall`, the bulk-level equivalent of a
 // single campaign's own batchSize: once that many recipients have been
 // processed across ALL selected campaigns combined, this stops and
-// returns — the remaining, not-yet-started campaigns are reported in
-// `campaignsSkippedIneligible`... no: they are simply absent from
-// `campaignsProcessed`, and the caller (the admin, via the UI) calls
-// this again with the same campaignIds to continue, the same
-// resumable-batch discipline as a single campaign's own "Continue
-// Sending" button, just extended across a whole selection.
+// returns — a campaign not yet reached is simply absent from
+// `campaignsProcessed`, still READY, and picked up by calling this
+// again with the same campaignIds. Milestone 198.1's final eligibility
+// correction: isEligibleForBulkSend() only accepts READY, never
+// SENDING — so if this call's own cap is hit PARTWAY through a
+// campaign (leaving it SENDING with some recipients still PENDING),
+// that one campaign is deliberately NOT picked up by a later bulk-
+// start call either; finishing it is the campaign detail page's own
+// "Continue Sending" button's job from then on, exactly the "bulk
+// selection is never a second way to resume a SENDING campaign"
+// boundary the owner asked for.
 //
 // Part 5/9: `sentInThisRun` accumulates every contact id actually sent
 // to as this loop proceeds through the selected campaigns in order —
@@ -559,7 +576,20 @@ export async function bulkStartCampaigns(campaignIds: string[], maxRecipientsPer
     }
     const recipientCountsBefore = await getCampaignRecipientCounts(campaignId);
     if (!isEligibleForBulkSend(campaign.status, recipientCountsBefore.pending)) {
-      campaignsSkippedIneligible.push({ id: campaignId, name: campaign.name, reason: campaign.status === OutreachCampaignStatus.COMPLETED ? "Already fully sent." : campaign.status === OutreachCampaignStatus.CANCELLED ? "Cancelled." : campaign.status === OutreachCampaignStatus.DRAFT ? "Recipient list not built yet." : "No pending recipients left." });
+      campaignsSkippedIneligible.push({
+        id: campaignId,
+        name: campaign.name,
+        reason:
+          campaign.status === OutreachCampaignStatus.COMPLETED
+            ? "Already fully sent."
+            : campaign.status === OutreachCampaignStatus.CANCELLED
+              ? "Cancelled."
+              : campaign.status === OutreachCampaignStatus.DRAFT
+                ? "Recipient list not built yet."
+                : campaign.status === OutreachCampaignStatus.SENDING
+                  ? "Already sending — use Continue Sending on the campaign's own page."
+                  : "No pending recipients left.",
+      });
       continue;
     }
 
