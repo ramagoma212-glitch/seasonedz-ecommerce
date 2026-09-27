@@ -73,6 +73,7 @@ export function renderSchools() {
           idPrefix: "school",
           type: "SCHOOL",
           showQuantityField: true,
+          showProvinceField: true,
         })}
       </div>
     </section>

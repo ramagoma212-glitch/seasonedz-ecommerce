@@ -428,14 +428,17 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
     await expect(panel.locator("input")).toHaveCount(0);
   });
 
-  test("PayFast remains the only real payment integration: exactly 3 payment-method radios, PayFast still selectable/disabled per its own config", async ({ page }) => {
+  // Milestone 198.2 pre-launch audit: Cash / Card on Delivery was
+  // removed from checkout entirely (owner decision — it didn't fit
+  // Collection or unattended Locker delivery) — see order.validator.ts
+  // and js/orders.js. Only Bank Transfer and PayFast remain.
+  test("PayFast remains the only real payment integration: exactly 2 payment-method radios, PayFast still selectable/disabled per its own config", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
 
     const radios = page.locator('fieldset.payment-methods input[type="radio"][name="paymentMethod"]');
-    await expect(radios).toHaveCount(3);
+    await expect(radios).toHaveCount(2);
     await expect(radios.nth(0)).toHaveValue("bank-transfer");
     await expect(radios.nth(1)).toHaveValue("payfast");
-    await expect(radios.nth(2)).toHaveValue("cash-on-delivery");
 
     // No individual payment-method logo introduces a new selectable choice.
     await expect(page.locator('input[value*="visa" i], input[value*="mastercard" i], input[value*="applepay" i], input[value*="googlepay" i], input[value*="samsungpay" i], input[value*="snapscan" i], input[value*="zapper" i], input[value*="payflex" i]')).toHaveCount(0);

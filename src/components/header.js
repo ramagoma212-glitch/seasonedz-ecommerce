@@ -18,7 +18,14 @@ import { withBase } from "../js/paths.js";
 //    three: Kids/Bible/Mindfulness) — links to /shop.
 //  - "Digital Downloads" has no route at all yet (no digital product
 //    records exist — see pages/home.js's Digital Colouring Books
-//    section) — links to /shop.
+//    section). Milestone 198.2 pre-launch audit: this used to link to
+//    /shop, an unrelated generic catalogue with nothing digital-
+//    specific. It now links to "/" instead, since the homepage is
+//    where the real (if "Coming Soon") Digital Colouring Books section
+//    actually lives. Deep-linking straight to that section
+//    (`#digital-section-heading`) is deferred — the router has no
+//    hash-scroll-after-navigation support today, and building that is
+//    out of scope for a pre-launch fix; see router.js.
 //  - "Schools and Churches" links to the existing /schools page,
 //    which doesn't separately mention churches in its own content.
 // "Categories" and "FAQ" were on the old nav but aren't in the new
@@ -58,7 +65,7 @@ const NAV_LINKS = [
   { href: "/category/mindfulness-colouring", label: "Adult & Mindfulness Colouring", inMore: true },
   { href: "/category/markers-and-crayons", label: "Markers & Crayons", inMore: true },
   { href: "/category/bundles", label: "Colouring Book Bundles", inMore: true },
-  { href: "/shop", label: "Digital Downloads", inMore: false },
+  { href: "/", label: "Digital Downloads", inMore: false },
   { href: "/schools", label: "Schools & Churches", inMore: true },
   // Version 7, Milestone 175: links to the existing customer-account
   // entry point (accountPage.js's own Affiliate Programme section) —

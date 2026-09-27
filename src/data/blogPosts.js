@@ -17,7 +17,12 @@ import { withBase } from "../js/paths.js";
 export const blogPosts = [
   {
     id: "post-1",
-    title: "5 Ways Colouring Books Support Early Childhood Learning",
+    // Milestone 198.2 pre-launch audit fix: was "5 Ways Colouring Books
+    // Support Early Childhood Learning" — the body only ever had 4
+    // unstructured paragraphs, never 5 enumerated points. Retitled to
+    // match the actual content rather than restructuring the content
+    // to force a 5th point (which would risk inventing a new claim).
+    title: "How Colouring Books Support Early Childhood Learning",
     slug: "colouring-books-support-early-learning",
     category: "Educational Colouring",
     excerpt: "Discover how colouring activities build fine motor skills and focus.",

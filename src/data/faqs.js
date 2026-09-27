@@ -28,7 +28,7 @@ export const faqs = [
     category: "Delivery",
     question: "How much does delivery cost, and when is it free?",
     answer:
-      "Courier Guy Locker to Locker is R100 and Courier Guy Door to Door is R120. Both are free on orders of R600 or more in qualifying products. Customer Collection in Pretoria or Thohoyandou is always free, by arrangement. See our Shipping Policy for full details.",
+      "Courier Guy Locker to Locker is R100 and Courier Guy Door to Door is R120. Both are free on orders of R600 or more in qualifying products (R500 or more for registered customers). Customer Collection in Pretoria or Thohoyandou is always free, by arrangement. See our Shipping Policy for full details.",
   },
   {
     category: "Delivery",

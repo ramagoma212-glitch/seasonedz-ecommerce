@@ -1022,6 +1022,20 @@ function handleSelectVariantOption(buttonEl) {
       addToCartBtn.dataset.variantId = selectedVariant.id;
       addToCartBtn.dataset.variantLabel = buildVariantLabel(selectedVariant.optionValues, groups);
     }
+
+    // Milestone 198.2 pre-launch audit fix: the "Notify Me When
+    // Available" button/banner are only ever rendered once, at page
+    // load, based on whichever variant was selected then (see
+    // productDetails.js). Without this, switching to an in-stock
+    // variant left a stale, still-clickable Notify Me button sitting
+    // right alongside the now-active Add to Cart button — hide it the
+    // instant the selected variant is no longer out of stock.
+    const notifyBtn = root.querySelector('[data-action="notify-when-in-stock"]');
+    if (notifyBtn) {
+      notifyBtn.hidden = !outOfStock;
+      const stockAlertBanner = root.querySelector("[data-stock-alert-banner]");
+      if (stockAlertBanner) stockAlertBanner.hidden = true;
+    }
   }
 
   // Milestone 197: rebuilds the ENTIRE gallery — main image, thumbnail
@@ -1370,7 +1384,7 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee - discountTotal).toFixed(2)}`;
 
   const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
-  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, { isRegisteredCustomer }).trim();
+  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, { isRegisteredCustomer, deliveryMethod: method }).trim();
 }
 
 // Milestone 197, Part 7: recomputes the order summary's discount row and
@@ -8126,6 +8140,7 @@ async function handleEnquirySubmit(form) {
     message: (data.message || "").trim(),
   };
   if ((data.companyName || "").trim()) payload.companyName = data.companyName.trim();
+  if ((data.province || "").trim()) payload.province = data.province.trim();
   if (data.estimatedQuantity) {
     const quantity = parseInt(data.estimatedQuantity, 10);
     if (Number.isInteger(quantity)) payload.estimatedQuantity = quantity;

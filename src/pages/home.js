@@ -207,7 +207,10 @@ function renderBestSellerSection(products) {
               data-name="${product.name}"
               data-price="${product.price}"
               data-image="${product.image}"
-            >Add to Cart</button>
+              data-product-type="${product.productType || "PHYSICAL"}"
+              data-is-preorder="${product.isPreorder ? "true" : "false"}"
+              data-preorder-release-at="${product.preorderReleaseAt || ""}"
+            >${product.isPreorder ? "Add Preorder to Cart" : "Add to Cart"}</button>
             <button
               type="button"
               class="best-seller__wishlist ${wishlisted ? "is-active" : ""}"

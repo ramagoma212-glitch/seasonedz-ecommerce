@@ -219,6 +219,15 @@ export function validateOrderRequest(body: unknown): OrderValidationResult {
     // resolved. The frontend already disables this option in the UI
     // (src/js/orders.js); this closes the same gap at the API level.
     errors.push({ field: "paymentMethod", message: "PayFast payments are not available yet. Please choose another payment method." });
+  } else if (root.paymentMethod === PaymentMethod.CASH_ON_DELIVERY) {
+    // Milestone 198.2 pre-launch audit: owner decision was to remove
+    // Cash/Card on Delivery from checkout entirely (it doesn't fit
+    // Collection or unattended Locker delivery). CASH_ON_DELIVERY stays
+    // a valid enum value so existing historical orders remain readable
+    // and manageable in admin — this only blocks *new* orders from
+    // being created with it, same defense-in-depth pattern as PAYFAST
+    // above (frontend already removes the option from the UI).
+    errors.push({ field: "paymentMethod", message: "Cash / Card on Delivery is not available. Please choose another payment method." });
   }
 
   const rawItems = Array.isArray(root.items) ? root.items : null;

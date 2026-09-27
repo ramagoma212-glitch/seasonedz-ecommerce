@@ -589,14 +589,14 @@ export async function renderProductDetails({ slug, query } = {}) {
           -->
           <div class="product-details__purchase-row">
             <div class="product-details__quantity">
-              <span>Quantity</span>
+              <span id="productQuantityLabel">Quantity</span>
               <div class="quantity-selector" ${
                 product.productType !== "DIGITAL" && !product.isPreorder
                   ? `data-max-quantity="${product.hasVariants ? (selectedVariant ? selectedVariant.stockQuantity : 0) : product.stockQuantity}"`
                   : ""
               }>
                 <button type="button" class="quantity-selector__btn" data-action="qty-decrease" aria-label="Decrease quantity" ${outOfStock ? "disabled" : ""}>&minus;</button>
-                <input type="number" class="quantity-selector__input" value="1" min="1" readonly ${outOfStock ? "disabled" : ""} />
+                <input type="number" class="quantity-selector__input" value="1" min="1" readonly aria-labelledby="productQuantityLabel" ${outOfStock ? "disabled" : ""} />
                 <button type="button" class="quantity-selector__btn" data-action="qty-increase" aria-label="Increase quantity" ${outOfStock ? "disabled" : ""}>&plus;</button>
               </div>
             </div>

@@ -329,7 +329,7 @@ test.describe("Blog post SEO (Milestone 171I)", () => {
 
   test("different blog posts each get their own unique title — not the same one everywhere", async ({ page }) => {
     await page.goto("/blog/colouring-books-support-early-learning");
-    await expect(page).toHaveTitle("5 Ways Colouring Books Support Early Childhood Learning | Seasonedz Group");
+    await expect(page).toHaveTitle("How Colouring Books Support Early Childhood Learning | Seasonedz Group");
 
     await page.goto("/blog/calming-power-of-mindfulness-colouring");
     await expect(page).toHaveTitle("The Calming Power of Mindfulness Colouring | Seasonedz Group");

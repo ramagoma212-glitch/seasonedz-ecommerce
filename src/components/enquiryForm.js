@@ -5,6 +5,23 @@
 // submit handler in js/app.js, which reads `type` from
 // data-enquiry-type below to tell the four forms apart.
 
+// Milestone 198.2 pre-launch audit fix, Part 26: the backend Enquiry
+// model already has an unused, nullable `province` column (see
+// backend/prisma/schema.prisma) that no enquiry form populated —
+// zero-migration, frontend-only addition. Uses the same 9-province
+// list as checkoutPage.js's own province select.
+const PROVINCES = [
+  "Eastern Cape",
+  "Free State",
+  "Gauteng",
+  "KwaZulu Natal",
+  "Limpopo",
+  "Mpumalanga",
+  "Northern Cape",
+  "North West",
+  "Western Cape",
+];
+
 export function renderEnquiryForm({
   heading,
   orgLabel,
@@ -15,6 +32,7 @@ export function renderEnquiryForm({
   type,
   showQuantityField = false,
   quantityRequired = false,
+  showProvinceField = false,
 }) {
   return `
     <form class="contact-form demo-form" data-enquiry-type="${type}" novalidate>
@@ -72,6 +90,21 @@ export function renderEnquiryForm({
                 ${quantityRequired ? "required" : ""}
               />
               <span class="form-field__error" data-error-for="estimatedQuantity"></span>
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        showProvinceField
+          ? `
+            <div class="form-field">
+              <label class="form-field__label" for="${idPrefix}Province">Province <span class="form-field__optional">(optional)</span></label>
+              <select id="${idPrefix}Province" name="province" class="form-field__input">
+                <option value="">Select a province</option>
+                ${PROVINCES.map((province) => `<option value="${province}">${province}</option>`).join("")}
+              </select>
+              <span class="form-field__error" data-error-for="province"></span>
             </div>
           `
           : ""

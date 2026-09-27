@@ -68,10 +68,18 @@ export function renderMarketplaceHomeSection() {
   `;
 }
 
+// Milestone 198.2 pre-launch audit fix: this block renders the same
+// generic, storefront-level marketplace links (never per-product —
+// see marketplaceLinks.js's own header comment) on every product page
+// regardless of whether that specific product is actually listed on
+// each marketplace. "Also available on:" overclaimed per-product
+// accuracy; "Seasonedz Group products are also on:" matches
+// renderMarketplaceHomeSection()'s own hedged "Find selected... on
+// trusted online marketplaces" wording instead.
 export function renderProductMarketplaceBlock() {
   return `
     <div class="product-details__marketplace">
-      <span class="product-details__marketplace-label">Also available on:</span>
+      <span class="product-details__marketplace-label">Seasonedz Group products are also on:</span>
       ${marketplaceLinks
         .map(
           (marketplace, index) => `

@@ -33,7 +33,17 @@ import { escapeHtml } from "../js/search.js";
 // R500 is), rather than the guest-only R600 wording. Never clutters
 // the guest path: a guest sees exactly the same wording as before this
 // milestone.
-export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected = false, isRegisteredCustomer = false } = {}) {
+// Milestone 198.2 pre-launch audit fix: `deliveryMethod` (the raw
+// COLLECTION/COURIER_LOCKER/COURIER_DOOR value) lets the free-delivery
+// case tell Collection apart from the two courier methods — Collection
+// is unconditionally free with no subtotal threshold at all, so it
+// must never be described in terms of the R500/R600 courier
+// threshold it never needed to meet.
+export function getDeliveryNote(
+  deliveryFee,
+  hasPhysicalItems,
+  { omitDeliveryUntilSelected = false, isRegisteredCustomer = false, deliveryMethod = null } = {}
+) {
   if (!hasPhysicalItems) {
     return "No delivery is needed. This order is digital download(s) only.";
   }
@@ -43,6 +53,9 @@ export function getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUnt
       : "Select a delivery method below to see your delivery fee.";
   }
   if (deliveryFee === 0) {
+    if (deliveryMethod === "COLLECTION") {
+      return "Customer Collection is free, with no minimum order.";
+    }
     return isRegisteredCustomer
       ? "Registered customer benefit: free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R500 or more for registered customers."
       : "Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
@@ -149,6 +162,7 @@ export function renderOrderSummary({
   preorderDiscountPercent = null,
   deliveryFee,
   deliveryMethodLabel = null,
+  deliveryMethod = null,
   hasPhysicalItems = true,
   showCheckoutButton = true,
   checkoutBlocked = false,
@@ -241,7 +255,7 @@ export function renderOrderSummary({
       </div>
 
       <p class="order-summary__note" data-order-summary-delivery-note>
-        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer })}
+        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer, deliveryMethod })}
       </p>
 
       ${showCouponInput ? renderCouponBlock(couponCode) : ""}

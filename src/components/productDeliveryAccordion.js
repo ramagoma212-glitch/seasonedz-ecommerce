@@ -9,7 +9,13 @@
 // namespaced per-product-page instance so they never collide with the
 // homepage's own FAQ ids if both somehow render in the same session.
 
-import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD, COLLECTION_CITIES } from "../config/delivery.js";
+import {
+  COURIER_LOCKER_FEE,
+  COURIER_DOOR_FEE,
+  FREE_DELIVERY_THRESHOLD,
+  REGISTERED_FREE_DELIVERY_THRESHOLD,
+  COLLECTION_CITIES,
+} from "../config/delivery.js";
 
 const ROWS = [
   {
@@ -19,7 +25,7 @@ const ROWS = [
       <p>Courier Guy Locker to Locker: R${COURIER_LOCKER_FEE}</p>
       <p>Courier Guy Door to Door: R${COURIER_DOOR_FEE}</p>
       <p>Free collection in ${COLLECTION_CITIES.join(" or ")} by arrangement.</p>
-      <p>Orders of R${FREE_DELIVERY_THRESHOLD} or more qualify for free Locker to Locker or Door to Door delivery.</p>
+      <p>Orders of R${FREE_DELIVERY_THRESHOLD} or more qualify for free Locker to Locker or Door to Door delivery (R${REGISTERED_FREE_DELIVERY_THRESHOLD} or more for registered customers).</p>
       <p>Choose your preferred delivery or collection option at checkout.</p>
     `,
   },
@@ -27,7 +33,7 @@ const ROWS = [
     id: "free-delivery-threshold",
     question: `Free delivery on orders of R${FREE_DELIVERY_THRESHOLD} or more`,
     answer: `
-      <p>When your qualifying product subtotal reaches R${FREE_DELIVERY_THRESHOLD} or more, both Courier Guy Locker to Locker and Door to Door delivery are free.</p>
+      <p>When your qualifying product subtotal reaches R${FREE_DELIVERY_THRESHOLD} or more, both Courier Guy Locker to Locker and Door to Door delivery are free. Registered customers qualify at R${REGISTERED_FREE_DELIVERY_THRESHOLD} or more.</p>
       <p>Gift wrapping does not count toward the free-delivery threshold.</p>
     `,
   },

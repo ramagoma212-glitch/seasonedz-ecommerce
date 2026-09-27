@@ -40,6 +40,18 @@ test("rejects a request with no delivery method at all", () => {
   assert.ok(result.errors.some((e) => e.field === "deliveryMethod"));
 });
 
+// Milestone 198.2 pre-launch audit: owner decision was to remove Cash
+// / Card on Delivery from checkout entirely — CASH_ON_DELIVERY stays a
+// valid enum value (existing historical orders remain readable in
+// admin) but a new order can no longer be created with it, same
+// defense-in-depth pattern as the PAYFAST-disabled check above it in
+// order.validator.ts.
+test("rejects a request with paymentMethod CASH_ON_DELIVERY — removed from checkout, owner decision", () => {
+  const result = validateOrderRequest(baseBody({ deliveryMethod: "COURIER_DOOR", paymentMethod: "CASH_ON_DELIVERY" }));
+  assert.equal(result.isValid, false);
+  assert.ok(result.errors.some((e) => e.field === "paymentMethod"));
+});
+
 test("COURIER_DOOR requires a full delivery address", () => {
   const result = validateOrderRequest(baseBody({ deliveryMethod: "COURIER_DOOR", deliveryAddress: {} }));
   assert.equal(result.isValid, false);

@@ -13,17 +13,24 @@ import { getStorageItem, setStorageItem } from "./storage.js";
 const ORDERS_KEY = "seasonedz_orders";
 const LATEST_ORDER_KEY = "seasonedz_latest_order";
 
-// Payment options shown at checkout. Bank transfer and cash/card on
-// delivery both place a real order with the Seasonedz Group backend —
-// see js/api/ordersApi.js — but take no online charge through this
-// site; payment itself happens by manual bank transfer or on
-// delivery. PayFast (Version 3, Milestone 23) is only selectable when
-// VITE_PAYFAST_ENABLED="true" — this flag only controls what the
-// checkout UI *offers*; the backend independently re-checks its own
-// PAYFAST_ENABLED and rejects paymentMethod: PAYFAST regardless of
-// what this frontend flag says, so flipping this alone can never let
-// a real PayFast order through if the backend isn't also configured
-// for it.
+// Payment options shown at checkout. Bank transfer places a real order
+// with the Seasonedz Group backend — see js/api/ordersApi.js — but
+// takes no online charge through this site; payment itself happens by
+// manual bank transfer. PayFast (Version 3, Milestone 23) is only
+// selectable when VITE_PAYFAST_ENABLED="true" — this flag only
+// controls what the checkout UI *offers*; the backend independently
+// re-checks its own PAYFAST_ENABLED and rejects paymentMethod: PAYFAST
+// regardless of what this frontend flag says, so flipping this alone
+// can never let a real PayFast order through if the backend isn't
+// also configured for it.
+//
+// Cash / Card on Delivery was removed from checkout in Milestone
+// 198.2 (pre-launch audit, owner decision): it didn't fit in-person
+// Collection (no courier involved) or unattended Locker delivery, and
+// the owner decided not to offer it at all. The backend independently
+// rejects paymentMethod: CASH_ON_DELIVERY for new orders too (see
+// order.validator.ts) — the enum value itself is kept only so
+// existing historical orders remain manageable in admin.
 const payfastEnabled = (import.meta.env.VITE_PAYFAST_ENABLED || "").toLowerCase() === "true";
 
 export const PAYMENT_METHODS = [
@@ -39,11 +46,6 @@ export const PAYMENT_METHODS = [
       ? "You'll be redirected to PayFast to complete payment."
       : "Real PayFast integration is not connected yet.",
     disabled: !payfastEnabled,
-  },
-  {
-    value: "cash-on-delivery",
-    label: "Cash / Card on Delivery",
-    description: "Places your order now. Pay the courier when your order arrives.",
   },
 ];
 
