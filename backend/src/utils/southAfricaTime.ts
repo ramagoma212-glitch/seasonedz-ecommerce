@@ -35,3 +35,28 @@ export function formatSastDateTime(date: Date): string {
     hour12: false,
   }).format(date);
 }
+
+// Milestone 199: CRM follow-up due/overdue/upcoming judgements must be
+// made against the CALENDAR DAY in SAST, not the server's own local
+// time or a raw UTC day boundary — a follow-up stored as
+// 2026-10-05T22:00:00Z is "5 October" to a SAST-based admin, not
+// "6 October". Reads "what calendar date is `now` in SAST" via Intl
+// (same zone-aware approach as formatSastDate() above) before doing
+// any arithmetic; the arithmetic itself (midnight SAST == 22:00 UTC
+// the day before) is then a safe, fixed +2-hour relationship because
+// SAST never observes daylight saving — unlike a DST-observing zone,
+// there is no day where this offset silently shifts.
+export function getSastTodayBoundsUtc(now: Date = new Date()): { startOfTodayUtc: Date; startOfTomorrowUtc: Date } {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: SAST_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const year = get("year");
+  const month = get("month");
+  const day = get("day");
+  // 00:00 SAST == 22:00 UTC the previous calendar day. Date.UTC
+  // normalizes an hour argument of -2 correctly (it rolls back to the
+  // prior day itself), so this is exactly midnight SAST as a real UTC
+  // instant, never an off-by-one-day bug.
+  const startOfTodayUtc = new Date(Date.UTC(year, month - 1, day, -2, 0, 0, 0));
+  const startOfTomorrowUtc = new Date(startOfTodayUtc.getTime() + 24 * 60 * 60 * 1000);
+  return { startOfTodayUtc, startOfTomorrowUtc };
+}

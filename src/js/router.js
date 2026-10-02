@@ -423,6 +423,10 @@ const routeDefs = [
   { pattern: "/admin/outreach/contacts/import", render: lazyPage(() => import("../pages/adminOutreachImport.js"), (m) => m.renderAdminOutreachImport), title: "Import Contacts", noindex: true },
   { pattern: "/admin/outreach/contacts/new", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactCreate), title: "Add Contact", noindex: true },
   { pattern: "/admin/outreach/contacts/:id/edit", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactEdit), title: "Edit Contact", noindex: true },
+  // Milestone 199: the read-only CRM detail view — "/:id/edit" above
+  // still wins for that exact path (more specific pattern registered
+  // first), so this plain "/:id" only ever matches a bare contact id.
+  { pattern: "/admin/outreach/contacts/:id", render: lazyPage(() => import("../pages/adminOutreachContactDetail.js"), (m) => m.renderAdminOutreachContactDetail), title: "Outreach Contact", noindex: true },
   { pattern: "/admin/outreach/contacts", render: lazyPage(() => import("../pages/adminOutreachContacts.js"), (m) => m.renderAdminOutreachContacts), title: "Outreach Contacts", noindex: true },
   { pattern: "/admin/outreach/suppressed", render: lazyPage(() => import("../pages/adminOutreachSuppressionList.js"), (m) => m.renderAdminOutreachSuppressionList), title: "Outreach Suppression List", noindex: true },
   { pattern: "/admin/outreach/history", render: lazyPage(() => import("../pages/adminOutreachCampaigns.js"), (m) => m.renderAdminOutreachHistory), title: "Outreach Sending History", noindex: true },

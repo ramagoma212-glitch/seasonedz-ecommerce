@@ -4663,10 +4663,19 @@ function setupAdminOutreachContactFilterForm() {
     event.preventDefault();
 
     const params = new URLSearchParams();
-    ["search", "organisationType", "province", "source", "tag"].forEach((name) => {
+    ["search", "organisationType", "province", "source", "tag", "leadStatus", "followUpState"].forEach((name) => {
       const value = form.querySelector(`[name="${name}"]`)?.value.trim();
       if (value) params.set(name, value);
     });
+    // Milestone 199: "status" (email eligibility) is deliberately
+    // ALWAYS set, even when empty — unlike every filter above, its
+    // absence from the URL means "default to Active" (see
+    // adminOutreachContacts.js), not "no filter." Explicitly writing
+    // status= when the admin picks "All email eligibility" is the only
+    // way that choice survives the resulting page load instead of
+    // silently snapping back to Active.
+    const statusValue = form.querySelector('[name="status"]')?.value ?? "";
+    params.set("status", statusValue);
     params.set("page", "1");
     navigateTo(`/admin/outreach/contacts?${params.toString()}`);
   });
@@ -4701,16 +4710,78 @@ function readAdminOutreachContactFormValues(form) {
       .split(",")
       .map((tag) => tag.trim())
       .filter(Boolean),
+    // Milestone 199: CRM fields. leadStatus always has a real selected
+    // value (the <select> has no blank option), contactRole/buyerEmail/
+    // nextFollowUpAt follow the same "empty means null" convention as
+    // every optional field above.
+    leadStatus: form.querySelector("#outreachContactLeadStatus")?.value || undefined,
+    contactRole: form.querySelector("#outreachContactRole")?.value.trim() || null,
+    buyerEmail: form.querySelector("#outreachContactBuyerEmail")?.value.trim() || null,
+    nextFollowUpAt: form.querySelector("#outreachContactNextFollowUp")?.value || null,
   };
 }
 
 function setupAdminOutreachContactForm() {
   document.addEventListener("submit", (event) => {
     const form = event.target.closest("[data-admin-outreach-contact-form]");
-    if (!form) return;
-    event.preventDefault();
-    handleAdminOutreachContactFormSubmit(form);
+    if (form) {
+      event.preventDefault();
+      handleAdminOutreachContactFormSubmit(form);
+      return;
+    }
+
+    // Milestone 199: the contact detail page's two quick-action forms
+    // — each PATCHes exactly one CRM field via the same
+    // updateAdminOutreachContact() the full edit form uses. Neither
+    // ever sends an email; both just rerender the current route on
+    // success, same as any other admin edit.
+    const leadStatusForm = event.target.closest("[data-admin-outreach-quick-leadstatus-form]");
+    if (leadStatusForm) {
+      event.preventDefault();
+      handleAdminOutreachQuickUpdate(leadStatusForm, { leadStatus: leadStatusForm.querySelector("#quickLeadStatus")?.value });
+      return;
+    }
+
+    const followUpForm = event.target.closest("[data-admin-outreach-quick-followup-form]");
+    if (followUpForm) {
+      event.preventDefault();
+      handleAdminOutreachQuickUpdate(followUpForm, { nextFollowUpAt: followUpForm.querySelector("#quickNextFollowUp")?.value || null });
+      return;
+    }
   });
+}
+
+async function handleAdminOutreachQuickUpdate(form, payload) {
+  const contactId = form.dataset.contactId;
+  const banner = document.querySelector("[data-admin-outreach-quick-action-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateAdminOutreachContact(contactId, payload);
+    setPendingAdminMessage("Contact updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && (error.status === 400 || error.status === 409)) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
 }
 
 async function handleAdminOutreachContactFormSubmit(form) {
@@ -4882,6 +4953,7 @@ function readOutreachAudienceFilter(form) {
     provinces: checkedValues("outreachAudienceProvinces"),
     sources: checkedValues("outreachAudienceSources"),
     tags: checkedValues("outreachAudienceTags"),
+    leadStatuses: checkedValues("outreachAudienceLeadStatuses"),
   };
 }
 

@@ -11,7 +11,14 @@ import { ApiError } from "../js/apiClient.js";
 import { consumePendingAdminMessage, isBackendUnavailable, isUnauthenticated, redirectToAdminLogin, renderAdminConnectionError, renderAdminRedirecting } from "../js/adminGuard.js";
 import { renderAdminNav } from "../components/adminNav.js";
 import { renderOutreachSubNav } from "../components/outreachSubNav.js";
+import { humanizeEnum } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
+
+// Milestone 199, Part 7: a closed enum, unlike organisationTypes/
+// provinces/sources/tags above (which are free text and read from
+// getAdminOutreachContactDistinctValues()) — there is no "distinct
+// values" lookup needed for this one.
+const LEAD_STATUSES = ["PROSPECT", "CONTACTED", "INTERESTED", "CATALOGUE_SENT", "QUOTE_REQUESTED", "NEGOTIATING", "CUSTOMER", "REPEAT_CUSTOMER"];
 
 function renderNotFound(id) {
   return `
@@ -24,11 +31,11 @@ function renderNotFound(id) {
   `;
 }
 
-function renderCheckboxGroup(name, values, selectedValues) {
+function renderCheckboxGroup(name, values, selectedValues, labelFor = (value) => escapeHtml(value)) {
   if (values.length === 0) return `<p class="admin-product-form__hint">No contacts have this field set yet.</p>`;
   return `
     <div class="admin-product-form__checkboxes">
-      ${values.map((value) => `<label><input type="checkbox" name="${name}" value="${escapeHtml(value)}"${selectedValues.includes(value) ? " checked" : ""} /> ${escapeHtml(value)}</label>`).join("")}
+      ${values.map((value) => `<label><input type="checkbox" name="${name}" value="${escapeHtml(value)}"${selectedValues.includes(value) ? " checked" : ""} /> ${labelFor(value)}</label>`).join("")}
     </div>
   `;
 }
@@ -85,6 +92,11 @@ function renderCampaignForm(mode, campaign, distinctValues) {
         ${renderCheckboxGroup("outreachAudienceSources", distinctValues.sources, filter.sources || [])}
         <p class="admin-product-form__hint">Tags</p>
         ${renderCheckboxGroup("outreachAudienceTags", distinctValues.tags, filter.tags || [])}
+        <p class="admin-product-form__hint">Lead Status</p>
+        ${renderCheckboxGroup("outreachAudienceLeadStatuses", LEAD_STATUSES, filter.leadStatuses || [], (value) => humanizeEnum(value))}
+        <p class="admin-product-form__hint">
+          UNSUBSCRIBED/BOUNCED/INVALID/SUPPRESSED contacts are always excluded from every campaign, regardless of these filters — Lead Status can only narrow the audience further, never override that.
+        </p>
       </div>
 
       <div class="admin-product-form__row">

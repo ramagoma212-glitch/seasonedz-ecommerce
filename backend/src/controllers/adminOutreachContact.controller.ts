@@ -5,10 +5,10 @@
 // routes/adminOutreachContact.routes.ts).
 
 import type { NextFunction, Request, Response } from "express";
-import { Prisma, OutreachContactStatus } from "@prisma/client";
+import { Prisma, OutreachContactStatus, OutreachLeadStatus } from "@prisma/client";
 import { sendError, sendSuccess } from "../utils/apiResponse.js";
 import * as outreachContactService from "../services/outreach/outreachContact.service.js";
-import { OutreachContactError } from "../services/outreach/outreachContact.service.js";
+import { OutreachContactError, OUTREACH_FOLLOW_UP_STATES, type OutreachFollowUpState } from "../services/outreach/outreachContact.service.js";
 import { parseOutreachContactsCsv, parsePastedOutreachContacts, previewOutreachImport, commitOutreachImport, type RawImportRow } from "../services/outreach/outreachImport.service.js";
 import { recordAdminSecurityEvent } from "../services/adminSecurityEvent.service.js";
 
@@ -30,7 +30,7 @@ function handleServiceError(error: unknown, res: Response, next: NextFunction): 
 
 export async function listContactsHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { search, organisationType, province, city, source, tag, status, page, limit } = req.query;
+    const { search, organisationType, province, city, source, tag, status, leadStatus, followUpState, page, limit } = req.query;
     const result = await outreachContactService.listContacts({
       search: typeof search === "string" ? search : undefined,
       organisationType: typeof organisationType === "string" ? organisationType : undefined,
@@ -39,10 +39,43 @@ export async function listContactsHandler(req: Request, res: Response, next: Nex
       source: typeof source === "string" ? source : undefined,
       tag: typeof tag === "string" ? tag : undefined,
       status: typeof status === "string" && status in OutreachContactStatus ? (status as OutreachContactStatus) : undefined,
+      leadStatus: typeof leadStatus === "string" && leadStatus in OutreachLeadStatus ? (leadStatus as OutreachLeadStatus) : undefined,
+      followUpState:
+        typeof followUpState === "string" && OUTREACH_FOLLOW_UP_STATES.includes(followUpState as OutreachFollowUpState)
+          ? (followUpState as OutreachFollowUpState)
+          : undefined,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
     sendSuccess(res, { message: "Contacts retrieved successfully", data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getCrmSummaryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const summary = await outreachContactService.getCrmSummary();
+    sendSuccess(res, { message: "CRM summary retrieved successfully", data: summary });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getContactHistoryHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      sendError(res, { message: "Contact id is required", statusCode: 400 });
+      return;
+    }
+    const contact = await outreachContactService.getContact(id);
+    if (!contact) {
+      sendError(res, { message: `Contact not found: ${id}`, statusCode: 404 });
+      return;
+    }
+    const history = await outreachContactService.getContactCampaignHistory(id);
+    sendSuccess(res, { message: "Contact history retrieved successfully", data: { contact, history } });
   } catch (error) {
     next(error);
   }

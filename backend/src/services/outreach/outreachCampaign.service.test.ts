@@ -113,6 +113,31 @@ test("buildAudienceWhere treats an explicit contactIds selection as exclusive of
   assert.equal("organisationType" in where, false);
 });
 
+// Milestone 199, Part 7: leadStatus campaign segmentation — additive
+// only, and the ACTIVE-only base clause is never affected by it.
+test("buildAudienceWhere applies a leadStatuses filter as an additional AND-ed clause", () => {
+  const where = buildAudienceWhere({ organisationTypes: ["Bookshop"], leadStatuses: ["PROSPECT"] }) as Record<string, unknown>;
+  assert.deepEqual(where.organisationType, { in: ["Bookshop"] });
+  assert.deepEqual(where.leadStatus, { in: ["PROSPECT"] });
+  assert.equal(where.status, OutreachContactStatus.ACTIVE);
+});
+
+test("buildAudienceWhere's leadStatuses filter can never widen eligibility — the ACTIVE base clause is unconditional even when leadStatuses is set", () => {
+  const where = buildAudienceWhere({ leadStatuses: ["CUSTOMER", "REPEAT_CUSTOMER"] });
+  assert.equal(where.status, OutreachContactStatus.ACTIVE);
+});
+
+test("buildAudienceWhere with no leadStatuses set never adds a leadStatus clause at all", () => {
+  const where = buildAudienceWhere({ organisationTypes: ["Bookshop"] }) as Record<string, unknown>;
+  assert.equal("leadStatus" in where, false);
+});
+
+test("buildAudienceWhere combines province + leadStatus (Gauteng + Interested)", () => {
+  const where = buildAudienceWhere({ provinces: ["Gauteng"], leadStatuses: ["INTERESTED"] }) as Record<string, unknown>;
+  assert.deepEqual(where.province, { in: ["Gauteng"] });
+  assert.deepEqual(where.leadStatus, { in: ["INTERESTED"] });
+});
+
 test("renderPersonalizedOutreachBody substitutes both tokens", () => {
   const rendered = renderPersonalizedOutreachBody("Hello {{organisation_name}}, attn: {{contact_name}}", { organisationName: "Sunnyside Primary", contactName: "Mrs Nkosi" });
   assert.equal(rendered, "Hello Sunnyside Primary, attn: Mrs Nkosi");

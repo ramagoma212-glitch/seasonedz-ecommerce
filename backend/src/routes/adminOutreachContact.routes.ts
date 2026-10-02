@@ -11,6 +11,8 @@ import {
   createContactHandler,
   deleteContactHandler,
   getContactHandler,
+  getContactHistoryHandler,
+  getCrmSummaryHandler,
   listContactsHandler,
   listDistinctContactValuesHandler,
   previewImportHandler,
@@ -24,10 +26,19 @@ router.use(requireAdminAuth);
 
 router.get("/", listContactsHandler);
 router.get("/distinct-values", listDistinctContactValuesHandler);
+// Milestone 199: a dedicated CRM summary endpoint, never folded into
+// listContactsHandler above — the counts here are always global (every
+// contact, independent of whatever page/filter the contacts list is
+// currently showing).
+router.get("/crm-summary", getCrmSummaryHandler);
 router.post("/import/preview", outreachImportRateLimiter, previewImportHandler);
 router.post("/import/commit", outreachImportRateLimiter, commitImportHandler);
 router.post("/", createContactHandler);
 router.get("/:id", getContactHandler);
+// Milestone 199: a dedicated history endpoint, not an expansion of
+// getContactHandler's own payload — keeps the existing edit-form's
+// GET /:id response exactly as it already was.
+router.get("/:id/history", getContactHistoryHandler);
 router.patch("/:id", updateContactHandler);
 router.patch("/:id/status", setContactStatusHandler);
 router.delete("/:id", deleteContactHandler);

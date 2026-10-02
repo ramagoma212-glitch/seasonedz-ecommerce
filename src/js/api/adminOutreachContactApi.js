@@ -16,6 +16,8 @@ function buildQuery(params) {
   if (params.source) query.set("source", params.source);
   if (params.tag) query.set("tag", params.tag);
   if (params.status) query.set("status", params.status);
+  if (params.leadStatus) query.set("leadStatus", params.leadStatus);
+  if (params.followUpState) query.set("followUpState", params.followUpState);
   const qs = query.toString();
   return qs ? `?${qs}` : "";
 }
@@ -28,8 +30,16 @@ export function getAdminOutreachContactDistinctValues() {
   return adminRequest("/admin/outreach/contacts/distinct-values", { method: "GET" });
 }
 
+export function getAdminOutreachCrmSummary() {
+  return adminRequest("/admin/outreach/contacts/crm-summary", { method: "GET" });
+}
+
 export function getAdminOutreachContact(id) {
   return adminRequest(`/admin/outreach/contacts/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export function getAdminOutreachContactHistory(id) {
+  return adminRequest(`/admin/outreach/contacts/${encodeURIComponent(id)}/history`, { method: "GET" });
 }
 
 export function createAdminOutreachContact(payload) {

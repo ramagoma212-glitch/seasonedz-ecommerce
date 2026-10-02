@@ -4,7 +4,7 @@
 // exists in this codebase — see this milestone's own infrastructure
 // audit), and track every recipient's own send status.
 
-import { OutreachCampaignStatus, OutreachContactStatus, OutreachRecipientStatus, Prisma } from "@prisma/client";
+import { OutreachCampaignStatus, OutreachContactStatus, OutreachLeadStatus, OutreachRecipientStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { sendOutreachCampaignEmail, sendOutreachTestEmail } from "./outreachSending.service.js";
 
@@ -129,13 +129,22 @@ export interface OutreachAudienceFilter {
   cities?: string[];
   sources?: string[];
   tags?: string[];
+  // Milestone 199, Part 7: a CRM/sales-pipeline filter, deliberately
+  // additive to (never a replacement for) the ACTIVE-only base clause
+  // below — a leadStatus can narrow the audience further but can never
+  // widen it back to include an UNSUBSCRIBED/BOUNCED/INVALID/SUPPRESSED
+  // contact. See buildAudienceWhere()'s own comment.
+  leadStatuses?: string[];
 }
 
 // Always ACTIVE-only, non-negotiably — Part 12's own "before EVERY send,
 // server-side logic must check suppression status" starts here: a
 // suppressed/unsubscribed/bounced/invalid contact can never even enter a
 // campaign's recipient snapshot in the first place, regardless of which
-// filter or explicit selection the admin used to build it.
+// filter or explicit selection the admin used to build it. Milestone
+// 199: leadStatuses is applied as an ADDITIONAL AND-ed clause on top of
+// this same base — it narrows which ACTIVE contacts qualify, it can
+// never itself grant eligibility to a non-ACTIVE contact.
 export function buildAudienceWhere(filter: OutreachAudienceFilter): Prisma.OutreachContactWhereInput {
   const where: Prisma.OutreachContactWhereInput = { status: OutreachContactStatus.ACTIVE };
 
@@ -149,6 +158,7 @@ export function buildAudienceWhere(filter: OutreachAudienceFilter): Prisma.Outre
   if (filter.cities?.length) where.city = { in: filter.cities };
   if (filter.sources?.length) where.source = { in: filter.sources };
   if (filter.tags?.length) where.tags = { hasSome: filter.tags };
+  if (filter.leadStatuses?.length) where.leadStatus = { in: filter.leadStatuses as OutreachLeadStatus[] };
   return where;
 }
 

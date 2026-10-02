@@ -1011,6 +1011,15 @@
   color: var(--color-text-muted);
 }
 
+/* Milestone 199: the Outreach CRM summary's Due Today/Overdue tiles,
+   when their count is above zero, get the same left-accent-border
+   "needs attention" treatment as a danger badge — never a changed
+   background, so the tile still reads as a plain factual count, not
+   an alarm. */
+.admin-card--warning {
+  border-left: 3px solid var(--color-error);
+}
+
 .admin-card__value {
   font-size: var(--font-size-2xl);
   font-weight: 700;
@@ -1502,6 +1511,45 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   color: var(--color-text-muted);
+}
+
+/* Milestone 199: the Outreach contact detail page lays its read-only
+   fields out in a responsive grid (same column/gap language as
+   .admin-product-form__row) instead of each .admin-readonly-field
+   stacking full-width one below the other. */
+.admin-readonly-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+}
+
+.admin-readonly-grid .admin-readonly-field {
+  margin-bottom: 0;
+}
+
+/* Milestone 199: the contact detail page's two focused quick-action
+   forms (Change Lead Status, Set/Update Follow-up) — deliberately
+   small and side by side on desktop, never the full-width form grid
+   the create/edit page uses, since each only ever touches one field. */
+.admin-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.admin-quick-action-form {
+  min-width: 220px;
+}
+
+.admin-quick-action-form__row {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.admin-quick-action-form__row .form-field__input {
+  flex: 1;
 }
 
 /* ---- Admin product images (Version 7, Milestone 70) ------------------------ */

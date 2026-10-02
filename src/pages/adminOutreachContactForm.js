@@ -11,11 +11,36 @@ import { ApiError } from "../js/apiClient.js";
 import { consumePendingAdminMessage, isBackendUnavailable, isUnauthenticated, redirectToAdminLogin, renderAdminConnectionError, renderAdminRedirecting } from "../js/adminGuard.js";
 import { renderAdminNav } from "../components/adminNav.js";
 import { renderOutreachSubNav } from "../components/outreachSubNav.js";
+import { humanizeEnum } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
 
-const SUGGESTED_ORGANISATION_TYPES = ["School", "ECD Centre", "Church", "Bookstore", "NGO", "Wellness / Mental Health", "Corporate", "Retailer", "Other"];
+// Milestone 199: expanded to the owner's real-world B2B segment list.
+// Still only a suggested-options list (see outreachContact.service.ts's
+// own SUGGESTED_ORGANISATION_TYPES comment) — existing contact rows
+// keep whatever organisationType they already had.
+const SUGGESTED_ORGANISATION_TYPES = [
+  "Bookshop",
+  "Stationery Store",
+  "Educational Supplier",
+  "Toy / Children's Store",
+  "Gift Shop",
+  "Christian Bookshop / Retailer",
+  "School / Preschool / ECD",
+  "Church / Ministry",
+  "NGO / Community Organisation",
+  "Corporate / Organisation",
+  "Hotel / Resort",
+  "Healthcare",
+  "Adult Care / Support",
+  "Other",
+];
 const SUGGESTED_SOURCES = ["Google Maps", "Website", "Referral", "Event", "Manual research", "Existing customer", "Other"];
 const CONTACT_STATUSES = ["ACTIVE", "UNSUBSCRIBED", "BOUNCED", "INVALID", "SUPPRESSED"];
+// Milestone 199: the B2B sales-pipeline status — completely separate
+// from CONTACT_STATUSES above, which remains the only thing that ever
+// controls email eligibility. Changing this select never touches the
+// Status select below, and vice versa.
+const LEAD_STATUSES = ["PROSPECT", "CONTACTED", "INTERESTED", "CATALOGUE_SENT", "QUOTE_REQUESTED", "NEGOTIATING", "CUSTOMER", "REPEAT_CUSTOMER"];
 
 function renderNotFound(id) {
   return `
@@ -92,6 +117,33 @@ function renderContactForm(mode, contact, distinctValues) {
       <div class="form-field">
         <label class="form-field__label" for="outreachContactWebsite">Website <span class="form-field__optional">(optional)</span></label>
         <input type="text" id="outreachContactWebsite" class="form-field__input" placeholder="https://" value="${escapeHtml(contact?.website || "")}" />
+      </div>
+
+      <h3 class="admin-page__section-title">Buyer / Procurement Contact</h3>
+      <div class="admin-product-form__row">
+        <div class="form-field">
+          <label class="form-field__label" for="outreachContactRole">Role / Title <span class="form-field__optional">(optional, e.g. "Buyer", "Principal")</span></label>
+          <input type="text" id="outreachContactRole" class="form-field__input" maxlength="100" value="${escapeHtml(contact?.contactRole || "")}" />
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="outreachContactBuyerEmail">Buyer Email <span class="form-field__optional">(optional — the general email above remains the one campaigns send to)</span></label>
+          <input type="email" id="outreachContactBuyerEmail" class="form-field__input" value="${escapeHtml(contact?.buyerEmail || "")}" />
+        </div>
+      </div>
+
+      <h3 class="admin-page__section-title">Sales Pipeline</h3>
+      <div class="admin-product-form__row">
+        <div class="form-field">
+          <label class="form-field__label" for="outreachContactLeadStatus">Lead Status</label>
+          <select id="outreachContactLeadStatus" class="form-field__input">
+            ${LEAD_STATUSES.map((value) => `<option value="${value}"${value === (contact?.leadStatus || "PROSPECT") ? " selected" : ""}>${humanizeEnum(value)}</option>`).join("")}
+          </select>
+          <p class="admin-product-form__hint">Separate from email eligibility below — changing this never affects whether this contact can receive campaigns.</p>
+        </div>
+        <div class="form-field">
+          <label class="form-field__label" for="outreachContactNextFollowUp">Next Follow-up <span class="form-field__optional">(optional)</span></label>
+          <input type="date" id="outreachContactNextFollowUp" class="form-field__input" value="${contact?.nextFollowUpAt ? contact.nextFollowUpAt.slice(0, 10) : ""}" />
+        </div>
       </div>
 
       <div class="admin-product-form__row">

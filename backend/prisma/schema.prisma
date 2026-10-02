@@ -3239,6 +3239,28 @@ enum OutreachContactStatus {
   SUPPRESSED
 }
 
+// Milestone 199: a separate B2B sales-pipeline status, deliberately
+// never merged with OutreachContactStatus above — that status alone
+// remains authoritative for email eligibility/suppression (see
+// OutreachContact.leadStatus's own comment below and
+// buildAudienceWhere() in outreachCampaign.service.ts, which never
+// reads this enum). PROSPECT is the default for every new contact;
+// INTERESTED/CATALOGUE_SENT/QUOTE_REQUESTED/NEGOTIATING/CUSTOMER/
+// REPEAT_CUSTOMER are never inferred automatically from sending
+// history — only CONTACTED is (see the Milestone 199 backfill script),
+// because a genuine SENT campaign recipient is reliable evidence of
+// that one fact and no more.
+enum OutreachLeadStatus {
+  PROSPECT
+  CONTACTED
+  INTERESTED
+  CATALOGUE_SENT
+  QUOTE_REQUESTED
+  NEGOTIATING
+  CUSTOMER
+  REPEAT_CUSTOMER
+}
+
 model OutreachContact {
   id String @id @default(cuid())
 
@@ -3286,6 +3308,19 @@ model OutreachContact {
   suppressedAt     DateTime?
   suppressedReason String?
 
+  // Milestone 199: B2B sales-pipeline fields. Deliberately separate
+  // from email eligibility (status above) — a leadStatus change can
+  // never make a SUPPRESSED/UNSUBSCRIBED/BOUNCED/INVALID contact
+  // eligible again, and buildAudienceWhere()'s ACTIVE-only base clause
+  // never reads this field. contactRole/buyerEmail describe the
+  // procurement contact without replacing the primary `email` above,
+  // which remains the one address campaigns are ever sent to.
+  leadStatus      OutreachLeadStatus @default(PROSPECT)
+  contactRole     String?
+  buyerEmail      String?
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -3297,6 +3332,8 @@ model OutreachContact {
   @@index([city])
   @@index([source])
   @@index([createdAt])
+  @@index([leadStatus])
+  @@index([nextFollowUpAt])
 }
 
 enum OutreachCampaignStatus {

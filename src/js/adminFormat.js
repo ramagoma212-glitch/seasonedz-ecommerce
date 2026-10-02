@@ -15,7 +15,14 @@
 // UNSUBSCRIBED/BOUNCED/INVALID/SUPPRESSED/PARTIALLY_FAILED join the
 // danger set below — the same generic tone convention, so a suppressed
 // contact or a failed send reads as a problem state at a glance.
-const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED", "COMPLETED", "SENT"]);
+// Milestone 199: CUSTOMER/REPEAT_CUSTOMER join the success set — the
+// two B2B CRM leadStatus values that represent genuine business
+// progress, the same "reads as a good state at a glance" convention
+// every other status in this set already follows. The other six lead
+// statuses (PROSPECT/CONTACTED/INTERESTED/CATALOGUE_SENT/
+// QUOTE_REQUESTED/NEGOTIATING) are deliberately left out of both sets
+// — a lead still in progress is neither a success nor a danger state.
+const SUCCESS_STATUSES = new Set(["PAID", "CONFIRMED", "DELIVERED", "RESPONDED", "CLOSED", "ACTIVE", "APPROVED", "PUBLISHED", "COMPLETED", "SENT", "CUSTOMER", "REPEAT_CUSTOMER"]);
 const DANGER_STATUSES = new Set(["CANCELLED", "REFUNDED", "FAILED", "OUT_OF_STOCK", "REJECTED", "REVERSED", "EXPIRED", "INACTIVE", "UNSUBSCRIBED", "BOUNCED", "INVALID", "SUPPRESSED", "PARTIALLY_FAILED"]);
 
 export function humanizeEnum(value) {

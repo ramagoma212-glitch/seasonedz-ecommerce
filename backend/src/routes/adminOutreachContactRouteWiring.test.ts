@@ -19,10 +19,12 @@ test("every expected outreach contact admin route is registered", () => {
   const expected: Array<[string, string]> = [
     ["get", "/"],
     ["get", "/distinct-values"],
+    ["get", "/crm-summary"],
     ["post", "/import/preview"],
     ["post", "/import/commit"],
     ["post", "/"],
     ["get", "/:id"],
+    ["get", "/:id/history"],
     ["patch", "/:id"],
     ["patch", "/:id/status"],
     ["delete", "/:id"],

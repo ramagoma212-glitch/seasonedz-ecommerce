@@ -4,8 +4,9 @@
 // Customer/NewsletterSubscriber; nothing here is ever a real Seasonedz
 // customer account.
 
-import { OutreachContactStatus, Prisma } from "@prisma/client";
+import { OutreachContactStatus, OutreachLeadStatus, Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
+import { getSastTodayBoundsUtc } from "../../utils/southAfricaTime.js";
 
 export class OutreachContactError extends Error {
   statusCode: number;
@@ -35,7 +36,36 @@ export function isValidOutreachEmail(raw: string): boolean {
 // plain text (see schema.prisma's own comment on OutreachContact.
 // organisationType), so this list is only ever used to populate the
 // admin form's dropdown, never enforced as a closed set server-side.
-export const SUGGESTED_ORGANISATION_TYPES = ["School", "ECD Centre", "Church", "Bookstore", "NGO", "Wellness / Mental Health", "Corporate", "Retailer", "Other"];
+// Milestone 199: expanded to the owner's real-world B2B segment list —
+// existing contact rows keep whatever organisationType they already
+// had (this is purely the suggested-options list, never a migration).
+export const SUGGESTED_ORGANISATION_TYPES = [
+  "Bookshop",
+  "Stationery Store",
+  "Educational Supplier",
+  "Toy / Children's Store",
+  "Gift Shop",
+  "Christian Bookshop / Retailer",
+  "School / Preschool / ECD",
+  "Church / Ministry",
+  "NGO / Community Organisation",
+  "Corporate / Organisation",
+  "Hotel / Resort",
+  "Healthcare",
+  "Adult Care / Support",
+  "Other",
+];
+
+export const OUTREACH_LEAD_STATUSES: OutreachLeadStatus[] = [
+  OutreachLeadStatus.PROSPECT,
+  OutreachLeadStatus.CONTACTED,
+  OutreachLeadStatus.INTERESTED,
+  OutreachLeadStatus.CATALOGUE_SENT,
+  OutreachLeadStatus.QUOTE_REQUESTED,
+  OutreachLeadStatus.NEGOTIATING,
+  OutreachLeadStatus.CUSTOMER,
+  OutreachLeadStatus.REPEAT_CUSTOMER,
+];
 
 export interface OutreachContactInput {
   organisationName?: unknown;
@@ -50,6 +80,17 @@ export interface OutreachContactInput {
   sourceUrl?: unknown;
   notes?: unknown;
   tags?: unknown;
+  // Milestone 199, CRM fields. leadStatus/contactRole/buyerEmail/
+  // lastContactedAt/nextFollowUpAt are deliberately editable through
+  // this exact same partial-update path as every other field — no
+  // separate "CRM-only" endpoint, so there is only ever one place a
+  // contact row can be written from. None of these five ever touch
+  // `status` (email eligibility) — see parseOutreachContactInput below.
+  leadStatus?: unknown;
+  contactRole?: unknown;
+  buyerEmail?: unknown;
+  lastContactedAt?: unknown;
+  nextFollowUpAt?: unknown;
 }
 
 interface ParsedOutreachContactInput {
@@ -65,6 +106,11 @@ interface ParsedOutreachContactInput {
   sourceUrl: string | null;
   notes: string | null;
   tags: string[];
+  leadStatus: OutreachLeadStatus;
+  contactRole: string | null;
+  buyerEmail: string | null;
+  lastContactedAt: Date | null;
+  nextFollowUpAt: Date | null;
 }
 
 function optionalTrimmedString(raw: unknown): string | null {
@@ -86,6 +132,38 @@ function parseTags(raw: unknown): string[] {
     deduped.push(tag);
   }
   return deduped;
+}
+
+function parseLeadStatus(raw: unknown): OutreachLeadStatus {
+  if (typeof raw !== "string" || !OUTREACH_LEAD_STATUSES.includes(raw as OutreachLeadStatus)) {
+    throw new OutreachContactError(`Lead status must be one of: ${OUTREACH_LEAD_STATUSES.join(", ")}.`);
+  }
+  return raw as OutreachLeadStatus;
+}
+
+// Part 6 of the Milestone 199 brief: optional, validated if supplied,
+// and NEVER written into the primary `email` field above — buyerEmail
+// only ever describes the procurement contact's own address, it is
+// never what a campaign actually sends to.
+function parseOptionalEmail(raw: unknown, fieldLabel: string): string | null {
+  const trimmed = optionalTrimmedString(raw);
+  if (trimmed === null) return null;
+  if (!isValidOutreachEmail(trimmed)) {
+    throw new OutreachContactError(`${fieldLabel} must be a valid email address.`);
+  }
+  return normalizeOutreachEmail(trimmed);
+}
+
+function parseOptionalDate(raw: unknown, fieldLabel: string): Date | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  if (typeof raw !== "string" && !(raw instanceof Date)) {
+    throw new OutreachContactError(`${fieldLabel} is not a valid date.`);
+  }
+  const date = new Date(raw as string | Date);
+  if (Number.isNaN(date.getTime())) {
+    throw new OutreachContactError(`${fieldLabel} is not a valid date.`);
+  }
+  return date;
 }
 
 // Shared by createContact()/updateContact() — mirrors coupon.service.ts's
@@ -129,6 +207,11 @@ export function parseOutreachContactInput(rawInput: OutreachContactInput, existi
     sourceUrl: has("sourceUrl") ? optionalTrimmedString(rawInput.sourceUrl) : (existing?.sourceUrl ?? null),
     notes: has("notes") ? optionalTrimmedString(rawInput.notes) : (existing?.notes ?? null),
     tags: has("tags") ? parseTags(rawInput.tags) : (existing?.tags ?? []),
+    leadStatus: has("leadStatus") ? parseLeadStatus(rawInput.leadStatus) : (existing?.leadStatus ?? OutreachLeadStatus.PROSPECT),
+    contactRole: has("contactRole") ? optionalTrimmedString(rawInput.contactRole) : (existing?.contactRole ?? null),
+    buyerEmail: has("buyerEmail") ? parseOptionalEmail(rawInput.buyerEmail, "Buyer email") : (existing?.buyerEmail ?? null),
+    lastContactedAt: has("lastContactedAt") ? parseOptionalDate(rawInput.lastContactedAt, "Last contacted date") : (existing?.lastContactedAt ?? null),
+    nextFollowUpAt: has("nextFollowUpAt") ? parseOptionalDate(rawInput.nextFollowUpAt, "Next follow-up date") : (existing?.nextFollowUpAt ?? null),
   };
 }
 
@@ -160,6 +243,11 @@ function toParsedFromRow(row: {
   sourceUrl: string | null;
   notes: string | null;
   tags: string[];
+  leadStatus: OutreachLeadStatus;
+  contactRole: string | null;
+  buyerEmail: string | null;
+  lastContactedAt: Date | null;
+  nextFollowUpAt: Date | null;
 }): ParsedOutreachContactInput {
   return { ...row };
 }
@@ -179,7 +267,37 @@ export async function updateContact(id: string, rawInput: OutreachContactInput) 
 }
 
 export async function getContact(id: string) {
-  return prisma.outreachContact.findUnique({ where: { id } });
+  const contact = await prisma.outreachContact.findUnique({ where: { id } });
+  if (!contact) return null;
+  return { ...contact, followUpState: getFollowUpState(contact.nextFollowUpAt) };
+}
+
+// Milestone 199: the four follow-up buckets the Admin Contacts page
+// filters/summarises by — judged against the SAST calendar day (see
+// getSastTodayBoundsUtc()), never the server's own local time.
+export type OutreachFollowUpState = "NONE" | "OVERDUE" | "DUE_TODAY" | "UPCOMING";
+export const OUTREACH_FOLLOW_UP_STATES: OutreachFollowUpState[] = ["NONE", "OVERDUE", "DUE_TODAY", "UPCOMING"];
+
+export function getFollowUpState(nextFollowUpAt: Date | null, now: Date = new Date()): OutreachFollowUpState {
+  if (!nextFollowUpAt) return "NONE";
+  const { startOfTodayUtc, startOfTomorrowUtc } = getSastTodayBoundsUtc(now);
+  if (nextFollowUpAt < startOfTodayUtc) return "OVERDUE";
+  if (nextFollowUpAt < startOfTomorrowUtc) return "DUE_TODAY";
+  return "UPCOMING";
+}
+
+function followUpStateWhere(state: OutreachFollowUpState, now: Date = new Date()): Prisma.OutreachContactWhereInput {
+  const { startOfTodayUtc, startOfTomorrowUtc } = getSastTodayBoundsUtc(now);
+  switch (state) {
+    case "NONE":
+      return { nextFollowUpAt: null };
+    case "OVERDUE":
+      return { nextFollowUpAt: { lt: startOfTodayUtc } };
+    case "DUE_TODAY":
+      return { nextFollowUpAt: { gte: startOfTodayUtc, lt: startOfTomorrowUtc } };
+    case "UPCOMING":
+      return { nextFollowUpAt: { gte: startOfTomorrowUtc } };
+  }
 }
 
 export interface OutreachContactListFilters {
@@ -190,6 +308,8 @@ export interface OutreachContactListFilters {
   source?: string;
   tag?: string;
   status?: OutreachContactStatus;
+  leadStatus?: OutreachLeadStatus;
+  followUpState?: OutreachFollowUpState;
   page?: number;
   limit?: number;
 }
@@ -205,6 +325,7 @@ export function buildOutreachContactWhere(filters: Omit<OutreachContactListFilte
   if (filters.city) where.city = filters.city;
   if (filters.source) where.source = filters.source;
   if (filters.tag) where.tags = { has: filters.tag };
+  if (filters.leadStatus) where.leadStatus = filters.leadStatus;
   if (filters.search) {
     const search = filters.search.trim();
     if (search) {
@@ -215,6 +336,9 @@ export function buildOutreachContactWhere(filters: Omit<OutreachContactListFilte
       ];
     }
   }
+  if (filters.followUpState) {
+    Object.assign(where, followUpStateWhere(filters.followUpState));
+  }
   return where;
 }
 
@@ -222,13 +346,19 @@ export async function listContacts(filters: OutreachContactListFilters = {}) {
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(filters.limit ?? DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
   const where = buildOutreachContactWhere(filters);
+  const now = new Date();
 
   const [contacts, total] = await Promise.all([
     prisma.outreachContact.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
     prisma.outreachContact.count({ where }),
   ]);
 
-  return { contacts, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+  // Milestone 199: `followUpState` is computed here, server-side,
+  // against the real SAST calendar day, and attached to each row —
+  // never duplicated as a second timezone calculation in the frontend.
+  const contactsWithFollowUpState = contacts.map((contact) => ({ ...contact, followUpState: getFollowUpState(contact.nextFollowUpAt, now) }));
+
+  return { contacts: contactsWithFollowUpState, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
 }
 
 // Every distinct, non-null value currently in use for a given column —
@@ -287,6 +417,70 @@ export async function unsubscribeContactByToken(contactId: string) {
     where: { id: contactId },
     data: { status: OutreachContactStatus.UNSUBSCRIBED, suppressedAt: existing.suppressedAt ?? new Date(), suppressedReason: "Unsubscribed via email link" },
   });
+}
+
+// Milestone 199, Part H: factual counts only — every number here is a
+// real `groupBy`/`count` query against the current table, never an
+// invented conversion rate. If a conversion percentage is ever wanted
+// later, it must be computed from these same real counts with an
+// explicit, stated definition — not added here speculatively.
+export interface OutreachCrmSummary {
+  byLeadStatus: Record<OutreachLeadStatus, number>;
+  dueToday: number;
+  overdue: number;
+}
+
+export async function getCrmSummary(now: Date = new Date()): Promise<OutreachCrmSummary> {
+  const [leadStatusCounts, dueToday, overdue] = await Promise.all([
+    prisma.outreachContact.groupBy({ by: ["leadStatus"], _count: true }),
+    prisma.outreachContact.count({ where: followUpStateWhere("DUE_TODAY", now) }),
+    prisma.outreachContact.count({ where: followUpStateWhere("OVERDUE", now) }),
+  ]);
+
+  const byLeadStatus = OUTREACH_LEAD_STATUSES.reduce(
+    (acc, status) => {
+      acc[status] = 0;
+      return acc;
+    },
+    {} as Record<OutreachLeadStatus, number>
+  );
+  for (const row of leadStatusCounts) {
+    byLeadStatus[row.leadStatus] = row._count;
+  }
+
+  return { byLeadStatus, dueToday, overdue };
+}
+
+export interface OutreachContactCampaignHistoryEntry {
+  campaignId: string;
+  campaignName: string;
+  campaignSubject: string;
+  status: string;
+  sentAt: Date | null;
+  failureReason: string | null;
+}
+
+// Milestone 199, Part E of the investigation: contact history is read
+// straight from the existing OutreachCampaignRecipient relation —
+// never a second, duplicated history table. "SENT" is reported exactly
+// as that word; it is never relabelled "Delivered" (the brief's own
+// Part 3 instruction) since this system has no delivery-confirmation
+// signal, only "accepted by our sending system."
+export async function getContactCampaignHistory(contactId: string): Promise<OutreachContactCampaignHistoryEntry[]> {
+  const recipients = await prisma.outreachCampaignRecipient.findMany({
+    where: { contactId },
+    include: { campaign: { select: { id: true, name: true, subject: true } } },
+    orderBy: [{ sentAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  return recipients.map((r) => ({
+    campaignId: r.campaign.id,
+    campaignName: r.campaign.name,
+    campaignSubject: r.campaign.subject,
+    status: r.status,
+    sentAt: r.sentAt,
+    failureReason: r.failureReason,
+  }));
 }
 
 export async function deleteContact(id: string) {
