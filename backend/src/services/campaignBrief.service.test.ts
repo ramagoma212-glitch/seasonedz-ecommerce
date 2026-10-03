@@ -6,6 +6,7 @@ import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { Prisma, CampaignBriefStatus } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
+import { formatSastDate } from "../utils/southAfricaTime.js";
 import {
   createCampaignBrief,
   updateCampaignBrief,
@@ -43,6 +44,16 @@ const PRODUCT_ROW = {
   preorderReleaseAt: null,
   isPreorderDiscountEligible: false,
 };
+
+// Test-maintenance (Milestone 199 follow-up): was a fixed calendar
+// date (2026-09-29T22:00 UTC = 30 Sep 2026 00:00 SAST). isActivePreorder()
+// compares against the real current time, so a fixed future date
+// silently expires once the real calendar catches up — computed
+// relative to Date.now() instead, so this fixture never needs updating
+// again. Any assertion checking the rendered date text must format
+// THIS constant with the real formatSastDate(), never a hardcoded
+// string, so the two can never drift apart.
+const ACTIVE_PREORDER_RELEASE_AT = new Date(Date.now() + 1000 * 60 * 60 * 24 * 365);
 
 const AUDIENCE_ROW = { id: "aud-1", name: "Churches", description: "Church groups.", painPoints: null, motivations: null, preferredContent: null, isActive: true };
 const PILLAR_ROW = { id: "pillar-1", name: "Bible Learning", description: "Faith-based learning.", isActive: true };
@@ -196,7 +207,7 @@ test("createCampaignBrief: campaignEndAt before campaignStartAt is rejected", as
 // ---------------------------------------------------------------------------
 
 test("createCampaignBrief: an active preorder product produces a brief that mentions preorder and the real release date", async () => {
-  const deps = stubContextDependencies({ isPreorderEnabled: true, preorderReleaseAt: new Date("2026-09-29T22:00:00.000Z"), isPreorderDiscountEligible: true });
+  const deps = stubContextDependencies({ isPreorderEnabled: true, preorderReleaseAt: ACTIVE_PREORDER_RELEASE_AT, isPreorderDiscountEligible: true });
   let capturedText = "";
   const create = stub(prisma.campaignBrief, "create", async ({ data }: { data: Record<string, unknown> }) => {
     capturedText = data.generatedBriefText as string;
@@ -205,7 +216,7 @@ test("createCampaignBrief: an active preorder product produces a brief that ment
 
   const brief = await createCampaignBrief({ ...VALID_INPUT, goal: "PREORDER" }, "admin-1");
   assert.ok(brief.generatedBriefText.includes("PREORDER"));
-  assert.ok(brief.generatedBriefText.includes("Available from 30 September 2026"));
+  assert.ok(brief.generatedBriefText.includes(`Available from ${formatSastDate(ACTIVE_PREORDER_RELEASE_AT)}`));
   assert.ok(brief.generatedBriefText.includes("10% off their first qualifying preorder"));
 
   deps.restore();
@@ -235,7 +246,7 @@ test("createCampaignBrief: a product whose preorder window has ended is treated 
 });
 
 test("createCampaignBrief: preorder-eligible but the programme is disabled — no discount mentioned", async () => {
-  const productFindUnique = stub(prisma.product, "findUnique", async () => ({ ...PRODUCT_ROW, isPreorderEnabled: true, preorderReleaseAt: new Date("2026-09-29T22:00:00.000Z"), isPreorderDiscountEligible: true }));
+  const productFindUnique = stub(prisma.product, "findUnique", async () => ({ ...PRODUCT_ROW, isPreorderEnabled: true, preorderReleaseAt: ACTIVE_PREORDER_RELEASE_AT, isPreorderDiscountEligible: true }));
   const audienceFindUnique = stub(prisma.audience, "findUnique", async () => AUDIENCE_ROW);
   const pillarFindUnique = stub(prisma.contentPillar, "findUnique", async () => PILLAR_ROW);
   const brandKnowledgeFindMany = stub(prisma.brandKnowledgeEntry, "findMany", async () => []);
@@ -329,7 +340,7 @@ test("updateCampaignBrief: rejects editing an ARCHIVED brief", async () => {
 
 test("regenerateCampaignBrief: re-reads current data without changing any stored input field", async () => {
   const findUnique = stub(prisma.campaignBrief, "findUnique", async () => fakeBriefRow());
-  const deps = stubContextDependencies({ isPreorderEnabled: true, preorderReleaseAt: new Date("2026-09-29T22:00:00.000Z") });
+  const deps = stubContextDependencies({ isPreorderEnabled: true, preorderReleaseAt: ACTIVE_PREORDER_RELEASE_AT });
   const update = stub(prisma.campaignBrief, "update", async ({ data }: { data: Record<string, unknown> }) => fakeBriefRow({ generatedBriefText: data.generatedBriefText }));
 
   const brief = await regenerateCampaignBrief("brief-1", "admin-1");

@@ -269,11 +269,21 @@ test("registered-customer eligibility is derived only from the already-verified 
 // (Milestone 181)
 // ---------------------------------------------------------------------------
 
+// Test-maintenance (Milestone 199 follow-up): this used to be a fixed
+// calendar date (2026-09-30), which genuinely was in the future when
+// this file was written — but isActivePreorder() compares against the
+// REAL current time, so that fixed date silently expired once the
+// real calendar caught up to it, and every test below started failing
+// through no change to the actual preorder logic. Computed relative to
+// Date.now() at test-run time instead, so "this preorder is still
+// active" stays true no matter how far into the future this suite is
+// ever run — never a promise this file can accidentally break by
+// sitting untouched past a specific date again.
 const ACTIVE_PREORDER_FIELDS = {
   isPreorderEnabled: true,
   preorderStartAt: null,
   preorderEndAt: null,
-  preorderReleaseAt: new Date("2026-09-30T00:00:00.000Z"),
+  preorderReleaseAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365),
   isPreorderDiscountEligible: true,
 };
 

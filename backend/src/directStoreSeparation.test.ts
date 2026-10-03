@@ -58,7 +58,15 @@ const FILES_THAT_MUST_NEVER_MENTION_AFFILIATE = [
 
 for (const relativePath of FILES_THAT_MUST_NEVER_MENTION_AFFILIATE) {
   test(`${relativePath} has no code path into affiliate products`, () => {
-    const contents = readFileSync(join(SRC_ROOT, relativePath), "utf8");
+    // Test-maintenance (Milestone 199 follow-up): comments stripped
+    // first, same stripLineComments() the schema-level check below
+    // already uses — this test's real intent is "no CODE path to
+    // anything affiliate-related," not "the word never appears even in
+    // a comment." A prose comment naming an unrelated, legitimately
+    // similarly-named file (e.g. "see adminAffiliateProductSetting.
+    // service.ts's own X") was tripping this check as a false positive
+    // with zero actual code crossing the boundary.
+    const contents = stripLineComments(readFileSync(join(SRC_ROOT, relativePath), "utf8"));
     assert.doesNotMatch(contents.toLowerCase(), /affiliate/, `${relativePath} must never reference anything affiliate-related`);
   });
 }
