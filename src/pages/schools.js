@@ -17,8 +17,8 @@ export function renderSchools() {
         <h2>Built for the Classroom</h2>
         <p>
           Our colouring books are designed with learning in mind, from
-          alphabet and fun fact books for young learners to
-          <a href="/category/bible-colouring-books">Bible colouring books</a>
+          <a href="/category/kids-colouring-books">alphabet and fun fact books for young learners</a>
+          to <a href="/category/bible-colouring-books">Bible colouring books</a>
           for Sunday school, church groups and faith based activities.
           They're an easy way to bring a calm, creative activity into a
           busy day.

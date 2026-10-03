@@ -33,7 +33,15 @@ import { getCategorySeoContent } from "../data/categorySeoContent.js";
 // only page a category filter can ever set metadata from.
 function categoryIntro(activeCategory) {
   if (!activeCategory) {
-    return "Browse our full range of colouring books, Bible colouring books, mindfulness colouring, markers, crayons and bundles.";
+    // Milestone 200: expanded from a single generic sentence — this is
+    // the page Seasonedz's own keyword-ownership map (Milestone 196)
+    // assigns the broad "colouring books" / "colouring books South
+    // Africa" intent to, so it needs to actually say what Seasonedz
+    // sells, who for, and that delivery is South Africa-wide — the same
+    // facts every category page's own long-form copy already states,
+    // just at the broader, whole-catalogue level. No new claim beyond
+    // what's already true elsewhere on the site.
+    return "Seasonedz Group's full range of colouring books for South African families: educational colouring books for kids, Bible colouring books for Sunday school and family devotion, mindfulness colouring for adults, plus acrylic markers, rotating crayons and bundles. Shop by category below, or browse everything at once. We deliver countrywide, with free collection in Pretoria and Thohoyandou.";
   }
   return activeCategory.description || `Browse our ${activeCategory.name} range from Seasonedz Group.`;
 }
@@ -109,10 +117,38 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
       categoryCollectionPage,
     ]);
   }
-  // No else branch needed for the generic /shop view — router.js
-  // already clears any previous page's structured data unconditionally
-  // before this function ever runs (see js/router.js's
-  // renderCurrentRoute()), so a category-less visit is already clean.
+  else {
+    // Milestone 200: the generic /shop view previously set no
+    // structured data at all — mirrors the activeCategory branch above
+    // (and scripts/generate-static-routes.mjs's own static-build
+    // mirror of this exact same block), built only from `results`, the
+    // products actually rendered below, never a fabricated full
+    // catalogue.
+    setPageStructuredData([
+      {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: new URL("/", window.location.origin).href },
+          { "@type": "ListItem", position: 2, name: "Shop", item: new URL("/shop", window.location.origin).href },
+        ],
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "CollectionPage",
+        name: "Shop Colouring Books, Markers & Crayons",
+        url: new URL("/shop", window.location.origin).href,
+        mainEntity: {
+          "@type": "ItemList",
+          itemListElement: results.map((product, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            url: new URL(`/product/${product.slug}`, window.location.origin).href,
+          })),
+        },
+      },
+    ]);
+  }
 
   return `
     <section class="stub-page container shop-page">
@@ -125,7 +161,7 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
       `
           : ""
       }
-      <h1 class="stub-page__title">${activeCategory ? displayName : "Shop"}</h1>
+      <h1 class="stub-page__title">${activeCategory ? displayName : "Colouring Books, Markers & Crayons"}</h1>
       <p class="stub-page__text">
         ${categoryIntro(activeCategory)}
       </p>

@@ -64,6 +64,17 @@ export const productSeoContent = {
   "school-starter-colouring-pack": {
     pageTitle: "Old Testament Bible Colouring Book & Markers Bundle",
   },
+  // Milestone 200: the one product among the audited core 5 that had
+  // no SEO title override at all — fell back entirely to the real
+  // Product.name ("Seasonedz Creative Acrylic Paint Marker Set, Non-
+  // Bleed"), which is accurate but leads with the brand name rather
+  // than the long-tail search intent (markers-and-crayons' own
+  // keyword ownership: "colouring markers", "acrylic markers").
+  // Dropping only the brand prefix, same pattern every other override
+  // above already follows — no fact changed.
+  "acrylic-marker-set-24-colours": {
+    pageTitle: "Acrylic Paint Marker Set, Non-Bleed",
+  },
 };
 
 export function getProductSeoContent(slug) {

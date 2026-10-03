@@ -875,13 +875,43 @@ async function main() {
   }
   const shellHtml = readFileSync(INDEX_HTML_PATH, "utf8");
 
+  // Milestone 200: "/shop" is handled separately, below, once `products`
+  // is available — it's the one PUBLIC_STATIC_ROUTES entry that owns a
+  // real, broad search intent ("colouring books", "colouring books
+  // South Africa") and deserves the same CollectionPage/ItemList/
+  // BreadcrumbList treatment every /category/:slug page already gets,
+  // rather than the empty jsonLdBlocks every other static informational
+  // page (about/contact/faq/etc.) correctly has no fabricated reason to
+  // carry.
   for (const route of PUBLIC_STATIC_ROUTES) {
+    if (route === "/shop") continue;
     const { title, description } = getStaticRouteMeta(route);
     writeRouteFile(route, shellHtml, { title, description, ogImage: DEFAULT_OG_IMAGE, jsonLdBlocks: [] });
   }
-  console.log(`[generate-static-routes] Generated ${PUBLIC_STATIC_ROUTES.length} public static route(s) with route-specific metadata.`);
+  console.log(`[generate-static-routes] Generated ${PUBLIC_STATIC_ROUTES.length - 1} public static route(s) with route-specific metadata.`);
 
   const { products, source } = await getProductsForRoutes();
+
+  // Milestone 200: mirrors shop.js's own runtime structured data for an
+  // active category (buildCategoryCollectionPageJsonLd), but for the
+  // generic /shop view — built from every real, currently-enriched
+  // product (never a fabricated/partial list), so a crawler's first,
+  // non-rendering pass of /shop/ sees the same real BreadcrumbList/
+  // CollectionPage/ItemList signal every category page already has,
+  // instead of none at all.
+  {
+    const { title: shopTitle, description: shopDescription } = getStaticRouteMeta("/shop");
+    const shopCanonicalUrl = `${SITE_URL}${withTrailingSlash("/shop")}`;
+    const enrichedProducts = products.filter(isEnrichedProduct);
+    const shopJsonLdBlocks =
+      source === "live API"
+        ? [
+            buildBreadcrumbJsonLd([{ name: "Home", url: `${SITE_URL}/` }, { name: "Shop", url: shopCanonicalUrl }]),
+            buildCategoryCollectionPageJsonLd(shopTitle, shopCanonicalUrl, enrichedProducts),
+          ]
+        : [];
+    writeRouteFile("/shop", shellHtml, { title: shopTitle, description: shopDescription, ogImage: DEFAULT_OG_IMAGE, jsonLdBlocks: shopJsonLdBlocks });
+  }
   for (const product of products) {
     const routePath = `/product/${product.slug}`;
     if (isEnrichedProduct(product)) {

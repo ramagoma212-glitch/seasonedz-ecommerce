@@ -169,6 +169,17 @@
       inventing a blended one; the lower registered threshold remains a
       real, undiscovered-by-crawlers bonus rather than a misrepresented
       global rate.
+
+      Milestone 200: added `address` and `areaServed` — the exact same
+      registered-office address already publicly displayed on every
+      legal page (Terms/Privacy/Returns/Cookies, see
+      businessInfo.registeredOfficeLines), now also machine-readable
+      here. Not a new disclosure, and not a LocalBusiness claim (this
+      stays `@type: Organization`) — it only gives Google the same
+      legitimate South African geographic context the business already
+      states elsewhere, per Search Central's own guidance that
+      Organization markup should include address when a real one
+      exists.
     -->
     <script type="application/ld+json">
       {
@@ -179,6 +190,18 @@
         "url": "https://www.seasonedzgroup.co.za/",
         "description": "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.",
         "logo": "https://www.seasonedzgroup.co.za/icon-512.png",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "99 Proclamation Hill, Pretoria West",
+          "addressLocality": "Pretoria",
+          "addressRegion": "Gauteng",
+          "postalCode": "0183",
+          "addressCountry": "ZA"
+        },
+        "areaServed": {
+          "@type": "Country",
+          "name": "South Africa"
+        },
         "sameAs": [
           "https://www.facebook.com/share/1Y8dbJ6YRE/?mibextid=wwXIfr",
           "https://www.instagram.com/colourwithseasonedz?igsi=MWc0Yzd4em9lMTNlcw%3D%3D&utm_source=qr",
