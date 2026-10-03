@@ -401,8 +401,8 @@ test("getContactCampaignHistory reports SENT exactly as that word, never relabel
   ]);
 
   const history = await getContactCampaignHistory("contact-1");
-  assert.equal(history[0].status, "SENT");
   assert.equal(history.length, 1);
+  assert.equal(history[0]?.status, "SENT");
 
   findMany.restore();
 });
