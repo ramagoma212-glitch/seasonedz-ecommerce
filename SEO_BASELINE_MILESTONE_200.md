@@ -1,26 +1,38 @@
-# SEO Baseline — Milestone 200 (2026-10-03/04)
+# SEO Baseline — Milestone 200 (2026-10-03/04, corrected 2026-10-04)
 
 A durable snapshot of the site's SEO state at the point Milestone 200's
 safe-improvement pass was committed. This is a reference document for
 future milestones to compare against — it is not a report of what
 changed (see the Milestone 200 Phase 24 report for that) and it will
 go stale; re-verify every claim below against the live site and repo
-before relying on it in a future milestone, per this project's own
-"verify, don't assume" discipline.
+before relying on it in a future milestone.
+
+Every claim below is labelled:
+
+- **CONFIRMED** — directly verified this milestone (file read, raw HTML
+  inspected, command run) and reproducible by re-running the same check.
+- **OBSERVED** — a one-time direct observation (e.g. a live HTTP
+  response at a point in time) that could change without a repo change.
+- **UNVERIFIED** — could not be checked from this environment (no
+  Search Console access, no backlink-authority tooling, etc.). Never
+  treat an UNVERIFIED item as false — it means "unknown," not "no."
+- **RECOMMENDED** — a suggested next step, not yet executed, not yet
+  approved.
 
 ## 1. Keyword Ownership Map (established Milestone 196, protected by Milestone 200)
 
 | Page | Owns | Notes |
 |---|---|---|
-| `/shop` | "colouring books", "colouring books South Africa" (broad, category-agnostic) | H1 fixed in Milestone 200 to "Colouring Books, Markers & Crayons" (was a bare "Shop" on the no-category view). Do not create a dedicated `/colouring-books/` landing page without strong keyword-cannibalization evidence against this page. |
+| `/shop` | "colouring books", "colouring books South Africa" (broad, category-agnostic) | **CONFIRMED**: H1 is "Colouring Books, Markers & Crayons" on the no-category view (was a bare "Shop"); intro copy mentions "South African" once, not repeated. Do not create a dedicated `/colouring-books/` landing page without strong keyword-cannibalization evidence against this page. |
 | `/category/kids-colouring-books` | "kids colouring books", "educational colouring books" | |
 | `/category/bible-colouring-books` | "bible colouring books" | |
 | `/category/mindfulness-colouring` | "mindfulness colouring", "colouring for adults" | |
 | `/category/markers-and-crayons` | "colouring markers", "acrylic markers", "rotating crayons" | |
 | `/category/bundles` | "colouring book bundles" / gift-bundle intent | |
-| `/schools` | "bulk colouring books for schools", "classroom colouring packs" | Deliberately has no `/category/schools-and-wholesale` counterpart — `categories.js` lists a 6th category (`schools-and-wholesale`) but `generate-static-routes.mjs` does not generate a static page for it, so this intent is owned solely by `/schools` with no duplicate-content risk. |
-| Product pages | Long-tail, product-name-specific queries | Each has its own title/description via `src/data/productSeoContent.js` overrides where the generated default isn't specific enough (e.g. the acrylic marker set, fixed in Milestone 200). |
-| Blog posts (`/blog/:slug`) | Informational/top-of-funnel queries ("how to choose colouring books by age", etc.) | 7 posts as of Milestone 200 (5 original + 2 added this milestone). Each links to exactly one commercial page via `relatedLink`. |
+| `/schools` | "bulk colouring books for schools", "classroom colouring packs" | **CONFIRMED**: `categories.js` lists a 6th category (`schools-and-wholesale`) but `generate-static-routes.mjs` does not generate a static page for it — this intent is owned solely by `/schools`. |
+| `/wholesale` | retailer/reseller/stockist enquiries (bookshops, educational stores, church shops, stationery stores) | **CONFIRMED** (Milestone 200 correction round): has real internal links from `/contact` (pre-existing) and from the FAQ page's "Can I stock Seasonedz Group products in my shop?" answer (fixed this round — was plain text, now a real `<a href="/wholesale">` link). Not orphaned. Not in main nav/footer by design choice, not by oversight — adding it there would be a navigation-structure change outside this milestone's scope. |
+| Product pages | Long-tail, product-name-specific queries | Each has its own title/description via `src/data/productSeoContent.js` overrides where the generated default isn't specific enough. |
+| Blog posts (`/blog/:slug`) | Informational/top-of-funnel queries | 7 posts as of Milestone 200. Each links to exactly one commercial page via `relatedLink`. **CONFIRMED**: every post has its own canonical, title, excerpt, and `BlogPosting` JSON-LD (both client-side in `blogPost.js` and in the static build via `generate-static-routes.mjs`'s `buildBlogPostingJsonLd`, field-for-field identical). Every post appears in `sitemap.xml` directly (not dependent on the `/blog` index page), so none is orphaned in the sense that matters for crawling: a discovery path exists independent of JS. The `/blog` index page itself does link to every post, but — like every other page on this site — only after JavaScript executes; its raw static HTML carries no links and no structured data (see section 4).
 
 **Rule for future milestones:** before creating any new URL intended to
 rank for a phrase already in this table, check whether an existing
@@ -29,53 +41,98 @@ adding a new, competing one.
 
 ## 2. Site Structure Snapshot
 
-- Static routes generated by `scripts/generate-static-routes.mjs`: **39 sitemap URLs** as of this milestone (was 37 before the 2 new blog posts).
-- 14 generic public static routes, 11 product routes, 5 category routes, 7 blog routes (totals overlap with the 39 sitemap count; see the script's own console output for the authoritative breakdown on any given run).
-- Google Merchant feed (`google-merchant-feed.xml`): 11 products — unchanged this milestone, as no product/price data was touched.
-- `robots.txt` and `sitemap.xml` are both served and tested (`tests/smoke/seo.spec.js`).
+- **CONFIRMED**: Static routes generated by `scripts/generate-static-routes.mjs`: 39 sitemap URLs as of this milestone (was 37 before the 2 new blog posts).
+- **CONFIRMED**: Google Merchant feed (`google-merchant-feed.xml`): 11 products — unchanged this milestone.
+- **CONFIRMED**: `robots.txt` and `sitemap.xml` are both served and tested (`tests/smoke/seo.spec.js`).
 
-## 3. Structured Data Coverage (as of this milestone)
+## 3. Structured Data Coverage
 
-- Site-wide `Organization` JSON-LD in `index.html`: now includes `address` (PostalAddress, sourced from `businessInfo.registeredOfficeLines`) and `areaServed` (South Africa) — added this milestone. Also carries `sameAs` (6 social profiles), return policy, and shipping rates (from earlier milestones).
-- `WebSite` JSON-LD on the homepage.
-- `Product` JSON-LD on every product page (price, availability, no fabricated ratings — `aggregateRating` only appears when real approved reviews exist).
-- `BreadcrumbList` + `CollectionPage`/`ItemList` on every category page, and now also on `/shop` for both the filtered and the generic (no-category) view — the generic view had zero structured data before this milestone.
-- `BlogPosting` JSON-LD on blog posts.
-- None of the above includes invented ratings, reviews, or fabricated data — enforced by `tests/smoke/seo.spec.js` and `tests/smoke/productReviews.spec.js`.
+- **CONFIRMED** (parsed and validated this round): homepage, `/shop`, and all 5 category pages each carry exactly one `Organization`, one `WebSite`, one `BreadcrumbList`, one `CollectionPage`, and one `ItemList` block — no duplicates, no conflicts. Product pages carry `Organization`, `WebSite`, `Product`, `BreadcrumbList` — one each. Blog posts carry `Organization`, `WebSite`, and one `BlogPosting`; the `BlogPosting`'s own `author`/`publisher` fields each contain a minimal nested `{"@type": "Organization", "name": "Seasonedz Group"}` reference, which is the standard, Google-documented pattern for this field and is not a duplicate/conflicting top-level entity.
+- **CONFIRMED**: the site-wide `Organization` block's `address` (added this milestone) exactly matches `businessInfo.registeredOfficeLines` (the same text already public on Terms/Privacy/Returns/Cookies), uses `@type: PostalAddress` only, stays `@type: Organization` (not `LocalBusiness`), and contains no invented opening hours or geographic coordinates.
+- **CONFIRMED**: the `/blog` index page (the listing, not individual posts) has no structured data at all, client-side or static — pre-existing, not introduced this milestone, not fixed this round (would need the same body-rendering change discussed in section 4).
 
-## 4. Known Structural Limitation (not fixed this milestone — flagged for a dedicated future milestone)
+## 4. Client-Side Rendering — corrected diagnosis
 
-The entire site is a client-side-rendered SPA. The raw HTML `<body>`
-for every single route (live and in `dist/`) is exactly
-`<div id="app"></div>` — zero H1, zero visible text, zero `<a>` tags —
-until JavaScript executes. `scripts/generate-static-routes.mjs` only
-ever rewrites each route's `<head>` (title/description/canonical/OG/
-JSON-LD); it never touches `<body>`. `mountApp()` in `src/js/app.js`
-uses `insertAdjacentHTML` to append header/main/footer on every page
-load without first clearing `#app`, so any static pre-rendered body
-content would need a corresponding `app.innerHTML = ""` safety change
-that runs on every page load site-wide, including checkout — judged
-too risky for this milestone's "do not break commerce" constraint.
+**A. Confirmed fact:** the raw, pre-JavaScript HTML `<body>` for every
+route checked — homepage, `/shop`, all 5 category pages, a sample
+product page, a sample blog post, the `/blog` index, and `/wholesale`
+— is exactly `<div id="app"></div>`, both in the local `dist/` build
+and on the live production site (checked directly via `curl` against
+`https://www.seasonedzgroup.co.za/shop/`). `scripts/generate-static-routes.mjs`
+only ever rewrites each route's `<head>`; it never touches `<body>`.
 
-This is almost certainly the single largest lever on non-brand
-organic visibility available to this site, and it needs its own
-dedicated milestone (progressive enhancement / pre-rendered body
-content with a safe hydration takeover), not a quick fix bolted onto
-an SEO content pass.
+**B. Technical SEO risk:** all visible body content and all internal
+links depend on JavaScript executing before they exist in the DOM.
 
-## 5. Other Open Items Carried Forward
+**C. Possible consequences:** slower or less reliable content
+discovery for crawlers, a rendering dependency, potential crawl/render
+budget inefficiency at scale, weaker accessibility to any non-JS-
+executing crawler or tool, and possible performance implications for
+real users on slow connections/devices.
 
-- `/wholesale` has no internal links pointing to it from site navigation (header/footer) — flagged, not fixed, in Milestone 200 (fixing it is a navigation change, not a pure content/metadata fix).
-- The old `seasonedzgroup.com` domain's ownership/registrar is unconfirmed; it currently redirects to Odoo's own fallback page with no live content. See the Milestone 200 Phase 24 report, section D, before taking any DNS action — this needs explicit owner approval and was investigation-only this milestone.
+**D. What is NOT proven, and must not be claimed:** that this
+architecture is the dominant cause of the site's current non-brand
+ranking performance. Google is capable of rendering JavaScript, and the
+presence of an empty raw body does not, by itself, mean Google cannot
+index or rank the rendered content — the site has previously surfaced
+in public search results, which is itself evidence against a simple
+"invisible to Google" reading. Attributing current ranking weakness
+primarily to this architecture would require Search Console rendering/
+indexing evidence, which is **UNVERIFIED** from this environment (no
+Search Console access).
+
+**Corrected summary statement:** *The site relies heavily on
+client-side rendering for visible body content. Google can render
+JavaScript, so this does not mean the content is unindexable. However,
+server/static rendering of important body content would reduce
+rendering dependency and may improve crawl reliability and
+performance. Search Console evidence is required before attributing
+ranking weakness primarily to this architecture.*
+
+**RECOMMENDED:** a future, dedicated milestone to evaluate progressive
+enhancement / pre-rendered body content, once real Search Console
+rendering/indexing data is available to confirm whether this is
+actually a live problem worth the risk of changing `mountApp()`'s
+append-only DOM mounting (used on every page, including checkout).
+Not implemented this round, per explicit instruction.
+
+## 5. Old Domain (`seasonedzgroup.com`)
+
+- **OBSERVED**: the domain currently redirects to `www.seasonedzgroup.com`.
+- **OBSERVED**: that destination currently appears to return an Odoo
+  fallback/404-style page, based on direct investigation at the time
+  of checking.
+- **UNVERIFIED**: who currently owns/controls this domain.
+- **UNVERIFIED**: the domain's Google index status. The WebSearch tool
+  available in this environment returned zero results even for
+  Seasonedz Group's own current, live, correctly-indexed-in-reality
+  domain and brand name — proof that this tool's own search index does
+  not reliably cover this site, which means it cannot be trusted to
+  confirm or deny the old domain's index status either. "My tool found
+  nothing" is not evidence of "Google has indexed nothing."
+- **UNVERIFIED**: whether the old domain carries any backlink history
+  or authority that could transfer via a redirect.
+- **RECOMMENDED**: if ownership is confirmed to sit with Seasonedz
+  Group, investigate a domain-wide 301 redirect to
+  `seasonedzgroup.co.za`. **Not executed.** No DNS or domain changes
+  are authorised by this milestone.
+
+## 6. Other Open Items Carried Forward
+
 - The main JS bundle (`index-*.js`) is >500KB post-minification (568.75 kB as of this build). Reported, not fixed — `vite.config.js` has prior history of a circular-chunk incident from a previous code-splitting attempt.
 - Google Business Profile linkage from the site was not verified/added this milestone.
+- A near-duplicate boilerplate closing sentence exists across category pages — flagged, not fixed.
 
-## 6. How to Re-Verify This Baseline
+## 7. How to Re-Verify This Baseline
 
 ```
 npm run build
 node scripts/generate-static-routes.mjs
 ```
 Compare the console output's route/sitemap/feed counts against section
-2 above. For structured data, read the relevant file under `dist/`
-directly rather than trusting this document's snapshot.
+2 above. For structured data and raw body content, read the relevant
+file under `dist/` directly rather than trusting this document's
+snapshot — all CONFIRMED items above are reproducible this way;
+OBSERVED and UNVERIFIED items are not, by definition, and need fresh
+investigation (and, for Search Console/backlink/index-status items,
+access this environment doesn't have).

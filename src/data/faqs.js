@@ -79,7 +79,7 @@ export const faqs = [
     category: "Wholesale",
     question: "Can I stock Seasonedz Group products in my shop?",
     answer:
-      "We welcome enquiries from bookshops, educational stores, church shops and stationery stores. Visit our Wholesale page to get in touch.",
+      'We welcome enquiries from bookshops, educational stores, church shops and stationery stores. Visit our <a href="/wholesale">Wholesale page</a> to get in touch.',
   },
   {
     category: "Distributor",
