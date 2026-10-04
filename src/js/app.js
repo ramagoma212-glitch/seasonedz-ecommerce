@@ -245,7 +245,7 @@ function ensureAdminModulesLoaded() {
       } = bundle.adminReferralsApi);
       ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
       ({ createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport } = bundle.adminOutreachContactApi);
-      ({ recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent, linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer, createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation } = bundle.adminOutreachCrmApi);
+      ({ recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent, linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer, createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation, reconcileAdminQuotation } = bundle.adminOutreachCrmApi);
       ({
         createAdminOutreachCampaign,
         updateAdminOutreachCampaign,
@@ -4758,7 +4758,7 @@ function setupAdminOutreachContactForm() {
 // none sends an email unless the admin confirmed it in the browser first.
 let recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent;
 let linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer;
-let createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation;
+let createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation, reconcileAdminQuotation;
 
 function crmFormPayload(form) {
   const payload = {};
@@ -4772,7 +4772,7 @@ function crmFormPayload(form) {
 }
 
 function crmErrorMessage(error) {
-  if (error instanceof ApiError && (error.status === 400 || error.status === 409 || error.status === 404 || error.status === 502 || error.status === 503)) {
+  if (error instanceof ApiError && [400, 403, 404, 409, 500, 502, 503].includes(error.status)) {
     return error.message;
   }
   if (error instanceof ApiUnavailableError) {
@@ -4850,6 +4850,26 @@ function setupAdminCrmWorkflow() {
           successMessage: "Follow-up marked completed and recorded in the timeline.",
         });
       }
+      return;
+    }
+
+    const reconcileForm = event.target.closest?.("[data-admin-quotation-reconcile-form]");
+    if (reconcileForm) {
+      event.preventDefault();
+      const outcome = event.submitter?.value;
+      const note = reconcileForm.querySelector('textarea[name="note"]')?.value?.trim() ?? "";
+      if (outcome !== "SENT" && outcome !== "NOT_SENT") return;
+      const question =
+        outcome === "SENT"
+          ? "Confirm that the email WAS delivered? This marks the quotation as sent."
+          : "Confirm that the email was NOT delivered? This returns the quotation to draft so it can be sent again.";
+      if (!window.confirm(question)) return;
+      runCrmAction({
+        bannerSelector: QUOTE_ACTION_BANNER,
+        button: event.submitter,
+        action: () => reconcileAdminQuotation(reconcileForm.dataset.quotationId, { outcome, note }),
+        successMessage: outcome === "SENT" ? "Quotation marked as sent after your check." : "Quotation returned to draft. You can now send it again.",
+      });
       return;
     }
 

@@ -265,3 +265,61 @@ test.describe("B2B quotations (Milestone 201)", () => {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 });
+
+test.describe("Unresolved quotation sends (Milestone 201 correction)", () => {
+  const QUOTE_UNCERTAIN = { ...QUOTE_DRAFT, id: "quote-3", quotationNumber: "SG-Q-2026-0003", status: "SEND_UNCERTAIN", lastSendError: "Outcome unknown: no confirmed response from the email provider." };
+
+  test("an unconfirmed send is shown as uncertain, offers no resend, and blocks edits and duplicates", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockQuotationDetail(page, QUOTE_UNCERTAIN);
+    await page.goto("/admin/outreach/quotations/quote-3");
+    await expect(page.getByText("did not confirm whether this quotation was delivered")).toBeVisible();
+    await expect(page.locator("[data-admin-quotation-send-form]")).toHaveCount(0);
+    await expect(page.locator('[data-quote-action="duplicate"]')).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Edit Draft" })).toHaveCount(0);
+    await expect(page.locator("[data-admin-quotation-reconcile-form]")).toBeVisible();
+  });
+
+  test("reconciling requires a written note before anything is sent", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockQuotationDetail(page, QUOTE_UNCERTAIN);
+    let called = false;
+    await page.route(/\/api\/admin\/outreach\/quotations\/quote-3\/reconcile$/, (route) => {
+      called = true;
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ ...QUOTE_UNCERTAIN, status: "SENT" }) });
+    });
+    page.on("dialog", (dialog) => dialog.accept());
+    await page.goto("/admin/outreach/quotations/quote-3");
+    await page.locator('[data-admin-quotation-reconcile-form] button[value="SENT"]').click();
+    await page.waitForTimeout(300);
+    expect(called).toBe(false);
+  });
+
+  test("confirming a delivered email posts the outcome and the note to the reconcile endpoint", async ({ page }) => {
+    await mockAdminAuth(page);
+    await mockQuotationDetail(page, QUOTE_UNCERTAIN);
+    let body = null;
+    await page.route(/\/api\/admin\/outreach\/quotations\/quote-3\/reconcile$/, (route) => {
+      body = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ ...QUOTE_UNCERTAIN, status: "SENT" }) });
+    });
+    page.on("dialog", (dialog) => dialog.accept());
+    await page.goto("/admin/outreach/quotations/quote-3");
+    await page.locator('[data-admin-quotation-reconcile-form] textarea[name="note"]').fill("Found it in the sent folder");
+    await page.locator('[data-admin-quotation-reconcile-form] button[value="SENT"]').click();
+    await expect.poll(() => body).not.toBeNull();
+    expect(body).toEqual({ outcome: "SENT", note: "Found it in the sent folder" });
+  });
+
+  test("the quotation list labels the unconfirmed state for the admin", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route(/\/api\/admin\/outreach\/quotations\/summary$/, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: envelope({ DRAFT: 0, SENDING: 0, SEND_UNCERTAIN: 1, SENT: 0, ACCEPTED: 0, DECLINED: 0, EXPIRED: 0, CANCELLED: 0 }) })
+    );
+    await page.route(/\/api\/admin\/outreach\/quotations(\?.*)?$/, (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: envelope({ items: [QUOTE_UNCERTAIN], total: 1, page: 1, limit: 25 }) })
+    );
+    await page.goto("/admin/outreach/quotations");
+    await expect(page.getByText("Sending / uncertain").first()).toBeVisible();
+  });
+});

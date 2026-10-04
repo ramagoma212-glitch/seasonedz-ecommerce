@@ -124,7 +124,11 @@ export async function updateContactHandler(req: Request, res: Response, next: Ne
       sendError(res, { message: "Contact id is required", statusCode: 400 });
       return;
     }
-    const contact = await outreachContactService.updateContact(id, req.body ?? {});
+    const contact = await outreachContactService.updateContact(
+      id,
+      req.body ?? {},
+      req.adminUser ? { id: req.adminUser.id, name: req.adminUser.name, email: req.adminUser.email } : undefined
+    );
     sendSuccess(res, { message: "Contact updated successfully", data: contact });
   } catch (error) {
     handleServiceError(error, res, next);

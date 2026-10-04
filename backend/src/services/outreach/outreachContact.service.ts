@@ -252,7 +252,13 @@ function toParsedFromRow(row: {
   return { ...row };
 }
 
-export async function updateContact(id: string, rawInput: OutreachContactInput) {
+export interface OutreachActorSnapshot {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export async function updateContact(id: string, rawInput: OutreachContactInput, actor?: OutreachActorSnapshot) {
   const existingRow = await prisma.outreachContact.findUnique({ where: { id } });
   if (!existingRow) throw new OutreachContactError(`Contact not found: ${id}`, 404);
 
@@ -263,7 +269,29 @@ export async function updateContact(id: string, rawInput: OutreachContactInput) 
     if (emailTaken) throw new OutreachContactError(`Another contact already uses this email: ${emailTaken.organisationName}.`, 409);
   }
 
-  return prisma.outreachContact.update({ where: { id }, data: parsed });
+  if (parsed.leadStatus === existingRow.leadStatus) {
+    return prisma.outreachContact.update({ where: { id }, data: parsed });
+  }
+
+  // A lead-status change is written to the timeline in the same transaction,
+  // so the history can never say a change happened without it having been saved.
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.outreachContact.update({ where: { id }, data: parsed });
+    await tx.outreachActivity.create({
+      data: {
+        contactId: id,
+        type: "LEAD_STATUS_CHANGED",
+        occurredAt: new Date(),
+        title: `Lead status changed from ${existingRow.leadStatus.replace(/_/g, " ").toLowerCase()} to ${parsed.leadStatus.replace(/_/g, " ").toLowerCase()}`,
+        fromLeadStatus: existingRow.leadStatus,
+        toLeadStatus: parsed.leadStatus,
+        createdByAdminUserId: actor?.id ?? null,
+        createdByAdminNameSnapshot: actor?.name ?? null,
+        createdByAdminEmailSnapshot: actor?.email ?? null,
+      },
+    });
+    return updated;
+  });
 }
 
 export async function getContact(id: string) {

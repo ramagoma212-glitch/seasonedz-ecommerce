@@ -4,7 +4,7 @@
 // table on every write; the admin's quote price is the only price a quote
 // stores, and it is snapshotted with the line.
 
-import type { QuotationStatus, Prisma } from "@prisma/client";
+import { Prisma, type QuotationStatus } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
 import { deliverRenderedEmail } from "../email/email.service.js";
@@ -14,8 +14,10 @@ import {
   assertQuotationEditable,
   assertQuotationTransition,
   buildQuotationEmail,
+  classifySendFailure,
   computeQuotationTotals,
   formatQuotationNumber,
+  UNRESOLVED_SEND_STATUSES,
   MAX_QUOTATION_LINES,
   parseQuantity,
   QuotationRuleError,
@@ -236,9 +238,28 @@ async function insertDraft(
   return quotation;
 }
 
+const MAX_NUMBER_ATTEMPTS = 3;
+
+// Two first-of-the-year creates can collide on the counter row's insert. The
+// losing transaction rolls back entirely, so a retry gets a fresh number from
+// the counter. A conflict that keeps happening is reported, never papered over.
+async function withQuotationNumberRetry<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const conflict = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+      if (!conflict) throw error;
+      if (attempt >= MAX_NUMBER_ATTEMPTS) {
+        throw new QuotationRuleError("Several quotations were created at the same moment. Please try again.", 409);
+      }
+    }
+  }
+}
+
 export async function createQuotationDraft(raw: Record<string, unknown>, actor: AdminActor, now: Date = new Date()) {
   const input = parseQuotationDraftInput(raw, now);
-  return prisma.$transaction((tx) => insertDraft(tx, input, actor, now));
+  return withQuotationNumberRetry(() => prisma.$transaction((tx) => insertDraft(tx, input, actor, now)));
 }
 
 export async function updateQuotationDraft(id: string, raw: Record<string, unknown>, now: Date = new Date()) {
@@ -315,7 +336,8 @@ export async function duplicateQuotation(id: string, actor: AdminActor, now: Dat
     }),
   };
 
-  return prisma.$transaction(async (tx) => {
+  return withQuotationNumberRetry(() =>
+    prisma.$transaction(async (tx) => {
     const draft = await insertDraft(tx, input, actor, now);
     await tx.outreachActivity.create({
       data: {
@@ -330,7 +352,8 @@ export async function duplicateQuotation(id: string, actor: AdminActor, now: Dat
       },
     });
     return draft;
-  });
+    })
+  );
 }
 
 type TerminalTransition = Extract<QuotationStatus, "ACCEPTED" | "DECLINED" | "EXPIRED" | "CANCELLED">;
@@ -390,6 +413,62 @@ export const defaultQuotationSendDependencies: QuotationSendDependencies = {
   deliver: deliverRenderedEmail,
 };
 
+function quotationTotalsCents(quotation: { subtotal: Prisma.Decimal; discountAmount: Prisma.Decimal; deliveryAmount: Prisma.Decimal; total: Prisma.Decimal }) {
+  return {
+    subtotal: decimalToCents(quotation.subtotal),
+    discount: decimalToCents(quotation.discountAmount),
+    delivery: decimalToCents(quotation.deliveryAmount),
+    total: decimalToCents(quotation.total),
+  };
+}
+
+// Records the outcome of a failed send attempt. It only moves a quotation that
+// is still SENDING, so it can never overwrite a later admin decision. If this
+// write fails, the quotation stays SENDING, which is the safe default.
+async function settleSendAttempt(
+  quotation: { id: string; contactId: string; quotationNumber: string },
+  to: { status: QuotationStatus; lastSendError: string; activityType: "QUOTE_SEND_FAILED" | "QUOTE_SEND_UNCERTAIN"; activityTitle: string },
+  actor: AdminActor,
+  now: Date
+) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2bQuotation.updateMany({
+        where: { id: quotation.id, status: "SENDING" },
+        data: { status: to.status, lastSendError: to.lastSendError },
+      });
+      if (claimed.count !== 1) return;
+      await tx.outreachActivity.create({
+        data: {
+          contactId: quotation.contactId,
+          type: to.activityType,
+          occurredAt: now,
+          title: to.activityTitle,
+          details: to.lastSendError,
+          quotationId: quotation.id,
+          createdByAdminUserId: actor.id,
+          createdByAdminNameSnapshot: actor.name,
+          createdByAdminEmailSnapshot: actor.email,
+        },
+      });
+    });
+  } catch {
+    console.error(`[b2bQuotation] could not record the send outcome for ${quotation.quotationNumber}. It remains SENDING and will not be resent automatically.`);
+  }
+}
+
+// Sequence, and why each step sits where it does:
+//  1. Validate everything first. Nothing is written yet.
+//  2. RESERVE: DRAFT -> SENDING in one conditional update, committed before the
+//     provider is called. A second attempt, or a database failure here, can
+//     never produce an email.
+//  3. Call the provider. An explicit refusal returns the quotation to DRAFT.
+//     Any other failure leaves it SEND_UNCERTAIN, because the email may have
+//     been accepted.
+//  4. On acceptance: SENDING -> SENT with the QUOTE_SENT activity in one
+//     transaction. If that save fails, the quotation stays SENDING. It is never
+//     silently shown as an ordinary draft, and it cannot be resent until an
+//     admin reconciles it.
 export async function sendQuotation(
   id: string,
   raw: Record<string, unknown>,
@@ -402,6 +481,9 @@ export async function sendQuotation(
     include: { lines: { orderBy: { position: "asc" } } },
   });
   if (!quotation) throw new QuotationRuleError("Quotation not found.", 404);
+  if (UNRESOLVED_SEND_STATUSES.includes(quotation.status)) {
+    throw new QuotationRuleError("A send for this quotation is already in progress or its outcome is unconfirmed. Do not resend it. Reconcile it first.", 409);
+  }
   if (quotation.status !== "DRAFT") {
     throw new QuotationRuleError("Only a draft quotation can be sent. Duplicate it to send a revised version.", 409);
   }
@@ -412,9 +494,7 @@ export async function sendQuotation(
   });
   if (!contact) throw new QuotationRuleError("Contact not found.", 404);
 
-  // Marketing suppression stays authoritative. A quotation is only sent to
-  // a contact who is currently eligible for email; anyone else is refused
-  // and nothing about their status changes.
+  // Marketing suppression stays authoritative. Only ACTIVE contacts are emailed.
   if (contact.status !== "ACTIVE") {
     throw new QuotationRuleError(
       `This contact's email status is ${contact.status}, so the quotation was not sent. Their email eligibility has not been changed.`,
@@ -439,6 +519,7 @@ export async function sendQuotation(
     throw new QuotationRuleError("Email delivery is switched off in this environment, so nothing was sent. The quotation is still a draft.", 503);
   }
 
+  const totals = quotationTotalsCents(quotation);
   const email = buildQuotationEmail({
     quotationNumber: quotation.quotationNumber,
     organisationName: quotation.organisationNameSnapshot,
@@ -450,13 +531,28 @@ export async function sendQuotation(
       unitPriceCents: decimalToCents(line.unitPrice),
       lineTotalCents: decimalToCents(line.lineTotal),
     })),
-    subtotalCents: decimalToCents(quotation.subtotal),
-    discountCents: decimalToCents(quotation.discountAmount),
-    deliveryCents: decimalToCents(quotation.deliveryAmount),
-    totalCents: decimalToCents(quotation.total),
+    subtotalCents: totals.subtotal,
+    discountCents: totals.discount,
+    deliveryCents: totals.delivery,
+    totalCents: totals.total,
     notes: quotation.notes,
   });
 
+  // Step 2: reserve. Only one attempt can move DRAFT to SENDING.
+  let reserved: { count: number };
+  try {
+    reserved = await prisma.b2bQuotation.updateMany({
+      where: { id, status: "DRAFT" },
+      data: { status: "SENDING", sendAttemptCount: { increment: 1 }, lastSendAttemptAt: now, lastSendError: null },
+    });
+  } catch {
+    throw new QuotationRuleError("The quotation could not be reserved for sending, so nothing was sent. Try again.", 503);
+  }
+  if (reserved.count !== 1) {
+    throw new QuotationRuleError("This quotation is already being sent, or its status changed. Refresh the page before doing anything else.", 409);
+  }
+
+  // Step 3: the external side effect.
   try {
     await deps.deliver({
       templateName: "b2b-quotation",
@@ -467,30 +563,118 @@ export async function sendQuotation(
       rendered: email,
     });
   } catch (error) {
-    // The provider failure is logged by email.service.ts without the
-    // address or body. Nothing has been recorded as sent.
-    console.warn(`[b2bQuotation] send failed for ${quotation.quotationNumber}; quotation left as DRAFT and no activity recorded.`);
-    throw new QuotationRuleError("The email could not be sent, so the quotation was not marked as sent. Try again.", 502);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (classifySendFailure(error) === "DEFINITE") {
+      await settleSendAttempt(
+        quotation,
+        {
+          status: "DRAFT",
+          lastSendError: `Not accepted by the email provider: ${message}`,
+          activityType: "QUOTE_SEND_FAILED",
+          activityTitle: `Quotation ${quotation.quotationNumber} was not sent`,
+        },
+        actor,
+        now
+      );
+      throw new QuotationRuleError("The email provider did not accept the message, so nothing was sent. The quotation is a draft again and can be retried.", 502);
+    }
+    await settleSendAttempt(
+      quotation,
+      {
+        status: "SEND_UNCERTAIN",
+        lastSendError: `Outcome unknown: no confirmed response from the email provider (${message}).`,
+        activityType: "QUOTE_SEND_UNCERTAIN",
+        activityTitle: `Quotation ${quotation.quotationNumber} send outcome is unconfirmed`,
+      },
+      actor,
+      now
+    );
+    throw new QuotationRuleError(
+      "The email provider did not confirm the outcome, so the email may or may not have been delivered. Do not resend. Check the mailbox, then reconcile this quotation.",
+      502
+    );
   }
+
+  // Step 4: the provider accepted the email. Record that, or leave it SENDING.
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2bQuotation.updateMany({ where: { id, status: "SENDING" }, data: { status: "SENT", sentAt: now } });
+      if (claimed.count !== 1) throw new Error("Quotation left the SENDING state during the send.");
+
+      await tx.outreachActivity.create({
+        data: {
+          contactId: quotation.contactId,
+          type: "QUOTE_SENT",
+          channel: "EMAIL",
+          occurredAt: now,
+          title: `Quotation ${quotation.quotationNumber} sent by email`,
+          details: `Total ${formatRand(totals.total)}, sent to the contact's email address.`,
+          quotationId: id,
+          createdByAdminUserId: actor.id,
+          createdByAdminNameSnapshot: actor.name,
+          createdByAdminEmailSnapshot: actor.email,
+        },
+      });
+
+      const contactRow = await tx.outreachContact.findUnique({ where: { id: quotation.contactId }, select: { lastContactedAt: true } });
+      if (!contactRow?.lastContactedAt || contactRow.lastContactedAt.getTime() < now.getTime()) {
+        await tx.outreachContact.update({ where: { id: quotation.contactId }, data: { lastContactedAt: now } });
+      }
+
+      return tx.b2bQuotation.findUnique({ where: { id } });
+    });
+  } catch {
+    console.error(`[b2bQuotation] ${quotation.quotationNumber} was accepted by the email provider but its final save failed. It stays SENDING and must not be resent.`);
+    await prisma.b2bQuotation
+      .updateMany({
+        where: { id, status: "SENDING" },
+        data: { lastSendError: "The provider accepted the email, but the final save failed. Reconcile before doing anything else." },
+      })
+      .catch(() => undefined);
+    throw new QuotationRuleError(
+      "The email was accepted by the provider, but the quotation could not be marked as sent. It is now shown as Sending / uncertain. Do not resend it. Reconcile it instead.",
+      500
+    );
+  }
+}
+
+// An admin's decision about an unresolved send. "Delivered" records the send
+// as SENT. "Not delivered" returns the quotation to DRAFT so it can be sent
+// again. Both need a written note and both appear in the timeline. The router
+// restricts this to the highest admin role.
+export async function reconcileQuotationSend(id: string, raw: Record<string, unknown>, actor: AdminActor, now: Date = new Date()) {
+  const note = typeof raw.note === "string" ? raw.note.trim() : "";
+  if (note.length < 5) throw new QuotationRuleError("Write a short note explaining how you checked, at least 5 characters.");
+  if (note.length > 1000) throw new QuotationRuleError("The note must be 1000 characters or fewer.");
+  if (raw.outcome !== "SENT" && raw.outcome !== "NOT_SENT") throw new QuotationRuleError("Choose whether the email was delivered or not.");
+
+  const quotation = await prisma.b2bQuotation.findUnique({ where: { id }, select: { id: true, status: true, contactId: true, quotationNumber: true } });
+  if (!quotation) throw new QuotationRuleError("Quotation not found.", 404);
+  if (!UNRESOLVED_SEND_STATUSES.includes(quotation.status)) {
+    throw new QuotationRuleError("Only a quotation whose send is in progress or unconfirmed can be reconciled.", 409);
+  }
+
+  const target: QuotationStatus = raw.outcome === "SENT" ? "SENT" : "DRAFT";
+  assertQuotationTransition(quotation.status, target);
+  const sentConfirmed = target === "SENT";
 
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.b2bQuotation.updateMany({
-      where: { id, status: "DRAFT" },
-      data: { status: "SENT", sentAt: now },
+      where: { id, status: quotation.status },
+      data: sentConfirmed ? { status: "SENT", sentAt: now } : { status: "DRAFT" },
     });
-    if (claimed.count !== 1) {
-      console.warn(`[b2bQuotation] ${quotation.quotationNumber} was emailed but its status changed concurrently; check the timeline before resending.`);
-      throw new QuotationRuleError("The quotation changed while it was being sent. Check its status before doing anything else.", 409);
-    }
+    if (claimed.count !== 1) throw new QuotationRuleError("This quotation changed while you were reconciling it. Refresh and check its status.", 409);
 
     await tx.outreachActivity.create({
       data: {
         contactId: quotation.contactId,
-        type: "QUOTE_SENT",
-        channel: "EMAIL",
+        type: sentConfirmed ? "QUOTE_SENT" : "QUOTE_SEND_RECONCILED",
+        channel: sentConfirmed ? "EMAIL" : null,
         occurredAt: now,
-        title: `Quotation ${quotation.quotationNumber} sent by email`,
-        details: `Total ${formatRand(decimalToCents(quotation.total))}, sent to the contact's email address.`,
+        title: sentConfirmed
+          ? `Quotation ${quotation.quotationNumber} confirmed as sent (admin reconciliation)`
+          : `Quotation ${quotation.quotationNumber} confirmed not delivered; returned to draft`,
+        details: `${actor.name} checked: ${note}`,
         quotationId: id,
         createdByAdminUserId: actor.id,
         createdByAdminNameSnapshot: actor.name,
@@ -498,11 +682,12 @@ export async function sendQuotation(
       },
     });
 
-    const contactRow = await tx.outreachContact.findUnique({ where: { id: quotation.contactId }, select: { lastContactedAt: true } });
-    if (!contactRow?.lastContactedAt || contactRow.lastContactedAt.getTime() < now.getTime()) {
-      await tx.outreachContact.update({ where: { id: quotation.contactId }, data: { lastContactedAt: now } });
+    if (sentConfirmed) {
+      const contactRow = await tx.outreachContact.findUnique({ where: { id: quotation.contactId }, select: { lastContactedAt: true } });
+      if (!contactRow?.lastContactedAt || contactRow.lastContactedAt.getTime() < now.getTime()) {
+        await tx.outreachContact.update({ where: { id: quotation.contactId }, data: { lastContactedAt: now } });
+      }
     }
-
     return tx.b2bQuotation.findUnique({ where: { id } });
   });
 }
@@ -569,7 +754,7 @@ export async function listQuotations(filters: QuotationListFilters) {
 
 export async function countQuotationsByStatus(): Promise<Record<QuotationStatus, number>> {
   const rows = await prisma.b2bQuotation.groupBy({ by: ["status"], _count: true });
-  const counts: Record<QuotationStatus, number> = { DRAFT: 0, SENT: 0, ACCEPTED: 0, DECLINED: 0, EXPIRED: 0, CANCELLED: 0 };
+  const counts: Record<QuotationStatus, number> = { DRAFT: 0, SENDING: 0, SEND_UNCERTAIN: 0, SENT: 0, ACCEPTED: 0, DECLINED: 0, EXPIRED: 0, CANCELLED: 0 };
   for (const row of rows) counts[row.status] = row._count;
   return counts;
 }

@@ -4,6 +4,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   assertQuotationEditable,
+  classifySendFailure,
+  UNRESOLVED_SEND_STATUSES,
   assertQuotationTransition,
   buildQuotationEmail,
   canTransitionQuotation,
@@ -83,23 +85,42 @@ test("invalid year or sequence never produces a number", () => {
   assert.throws(() => formatQuotationNumber(2026, 1.5), QuotationRuleError);
 });
 
-test("the quotation lifecycle allows only the documented transitions", () => {
-  assert.equal(canTransitionQuotation("DRAFT", "SENT"), true);
+test("the quotation lifecycle allows only the documented transitions, and never skips the send states", () => {
+  assert.equal(canTransitionQuotation("DRAFT", "SENDING"), true);
   assert.equal(canTransitionQuotation("DRAFT", "CANCELLED"), true);
+  assert.equal(canTransitionQuotation("SENDING", "SENT"), true);
+  assert.equal(canTransitionQuotation("SENDING", "DRAFT"), true, "a definite provider refusal returns to draft");
+  assert.equal(canTransitionQuotation("SENDING", "SEND_UNCERTAIN"), true);
+  assert.equal(canTransitionQuotation("SEND_UNCERTAIN", "SENT"), true, "admin reconciliation");
+  assert.equal(canTransitionQuotation("SEND_UNCERTAIN", "DRAFT"), true, "admin reconciliation");
   assert.equal(canTransitionQuotation("SENT", "ACCEPTED"), true);
   assert.equal(canTransitionQuotation("SENT", "DECLINED"), true);
   assert.equal(canTransitionQuotation("SENT", "EXPIRED"), true);
   assert.equal(canTransitionQuotation("SENT", "CANCELLED"), true);
 
-  assert.equal(canTransitionQuotation("DRAFT", "ACCEPTED"), false, "a draft was never sent, so it cannot be accepted");
-  assert.equal(canTransitionQuotation("DRAFT", "DECLINED"), false);
-  assert.equal(canTransitionQuotation("DRAFT", "EXPIRED"), false);
+  assert.equal(canTransitionQuotation("DRAFT", "SENT"), false, "a draft is never marked sent without going through SENDING");
+  assert.equal(canTransitionQuotation("DRAFT", "ACCEPTED"), false);
+  assert.equal(canTransitionQuotation("SENDING", "ACCEPTED"), false);
+  assert.equal(canTransitionQuotation("SENDING", "CANCELLED"), false, "an in-flight send cannot be cancelled");
+  assert.equal(canTransitionQuotation("SEND_UNCERTAIN", "CANCELLED"), false);
   assert.equal(canTransitionQuotation("SENT", "DRAFT"), false, "a sent quote never returns to draft");
+});
+
+test("send classification: only an explicit refusal is treated as definitely not sent", () => {
+  assert.equal(classifySendFailure({ code: "REJECTED" }), "DEFINITE");
+  assert.equal(classifySendFailure({ code: "NOT_CONFIGURED" }), "DEFINITE");
+  assert.equal(classifySendFailure({ code: "UNREACHABLE" }), "AMBIGUOUS");
+  assert.equal(classifySendFailure(new Error("socket hang up")), "AMBIGUOUS");
+  assert.equal(classifySendFailure(undefined), "AMBIGUOUS");
+});
+
+test("unresolved send states are exactly SENDING and SEND_UNCERTAIN", () => {
+  assert.deepEqual([...UNRESOLVED_SEND_STATUSES].sort(), ["SENDING", "SEND_UNCERTAIN"]);
 });
 
 test("accepted, declined, expired and cancelled quotations are terminal", () => {
   for (const terminal of ["ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"] as const) {
-    for (const to of ["DRAFT", "SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"] as const) {
+    for (const to of ["DRAFT", "SENDING", "SEND_UNCERTAIN", "SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"] as const) {
       assert.equal(canTransitionQuotation(terminal, to), false, `${terminal} -> ${to} must be refused`);
     }
   }
@@ -114,7 +135,7 @@ test("an illegal transition throws a 409 conflict", () => {
 
 test("only drafts are editable", () => {
   assert.doesNotThrow(() => assertQuotationEditable("DRAFT"));
-  for (const sent of ["SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"] as const) {
+  for (const sent of ["SENDING", "SEND_UNCERTAIN", "SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"] as const) {
     assert.throws(() => assertQuotationEditable(sent), QuotationRuleError);
   }
 });

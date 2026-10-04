@@ -30,9 +30,15 @@ function renderTotalsRow(label, value, bold = false) {
   return `<tr><th scope="row" class="${bold ? "admin-quote-total" : ""}">${escapeHtml(label)}</th><td class="${bold ? "admin-quote-total" : ""}">${escapeHtml(formatRandAmount(value))}</td></tr>`;
 }
 
+const UNRESOLVED = ["SENDING", "SEND_UNCERTAIN"];
+
 function renderActions(quotation) {
   const id = escapeHtml(quotation.id);
   const actions = [];
+  if (UNRESOLVED.includes(quotation.status)) {
+    actions.push(`<a class="btn btn--secondary btn--sm" href="${adminQuotationPdfUrl(quotation.id)}" target="_blank" rel="noopener">Download PDF</a>`);
+    return actions.join("");
+  }
   if (quotation.status === "DRAFT") {
     actions.push(`<a class="btn btn--secondary btn--sm" href="/admin/outreach/quotations/${id}/edit">Edit Draft</a>`);
     actions.push(`<button type="button" class="btn btn--secondary btn--sm" data-quote-action="cancel" data-quote-id="${id}">Cancel Quotation</button>`);
@@ -46,6 +52,27 @@ function renderActions(quotation) {
   actions.push(`<button type="button" class="btn btn--secondary btn--sm" data-quote-action="duplicate" data-quote-id="${id}">Duplicate as New Draft</button>`);
   actions.push(`<a class="btn btn--secondary btn--sm" href="${adminQuotationPdfUrl(quotation.id)}" target="_blank" rel="noopener">Download PDF</a>`);
   return actions.join("");
+}
+
+function renderUnresolvedPanel(quotation) {
+  if (!UNRESOLVED.includes(quotation.status)) return "";
+  const id = escapeHtml(quotation.id);
+  return `
+    <div class="form-banner form-banner--error" role="alert">
+      <strong>${quotation.status === "SENDING" ? "This quotation is being sent, or the send was interrupted." : "The email provider did not confirm whether this quotation was delivered."}</strong>
+      Do not resend it until you have checked the contact's mailbox, the email provider, and the sent folder.
+      ${quotation.lastSendError ? `<br /><span class="admin-page__subtitle">Last recorded: ${escapeHtml(quotation.lastSendError)}</span>` : ""}
+    </div>
+    <form class="admin-quick-action-form" data-admin-quotation-reconcile-form data-quotation-id="${id}">
+      <h3 class="admin-page__section-title">Confirm the outcome</h3>
+      <p class="admin-page__subtitle">Only the owner (ADMIN) can record this. Write what you checked. The note stays in the timeline.</p>
+      <label class="form-field__label">How you checked
+        <textarea name="note" rows="2" maxlength="1000" required class="form-field__input"></textarea>
+      </label>
+      <button type="submit" name="outcome" value="SENT" class="btn btn--primary">It was delivered: mark as sent</button>
+      <button type="submit" name="outcome" value="NOT_SENT" class="btn btn--secondary">It was not delivered: return to draft</button>
+    </form>
+  `;
 }
 
 function renderSendPanel(quotation) {
@@ -140,6 +167,7 @@ export async function renderAdminOutreachQuotationDetail({ id } = {}) {
 
         ${quotation.notes ? `<h3 class="admin-page__section-title">Notes</h3><p class="admin-page__subtitle">${escapeHtml(quotation.notes)}</p>` : ""}
 
+        ${renderUnresolvedPanel(quotation)}
         ${renderSendPanel(quotation)}
       </section>
     `;

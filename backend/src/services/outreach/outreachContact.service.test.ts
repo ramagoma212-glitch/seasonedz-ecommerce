@@ -190,14 +190,42 @@ test("updateContact accepts a valid leadStatus and never touches the email-eligi
   const existing = baseContactRow({ leadStatus: OutreachLeadStatus.PROSPECT, status: OutreachContactStatus.ACTIVE });
   const findUnique = stub(prisma.outreachContact, "findUnique", async () => existing);
   const update = stub(prisma.outreachContact, "update", async (args: { data: Record<string, unknown> }) => baseContactRow(args.data));
+  const transaction = stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  const activity = stub(prisma.outreachActivity, "create", async (args: { data: Record<string, unknown> }) => args.data);
 
-  await updateContact("contact-1", { leadStatus: "INTERESTED" });
+  await updateContact("contact-1", { leadStatus: "INTERESTED" }, { id: "admin-1", name: "Owner", email: "owner@example.invalid" });
   const callData = update.fn.mock.calls[0]?.arguments[0].data;
   assert.equal(callData.leadStatus, "INTERESTED");
   assert.equal("status" in callData, false, "a leadStatus update must never also write the email-eligibility status field");
 
+  const history = activity.fn.mock.calls[0]?.arguments[0].data;
+  assert.equal(history.type, "LEAD_STATUS_CHANGED");
+  assert.equal(history.fromLeadStatus, "PROSPECT");
+  assert.equal(history.toLeadStatus, "INTERESTED");
+  assert.equal(history.createdByAdminUserId, "admin-1");
+  assert.equal(transaction.fn.mock.callCount(), 1, "the status change and its history row are written together");
+
   findUnique.restore();
   update.restore();
+  transaction.restore();
+  activity.restore();
+});
+
+test("updateContact records no lead-status history when the lead status did not change", async () => {
+  const existing = baseContactRow({ leadStatus: OutreachLeadStatus.INTERESTED });
+  const findUnique = stub(prisma.outreachContact, "findUnique", async () => existing);
+  const update = stub(prisma.outreachContact, "update", async (args: { data: Record<string, unknown> }) => baseContactRow(args.data));
+  const transaction = stub(prisma, "$transaction", async () => {
+    throw new Error("must not run");
+  });
+
+  await updateContact("contact-1", { leadStatus: "INTERESTED", notes: "still interested" });
+  assert.equal(update.fn.mock.callCount(), 1);
+  assert.equal(transaction.fn.mock.callCount(), 0);
+
+  findUnique.restore();
+  update.restore();
+  transaction.restore();
 });
 
 test("updateContact rejects an invalid leadStatus value before ever touching the database", async () => {
@@ -290,8 +318,12 @@ test("a suppressed/unsubscribed contact's email-eligibility status cannot be cha
   // by merging onto `existing` rather than a fresh baseContactRow(),
   // which would otherwise silently default status back to ACTIVE.
   const update = stub(prisma.outreachContact, "update", async (args: { data: Record<string, unknown> }) => ({ ...existing, ...args.data }));
+  const transaction = stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  const activity = stub(prisma.outreachActivity, "create", async (args: { data: Record<string, unknown> }) => args.data);
 
   const result = await updateContact("contact-1", { leadStatus: "CUSTOMER" });
+  assert.equal(activity.fn.mock.callCount(), 1, "the lead change is still recorded in the timeline");
+  assert.equal(transaction.fn.mock.callCount(), 1);
   // parseOutreachContactInput never reads or writes `status` at all —
   // the suppressed contact's eligibility can only ever change through
   // setContactStatus(), a completely separate function.
@@ -299,6 +331,8 @@ test("a suppressed/unsubscribed contact's email-eligibility status cannot be cha
 
   findUnique.restore();
   update.restore();
+  transaction.restore();
+  activity.restore();
 });
 
 // ---------------------------------------------------------------------------

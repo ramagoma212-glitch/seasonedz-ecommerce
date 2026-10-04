@@ -15,7 +15,7 @@ export class QuotationRuleError extends Error {
   }
 }
 
-export const MAX_QUOTATION_LINES = 100;
+export const MAX_QUOTATION_LINES = 15;
 export const MAX_QUOTATION_QUANTITY = 100_000;
 
 export interface QuotationLineCalcInput {
@@ -84,14 +84,30 @@ export function formatQuotationNumber(year: number, sequence: number): string {
   return `SG-Q-${year}-${String(sequence).padStart(4, "0")}`;
 }
 
+// DRAFT -> SENDING is the only way into a send. SENDING and SEND_UNCERTAIN
+// can only leave by an admin's reconciliation (or the send's own outcome),
+// never by a generic status change and never by a blind resend.
 const QUOTATION_STATUS_TRANSITIONS: Record<QuotationStatus, readonly QuotationStatus[]> = {
-  DRAFT: ["SENT", "CANCELLED"],
+  DRAFT: ["SENDING", "CANCELLED"],
+  SENDING: ["SENT", "DRAFT", "SEND_UNCERTAIN"],
+  SEND_UNCERTAIN: ["SENT", "DRAFT"],
   SENT: ["ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"],
   ACCEPTED: [],
   DECLINED: [],
   EXPIRED: [],
   CANCELLED: [],
 };
+
+// Statuses in which a send is in progress or its outcome is not confirmed.
+export const UNRESOLVED_SEND_STATUSES: readonly QuotationStatus[] = ["SENDING", "SEND_UNCERTAIN"];
+
+// A failure the provider reported explicitly means the email was not accepted,
+// so the quotation may return to draft. Anything else (timeout, network, or an
+// unexpected error) may still have been delivered, so it stays unresolved.
+export function classifySendFailure(error: unknown): "DEFINITE" | "AMBIGUOUS" {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === "NOT_CONFIGURED" || code === "REJECTED" ? "DEFINITE" : "AMBIGUOUS";
+}
 
 export function canTransitionQuotation(from: QuotationStatus, to: QuotationStatus): boolean {
   return QUOTATION_STATUS_TRANSITIONS[from].includes(to);

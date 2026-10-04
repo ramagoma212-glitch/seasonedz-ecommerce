@@ -1,11 +1,11 @@
 -- CreateEnum
-CREATE TYPE "OutreachActivityType" AS ENUM ('NOTE', 'REPLY_RECEIVED', 'PHONE_CALL', 'WHATSAPP', 'EMAIL', 'CATALOGUE_SENT', 'QUOTE_REQUESTED', 'QUOTE_CREATED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'QUOTE_DECLINED', 'FOLLOW_UP', 'ORDER_CREATED', 'CUSTOMER_CONVERTED');
+CREATE TYPE "OutreachActivityType" AS ENUM ('NOTE', 'REPLY_RECEIVED', 'PHONE_CALL', 'WHATSAPP', 'EMAIL', 'CATALOGUE_SENT', 'QUOTE_REQUESTED', 'QUOTE_CREATED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'QUOTE_DECLINED', 'FOLLOW_UP', 'ORDER_CREATED', 'CUSTOMER_CONVERTED', 'LEAD_STATUS_CHANGED', 'QUOTE_SEND_FAILED', 'QUOTE_SEND_UNCERTAIN', 'QUOTE_SEND_RECONCILED');
 
 -- CreateEnum
 CREATE TYPE "OutreachActivityChannel" AS ENUM ('EMAIL', 'PHONE', 'WHATSAPP', 'OTHER');
 
 -- CreateEnum
-CREATE TYPE "QuotationStatus" AS ENUM ('DRAFT', 'SENT', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED');
+CREATE TYPE "QuotationStatus" AS ENUM ('DRAFT', 'SENDING', 'SEND_UNCERTAIN', 'SENT', 'ACCEPTED', 'DECLINED', 'EXPIRED', 'CANCELLED');
 
 -- AlterTable
 ALTER TABLE "OutreachContact" ADD COLUMN     "lastCatalogueSentAt" TIMESTAMP(3),
@@ -20,6 +20,8 @@ CREATE TABLE "OutreachActivity" (
     "occurredAt" TIMESTAMP(3) NOT NULL,
     "title" TEXT NOT NULL,
     "details" TEXT,
+    "fromLeadStatus" "OutreachLeadStatus",
+    "toLeadStatus" "OutreachLeadStatus",
     "createdByAdminUserId" TEXT,
     "createdByAdminNameSnapshot" TEXT,
     "createdByAdminEmailSnapshot" TEXT,
@@ -53,6 +55,9 @@ CREATE TABLE "B2bQuotation" (
     "acceptedAt" TIMESTAMP(3),
     "declinedAt" TIMESTAMP(3),
     "cancelledAt" TIMESTAMP(3),
+    "sendAttemptCount" INTEGER NOT NULL DEFAULT 0,
+    "lastSendAttemptAt" TIMESTAMP(3),
+    "lastSendError" TEXT,
     "createdByAdminUserId" TEXT,
     "createdByAdminNameSnapshot" TEXT,
     "createdByAdminEmailSnapshot" TEXT,

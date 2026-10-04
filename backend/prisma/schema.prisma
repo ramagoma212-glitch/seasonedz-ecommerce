@@ -3468,6 +3468,12 @@ enum OutreachActivityType {
   FOLLOW_UP
   ORDER_CREATED
   CUSTOMER_CONVERTED
+  // System-owned only: written by server flows, never accepted by the
+  // manual activity endpoint (see crmActivity.rules.ts).
+  LEAD_STATUS_CHANGED
+  QUOTE_SEND_FAILED
+  QUOTE_SEND_UNCERTAIN
+  QUOTE_SEND_RECONCILED
 }
 
 enum OutreachActivityChannel {
@@ -3490,6 +3496,10 @@ model OutreachActivity {
   occurredAt DateTime
   title      String
   details    String? @db.Text
+
+  // Only set on LEAD_STATUS_CHANGED rows.
+  fromLeadStatus OutreachLeadStatus?
+  toLeadStatus   OutreachLeadStatus?
 
   // Admin attribution: id from the verified session, plus snapshots so
   // the timeline still reads correctly if the admin account is later
@@ -3517,6 +3527,11 @@ model OutreachActivity {
 
 enum QuotationStatus {
   DRAFT
+  // SENDING is reserved before the provider is called. SEND_UNCERTAIN means
+  // the provider may have accepted the email but the outcome is not
+  // confirmed. Neither can be edited, cancelled or resent blindly.
+  SENDING
+  SEND_UNCERTAIN
   SENT
   ACCEPTED
   DECLINED
@@ -3555,6 +3570,12 @@ model B2bQuotation {
   acceptedAt  DateTime?
   declinedAt  DateTime?
   cancelledAt DateTime?
+
+  // Send-attempt evidence. Written before the provider call and kept after
+  // every outcome, so a quotation that was emailed can never look untouched.
+  sendAttemptCount Int       @default(0)
+  lastSendAttemptAt DateTime?
+  lastSendError     String?  @db.Text
 
   createdByAdminUserId        String?
   createdByAdminNameSnapshot  String?

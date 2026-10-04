@@ -1,30 +1,40 @@
-// Milestone 201: B2B quotation service. Every Prisma call is stubbed, so
-// these tests never touch a database and never send email: the send
-// dependencies are injected, and every test that could send uses a fake.
-// The rules that matter most are asserted here: a suppressed contact is never
-// emailed, a failed send records nothing, and no quotation action changes
-// email eligibility (OutreachContact.status).
+// Milestone 201: B2B quotation service. Every Prisma call is stubbed. The
+// quotation row is a small in-memory fake that applies conditional updates
+// the way the database would, so these tests check real state sequences:
+// DRAFT -> SENDING -> SENT, and each failure path. The send dependencies are
+// injected, so nothing here can send email. Email eligibility is asserted to
+// be untouched by every path.
 import { test, mock, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import {
   createQuotationDraft,
   duplicateQuotation,
+  parseQuotationDraftInput,
+  reconcileQuotationSend,
   sendQuotation,
   transitionQuotation,
   updateQuotationDraft,
   type QuotationSendDependencies,
 } from "./b2bQuotation.service.js";
 import { QuotationRuleError } from "./b2bQuotation.rules.js";
+import { BrevoSendError } from "../email/providers/brevo.provider.js";
 
 const ACTOR = { id: "admin-1", name: "Owner", email: "owner@seasonedz.test" };
 const NOW = new Date("2026-10-04T10:00:00.000Z");
 
-type Restore = () => void;
-const restores: Restore[] = [];
-
+const restores: Array<() => void> = [];
 afterEach(() => {
   while (restores.length) restores.pop()!();
+  store.quote = null;
+  store.activities = [];
+  store.contactUpdates = [];
+  store.failReserve = false;
+  store.failFinalPersist = false;
+  store.raceFailuresLeft = 0;
+  store.counter = 0;
+  store.quotationNumbers = new Set();
 });
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -36,6 +46,21 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
     obj[key] = original;
   });
   return fn;
+}
+
+const store = {
+  quote: null as Record<string, any> | null,
+  activities: [] as Record<string, unknown>[],
+  contactUpdates: [] as Record<string, unknown>[],
+  failReserve: false,
+  failFinalPersist: false,
+  raceFailuresLeft: 0,
+  counter: 0,
+  quotationNumbers: new Set<string>(),
+};
+
+function clone<T>(value: T): T {
+  return structuredClone(value);
 }
 
 function activeContact(overrides: Record<string, unknown> = {}) {
@@ -51,10 +76,6 @@ function activeContact(overrides: Record<string, unknown> = {}) {
     lastContactedAt: null,
     ...overrides,
   };
-}
-
-function activeProduct(overrides: Record<string, unknown> = {}) {
-  return { id: "prod-1", name: "ABC Colouring Book", sku: "SG-0001", status: "ACTIVE", ...overrides };
 }
 
 function quotationRow(overrides: Record<string, unknown> = {}) {
@@ -79,6 +100,9 @@ function quotationRow(overrides: Record<string, unknown> = {}) {
     acceptedAt: null,
     declinedAt: null,
     cancelledAt: null,
+    sendAttemptCount: 0,
+    lastSendAttemptAt: null,
+    lastSendError: null,
     lines: [
       {
         position: 1,
@@ -94,19 +118,57 @@ function quotationRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function draftPayload(overrides: Record<string, unknown> = {}) {
-  return {
-    contactId: "contact-1",
-    validUntil: "2026-10-31",
-    discount: "0",
-    delivery: "0",
-    lines: [{ productId: "prod-1", quantity: 10, unitPrice: "100" }],
-    ...overrides,
-  };
+// Installs the fake quotation row and the Prisma delegates it needs.
+function installFakeDatabase(quote: Record<string, unknown> = quotationRow()) {
+  store.quote = clone(quote);
+  stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => {
+    if (store.failFinalPersist) {
+      store.failFinalPersist = false;
+      throw new Error("simulated database failure during final save");
+    }
+    return fn(prisma);
+  });
+
+  stub(prisma.b2bQuotation, "findUnique", async () => (store.quote ? clone(store.quote) : null));
+
+  stub(prisma.b2bQuotation, "updateMany", async (args: { where: Record<string, unknown>; data: Record<string, any> }) => {
+    if (store.failReserve && args.data.status === "SENDING") {
+      throw new Error("simulated database failure before send");
+    }
+    if (!store.quote || (args.where.id !== undefined && args.where.id !== store.quote.id)) return { count: 0 };
+    if (args.where.status !== undefined && store.quote.status !== args.where.status) return { count: 0 };
+    for (const [key, value] of Object.entries(args.data)) {
+      if (value && typeof value === "object" && "increment" in (value as object)) {
+        store.quote[key] = (Number(store.quote[key]) || 0) + (value as { increment: number }).increment;
+      } else {
+        store.quote[key] = value;
+      }
+    }
+    return { count: 1 };
+  });
+
+  stub(prisma.b2bQuotation, "update", async () => (store.quote ? clone(store.quote) : null));
+  stub(prisma.outreachActivity, "create", async (args: { data: Record<string, unknown> }) => {
+    store.activities.push(clone(args.data));
+    return args.data;
+  });
+  stub(prisma.outreachContact, "findUnique", async (args: { select?: Record<string, boolean> }) =>
+    args.select && Object.keys(args.select).length === 1 && "lastContactedAt" in args.select ? { lastContactedAt: null } : activeContact()
+  );
+  stub(prisma.outreachContact, "update", async (args: { data: Record<string, unknown> }) => {
+    store.contactUpdates.push(clone(args.data));
+    return activeContact();
+  });
 }
 
-function stubTransaction() {
-  stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+function activityTypes() {
+  return store.activities.map((activity) => activity.type);
+}
+
+function assertNeverWroteEligibility() {
+  for (const data of store.contactUpdates) {
+    assert.ok(!("status" in data), "a quotation action must never change OutreachContact.status (email eligibility)");
+  }
 }
 
 function sendDeps(overrides: Partial<QuotationSendDependencies> = {}) {
@@ -119,6 +181,16 @@ function sendDeps(overrides: Partial<QuotationSendDependencies> = {}) {
   return { deps, deliver };
 }
 
+function providerRejected() {
+  return new BrevoSendError("Brevo send failed (400).", "REJECTED");
+}
+
+function providerUnreachable() {
+  return new BrevoSendError("Could not reach Brevo.", "UNREACHABLE");
+}
+
+const CONFIRM = { confirmRecipientEmail: "office@sunnyside.test" };
+
 async function expectRuleError(promise: Promise<unknown>, pattern: RegExp, statusCode?: number) {
   await assert.rejects(promise, (error: unknown) => {
     assert.ok(error instanceof QuotationRuleError, `expected QuotationRuleError, got ${String(error)}`);
@@ -128,293 +200,358 @@ async function expectRuleError(promise: Promise<unknown>, pattern: RegExp, statu
   });
 }
 
-// --- creation -------------------------------------------------------------
+function draftPayload(overrides: Record<string, unknown> = {}) {
+  return {
+    contactId: "contact-1",
+    validUntil: "2026-10-31",
+    discount: "0",
+    delivery: "0",
+    lines: [{ productId: "prod-1", quantity: 10, unitPrice: "100" }],
+    ...overrides,
+  };
+}
 
-test("creates a draft with server-computed totals and the first SAST-year number", async () => {
-  stubTransaction();
+function stubProductsAndContactForCreate() {
   stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => [activeProduct()]);
-  const counter = stub(prisma.quotationNumberCounter, "upsert", async () => ({ year: 2026, lastValue: 1 }));
-  const created = stub(prisma.b2bQuotation, "create", async (args: { data: Record<string, unknown> }) => quotationRow({ ...args.data, id: "quote-1" }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
+  stub(prisma.product, "findMany", async () => [{ id: "prod-1", name: "ABC Colouring Book", sku: "SG-0001", status: "ACTIVE" }]);
+}
 
-  await createQuotationDraft(draftPayload({ discount: "50", delivery: "120" }), ACTOR, NOW);
+// --- sending: the state sequence -------------------------------------------
 
-  assert.equal(counter.mock.callCount(), 1);
-  const data = created.mock.calls[0]!.arguments[0]!.data as Record<string, unknown>;
-  assert.equal(data.quotationNumber, "SG-Q-2026-0001");
-  assert.equal(data.subtotal, "1000.00");
-  assert.equal(data.discountAmount, "50.00");
-  assert.equal(data.deliveryAmount, "120.00");
-  assert.equal(data.total, "1070.00");
-  assert.equal(data.status, "DRAFT");
-  assert.equal(data.createdByAdminUserId, ACTOR.id);
-  assert.equal(activity.mock.calls[0]!.arguments[0]!.data.type, "QUOTE_CREATED");
-});
-
-test("the price on a line is the admin's quote price, not the product's website price", async () => {
-  stubTransaction();
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => [activeProduct({ price: "250.00" })]);
-  stub(prisma.quotationNumberCounter, "upsert", async () => ({ year: 2026, lastValue: 2 }));
-  const created = stub(prisma.b2bQuotation, "create", async (args: { data: Record<string, unknown> }) => quotationRow({ ...args.data }));
-  stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-
-  await createQuotationDraft(draftPayload({ lines: [{ productId: "prod-1", quantity: 100, unitPrice: "80" }] }), ACTOR, NOW);
-
-  const lines = (created.mock.calls[0]!.arguments[0]!.data.lines as { create: Record<string, unknown>[] }).create;
-  assert.equal(lines[0]!.unitPrice, "80.00");
-  assert.equal(lines[0]!.lineTotal, "8000.00");
-  assert.equal(lines[0]!.descriptionSnapshot, "ABC Colouring Book", "the description is read from the product, never the client");
-  assert.equal(lines[0]!.skuSnapshot, "SG-0001");
-});
-
-test("an inactive product cannot be quoted", async () => {
-  stubTransaction();
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => [activeProduct({ status: "ARCHIVED" })]);
-  stub(prisma.quotationNumberCounter, "upsert", async () => ({ year: 2026, lastValue: 1 }));
-  await expectRuleError(createQuotationDraft(draftPayload(), ACTOR, NOW), /not available to quote/);
-});
-
-test("a product id that does not exist is refused", async () => {
-  stubTransaction();
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => []);
-  await expectRuleError(createQuotationDraft(draftPayload(), ACTOR, NOW), /no longer exists/, 404);
-});
-
-test("the same product cannot appear twice on one quotation", async () => {
-  await expectRuleError(
-    createQuotationDraft(
-      draftPayload({
-        lines: [
-          { productId: "prod-1", quantity: 1, unitPrice: "10" },
-          { productId: "prod-1", quantity: 2, unitPrice: "10" },
-        ],
-      }),
-      ACTOR,
-      NOW
-    ),
-    /already on the quotation/
-  );
-});
-
-test("a quotation cannot expire before it is dated", async () => {
-  await expectRuleError(createQuotationDraft(draftPayload({ validUntil: "2026-09-01" }), ACTOR, NOW), /cannot be before the quotation date/);
-});
-
-test("a discount larger than the subtotal is refused before anything is written", async () => {
-  stubTransaction();
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => [activeProduct()]);
-  const created = stub(prisma.b2bQuotation, "create", async () => quotationRow());
-  await expectRuleError(createQuotationDraft(draftPayload({ discount: "5000" }), ACTOR, NOW), /more than the subtotal/);
-  assert.equal(created.mock.callCount(), 0);
-});
-
-test("a client-supplied quotation number is ignored: numbers only come from the counter", async () => {
-  stubTransaction();
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.product, "findMany", async () => [activeProduct()]);
-  stub(prisma.quotationNumberCounter, "upsert", async () => ({ year: 2026, lastValue: 9 }));
-  const created = stub(prisma.b2bQuotation, "create", async (args: { data: Record<string, unknown> }) => quotationRow({ ...args.data }));
-  stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-
-  await createQuotationDraft(draftPayload({ quotationNumber: "SG-Q-2026-0001", total: "1" }), ACTOR, NOW);
-
-  const data = created.mock.calls[0]!.arguments[0]!.data as Record<string, unknown>;
-  assert.equal(data.quotationNumber, "SG-Q-2026-0009");
-  assert.equal(data.total, "1000.00", "a client-supplied total is never trusted");
-});
-
-// --- editing and duplicating ----------------------------------------------
-
-test("a sent quotation cannot be edited", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => ({ id: "quote-1", status: "SENT", quotationDate: NOW, contactId: "contact-1" }));
-  const deleted = stub(prisma.b2bQuotationLine, "deleteMany", async () => ({ count: 0 }));
-  await expectRuleError(updateQuotationDraft("quote-1", draftPayload(), NOW), /Only draft quotations can be edited/, 409);
-  assert.equal(deleted.mock.callCount(), 0, "the lines of a sent quote are never removed");
-});
-
-test("editing a draft keeps its original quotation date when none is supplied", async () => {
-  stubTransaction();
-  const originalDate = new Date("2026-09-15T08:00:00.000Z");
-  stub(prisma.b2bQuotation, "findUnique", async () => ({ id: "quote-1", status: "DRAFT", quotationDate: originalDate, contactId: "contact-1" }));
-  stub(prisma.product, "findMany", async () => [activeProduct()]);
-  stub(prisma.b2bQuotationLine, "deleteMany", async () => ({ count: 1 }));
-  const updated = stub(prisma.b2bQuotation, "update", async (args: { data: Record<string, unknown> }) => ({ ...args.data }));
-
-  await updateQuotationDraft("quote-1", draftPayload({ validUntil: "2026-11-30" }), NOW);
-
-  assert.equal((updated.mock.calls[0]!.arguments[0]!.data.quotationDate as Date).getTime(), originalDate.getTime());
-});
-
-test("duplicating a quotation with a removed product is refused rather than guessed", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [{ ...quotationRow().lines[0], productId: null }] }));
-  await expectRuleError(duplicateQuotation("quote-1", ACTOR, NOW), /has since been removed/, 409);
-});
-
-// --- sending: every guard must hold before anything is emailed --------------
-
-test("sending a quotation that is not a draft is refused and nothing is emailed", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ status: "SENT", lines: [] }));
-  const { deps, deliver } = sendDeps();
-  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW), /Only a draft/, 409);
-  assert.equal(deliver.mock.callCount(), 0);
-});
-
-test("a suppressed (UNSUBSCRIBED) contact is never emailed a quotation", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [] }));
-  stub(prisma.outreachContact, "findUnique", async () => activeContact({ status: "UNSUBSCRIBED" }));
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
+test("successful send: DRAFT -> SENDING -> SENT, one QUOTE_SENT activity, and one provider call", async () => {
+  installFakeDatabase();
   const { deps, deliver } = sendDeps();
 
-  await expectRuleError(
-    sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW),
-    /email status is UNSUBSCRIBED.*Their email eligibility has not been changed/,
-    409
-  );
-  assert.equal(deliver.mock.callCount(), 0, "no email is handed to the provider");
-  assert.equal(updateMany.mock.callCount(), 0, "the quotation stays a draft");
-  assert.equal(activity.mock.callCount(), 0, "no QUOTE_SENT activity is recorded");
-});
-
-test("a BOUNCED, INVALID or SUPPRESSED contact is refused the same way", async () => {
-  for (const status of ["SUPPRESSED", "BOUNCED", "INVALID"]) {
-    stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [] }));
-    stub(prisma.outreachContact, "findUnique", async () => activeContact({ status }));
-    const { deps, deliver } = sendDeps();
-    await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW), /not sent/, 409);
-    assert.equal(deliver.mock.callCount(), 0, status);
-    restores.splice(0).forEach((restore) => restore());
-  }
-});
-
-test("when email delivery is switched off, nothing is sent and the draft stays a draft", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [] }));
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const { deps, deliver } = sendDeps({ isDeliveryEnabled: () => false });
-
-  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW), /switched off/, 503);
-  assert.equal(deliver.mock.callCount(), 0);
-  assert.equal(updateMany.mock.callCount(), 0);
-});
-
-test("the recipient must be typed correctly, matching the contact on record", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [] }));
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  const { deps, deliver } = sendDeps();
-
-  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "someone.else@example.test" }, ACTOR, deps, NOW), /does not match this contact/, 409);
-  await expectRuleError(sendQuotation("quote-1", {}, ACTOR, deps, NOW), /email address/);
-  assert.equal(deliver.mock.callCount(), 0);
-});
-
-test("a provider failure leaves the quotation as a draft and records no activity", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ lines: [] }));
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-  const { deps } = sendDeps({
-    deliver: (async () => {
-      throw new Error("Brevo unreachable");
-    }) as unknown as QuotationSendDependencies["deliver"],
-  });
-
-  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW), /could not be sent/, 502);
-  assert.equal(updateMany.mock.callCount(), 0, "status is not moved to SENT");
-  assert.equal(activity.mock.callCount(), 0, "no QUOTE_SENT activity is recorded");
-});
-
-test("a successful send emails the contact, marks the quotation SENT and records one QUOTE_SENT activity", async () => {
-  stubTransaction();
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow());
-  stub(prisma.outreachContact, "findUnique", async (args: { select?: Record<string, boolean> }) =>
-    args.select?.lastContactedAt ? { lastContactedAt: null } : activeContact()
-  );
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-  const contactUpdate = stub(prisma.outreachContact, "update", async () => ({ id: "contact-1" }));
-  const { deps, deliver } = sendDeps();
-
-  await sendQuotation("quote-1", { confirmRecipientEmail: "Office@Sunnyside.test" }, ACTOR, deps, NOW);
+  const result = await sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW);
 
   assert.equal(deliver.mock.callCount(), 1);
+  assert.equal(result?.status, "SENT");
+  assert.equal(result?.sendAttemptCount, 1);
+  assert.deepEqual(activityTypes(), ["QUOTE_SENT"]);
   const sent = deliver.mock.calls[0]!.arguments[0] as unknown as Record<string, unknown>;
   assert.equal(sent.templateName, "b2b-quotation");
   assert.equal(sent.recipientRole, "contact");
   assert.equal(sent.recipientEmail, "office@sunnyside.test");
-  assert.equal(sent.reference, "quotation:SG-Q-2026-0001");
-
-  assert.deepEqual(updateMany.mock.calls[0]!.arguments[0]!.where, { id: "quote-1", status: "DRAFT" }, "claim only a draft");
-  assert.equal(updateMany.mock.calls[0]!.arguments[0]!.data.status, "SENT");
-
-  assert.equal(activity.mock.callCount(), 1);
-  const recorded = activity.mock.calls[0]!.arguments[0]!.data as Record<string, unknown>;
-  assert.equal(recorded.type, "QUOTE_SENT");
-  assert.equal(recorded.channel, "EMAIL");
-  assert.equal(recorded.quotationId, "quote-1");
-
-  assert.equal(contactUpdate.mock.callCount(), 1, "last-contacted moves forward");
-  assert.ok(!("status" in (contactUpdate.mock.calls[0]!.arguments[0]!.data as object)), "a send never changes email eligibility");
+  assertNeverWroteEligibility();
 });
 
-test("a quotation that changed state during the send is reported, not silently double-counted", async () => {
-  stubTransaction();
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow());
-  stub(prisma.outreachContact, "findUnique", async () => activeContact());
-  stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 0 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-  const { deps } = sendDeps();
-  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "office@sunnyside.test" }, ACTOR, deps, NOW), /changed while it was being sent/, 409);
-  assert.equal(activity.mock.callCount(), 0);
+test("the reservation is committed before the provider is called", async () => {
+  installFakeDatabase();
+  let statusDuringProviderCall: string | null = null;
+  const { deps } = sendDeps({
+    deliver: (async () => {
+      statusDuringProviderCall = store.quote!.status;
+    }) as unknown as QuotationSendDependencies["deliver"],
+  });
+  await sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW);
+  assert.equal(statusDuringProviderCall, "SENDING", "a crash during the call must leave a reservation, not a draft");
 });
 
-// --- status moves -------------------------------------------------------------
+test("a second send attempt while the first is in flight is refused and never reaches the provider", async () => {
+  installFakeDatabase();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let providerEntered!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    providerEntered = resolve;
+  });
+  let providerCalls = 0;
+  const { deps } = sendDeps({
+    deliver: (async () => {
+      providerCalls += 1;
+      providerEntered();
+      await gate;
+    }) as unknown as QuotationSendDependencies["deliver"],
+  });
+
+  const first = sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW);
+  await entered;
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /already being sent|Do not resend/, 409);
+
+  release();
+  await first;
+  assert.equal(providerCalls, 1, "exactly one email, however many attempts");
+  assert.equal(store.quote!.status, "SENT");
+});
+
+test("a sent quotation cannot be sent again", async () => {
+  installFakeDatabase();
+  const { deps, deliver } = sendDeps();
+  await sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW);
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /Only a draft/, 409);
+  assert.equal(deliver.mock.callCount(), 1);
+});
+
+// --- provider failure ---------------------------------------------------------
+
+test("provider refusal returns the quotation to DRAFT, records QUOTE_SEND_FAILED, and allows a retry", async () => {
+  installFakeDatabase();
+  const failing = sendDeps({
+    deliver: (async () => {
+      throw providerRejected();
+    }) as unknown as QuotationSendDependencies["deliver"],
+  });
+
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, failing.deps, NOW), /nothing was sent/, 502);
+  assert.equal(store.quote!.status, "DRAFT");
+  assert.match(store.quote!.lastSendError, /Not accepted by the email provider/);
+  assert.deepEqual(activityTypes(), ["QUOTE_SEND_FAILED"]);
+  assert.ok(!activityTypes().includes("QUOTE_SENT"));
+
+  const retry = sendDeps();
+  const result = await sendQuotation("quote-1", CONFIRM, ACTOR, retry.deps, NOW);
+  assert.equal(result?.status, "SENT");
+  assert.equal(retry.deliver.mock.callCount(), 1);
+  assert.equal(result?.sendAttemptCount, 2);
+});
+
+test("an unreachable or unconfirmed provider leaves SEND_UNCERTAIN and blocks any blind resend", async () => {
+  installFakeDatabase();
+  const uncertain = sendDeps({
+    deliver: (async () => {
+      throw providerUnreachable();
+    }) as unknown as QuotationSendDependencies["deliver"],
+  });
+
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, uncertain.deps, NOW), /Do not resend/, 502);
+  assert.equal(store.quote!.status, "SEND_UNCERTAIN");
+  assert.deepEqual(activityTypes(), ["QUOTE_SEND_UNCERTAIN"]);
+
+  const again = sendDeps();
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, again.deps, NOW), /already in progress or its outcome is unconfirmed/, 409);
+  assert.equal(again.deliver.mock.callCount(), 0, "no second email while the outcome is unknown");
+});
+
+test("an unexpected, unclassified error is treated as unknown, never as a clean failure", async () => {
+  installFakeDatabase();
+  const { deps } = sendDeps({
+    deliver: (async () => {
+      throw new Error("socket hang up");
+    }) as unknown as QuotationSendDependencies["deliver"],
+  });
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /may or may not have been delivered/, 502);
+  assert.equal(store.quote!.status, "SEND_UNCERTAIN");
+});
+
+// --- database failures around the provider call ---------------------------------
+
+test("a database failure before the provider call sends nothing and leaves the draft untouched", async () => {
+  installFakeDatabase();
+  store.failReserve = true;
+  const { deps, deliver } = sendDeps();
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /could not be reserved for sending, so nothing was sent/, 503);
+  assert.equal(deliver.mock.callCount(), 0);
+  assert.equal(store.quote!.status, "DRAFT");
+  assert.equal(store.activities.length, 0);
+});
+
+test("a database failure after the provider accepted leaves SENDING, not DRAFT, and blocks a resend", async () => {
+  installFakeDatabase();
+  store.failFinalPersist = true;
+  const { deps, deliver } = sendDeps();
+
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /accepted by the provider.*Do not resend/, 500);
+  assert.equal(deliver.mock.callCount(), 1, "the email was accepted once");
+  assert.equal(store.quote!.status, "SENDING", "must not look like an ordinary unsent draft");
+  assert.match(store.quote!.lastSendError, /final save failed/);
+  assert.ok(!activityTypes().includes("QUOTE_SENT"), "no QUOTE_SENT is claimed without the save");
+
+  const again = sendDeps();
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, again.deps, NOW), /Do not resend it/, 409);
+  assert.equal(again.deliver.mock.callCount(), 0);
+});
+
+// --- gates that run before any reservation ---------------------------------------
+
+test("a suppressed contact is refused before anything is reserved or emailed", async () => {
+  installFakeDatabase();
+  stub(prisma.outreachContact, "findUnique", async () => activeContact({ status: "UNSUBSCRIBED" }));
+  const { deps, deliver } = sendDeps();
+  await expectRuleError(
+    sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW),
+    /email status is UNSUBSCRIBED.*Their email eligibility has not been changed/,
+    409
+  );
+  assert.equal(deliver.mock.callCount(), 0);
+  assert.equal(store.quote!.status, "DRAFT");
+});
+
+test("SUPPRESSED, BOUNCED and INVALID contacts are refused the same way", async () => {
+  for (const status of ["SUPPRESSED", "BOUNCED", "INVALID"]) {
+    installFakeDatabase();
+    stub(prisma.outreachContact, "findUnique", async () => activeContact({ status }));
+    const { deps, deliver } = sendDeps();
+    await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /not sent/, 409);
+    assert.equal(deliver.mock.callCount(), 0, status);
+    restores.splice(0).reverse().forEach((restore) => restore());
+  }
+});
+
+test("when email delivery is off, nothing is reserved and nothing is sent", async () => {
+  installFakeDatabase();
+  const { deps, deliver } = sendDeps({ isDeliveryEnabled: () => false });
+  await expectRuleError(sendQuotation("quote-1", CONFIRM, ACTOR, deps, NOW), /switched off/, 503);
+  assert.equal(deliver.mock.callCount(), 0);
+  assert.equal(store.quote!.status, "DRAFT");
+});
+
+test("the recipient must be typed correctly and match the contact on record", async () => {
+  installFakeDatabase();
+  const { deps, deliver } = sendDeps();
+  await expectRuleError(sendQuotation("quote-1", { confirmRecipientEmail: "someone.else@example.test" }, ACTOR, deps, NOW), /does not match this contact/, 409);
+  await expectRuleError(sendQuotation("quote-1", {}, ACTOR, deps, NOW), /Type the recipient email address to confirm/);
+  assert.equal(deliver.mock.callCount(), 0);
+  assert.equal(store.quote!.status, "DRAFT");
+});
+
+// --- reconciliation ------------------------------------------------------------------
+
+test("reconciling an unresolved send as delivered records SENT with the admin's note", async () => {
+  installFakeDatabase(quotationRow({ status: "SEND_UNCERTAIN" }));
+  const result = await reconcileQuotationSend("quote-1", { outcome: "SENT", note: "Found it in the sent folder" }, ACTOR, NOW);
+  assert.equal(result?.status, "SENT");
+  assert.deepEqual(activityTypes(), ["QUOTE_SENT"]);
+  assert.match(store.activities[0]!.details as string, /Found it in the sent folder/);
+});
+
+test("reconciling as not delivered returns the quotation to DRAFT so it can be sent again", async () => {
+  installFakeDatabase(quotationRow({ status: "SENDING" }));
+  const result = await reconcileQuotationSend("quote-1", { outcome: "NOT_SENT", note: "Checked mailbox, nothing arrived" }, ACTOR, NOW);
+  assert.equal(result?.status, "DRAFT");
+  assert.deepEqual(activityTypes(), ["QUOTE_SEND_RECONCILED"]);
+});
+
+test("reconciliation needs a real note and only applies to an unresolved send", async () => {
+  installFakeDatabase(quotationRow({ status: "SEND_UNCERTAIN" }));
+  await expectRuleError(reconcileQuotationSend("quote-1", { outcome: "SENT", note: "ok" }, ACTOR, NOW), /at least 5 characters/);
+  await expectRuleError(reconcileQuotationSend("quote-1", { outcome: "MAYBE", note: "checked it" }, ACTOR, NOW), /Choose whether/);
+
+  installFakeDatabase(quotationRow({ status: "SENT" }));
+  await expectRuleError(reconcileQuotationSend("quote-1", { outcome: "SENT", note: "checked it" }, ACTOR, NOW), /in progress or unconfirmed/, 409);
+});
+
+// --- status moves that must not bypass the send states ----------------------------
+
+test("a SENDING or SEND_UNCERTAIN quotation cannot be accepted, declined, cancelled or edited", async () => {
+  for (const status of ["SENDING", "SEND_UNCERTAIN"]) {
+    installFakeDatabase(quotationRow({ status }));
+    await expectRuleError(transitionQuotation("quote-1", "ACCEPTED", ACTOR, NOW), /cannot be marked accepted/, 409);
+    await expectRuleError(transitionQuotation("quote-1", "CANCELLED", ACTOR, NOW), /cannot be marked cancelled/, 409);
+    await expectRuleError(updateQuotationDraft("quote-1", draftPayload(), NOW), /Only draft quotations can be edited/, 409);
+    restores.splice(0).reverse().forEach((restore) => restore());
+  }
+});
 
 test("a draft cannot be marked accepted: it was never sent", async () => {
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ status: "DRAFT" }));
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
+  installFakeDatabase();
   await expectRuleError(transitionQuotation("quote-1", "ACCEPTED", ACTOR, NOW), /cannot be marked accepted/, 409);
-  assert.equal(updateMany.mock.callCount(), 0);
 });
 
-test("accepting a sent quotation records QUOTE_ACCEPTED and does NOT change the lead to customer", async () => {
-  stubTransaction();
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ status: "SENT", lines: [] }));
-  const updateMany = stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-  const contactUpdate = stub(prisma.outreachContact, "update", async () => ({}));
-
+test("accepting a sent quotation records QUOTE_ACCEPTED and never makes the lead a customer", async () => {
+  installFakeDatabase(quotationRow({ status: "SENT" }));
   await transitionQuotation("quote-1", "ACCEPTED", ACTOR, NOW);
-
-  assert.equal(updateMany.mock.calls[0]!.arguments[0]!.where.status, "SENT");
-  assert.ok("acceptedAt" in (updateMany.mock.calls[0]!.arguments[0]!.data as object));
-  assert.equal(activity.mock.calls[0]!.arguments[0]!.data.type, "QUOTE_ACCEPTED");
-  assert.equal(contactUpdate.mock.callCount(), 0, "accepting a quote never moves the lead to CUSTOMER");
+  assert.deepEqual(activityTypes(), ["QUOTE_ACCEPTED"]);
+  assert.equal(store.contactUpdates.length, 0, "accepting never writes the contact at all");
 });
 
-test("declining records QUOTE_DECLINED; cancelling records a NOTE and never a sale", async () => {
-  stubTransaction();
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ status: "SENT", lines: [] }));
-  stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 1 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
+// --- numbering race -----------------------------------------------------------------
 
-  await transitionQuotation("quote-1", "DECLINED", ACTOR, NOW);
-  assert.equal(activity.mock.calls[0]!.arguments[0]!.data.type, "QUOTE_DECLINED");
+function raceCounter() {
+  stub(prisma.quotationNumberCounter, "upsert", async () => {
+    if (store.raceFailuresLeft > 0) {
+      store.raceFailuresLeft -= 1;
+      throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed on the counter row", { code: "P2002", clientVersion: "5.22.0" });
+    }
+    store.counter += 1;
+    return { year: 2026, lastValue: store.counter };
+  });
+  stub(prisma.b2bQuotation, "create", async (args: { data: Record<string, any> }) => {
+    if (store.quotationNumbers.has(args.data.quotationNumber)) {
+      throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed on quotationNumber", { code: "P2002", clientVersion: "5.22.0" });
+    }
+    store.quotationNumbers.add(args.data.quotationNumber);
+    return quotationRow({ ...args.data, id: `quote-${store.quotationNumbers.size}` });
+  });
+  stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  stub(prisma.outreachActivity, "create", async (args: { data: Record<string, unknown> }) => args.data);
+}
 
-  await transitionQuotation("quote-1", "CANCELLED", ACTOR, NOW);
-  assert.equal(activity.mock.calls[1]!.arguments[0]!.data.type, "NOTE");
+test("two simultaneous first quotations of a year get distinct SG-Q numbers even when one collides on the counter", async () => {
+  stubProductsAndContactForCreate();
+  raceCounter();
+  store.raceFailuresLeft = 1;
+
+  const [a, b] = await Promise.all([createQuotationDraft(draftPayload(), ACTOR, NOW), createQuotationDraft(draftPayload(), ACTOR, NOW)]);
+
+  assert.notEqual(a.quotationNumber, b.quotationNumber);
+  assert.deepEqual([a.quotationNumber, b.quotationNumber].sort(), ["SG-Q-2026-0001", "SG-Q-2026-0002"]);
 });
 
-test("a lost race on a status change is refused and records nothing", async () => {
-  stubTransaction();
-  stub(prisma.b2bQuotation, "findUnique", async () => quotationRow({ status: "SENT", lines: [] }));
-  stub(prisma.b2bQuotation, "updateMany", async () => ({ count: 0 }));
-  const activity = stub(prisma.outreachActivity, "create", async () => ({ id: "act-1" }));
-  await expectRuleError(transitionQuotation("quote-1", "ACCEPTED", ACTOR, NOW), /changed while you were working/, 409);
-  assert.equal(activity.mock.callCount(), 0);
+test("a counter conflict that keeps happening is reported, never papered over with a duplicate number", async () => {
+  stubProductsAndContactForCreate();
+  raceCounter();
+  store.raceFailuresLeft = 10;
+  await expectRuleError(createQuotationDraft(draftPayload(), ACTOR, NOW), /same moment/, 409);
+  assert.equal(store.quotationNumbers.size, 0);
+});
+
+test("a retry after a single conflict still produces exactly one quotation", async () => {
+  stubProductsAndContactForCreate();
+  raceCounter();
+  store.raceFailuresLeft = 2;
+  const created = await createQuotationDraft(draftPayload(), ACTOR, NOW);
+  assert.equal(created.quotationNumber, "SG-Q-2026-0001");
+  assert.equal(store.quotationNumbers.size, 1);
+});
+
+// --- line limit ---------------------------------------------------------------------
+
+function linesOf(count: number) {
+  return Array.from({ length: count }, (_, index) => ({ productId: `prod-${index + 1}`, quantity: 1, unitPrice: "10" }));
+}
+
+test("a quotation may have up to 15 line items", () => {
+  assert.doesNotThrow(() => parseQuotationDraftInput(draftPayload({ lines: linesOf(15) }), NOW));
+});
+
+test("a sixteenth line item is refused with a clear error, never truncated", () => {
+  assert.throws(() => parseQuotationDraftInput(draftPayload({ lines: linesOf(16) }), NOW), /at most 15 line items/);
+});
+
+// --- creation and editing ---------------------------------------------------------------
+
+test("creation computes totals on the server from the admin's quote price", async () => {
+  stubProductsAndContactForCreate();
+  raceCounter();
+  const created = await createQuotationDraft(draftPayload({ discount: "50", delivery: "120" }), ACTOR, NOW);
+  assert.equal(created.quotationNumber, "SG-Q-2026-0001");
+  assert.equal(created.subtotal, "1000.00");
+  assert.equal(created.total, "1070.00");
+  assert.equal(created.status, "DRAFT");
+});
+
+test("an inactive product cannot be quoted", async () => {
+  stub(prisma.outreachContact, "findUnique", async () => activeContact());
+  stub(prisma.product, "findMany", async () => [{ id: "prod-1", name: "Old book", sku: null, status: "ARCHIVED" }]);
+  stub(prisma.quotationNumberCounter, "upsert", async () => ({ year: 2026, lastValue: 1 }));
+  stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  await expectRuleError(createQuotationDraft(draftPayload(), ACTOR, NOW), /not available to quote/);
+});
+
+test("editing a draft keeps its original quotation date when none is supplied", async () => {
+  const originalDate = new Date("2026-09-15T08:00:00.000Z");
+  installFakeDatabase(quotationRow({ quotationDate: originalDate }));
+  stub(prisma.product, "findMany", async () => [{ id: "prod-1", name: "ABC Colouring Book", sku: "SG-0001", status: "ACTIVE" }]);
+  stub(prisma.b2bQuotationLine, "deleteMany", async () => ({ count: 1 }));
+  const updated = stub(prisma.b2bQuotation, "update", async (args: { data: Record<string, unknown> }) => ({ ...args.data }));
+
+  await updateQuotationDraft("quote-1", draftPayload({ validUntil: "2026-11-30" }), NOW);
+  assert.equal((updated.mock.calls[0]!.arguments[0]!.data.quotationDate as Date).getTime(), originalDate.getTime());
+});
+
+test("duplicating a quotation with a removed product is refused rather than guessed", async () => {
+  installFakeDatabase(quotationRow({ lines: [{ ...quotationRow().lines[0], productId: null }] }));
+  await expectRuleError(duplicateQuotation("quote-1", ACTOR, NOW), /has since been removed/, 409);
 });

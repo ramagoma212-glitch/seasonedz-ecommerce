@@ -258,6 +258,8 @@ export async function getContactTimeline(contactId: string) {
         details: true,
         orderId: true,
         quotationId: true,
+        fromLeadStatus: true,
+        toLeadStatus: true,
         createdByAdminNameSnapshot: true,
         createdAt: true,
       },

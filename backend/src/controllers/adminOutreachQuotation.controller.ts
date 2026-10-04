@@ -156,3 +156,16 @@ export async function quotationPdfHandler(req: Request, res: Response, next: Nex
     handleCrmServiceError(error, res, next);
   }
 }
+
+export async function reconcileQuotationSendHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const id = quotationIdOf(req, res);
+    const actor = requireActor(req, res);
+    if (!id || !actor) return;
+    const quotation = await quotations.reconcileQuotationSend(id, bodyOf(req), actor);
+    void recordAdminSecurityEvent({ adminUserId: actor.id, eventType: "B2B_QUOTATION_SENT", summary: `Quotation ${id} send status reconciled` });
+    sendSuccess(res, { message: "Send status reconciled", data: quotation });
+  } catch (error) {
+    handleCrmServiceError(error, res, next);
+  }
+}

@@ -19,10 +19,21 @@ import type { RenderedEmail } from "../email.types.js";
 const BREVO_SEND_URL = "https://api.brevo.com/v3/smtp/email";
 const BREVO_REQUEST_TIMEOUT_MS = 10_000;
 
+// Milestone 201: `code` says what kind of failure this was, so a caller that
+// must not blindly retry (B2B quotation sending) can tell a definite refusal
+// from an outcome that is genuinely unknown.
+//   NOT_CONFIGURED: nothing was sent.
+//   REJECTED: Brevo answered with an error status, so the email was not accepted.
+//   UNREACHABLE: no response arrived (timeout, network). The email may or may not have been accepted.
+export type BrevoSendErrorCode = "NOT_CONFIGURED" | "REJECTED" | "UNREACHABLE";
+
 export class BrevoSendError extends Error {
-  constructor(message: string) {
+  code: BrevoSendErrorCode;
+
+  constructor(message: string, code: BrevoSendErrorCode) {
     super(message);
     this.name = "BrevoSendError";
+    this.code = code;
   }
 }
 
@@ -37,7 +48,7 @@ export async function sendViaBrevo(to: BrevoRecipient, rendered: RenderedEmail):
   // EMAIL_PROVIDER=brevo — keeps this function safe to call directly
   // in a test without needing to reload env.ts.
   if (!env.brevoApiKey || !env.emailReplyTo || !env.emailFromAddress) {
-    throw new BrevoSendError("Brevo is not fully configured. Missing API key, reply-to address, or from address.");
+    throw new BrevoSendError("Brevo is not fully configured. Missing API key, reply-to address, or from address.", "NOT_CONFIGURED");
   }
 
   const body = {
@@ -67,12 +78,12 @@ export async function sendViaBrevo(to: BrevoRecipient, rendered: RenderedEmail):
       signal: controller.signal,
     });
   } catch {
-    throw new BrevoSendError("Could not reach Brevo.");
+    throw new BrevoSendError("Could not reach Brevo.", "UNREACHABLE");
   } finally {
     clearTimeout(timeoutId);
   }
 
   if (!response.ok) {
-    throw new BrevoSendError(`Brevo send failed (${response.status}).`);
+    throw new BrevoSendError(`Brevo send failed (${response.status}).`, "REJECTED");
   }
 }

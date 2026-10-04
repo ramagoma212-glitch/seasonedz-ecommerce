@@ -73,6 +73,10 @@ export function sendAdminQuotation(id, confirmRecipientEmail) {
   return adminRequest(`${quotationPath(id)}/send`, { method: "POST", body: JSON.stringify({ confirmRecipientEmail }) });
 }
 
+export function reconcileAdminQuotation(id, payload) {
+  return adminRequest(`${quotationPath(id)}/reconcile`, { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function transitionAdminQuotation(id, action) {
   return adminRequest(`${quotationPath(id)}/${action}`, { method: "POST" });
 }

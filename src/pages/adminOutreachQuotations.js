@@ -9,7 +9,12 @@ import { renderOutreachSubNav } from "../components/outreachSubNav.js";
 import { formatDate, humanizeEnum, renderStatusBadge } from "../js/adminFormat.js";
 import { escapeHtml } from "../js/search.js";
 
-const STATUSES = ["DRAFT", "SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"];
+const STATUSES = ["DRAFT", "SENDING", "SEND_UNCERTAIN", "SENT", "ACCEPTED", "DECLINED", "EXPIRED", "CANCELLED"];
+const STATUS_LABELS = { SENDING: "Sending", SEND_UNCERTAIN: "Sending / uncertain" };
+
+function statusLabel(status) {
+  return STATUS_LABELS[status] ?? humanizeEnum(status);
+}
 
 function formatRandAmount(value) {
   return `R${Number(value).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -20,7 +25,7 @@ function renderSummary(counts) {
     <div class="admin-cards">
       ${STATUSES.map((status) => `
         <a class="admin-card" href="/admin/outreach/quotations?status=${status}">
-          <span class="admin-card__label">${humanizeEnum(status)}</span>
+          <span class="admin-card__label">${escapeHtml(statusLabel(status))}</span>
           <span class="admin-card__value">${counts[status] ?? 0}</span>
         </a>`).join("")}
     </div>
@@ -92,7 +97,7 @@ export async function renderAdminOutreachQuotations({ query } = {}) {
           <label class="form-field__label">Status
             <select name="status" class="form-field__input">
               <option value="">All statuses</option>
-              ${STATUSES.map((value) => `<option value="${value}"${value === status ? " selected" : ""}>${humanizeEnum(value)}</option>`).join("")}
+              ${STATUSES.map((value) => `<option value="${value}"${value === status ? " selected" : ""}>${escapeHtml(statusLabel(value))}</option>`).join("")}
             </select>
           </label>
           <label class="form-field__label">Search
