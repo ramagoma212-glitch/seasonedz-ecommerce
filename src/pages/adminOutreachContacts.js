@@ -141,6 +141,7 @@ function renderContactsTable(contacts) {
             <th>Email Eligibility</th>
             <th>Last Contacted</th>
             <th>Follow-up</th>
+            <th>Next Action</th>
             <th>Added</th>
             <th></th>
           </tr>
@@ -159,6 +160,7 @@ function renderContactsTable(contacts) {
               <td>${renderStatusBadge(contact.status)}</td>
               <td>${contact.lastContactedAt ? formatDate(contact.lastContactedAt) : "&mdash;"}</td>
               <td>${renderFollowUpBadge(contact.followUpState, contact.nextFollowUpAt)}</td>
+              <td>${contact.nextAction ? escapeHtml(contact.nextAction) : "&mdash;"}</td>
               <td>${formatDate(contact.createdAt)}</td>
               <td class="admin-table__actions">
                 <a href="/admin/outreach/contacts/${encodeURIComponent(contact.id)}" class="admin-section__link">View</a>

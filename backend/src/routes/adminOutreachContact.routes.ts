@@ -7,6 +7,17 @@ import { Router } from "express";
 import { requireAdminAuth } from "../middleware/requireAdminAuth.middleware.js";
 import { outreachImportRateLimiter } from "../middleware/rateLimit.middleware.js";
 import {
+  completeFollowUpHandler,
+  getContactCrmDetailHandler,
+  getContactTimelineHandler,
+  linkOrderHandler,
+  markCustomerHandler,
+  markRepeatCustomerHandler,
+  recordActivityHandler,
+  recordCatalogueSentHandler,
+  setFollowUpHandler,
+} from "../controllers/adminOutreachCrm.controller.js";
+import {
   commitImportHandler,
   createContactHandler,
   deleteContactHandler,
@@ -41,6 +52,17 @@ router.get("/:id", getContactHandler);
 router.get("/:id/history", getContactHistoryHandler);
 router.patch("/:id", updateContactHandler);
 router.patch("/:id/status", setContactStatusHandler);
+// Milestone 201: CRM sales workflow. Each of these is one explicit admin
+// action. None of them touches OutreachContact.status (email eligibility).
+router.get("/:id/crm-detail", getContactCrmDetailHandler);
+router.get("/:id/timeline", getContactTimelineHandler);
+router.post("/:id/activities", recordActivityHandler);
+router.patch("/:id/follow-up", setFollowUpHandler);
+router.post("/:id/follow-up/complete", completeFollowUpHandler);
+router.post("/:id/catalogue-sent", recordCatalogueSentHandler);
+router.post("/:id/orders/:orderId/link", linkOrderHandler);
+router.post("/:id/orders/:orderId/mark-customer", markCustomerHandler);
+router.post("/:id/mark-repeat-customer", markRepeatCustomerHandler);
 router.delete("/:id", deleteContactHandler);
 
 export default router;

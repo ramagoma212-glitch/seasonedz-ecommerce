@@ -38,6 +38,7 @@ export * as adminAffiliateApi from "./api/adminAffiliateApi.js";
 export * as adminReferralsApi from "./api/adminReferralsApi.js";
 export * as adminCouponApi from "./api/adminCouponApi.js";
 export * as adminOutreachContactApi from "./api/adminOutreachContactApi.js";
+export * as adminOutreachCrmApi from "./api/adminOutreachCrmApi.js";
 export * as adminOutreachCampaignApi from "./api/adminOutreachCampaignApi.js";
 export * as adminOutreachImport from "../pages/adminOutreachImport.js";
 export * as adminPreorderApi from "./api/adminPreorderApi.js";

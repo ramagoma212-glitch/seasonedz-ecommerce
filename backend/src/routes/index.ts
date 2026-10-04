@@ -31,6 +31,7 @@ import adminWelcomeGiftRoutes from "./adminWelcomeGift.routes.js";
 import couponRoutes from "./coupon.routes.js";
 import adminCouponRoutes from "./adminCoupon.routes.js";
 import adminOutreachContactRoutes from "./adminOutreachContact.routes.js";
+import adminOutreachQuotationRoutes from "./adminOutreachQuotation.routes.js";
 import adminOutreachCampaignRoutes from "./adminOutreachCampaign.routes.js";
 import outreachUnsubscribeRoutes from "./outreachUnsubscribe.routes.js";
 
@@ -88,6 +89,7 @@ router.use("/coupons", couponRoutes);
 // the same "admin surface and its one public counterpart, two
 // routers" pattern /coupons above already established.
 router.use("/admin/outreach/contacts", adminOutreachContactRoutes);
+router.use("/admin/outreach/quotations", adminOutreachQuotationRoutes);
 router.use("/admin/outreach/campaigns", adminOutreachCampaignRoutes);
 router.use("/outreach", outreachUnsubscribeRoutes);
 // Version 7, Milestone 176: affiliate application/document review —

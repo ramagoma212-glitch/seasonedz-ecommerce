@@ -245,6 +245,7 @@ function ensureAdminModulesLoaded() {
       } = bundle.adminReferralsApi);
       ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
       ({ createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport } = bundle.adminOutreachContactApi);
+      ({ recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent, linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer, createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation } = bundle.adminOutreachCrmApi);
       ({
         createAdminOutreachCampaign,
         updateAdminOutreachCampaign,
@@ -393,6 +394,7 @@ function mountApp() {
       setupAdminCouponActions();
       setupAdminOutreachContactFilterForm();
       setupAdminOutreachContactForm();
+      setupAdminCrmWorkflow();
       setupAdminOutreachSuppressionFilterForm();
       setupAdminOutreachImport();
       setupAdminOutreachCampaignForm();
@@ -4747,6 +4749,219 @@ function setupAdminOutreachContactForm() {
       event.preventDefault();
       handleAdminOutreachQuickUpdate(followUpForm, { nextFollowUpAt: followUpForm.querySelector("#quickNextFollowUp")?.value || null });
       return;
+    }
+  });
+}
+
+// Milestone 201: CRM sales workflow and quotation handlers. Every action is
+// an explicit submit or click. None of them changes email eligibility, and
+// none sends an email unless the admin confirmed it in the browser first.
+let recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent;
+let linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer;
+let createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation;
+
+function crmFormPayload(form) {
+  const payload = {};
+  for (const [key, value] of new FormData(form).entries()) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed === "") continue;
+    payload[key] = key === "occurredAt" ? new Date(trimmed).toISOString() : trimmed;
+  }
+  return payload;
+}
+
+function crmErrorMessage(error) {
+  if (error instanceof ApiError && (error.status === 400 || error.status === 409 || error.status === 404 || error.status === 502 || error.status === 503)) {
+    return error.message;
+  }
+  if (error instanceof ApiUnavailableError) {
+    return "We could not connect to the admin system right now. Please try again shortly.";
+  }
+  return "Something went wrong. Please try again shortly.";
+}
+
+async function runCrmAction({ bannerSelector, button, action, successMessage }) {
+  const banner = bannerSelector ? document.querySelector(bannerSelector) : null;
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  if (button) button.disabled = true;
+
+  try {
+    await action();
+    setPendingAdminMessage(successMessage);
+    rerenderCurrentRoute();
+  } catch (error) {
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    }
+    if (banner) {
+      banner.textContent = crmErrorMessage(error);
+      banner.hidden = false;
+    }
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+const CONTACT_BANNER = "[data-admin-outreach-quick-action-banner]";
+const QUOTE_FORM_BANNER = "[data-admin-quotation-form-banner]";
+const QUOTE_ACTION_BANNER = "[data-admin-quotation-action-banner]";
+
+function setupAdminCrmWorkflow() {
+  document.addEventListener("submit", (event) => {
+    const crmForm = event.target.closest?.("[data-admin-crm-form]");
+    if (crmForm) {
+      event.preventDefault();
+      const contactId = crmForm.dataset.contactId;
+      const submitButton = crmForm.querySelector('button[type="submit"]');
+      const payload = crmFormPayload(crmForm);
+
+      if (crmForm.dataset.crmAction === "activity") {
+        payload.type = crmForm.dataset.activityType;
+        runCrmAction({
+          bannerSelector: CONTACT_BANNER,
+          button: submitButton,
+          action: () => recordAdminOutreachActivity(contactId, payload),
+          successMessage: "Saved. The lead status has not changed.",
+        });
+      } else if (crmForm.dataset.crmAction === "catalogue") {
+        runCrmAction({
+          bannerSelector: CONTACT_BANNER,
+          button: submitButton,
+          action: () => recordAdminOutreachCatalogueSent(contactId, payload),
+          successMessage: "Catalogue send recorded. The lead status has not changed.",
+        });
+      } else if (crmForm.dataset.crmAction === "follow-up") {
+        runCrmAction({
+          bannerSelector: CONTACT_BANNER,
+          button: submitButton,
+          action: () => setAdminOutreachFollowUp(contactId, payload),
+          successMessage: "Follow-up saved.",
+        });
+      } else if (crmForm.dataset.crmAction === "complete-follow-up") {
+        runCrmAction({
+          bannerSelector: CONTACT_BANNER,
+          button: submitButton,
+          action: () => completeAdminOutreachFollowUp(contactId, payload),
+          successMessage: "Follow-up marked completed and recorded in the timeline.",
+        });
+      }
+      return;
+    }
+
+    const quoteForm = event.target.closest?.("[data-admin-quotation-form]");
+    if (quoteForm) {
+      event.preventDefault();
+      const data = new FormData(quoteForm);
+      const productIds = data.getAll("line_productId");
+      const quantities = data.getAll("line_quantity");
+      const prices = data.getAll("line_unitPrice");
+      const lines = [];
+      productIds.forEach((productId, index) => {
+        if (productId) lines.push({ productId, quantity: quantities[index], unitPrice: prices[index] });
+      });
+      const payload = {
+        quotationDate: data.get("quotationDate") || undefined,
+        validUntil: data.get("validUntil") || undefined,
+        discount: data.get("discount") || "0",
+        delivery: data.get("delivery") || "0",
+        billingAddress: data.get("billingAddress") || null,
+        notes: data.get("notes") || null,
+        lines,
+      };
+      const isEdit = quoteForm.dataset.mode === "edit";
+      if (!isEdit) payload.contactId = data.get("contactId");
+      const quoteId = quoteForm.dataset.quotationId;
+      runCrmAction({
+        bannerSelector: QUOTE_FORM_BANNER,
+        button: quoteForm.querySelector('button[type="submit"]'),
+        action: async () => {
+          const response = isEdit ? await updateAdminQuotation(quoteId, payload) : await createAdminQuotation(payload);
+          const savedId = response.data.id;
+          navigateTo(`/admin/outreach/quotations/${encodeURIComponent(savedId)}`);
+        },
+        successMessage: isEdit ? "Draft saved. Totals were recalculated." : "Draft created. Totals were calculated on save.",
+      });
+      return;
+    }
+
+    const sendForm = event.target.closest?.("[data-admin-quotation-send-form]");
+    if (sendForm) {
+      event.preventDefault();
+      const quoteId = sendForm.dataset.quotationId;
+      const typed = sendForm.querySelector('input[name="confirmRecipientEmail"]')?.value?.trim() ?? "";
+      if (!window.confirm(`Email this quotation to ${typed}? This cannot be undone.`)) return;
+      runCrmAction({
+        bannerSelector: QUOTE_ACTION_BANNER,
+        button: sendForm.querySelector('button[type="submit"]'),
+        action: () => sendAdminQuotation(quoteId, typed),
+        successMessage: "Quotation emailed. It is now marked as sent.",
+      });
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const clearButton = event.target.closest?.('[data-crm-action="clear-follow-up"]');
+    if (clearButton) {
+      event.preventDefault();
+      const contactId = clearButton.closest("[data-admin-crm-form]")?.dataset.contactId;
+      runCrmAction({
+        bannerSelector: CONTACT_BANNER,
+        button: clearButton,
+        action: () => setAdminOutreachFollowUp(contactId, { nextFollowUpAt: null, nextAction: null }),
+        successMessage: "Follow-up cleared.",
+      });
+      return;
+    }
+
+    const orderButton = event.target.closest?.("[data-crm-order-action]");
+    if (orderButton) {
+      event.preventDefault();
+      const contactId = document.querySelector("[data-crm-quick-actions]")?.dataset.contactId;
+      const orderId = orderButton.dataset.orderId;
+      const kind = orderButton.dataset.crmOrderAction;
+      if (kind === "link") {
+        runCrmAction({ bannerSelector: CONTACT_BANNER, button: orderButton, action: () => linkAdminOutreachOrder(contactId, orderId), successMessage: "Order linked to this contact. The lead status has not changed." });
+      } else if (kind === "mark-customer") {
+        if (!window.confirm("Mark this contact as a customer from this order? The lead status will change to Customer.")) return;
+        runCrmAction({ bannerSelector: CONTACT_BANNER, button: orderButton, action: () => markAdminOutreachCustomer(contactId, orderId), successMessage: "Contact marked as customer." });
+      } else if (kind === "mark-repeat") {
+        if (!window.confirm("Mark this contact as a repeat customer? The lead status will change to Repeat Customer.")) return;
+        runCrmAction({ bannerSelector: CONTACT_BANNER, button: orderButton, action: () => markAdminOutreachRepeatCustomer(contactId), successMessage: "Contact marked as repeat customer." });
+      }
+      return;
+    }
+
+    const quoteButton = event.target.closest?.("[data-quote-action]");
+    if (quoteButton) {
+      event.preventDefault();
+      const quoteId = quoteButton.dataset.quoteId;
+      const action = quoteButton.dataset.quoteAction;
+      if (action === "duplicate") {
+        runCrmAction({
+          bannerSelector: QUOTE_ACTION_BANNER,
+          button: quoteButton,
+          action: async () => {
+            const response = await duplicateAdminQuotation(quoteId);
+            navigateTo(`/admin/outreach/quotations/${encodeURIComponent(response.data.id)}/edit`);
+          },
+          successMessage: "New draft created from this quotation.",
+        });
+        return;
+      }
+      const confirmations = {
+        accept: "Mark this quotation as accepted? This does not make the contact a customer. Record an order first for that.",
+        decline: "Mark this quotation as declined?",
+        expire: "Mark this quotation as expired?",
+        cancel: "Cancel this quotation? It will stay in the record, marked as cancelled.",
+      };
+      if (!window.confirm(confirmations[action])) return;
+      const labels = { accept: "Quotation marked accepted.", decline: "Quotation marked declined.", expire: "Quotation marked expired.", cancel: "Quotation cancelled." };
+      runCrmAction({ bannerSelector: QUOTE_ACTION_BANNER, button: quoteButton, action: () => transitionAdminQuotation(quoteId, action), successMessage: labels[action] });
     }
   });
 }

@@ -42,7 +42,12 @@ export type AdminSecurityEventType =
   | "OUTREACH_CAMPAIGN_EDITED"
   | "OUTREACH_CAMPAIGN_RECIPIENTS_BUILT"
   | "OUTREACH_CAMPAIGN_SEND_BATCH"
-  | "OUTREACH_CAMPAIGN_TEST_SENT";
+  | "OUTREACH_CAMPAIGN_TEST_SENT"
+  // Milestone 201: CRM lead-status promotions to customer, and a quotation
+  // emailed to a contact. Stored in the existing String column; no
+  // migration needed.
+  | "OUTREACH_CRM_CUSTOMER_STATUS_CHANGED"
+  | "B2B_QUOTATION_SENT";
 
 export interface RecordAdminSecurityEventInput {
   // Null for events with no real admin to attach to yet — an unknown-
