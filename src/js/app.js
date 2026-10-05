@@ -4667,7 +4667,7 @@ function setupAdminOutreachContactFilterForm() {
     event.preventDefault();
 
     const params = new URLSearchParams();
-    ["search", "organisationType", "province", "source", "tag", "leadStatus", "followUpState"].forEach((name) => {
+    ["search", "organisationType", "province", "source", "tag", "leadStatus", "followUpState", "replied"].forEach((name) => {
       const value = form.querySelector(`[name="${name}"]`)?.value.trim();
       if (value) params.set(name, value);
     });

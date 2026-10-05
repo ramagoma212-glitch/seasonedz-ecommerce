@@ -18,6 +18,7 @@ function buildQuery(params) {
   if (params.status) query.set("status", params.status);
   if (params.leadStatus) query.set("leadStatus", params.leadStatus);
   if (params.followUpState) query.set("followUpState", params.followUpState);
+  if (params.replied) query.set("replied", params.replied);
   const qs = query.toString();
   return qs ? `?${qs}` : "";
 }

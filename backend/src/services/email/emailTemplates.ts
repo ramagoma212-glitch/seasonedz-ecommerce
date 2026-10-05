@@ -34,6 +34,7 @@ import type {
   WelcomeGiftEmailData,
 } from "./email.types.js";
 import { preferredFrontendBaseUrl } from "../../utils/frontendUrl.js";
+import { BUSINESS_CONTACT } from "../../config/businessContact.js";
 import { formatSastDate } from "../../utils/southAfricaTime.js";
 
 const CONTACT_LINE = "If you have any questions, just reply to this email or reach us through our Contact page.";
@@ -52,9 +53,9 @@ const CONTACT_LINE = "If you have any questions, just reply to this email or rea
 // mailbox yet — see businessInfo.js). Update this once EMAIL_REPLY_TO
 // itself moves to a real, tested info@ mailbox, not before, or a
 // customer's "Reply" would go somewhere unmonitored.
-const ORDER_CONTACT_BLOCK = `Seasonedz Group
-Email: seasonedzgroup@outlook.com
-WhatsApp: +27 69 526 9941`;
+const ORDER_CONTACT_BLOCK = `${BUSINESS_CONTACT.businessName}
+Email: ${BUSINESS_CONTACT.email}
+WhatsApp: ${BUSINESS_CONTACT.phone}`;
 
 function formatRand(amount: number): string {
   return `R${amount.toFixed(2)}`;

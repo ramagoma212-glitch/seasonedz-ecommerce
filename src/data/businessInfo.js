@@ -24,11 +24,14 @@ export const businessInfo = {
   // for now — info@seasonedzgroup.co.za has no mailbox yet (email hosting
   // is planned via Afrihost). Update once that mailbox exists and is tested.
   email: "seasonedzgroup@outlook.com",
-  phoneDisplay: "069 526 9941",
-  phoneE164: "+27695269941",
-  whatsappUrl: "https://wa.me/27695269941",
+  // Milestone 202 completion: the owner's official Call / WhatsApp number for
+  // every customer-facing and B2B communication. Mirrored in
+  // backend/src/config/businessContact.ts, and a backend test keeps the two equal.
+  phoneDisplay: "072 844 5644",
+  phoneE164: "+27728445644",
+  whatsappUrl: "https://wa.me/27728445644",
   mailtoUrl: "mailto:seasonedzgroup@outlook.com",
-  telUrl: "tel:+27695269941",
+  telUrl: "tel:+27728445644",
   // Milestone 178: owner confirmed official Seasonedz Group social
   // profile destinations. Every place on the site that links to these
   // platforms reads from here, so there is exactly one place to update

@@ -30,7 +30,7 @@ function handleServiceError(error: unknown, res: Response, next: NextFunction): 
 
 export async function listContactsHandler(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { search, organisationType, province, city, source, tag, status, leadStatus, followUpState, page, limit } = req.query;
+    const { search, organisationType, province, city, source, tag, status, leadStatus, followUpState, replied, page, limit } = req.query;
     const result = await outreachContactService.listContacts({
       search: typeof search === "string" ? search : undefined,
       organisationType: typeof organisationType === "string" ? organisationType : undefined,
@@ -44,6 +44,7 @@ export async function listContactsHandler(req: Request, res: Response, next: Nex
         typeof followUpState === "string" && OUTREACH_FOLLOW_UP_STATES.includes(followUpState as OutreachFollowUpState)
           ? (followUpState as OutreachFollowUpState)
           : undefined,
+      replied: replied === "true" ? true : undefined,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });

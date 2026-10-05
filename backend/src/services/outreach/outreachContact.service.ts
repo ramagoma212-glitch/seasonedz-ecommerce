@@ -338,6 +338,8 @@ export interface OutreachContactListFilters {
   status?: OutreachContactStatus;
   leadStatus?: OutreachLeadStatus;
   followUpState?: OutreachFollowUpState;
+  // Milestone 202: a genuine REPLY_RECEIVED activity exists. Never opens, clicks or campaign status.
+  replied?: boolean;
   page?: number;
   limit?: number;
 }
@@ -354,6 +356,7 @@ export function buildOutreachContactWhere(filters: Omit<OutreachContactListFilte
   if (filters.source) where.source = filters.source;
   if (filters.tag) where.tags = { has: filters.tag };
   if (filters.leadStatus) where.leadStatus = filters.leadStatus;
+  if (filters.replied) where.activities = { some: { type: "REPLY_RECEIVED" } };
   if (filters.search) {
     const search = filters.search.trim();
     if (search) {

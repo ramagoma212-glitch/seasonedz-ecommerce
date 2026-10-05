@@ -18,7 +18,7 @@ const EXPECTED = {
   x: "https://x.com/seasonedzgroup?s=11",
   linkedin: "https://www.linkedin.com/company/seasonedz-group/",
   reddit: "https://www.reddit.com/u/SeasonedzGroup/s/4YQwVhRT1H",
-  whatsapp: "https://wa.me/27695269941",
+  whatsapp: "https://wa.me/27728445644",
 };
 
 async function assertExternalLink(page, locator, expectedHref) {

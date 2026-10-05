@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
 
 const REGISTRATION_NUMBER = "2024/618215/07";
 const EMAIL = "seasonedzgroup@outlook.com";
-const PHONE = "069 526 9941";
+const PHONE = "072 844 5644";
 const WEBSITE_DISPLAY = "www.seasonedzgroup.co.za";
 const LAST_UPDATED = "Last updated: 24 August 2026";
 

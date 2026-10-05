@@ -74,6 +74,7 @@ function renderFilters(query, distinctValues) {
   const statusParam = query.get("status");
   const status = statusParam === null ? "ACTIVE" : statusParam;
   const followUpState = query.get("followUpState") || "";
+  const replied = query.get("replied") || "";
 
   const selectOptions = (values, current) => values.map((value) => `<option value="${escapeHtml(value)}"${value === current ? " selected" : ""}>${escapeHtml(value)}</option>`).join("");
   const enumOptions = (values, current, placeholder) =>
@@ -109,6 +110,10 @@ function renderFilters(query, distinctValues) {
       <select name="followUpState" class="form-field__input">
         <option value="">All follow-up states</option>
         ${FOLLOW_UP_STATES.map((state) => `<option value="${state.value}"${state.value === followUpState ? " selected" : ""}>${escapeHtml(state.label)}</option>`).join("")}
+      </select>
+      <select name="replied" class="form-field__input">
+        <option value="">All contacts</option>
+        <option value="true"${replied === "true" ? " selected" : ""}>Replied only</option>
       </select>
       <button type="submit" class="btn btn--secondary btn--sm">Filter</button>
     </form>
@@ -207,6 +212,8 @@ export async function renderAdminOutreachContacts({ query } = {}) {
   const tag = effectiveQuery.get("tag") || undefined;
   const leadStatus = effectiveQuery.get("leadStatus") || undefined;
   const followUpState = effectiveQuery.get("followUpState") || undefined;
+  // Milestone 202: genuine REPLY_RECEIVED activity only.
+  const replied = effectiveQuery.get("replied") === "true" ? "true" : undefined;
   // Milestone 199: "status" (email eligibility) now defaults to ACTIVE
   // only when the admin hasn't explicitly chosen one — same "All ..."
   // empty-string-means-no-filter convention every other filter here
@@ -216,7 +223,7 @@ export async function renderAdminOutreachContacts({ query } = {}) {
 
   try {
     const [contactsResponse, distinctValuesResponse, crmSummaryResponse] = await Promise.all([
-      getAdminOutreachContacts({ page, search, organisationType, province, source, tag, leadStatus, followUpState, status }),
+      getAdminOutreachContacts({ page, search, organisationType, province, source, tag, leadStatus, followUpState, status, replied }),
       getAdminOutreachContactDistinctValues(),
       getAdminOutreachCrmSummary(),
     ]);

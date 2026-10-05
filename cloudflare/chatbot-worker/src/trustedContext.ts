@@ -41,8 +41,8 @@ const BUSINESS_INFO = {
   name: "Seasonedz Group",
   website: "https://www.seasonedzgroup.co.za",
   email: "seasonedzgroup@outlook.com",
-  phone: "069 526 9941",
-  whatsapp: "https://wa.me/27695269941",
+  phone: "072 844 5644",
+  whatsapp: "https://wa.me/27728445644",
   location: "Pretoria, South Africa",
 };
 

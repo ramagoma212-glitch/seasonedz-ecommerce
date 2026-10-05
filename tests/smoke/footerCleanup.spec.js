@@ -100,7 +100,7 @@ test.describe("Footer owner layout refinement (Milestone 171B.0.3)", () => {
     await expect(strip.getByRole("link", { name: /FAQ/ })).toHaveAttribute("href", "/faq");
     await expect(strip.getByRole("link", { name: /WhatsApp/ })).toHaveAttribute("href", /wa\.me/);
     await expect(strip.getByRole("link", { name: /seasonedzgroup@outlook\.com/ })).toHaveAttribute("href", /^mailto:/);
-    await expect(strip.getByRole("link", { name: /069 526 9941/ })).toHaveAttribute("href", /^tel:/);
+    await expect(strip.getByRole("link", { name: /072 844 5644/ })).toHaveAttribute("href", /^tel:/);
   });
 
   test("all 9 payment methods are shown as individual, non-interactive, non-linked images with descriptive alt text", async ({ page }) => {
