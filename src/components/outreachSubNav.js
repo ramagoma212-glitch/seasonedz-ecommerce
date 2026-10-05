@@ -7,6 +7,7 @@
 
 const SUB_NAV_LINKS = [
   { key: "contacts", href: "/admin/outreach/contacts", label: "Contacts" },
+  { key: "followups", href: "/admin/outreach/follow-ups", label: "Follow-ups" },
   { key: "quotations", href: "/admin/outreach/quotations", label: "Quotations" },
   { key: "campaigns", href: "/admin/outreach/campaigns", label: "Campaigns" },
   { key: "suppression", href: "/admin/outreach/suppressed", label: "Suppression List" },

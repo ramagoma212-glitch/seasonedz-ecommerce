@@ -28,6 +28,7 @@
 
 import { deliverRenderedEmail } from "../email/email.service.js";
 import { preferredFrontendBaseUrl } from "../../utils/frontendUrl.js";
+import { buildB2bSignature, bodyAlreadyHasSignature } from "./b2bSignature.js";
 import { signOutreachUnsubscribeToken } from "../../utils/outreachUnsubscribeToken.js";
 
 export interface PersonalizationContact {
@@ -78,7 +79,12 @@ export async function sendOutreachCampaignEmail(params: {
   reference: string;
 }): Promise<OutreachSendResult> {
   const personalizedBody = renderPersonalizedOutreachBody(params.bodyTemplate, { organisationName: params.organisationName, contactName: params.contactName });
-  const finalBody = appendUnsubscribeFooter(personalizedBody, params.contactId);
+  // Milestone 202: every future outreach email carries the official B2B contact
+  // block. An admin who already wrote the number into the body is not signed twice.
+  const signedBody = bodyAlreadyHasSignature(personalizedBody) ? personalizedBody : `${personalizedBody}
+
+${buildB2bSignature()}`;
+  const finalBody = appendUnsubscribeFooter(signedBody, params.contactId);
 
   try {
     await deliverRenderedEmail({

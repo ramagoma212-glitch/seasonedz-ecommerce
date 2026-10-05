@@ -4,6 +4,7 @@
 
 import type { QuotationStatus } from "@prisma/client";
 import { assertCentsIsSafeInteger, formatRand, MoneyError } from "../../utils/quotationMoney.js";
+import { buildB2bSignature } from "./b2bSignature.js";
 
 export class QuotationRuleError extends Error {
   statusCode: number;
@@ -164,7 +165,7 @@ export function buildQuotationEmail(input: QuotationEmailInput): { subject: stri
     "",
     "Reply to this email with any questions, or to confirm your order.",
     "",
-    "Seasonedz Group",
+    buildB2bSignature(),
   ];
 
   return { subject, body: body.join("\n") };

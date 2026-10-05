@@ -3330,12 +3330,19 @@ model OutreachContact {
   // moved forward, never backdated.
   lastCatalogueSentAt DateTime?
 
+  // Milestone 202: id of the one unresolved individual email attempt for this
+  // contact, if any. Set atomically before the provider is called and released
+  // only by a settled outcome, so a second send cannot start while one is in
+  // flight or uncertain.
+  emailSendLockAttemptId String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   recipients OutreachCampaignRecipient[]
   activities OutreachActivity[]
   quotations B2bQuotation[]
+  emailAttempts OutreachEmailAttempt[]
 
   @@index([status])
   @@index([organisationType])
@@ -3474,6 +3481,8 @@ enum OutreachActivityType {
   QUOTE_SEND_FAILED
   QUOTE_SEND_UNCERTAIN
   QUOTE_SEND_RECONCILED
+  // Milestone 202: written only after the provider accepted an individual follow-up.
+  FOLLOW_UP_EMAIL_SENT
 }
 
 enum OutreachActivityChannel {
@@ -3618,4 +3627,44 @@ model B2bQuotationLine {
 model QuotationNumberCounter {
   year      Int @id
   lastValue Int @default(0)
+}
+
+// Milestone 202: one individual, human-approved email to one CRM contact.
+// Keyed by an idempotency key the browser generates per composer session, so
+// a double-click or retry can never produce a second email. The body is kept
+// as the record of exactly what was sent.
+enum OutreachEmailAttemptStatus {
+  RESERVED
+  ACCEPTED
+  FAILED
+  UNCERTAIN
+  CONFIRMED_SENT
+  CONFIRMED_NOT_SENT
+}
+
+model OutreachEmailAttempt {
+  id             String  @id @default(cuid())
+  idempotencyKey String  @unique
+  contactId      String
+  contact        OutreachContact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  kind           String
+  templateKey    String?
+  status         OutreachEmailAttemptStatus
+
+  recipientEmail String
+  subject        String
+  body           String @db.Text
+  failureReason  String? @db.Text
+  reconciliationNote String? @db.Text
+
+  createdByAdminUserId        String?
+  createdByAdminNameSnapshot  String?
+  createdByAdminEmailSnapshot String?
+
+  settledAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([contactId, createdAt])
+  @@index([status])
 }

@@ -47,7 +47,9 @@ export type AdminSecurityEventType =
   // emailed to a contact. Stored in the existing String column; no
   // migration needed.
   | "OUTREACH_CRM_CUSTOMER_STATUS_CHANGED"
-  | "B2B_QUOTATION_SENT";
+  | "B2B_QUOTATION_SENT"
+  // Milestone 202: an individual follow-up email was accepted, or its outcome reconciled.
+  | "OUTREACH_FOLLOW_UP_EMAIL_SENT";
 
 export interface RecordAdminSecurityEventInput {
   // Null for events with no real admin to attach to yet — an unknown-

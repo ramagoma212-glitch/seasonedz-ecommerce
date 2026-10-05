@@ -25,7 +25,7 @@ test("the manual types an admin can record are exactly the human-observed ones",
 });
 
 test("system-owned types can never be created by hand", () => {
-  for (const type of ["QUOTE_SENT", "QUOTE_ACCEPTED", "QUOTE_CREATED", "ORDER_CREATED", "CUSTOMER_CONVERTED", "CATALOGUE_SENT", "FOLLOW_UP", "LEAD_STATUS_CHANGED", "QUOTE_SEND_FAILED", "QUOTE_SEND_UNCERTAIN", "QUOTE_SEND_RECONCILED", "CAMPAIGN_SENT", "DROP TABLE"]) {
+  for (const type of ["QUOTE_SENT", "QUOTE_ACCEPTED", "QUOTE_CREATED", "ORDER_CREATED", "CUSTOMER_CONVERTED", "CATALOGUE_SENT", "FOLLOW_UP", "LEAD_STATUS_CHANGED", "QUOTE_SEND_FAILED", "QUOTE_SEND_UNCERTAIN", "QUOTE_SEND_RECONCILED", "FOLLOW_UP_EMAIL_SENT", "CAMPAIGN_SENT", "DROP TABLE"]) {
     assert.throws(() => parseManualActivityInput({ type, title: "x" }, NOW), OutreachContactError, type);
   }
 });

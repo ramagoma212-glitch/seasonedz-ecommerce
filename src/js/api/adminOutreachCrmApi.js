@@ -84,3 +84,25 @@ export function transitionAdminQuotation(id, action) {
 export function adminQuotationPdfUrl(id) {
   return `${ADMIN_API_BASE_URL}${quotationPath(id)}/pdf`;
 }
+
+// Milestone 202: individual follow-up emails. Preview is read-only; sending and
+// reconciling are ADMIN-only on the server.
+export function getAdminFollowUpComposer(id) {
+  return adminRequest(`${contactPath(id)}/follow-up`, { method: "GET" });
+}
+
+export function previewAdminFollowUp(id, payload) {
+  return adminRequest(`${contactPath(id)}/follow-up/preview`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function sendAdminFollowUp(id, payload) {
+  return adminRequest(`${contactPath(id)}/follow-up/send`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function reconcileAdminFollowUp(id, attemptId, payload) {
+  return adminRequest(`${contactPath(id)}/follow-up/attempts/${encodeURIComponent(attemptId)}/reconcile`, { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function getAdminFollowUpQueue() {
+  return adminRequest("/admin/outreach/contacts/follow-up-queue", { method: "GET" });
+}

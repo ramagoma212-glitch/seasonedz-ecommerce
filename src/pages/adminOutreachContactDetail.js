@@ -155,6 +155,7 @@ function renderQuickActions(contact) {
   const id = escapeHtml(contact.id);
   return `
     <div class="admin-quick-actions" data-crm-quick-actions data-contact-id="${id}">
+      <a class="btn btn--primary btn--sm" href="/admin/outreach/contacts/${id}/follow-up">Send Follow-up</a>
       <details class="admin-crm-action" open>
         <summary>Record Reply</summary>
         <p class="admin-page__subtitle">Records what the contact said. It does not change the lead status: use Lead Status below if that should change.</p>

@@ -66,20 +66,27 @@ test("renders quotations with no notes, no contact name and no discount", async 
 
 test("the business identity matches the owner-verified values in the frontend source", () => {
   const frontend = readFileSync(join(process.cwd(), "..", "src", "data", "businessInfo.js"), "utf8");
-  const identityPath = join(process.cwd(), "src", "config", "businessIdentity.ts");
-  const identity = readFileSync(identityPath, "utf8");
-
   const pick = (source: string, key: string) => {
     const match = source.match(new RegExp(`${key}:\\s*"([^"]+)"`));
-    assert.ok(match, `${key} missing from ${source === frontend ? "businessInfo.js" : "businessIdentity.ts"}`);
+    assert.ok(match, `${key} missing from businessInfo.js`);
     return match[1];
   };
-  for (const key of ["registeredName", "registrationNumber", "email", "phoneDisplay", "websiteDisplay"]) {
-    assert.equal(pick(identity, key), pick(frontend, key), `${key} drifted from businessInfo.js`);
-  }
-  const frontendLines = frontend.match(/registeredOfficeLines:\s*\[([^\]]+)\]/)![1]!;
-  const backendLines = identity.match(/registeredOfficeLines:\s*\[([^\]]+)\]/)![1]!;
-  assert.equal(backendLines.replace(/\s/g, ""), frontendLines.replace(/\s/g, ""));
+  // Compares runtime values, so the identity can be sourced from config/businessContact.ts.
+  assert.equal(BUSINESS_IDENTITY.registeredName, pick(frontend, "registeredName"));
+  assert.equal(BUSINESS_IDENTITY.registrationNumber, pick(frontend, "registrationNumber"));
+  assert.equal(BUSINESS_IDENTITY.email, pick(frontend, "email"));
+  assert.equal(BUSINESS_IDENTITY.websiteDisplay, pick(frontend, "websiteDisplay"));
+  assert.deepEqual([...BUSINESS_IDENTITY.registeredOfficeLines], [
+    "99 Proclamation Hill",
+    "Pretoria West",
+    "Pretoria",
+    "Gauteng",
+    "0183",
+    "South Africa",
+  ]);
+  // Deliberately not the site's phone: the B2B callback number is owner-instructed
+  // for outgoing business communication only (config/businessContact.ts).
+  assert.equal(BUSINESS_IDENTITY.phoneDisplay, "+27 72 844 5644");
 });
 
 test("the PDF identity block never prints VAT, bank or payment-term wording", () => {

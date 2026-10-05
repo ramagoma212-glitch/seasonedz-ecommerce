@@ -1,14 +1,17 @@
 // Milestone 201: the verified business identity printed on quotation PDFs.
-// Mirrors the owner-verified values in src/data/businessInfo.js. A test in
-// services/outreach/b2bQuotationPdf.test.ts fails if the two copies drift
-// apart. Contains no VAT number, bank details or payment terms: none of
-// those is verified in this repository, so none is ever printed.
+// Registration details mirror src/data/businessInfo.js (checked by
+// services/outreach/b2bQuotationPdf.test.ts). Contact details come from
+// config/businessContact.ts, the single source for outgoing B2B communication.
+// Contains no VAT number, bank details or payment terms, since none is verified
+// in this repository.
+
+import { BUSINESS_CONTACT } from "./businessContact.js";
 
 export const BUSINESS_IDENTITY = {
   registeredName: "SEASONEDZ GROUP",
   registrationNumber: "2024/618215/07",
   registeredOfficeLines: ["99 Proclamation Hill", "Pretoria West", "Pretoria", "Gauteng", "0183", "South Africa"],
-  email: "seasonedzgroup@outlook.com",
-  phoneDisplay: "069 526 9941",
-  websiteDisplay: "www.seasonedzgroup.co.za",
+  email: BUSINESS_CONTACT.email,
+  phoneDisplay: BUSINESS_CONTACT.phone,
+  websiteDisplay: BUSINESS_CONTACT.website,
 } as const;

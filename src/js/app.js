@@ -246,6 +246,7 @@ function ensureAdminModulesLoaded() {
       ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
       ({ createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport } = bundle.adminOutreachContactApi);
       ({ recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent, linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer, createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation, reconcileAdminQuotation } = bundle.adminOutreachCrmApi);
+      ({ previewAdminFollowUp, sendAdminFollowUp, reconcileAdminFollowUp } = bundle.adminOutreachCrmApi);
       ({
         createAdminOutreachCampaign,
         updateAdminOutreachCampaign,
@@ -395,6 +396,7 @@ function mountApp() {
       setupAdminOutreachContactFilterForm();
       setupAdminOutreachContactForm();
       setupAdminCrmWorkflow();
+      setupAdminFollowUpWorkflow();
       setupAdminOutreachSuppressionFilterForm();
       setupAdminOutreachImport();
       setupAdminOutreachCampaignForm();
@@ -4982,6 +4984,154 @@ function setupAdminCrmWorkflow() {
       if (!window.confirm(confirmations[action])) return;
       const labels = { accept: "Quotation marked accepted.", decline: "Quotation marked declined.", expire: "Quotation marked expired.", cancel: "Quotation cancelled." };
       runCrmAction({ bannerSelector: QUOTE_ACTION_BANNER, button: quoteButton, action: () => transitionAdminQuotation(quoteId, action), successMessage: labels[action] });
+    }
+  });
+}
+
+// Milestone 202: individual follow-up composer handlers. Nothing here sends on
+// render, template change or preview. Only the explicit Send and reconcile
+// submits reach the server, and each one asks for confirmation first.
+let previewAdminFollowUp, sendAdminFollowUp, reconcileAdminFollowUp;
+
+function followUpPayloadFrom(form) {
+  const data = new FormData(form);
+  return {
+    templateKey: data.get("templateKey") || undefined,
+    subject: (data.get("subject") || "").toString(),
+    body: (data.get("body") || "").toString(),
+  };
+}
+
+function renderFollowUpPreview(container, preview) {
+  container.textContent = "";
+  container.hidden = false;
+  const lines = [
+    ["To", preview.recipientEmail],
+    ["Subject", preview.subject],
+  ];
+  for (const [label, value] of lines) {
+    const row = document.createElement("p");
+    const strong = document.createElement("strong");
+    strong.textContent = `${label}: `;
+    row.appendChild(strong);
+    row.appendChild(document.createTextNode(value));
+    container.appendChild(row);
+  }
+  const pre = document.createElement("pre");
+  pre.className = "admin-followup-preview";
+  pre.textContent = preview.fullBody;
+  container.appendChild(pre);
+  for (const reason of [...preview.blockedReasons, ...preview.violations]) {
+    const warning = document.createElement("p");
+    warning.className = "form-banner form-banner--error";
+    warning.textContent = reason;
+    container.appendChild(warning);
+  }
+}
+
+async function runFollowUpPreview(form, container) {
+  const contactId = form.dataset.contactId;
+  const preview = (await previewAdminFollowUp(contactId, followUpPayloadFrom(form))).data;
+  renderFollowUpPreview(container, preview);
+  return preview;
+}
+
+function setupAdminFollowUpWorkflow() {
+  document.addEventListener("change", (event) => {
+    const select = event.target.closest?.("[data-admin-followup-template-select]");
+    if (!select) return;
+    const form = select.closest("[data-admin-followup-send-form]");
+    if (!form) return;
+    const contactId = select.dataset.contactId;
+    previewAdminFollowUp(contactId, { templateKey: select.value })
+      .then((response) => {
+        form.querySelector('input[name="subject"]').value = response.data.subject;
+        form.querySelector('textarea[name="body"]').value = response.data.bodyText;
+      })
+      .catch(() => {
+        const banner = document.querySelector("[data-admin-followup-banner]");
+        if (banner) {
+          banner.textContent = "The template could not be loaded. Your message has not changed.";
+          banner.hidden = false;
+        }
+      });
+  });
+
+  document.addEventListener("click", (event) => {
+    const previewButton = event.target.closest?.('[data-admin-followup-action="preview"]');
+    if (!previewButton) return;
+    event.preventDefault();
+    const form = previewButton.closest("form");
+    const container = document.querySelector("[data-admin-followup-preview]");
+    if (!form || !container) return;
+    runFollowUpPreview(form, container).catch((error) => {
+      const banner = document.querySelector("[data-admin-followup-banner]");
+      if (banner) {
+        banner.textContent = crmErrorMessage(error);
+        banner.hidden = false;
+      }
+    });
+  });
+
+  document.addEventListener("submit", (event) => {
+    const sendForm = event.target.closest?.("[data-admin-followup-send-form]");
+    if (sendForm) {
+      event.preventDefault();
+      const contactId = sendForm.dataset.contactId;
+      const typed = sendForm.querySelector('input[name="confirmRecipientEmail"]')?.value?.trim() ?? "";
+      if (!window.confirm(`Send this follow-up email to ${typed}? This cannot be undone.`)) return;
+      const submitButton = sendForm.querySelector('button[type="submit"]');
+      const banner = document.querySelector("[data-admin-followup-banner]");
+      if (banner) {
+        banner.hidden = true;
+        banner.textContent = "";
+      }
+      if (submitButton) submitButton.disabled = true;
+      const payload = {
+        ...followUpPayloadFrom(sendForm),
+        confirmRecipientEmail: typed,
+        idempotencyKey: sendForm.dataset.idempotencyKey,
+      };
+      sendAdminFollowUp(contactId, payload)
+        .then((response) => {
+          setPendingAdminMessage(response.message || "Follow-up email accepted by the provider and recorded.");
+          navigateTo(`/admin/outreach/contacts/${encodeURIComponent(contactId)}`);
+        })
+        .catch((error) => {
+          if (isUnauthenticated(error)) {
+            redirectToAdminLogin();
+            return;
+          }
+          if (banner) {
+            banner.textContent = crmErrorMessage(error);
+            banner.hidden = false;
+          }
+          // Every settled attempt gets a fresh key, so a deliberate new send is never a replay.
+          sendForm.dataset.idempotencyKey = crypto.randomUUID();
+        })
+        .finally(() => {
+          if (submitButton) submitButton.disabled = false;
+        });
+      return;
+    }
+
+    const reconcileForm = event.target.closest?.("[data-admin-followup-reconcile-form]");
+    if (reconcileForm) {
+      event.preventDefault();
+      const outcome = event.submitter?.value;
+      if (outcome !== "SENT" && outcome !== "NOT_SENT") return;
+      const note = reconcileForm.querySelector('textarea[name="note"]')?.value?.trim() ?? "";
+      const question =
+        outcome === "SENT"
+          ? "Confirm that the email WAS delivered? This records the follow-up in the timeline."
+          : "Confirm that the email was NOT delivered? This releases the contact so a new follow-up can be prepared.";
+      if (!window.confirm(question)) return;
+      runCrmAction({
+        bannerSelector: "[data-admin-followup-banner]",
+        button: event.submitter,
+        action: () => reconcileAdminFollowUp(reconcileForm.dataset.contactId, reconcileForm.dataset.attemptId, { outcome, note }),
+        successMessage: outcome === "SENT" ? "Recorded as sent after your check." : "Released. You can prepare a new follow-up.",
+      });
     }
   });
 }

@@ -425,6 +425,9 @@ const routeDefs = [
   { pattern: "/admin/outreach/quotations/:id/edit", render: lazyPage(() => import("../pages/adminOutreachQuotationForm.js"), (m) => m.renderAdminOutreachQuotationEdit), title: "Edit Quotation", noindex: true },
   { pattern: "/admin/outreach/quotations/:id", render: lazyPage(() => import("../pages/adminOutreachQuotationDetail.js"), (m) => m.renderAdminOutreachQuotationDetail), title: "Quotation", noindex: true },
   { pattern: "/admin/outreach/quotations", render: lazyPage(() => import("../pages/adminOutreachQuotations.js"), (m) => m.renderAdminOutreachQuotations), title: "Quotations", noindex: true },
+  // Milestone 202: individual follow-up composer and the Needs Follow-up queue.
+  { pattern: "/admin/outreach/contacts/:id/follow-up", render: lazyPage(() => import("../pages/adminOutreachFollowUp.js"), (m) => m.renderAdminOutreachFollowUp), title: "Follow-up Email", noindex: true },
+  { pattern: "/admin/outreach/follow-ups", render: lazyPage(() => import("../pages/adminOutreachFollowUpQueue.js"), (m) => m.renderAdminOutreachFollowUpQueue), title: "Follow-ups", noindex: true },
   { pattern: "/admin/outreach/contacts/import", render: lazyPage(() => import("../pages/adminOutreachImport.js"), (m) => m.renderAdminOutreachImport), title: "Import Contacts", noindex: true },
   { pattern: "/admin/outreach/contacts/new", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactCreate), title: "Add Contact", noindex: true },
   { pattern: "/admin/outreach/contacts/:id/edit", render: lazyPage(() => import("../pages/adminOutreachContactForm.js"), (m) => m.renderAdminOutreachContactEdit), title: "Edit Contact", noindex: true },
