@@ -79,6 +79,24 @@ function buildBlogPostingStructuredData(post) {
   };
 }
 
+// Milestone 203: Home > Blog > Post, the one real schema gap this
+// milestone's audit found — every other page type (product, category,
+// shop) already carries a BreadcrumbList; blog posts never did. Mirrors
+// the same pattern productDetails.js/shop.js already use, and the
+// build-time equivalent added to generate-static-routes.mjs alongside
+// this.
+function buildBlogBreadcrumbStructuredData(post) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: new URL("/", window.location.origin).href },
+      { "@type": "ListItem", position: 2, name: "Blog", item: new URL("/blog", window.location.origin).href },
+      { "@type": "ListItem", position: 3, name: post.title, item: window.location.href },
+    ],
+  };
+}
+
 export function renderBlogPost({ slug } = {}) {
   if (!slug) return renderNoPostSelected();
 
@@ -86,7 +104,7 @@ export function renderBlogPost({ slug } = {}) {
   if (!post) return renderPostNotFound();
 
   setPageMeta({ title: post.title, description: post.excerpt });
-  setPageStructuredData(buildBlogPostingStructuredData(post));
+  setPageStructuredData([buildBlogBreadcrumbStructuredData(post), buildBlogPostingStructuredData(post)]);
 
   return `
     <section class="container blog-post">

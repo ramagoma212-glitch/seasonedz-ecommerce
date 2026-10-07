@@ -551,6 +551,18 @@ export function buildCategoryCollectionPageJsonLd(displayName, canonicalUrl, cat
   };
 }
 
+// Milestone 203: Home > Blog > Post — mirrors blogPost.js's own
+// buildBlogBreadcrumbStructuredData() field-for-field, the one real
+// schema gap this milestone's audit found (every other page type
+// already had a BreadcrumbList).
+function buildBlogBreadcrumbTrail(post, canonicalUrl) {
+  return [
+    { name: "Home", url: `${SITE_URL}/` },
+    { name: "Blog", url: `${SITE_URL}${withTrailingSlash("/blog")}` },
+    { name: post.title, url: canonicalUrl },
+  ];
+}
+
 export function buildBlogPostingJsonLd(post) {
   return {
     "@context": "https://schema.org",
@@ -972,7 +984,7 @@ async function main() {
         title: post.title,
         description: post.excerpt,
         ogImage: resolveAssetUrl(post.image),
-        jsonLdBlocks: [buildBlogPostingJsonLd({ ...post, url: canonicalUrl })],
+        jsonLdBlocks: [buildBreadcrumbJsonLd(buildBlogBreadcrumbTrail(post, canonicalUrl)), buildBlogPostingJsonLd({ ...post, url: canonicalUrl })],
       });
     }
     console.log(`[generate-static-routes] Generated ${blogPosts.length} blog post route(s) with route-specific metadata and BlogPosting JSON-LD.`);

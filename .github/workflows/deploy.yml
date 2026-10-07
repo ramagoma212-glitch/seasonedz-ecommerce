@@ -178,3 +178,23 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Checkout
+        # Milestone 203: this job has no local dist/ (only the "build"
+        # job does) — the IndexNow step below deliberately fetches from
+        # the live site instead (see scripts/submit-indexnow.mjs's own
+        # header comment for why), so this checkout exists only to get
+        # that one script file onto the runner.
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Notify IndexNow (Bing/Yandex)
+        # Never blocks or fails the deploy — see the script's own
+        # header comment. Runs after the real deploy step above, so it
+        # can only ever submit URLs that are genuinely already live.
+        continue-on-error: true
+        run: node scripts/submit-indexnow.mjs

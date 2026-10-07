@@ -198,6 +198,11 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
           ? `
       <section class="category-seo-content" aria-label="About ${escapeHtml(displayName)}">
         ${seoContent.body.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("")}
+        ${
+          seoContent.relatedArticle
+            ? `<p class="category-seo-content__related"><a href="${escapeHtml(seoContent.relatedArticle.href)}">Read: ${escapeHtml(seoContent.relatedArticle.label)}</a></p>`
+            : ""
+        }
       </section>
       `
           : ""

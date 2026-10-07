@@ -11,10 +11,18 @@
 // never on the query-filtered /shop?category= view, so this content
 // only ever lives under its own canonical URL.
 
+// Milestone 203: `relatedArticle` is an optional per-category link to
+// the one genuinely matching blog post, closing the one real internal-
+// linking gap found this milestone — every blog post already links to
+// its matching category (see blogPosts.js's own relatedLink), but no
+// category linked back. Only set where a post is a genuine topical
+// match (4 of 5 categories); "bundles" has no single matching post and
+// deliberately gets none rather than a forced, weaker link.
 export const CATEGORY_SEO_CONTENT = {
   "bible-colouring-books": {
     metaDescription:
       "Christian colouring books for kids, ages 6 to 10. Old and New Testament Bible colouring books for Sunday school, family devotion time and homeschooling in South Africa.",
+    relatedArticle: { href: "/blog/bible-colouring-books-in-sunday-school", label: "Using Bible Colouring Books in Sunday School" },
     body: [
       "Seasonedz Group makes Bible colouring books for children who are learning the Old and New Testament stories for the first time. Little Hands, Big Faith is written for ages 6 to 10, with simple line art a child can colour independently and short, age appropriate text alongside each scene.",
       "These are genuinely useful Christian colouring books for South African families, not just decorated pages. A parent reading a Bible story at home, a Sunday school teacher preparing a lesson, or a grandparent looking for a gift that supports a child's faith will find real content here, not filler.",
@@ -26,6 +34,7 @@ export const CATEGORY_SEO_CONTENT = {
   "kids-colouring-books": {
     metaDescription:
       "ABC colouring book for kids with alphabet tracing and fun facts. A foundation phase activity book for Grade R, homeschooling and early learning in South Africa.",
+    relatedArticle: { href: "/blog/colouring-books-support-early-learning", label: "How Colouring Books Support Early Childhood Learning" },
     body: [
       "Our ABC Colouring Book for Kids is built around one simple idea: colouring and letter learning work better together. Each page pairs a letter with alphabet tracing practice and a real, simple fact, so a child ages 3 to 7 is doing three things at once without it feeling like work.",
       "It suits the foundation phase directly. A Grade R teacher can use it as a low pressure activity book between structured lessons. A parent homeschooling in South Africa can use it as a stand alone early learning resource, alongside whatever curriculum they already follow. Either way, the tracing element gives a child real pencil control practice, not just colouring for its own sake.",
@@ -52,6 +61,7 @@ export const CATEGORY_SEO_CONTENT = {
     pageTitle: "Adult & Mindfulness Colouring",
     metaDescription:
       "Explore adult and mindfulness colouring for quiet, screen free creative time. Shop the Seasonedz mindfulness book, markers and bundle in South Africa.",
+    relatedArticle: { href: "/blog/calming-power-of-mindfulness-colouring", label: "The Calming Power of Mindfulness Colouring" },
     body: [
       "Adult colouring, sometimes called mindfulness colouring, offers a simple way to spend quiet creative time away from a screen. Instead of starting with a blank page, you can choose colours and work through ready-made patterns and illustrations at your own pace.",
       "Seasonedz currently offers one dedicated adult title, the Mindfulness Colouring Book for Adults. It has 92 single sided pages with 45 designs including flowers, animals, patterns, portraits and nature scenes.",
@@ -63,6 +73,7 @@ export const CATEGORY_SEO_CONTENT = {
   "markers-and-crayons": {
     metaDescription:
       "Acrylic markers and wax crayons for kids and adults. Vibrant, safe colouring supplies from Seasonedz Group, made to pair with our colouring books.",
+    relatedArticle: { href: "/blog/choosing-markers-and-crayons-for-little-hands", label: "Choosing the Right Markers and Crayons for Little Hands" },
     body: [
       "Every colouring book is only as good as what you colour it with, and this range exists to be the reliable, no fuss answer to that. Our Seasonedz Creative Acrylic Paint Marker Set gives 24 colours with a genuinely non bleed tip, so colour stays on the page instead of soaking through to the next one, which matters if a child is working through a book they will want to keep.",
       "For younger hands, our 12 Colour Rotating Wax Crayons use a twist up design, so there is no sharpening and less risk of a snapped crayon halfway through a page. They suit ages 3 and up, and work well alongside our ABC Colouring Book for a young child who is still developing grip and control.",

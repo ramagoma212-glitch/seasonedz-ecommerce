@@ -1,0 +1,26 @@
+# Seasonedz Group
+
+> South African business selling educational, Bible and mindfulness colouring books, acrylic paint markers, rotating crayons and colouring book bundles for kids, families, schools and churches. Ships countrywide in South Africa.
+
+This file is an optional, machine-readable summary for AI tools that choose to read it. It does not affect Google Search ranking or indexing — Google has stated llms.txt is not a ranking input. The full, authoritative set of indexable pages is /sitemap.xml.
+
+## Shop
+
+- [All products](https://www.seasonedzgroup.co.za/shop/): Full catalogue of colouring books, markers and crayons.
+- [Kids Colouring Books](https://www.seasonedzgroup.co.za/category/kids-colouring-books/): Educational colouring books for children.
+- [Bible Colouring Books](https://www.seasonedzgroup.co.za/category/bible-colouring-books/): Christian colouring books for Sunday school and family devotion.
+- [Mindfulness Colouring](https://www.seasonedzgroup.co.za/category/mindfulness-colouring/): Adult colouring for quiet, screen-free time.
+- [Markers and Crayons](https://www.seasonedzgroup.co.za/category/markers-and-crayons/): Acrylic paint markers and rotating wax crayons.
+- [Bundles](https://www.seasonedzgroup.co.za/category/bundles/): Colouring book and supplies bundles.
+
+## Business
+
+- [About](https://www.seasonedzgroup.co.za/about/): Who Seasonedz Group is.
+- [Contact](https://www.seasonedzgroup.co.za/contact/): seasonedzgroup@outlook.com, +27 72 844 5644.
+- [Schools](https://www.seasonedzgroup.co.za/schools/): Bulk orders for schools, churches and classrooms.
+- [Wholesale](https://www.seasonedzgroup.co.za/wholesale/): Stocking enquiries for retailers.
+- [FAQ](https://www.seasonedzgroup.co.za/faq/): Ordering, delivery, payment and returns.
+
+## Guides
+
+- [Blog](https://www.seasonedzgroup.co.za/blog/): Buying guides and how-to articles about colouring books and supplies.

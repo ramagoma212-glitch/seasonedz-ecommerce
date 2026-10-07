@@ -180,6 +180,14 @@
       states elsewhere, per Search Central's own guidance that
       Organization markup should include address when a real one
       exists.
+
+      Milestone 203: added `contactPoint` — the same official phone/
+      email already shown in the footer, /contact and businessInfo.js
+      (the backend's businessContact.ts mirrors the same two values,
+      kept equal by businessContact.test.ts), now also machine-readable
+      on the one entity record search/AI systems use to answer "how do
+      I contact this business". No new disclosure and nothing invented
+      (no openingHours/geo — the business has never published either).
     -->
     <script type="application/ld+json">
       {
@@ -190,6 +198,14 @@
         "url": "https://www.seasonedzgroup.co.za/",
         "description": "Shop educational, Bible and mindfulness colouring books, markers, crayons and creative products for kids, families, schools and churches in South Africa.",
         "logo": "https://www.seasonedzgroup.co.za/icon-512.png",
+        "contactPoint": {
+          "@type": "ContactPoint",
+          "contactType": "customer service",
+          "telephone": "+27728445644",
+          "email": "seasonedzgroup@outlook.com",
+          "areaServed": "ZA",
+          "availableLanguage": "English"
+        },
         "address": {
           "@type": "PostalAddress",
           "streetAddress": "99 Proclamation Hill, Pretoria West",

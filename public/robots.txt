@@ -12,4 +12,54 @@ Disallow: /payment-success
 Disallow: /payment-cancelled
 Disallow: /payment-failed
 
+# Milestone 203: named search-crawler blocks, explicit duplicates of
+# the wildcard rule above. Functionally unchanged from before this
+# milestone (Googlebot/Bingbot/OAI-SearchBot were already covered by
+# "User-agent: *" and remain so) — these exist only so the policy is
+# legible without relying on wildcard fallthrough. OAI-SearchBot is
+# OpenAI's SEARCH crawler, separate from GPTBot (training); the two
+# are independently controllable, but no Seasonedz owner decision
+# exists on GPTBot either way, so it is deliberately left ungoverned
+# here and still only covered by the wildcard above — adding an
+# explicit GPTBot rule in either direction would be a training-data
+# policy decision this file doesn't make on the owner's behalf.
+User-agent: Googlebot
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /wishlist
+Disallow: /track-order
+Disallow: /search
+Disallow: /order-confirmation
+Disallow: /payment-success
+Disallow: /payment-cancelled
+Disallow: /payment-failed
+
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /wishlist
+Disallow: /track-order
+Disallow: /search
+Disallow: /order-confirmation
+Disallow: /payment-success
+Disallow: /payment-cancelled
+Disallow: /payment-failed
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+Disallow: /cart
+Disallow: /checkout
+Disallow: /wishlist
+Disallow: /track-order
+Disallow: /search
+Disallow: /order-confirmation
+Disallow: /payment-success
+Disallow: /payment-cancelled
+Disallow: /payment-failed
+
 Sitemap: https://www.seasonedzgroup.co.za/sitemap.xml
