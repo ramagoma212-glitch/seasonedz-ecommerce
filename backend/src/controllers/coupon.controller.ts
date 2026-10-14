@@ -64,6 +64,7 @@ export async function previewCouponHandler(req: Request, res: Response, next: Ne
         message: result.message,
         code: result.code,
         discountAmount: result.discountAmount.toNumber(),
+        freeDelivery: result.freeDelivery,
       },
     });
   } catch (error) {

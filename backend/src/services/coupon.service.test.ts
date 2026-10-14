@@ -33,6 +33,7 @@ function baseCouponRow(overrides: Record<string, unknown> = {}) {
     maxUsesPerCustomer: null,
     timesRedeemed: 0,
     customerEligibility: "ALL",
+    freeDelivery: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -276,6 +277,155 @@ test("excluded product is always removed, even if it would otherwise be eligible
   couponProduct.restore();
   couponCategory.restore();
   couponExcluded.restore();
+});
+
+// --- MILESTONE 197.1: FREE DELIVERY BENEFIT ---
+
+test("a coupon with freeDelivery=true reports freeDelivery:true on a valid, qualifying result", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ freeDelivery: true }));
+  const restrictions = stubEmptyRestrictions();
+
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(100) }]);
+  assert.equal(result.valid, true);
+  assert.equal(result.freeDelivery, true);
+  assert.equal(result.discountAmount.toFixed(2), "10.00"); // the discount still applies too — additional, not a replacement
+
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
+});
+
+test("a coupon with freeDelivery=false (the default) reports freeDelivery:false even when otherwise valid", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow());
+  const restrictions = stubEmptyRestrictions();
+
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(100) }]);
+  assert.equal(result.valid, true);
+  assert.equal(result.freeDelivery, false);
+
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
+});
+
+test("freeDelivery is never reported true for an INVALID coupon, even if the row itself has freeDelivery=true", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ freeDelivery: true, isActive: false }));
+
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(100) }]);
+  assert.equal(result.valid, false);
+  assert.equal(result.freeDelivery, false);
+  assert.equal(result.discountAmount.toFixed(2), "0.00");
+
+  findUnique.restore();
+});
+
+test("freeDelivery is never reported true once expired, even with freeDelivery=true configured", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ freeDelivery: true, expiresAt: new Date("2020-01-01T00:00:00Z") }));
+
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(100) }]);
+  assert.equal(result.valid, false);
+  assert.equal(result.freeDelivery, false);
+
+  findUnique.restore();
+});
+
+test("freeDelivery is never reported true below the coupon's own minimum spend, even with freeDelivery=true configured", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ freeDelivery: true, minimumOrderSubtotal: new Prisma.Decimal(200) }));
+  const restrictions = stubEmptyRestrictions();
+
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(100) }]);
+  assert.equal(result.valid, false);
+  assert.equal(result.freeDelivery, false);
+
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
+});
+
+test("a fixed-amount coupon can also carry freeDelivery=true — both benefits are independent", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ discountType: "FIXED_AMOUNT", discountValue: new Prisma.Decimal(50), freeDelivery: true }));
+  const restrictions = stubEmptyRestrictions();
+
+  const result = await previewCoupon("SAVE50", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(300) }]);
+  assert.equal(result.valid, true);
+  assert.equal(result.discountAmount.toFixed(2), "50.00");
+  assert.equal(result.freeDelivery, true);
+
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
+});
+
+test("admin: createCoupon defaults freeDelivery to false when not supplied", async () => {
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const create = stub(prisma.coupon, "create", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDelivery, false);
+    return baseCouponRow({ id: "new-coupon" });
+  });
+  const relationStubs = [
+    stub(prisma.couponProduct, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponCategory, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponExcludedProduct, "deleteMany", async () => ({ count: 0 })),
+  ];
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ id: "new-coupon" }));
+
+  await createCoupon({ code: "NOFLAG", discountType: "PERCENTAGE", discountValue: 10 });
+
+  transactionStub.restore();
+  create.restore();
+  relationStubs.forEach((r) => r.restore());
+  findUnique.restore();
+});
+
+test("admin: createCoupon honours an explicit freeDelivery:true", async () => {
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const create = stub(prisma.coupon, "create", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDelivery, true);
+    return baseCouponRow({ id: "new-coupon", freeDelivery: true });
+  });
+  const relationStubs = [
+    stub(prisma.couponProduct, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponCategory, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponExcludedProduct, "deleteMany", async () => ({ count: 0 })),
+  ];
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ id: "new-coupon", freeDelivery: true }));
+
+  const result = await createCoupon({ code: "FESTIVECUP", discountType: "PERCENTAGE", discountValue: 10, freeDelivery: true });
+  assert.equal(result.freeDelivery, true);
+
+  transactionStub.restore();
+  create.restore();
+  relationStubs.forEach((r) => r.restore());
+  findUnique.restore();
+});
+
+test("admin: updateCoupon can turn freeDelivery on for an existing coupon without touching its discount", async () => {
+  const existingRow = baseCouponRow({ id: "existing-coupon" });
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const findUnique = stub(prisma.coupon, "findUnique", async () => existingRow);
+  const update = stub(prisma.coupon, "update", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDelivery, true);
+    assert.equal(args.data.discountValue?.toString(), "10"); // unchanged
+    return { ...existingRow, freeDelivery: true };
+  });
+
+  await updateCoupon("existing-coupon", { freeDelivery: true });
+
+  transactionStub.restore();
+  findUnique.restore();
+  update.restore();
+});
+
+test("admin: updateCoupon with no freeDelivery field in the request leaves the existing value unchanged (false stays false)", async () => {
+  const existingRow = baseCouponRow({ id: "existing-coupon", freeDelivery: false });
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const findUnique = stub(prisma.coupon, "findUnique", async () => existingRow);
+  const update = stub(prisma.coupon, "update", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDelivery, false);
+    return existingRow;
+  });
+
+  await updateCoupon("existing-coupon", { description: "just a description change" });
+
+  transactionStub.restore();
+  findUnique.restore();
+  update.restore();
 });
 
 test("resolveCouponForOrder (the authoritative order-creation path) uses the exact same logic as previewCoupon", async () => {

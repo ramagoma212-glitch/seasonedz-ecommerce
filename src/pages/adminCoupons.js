@@ -33,11 +33,12 @@ function deriveDisplayStatus(coupon) {
 }
 
 function renderDiscountLabel(coupon) {
+  const freeDeliverySuffix = coupon.freeDelivery ? " + free delivery" : "";
   if (coupon.discountType === "PERCENTAGE") {
     const cap = coupon.maximumDiscountAmount ? `, up to R${Number(coupon.maximumDiscountAmount).toFixed(2)}` : "";
-    return `${Number(coupon.discountValue)}% off${cap}`;
+    return `${Number(coupon.discountValue)}% off${cap}${freeDeliverySuffix}`;
   }
-  return `R${Number(coupon.discountValue).toFixed(2)} off`;
+  return `R${Number(coupon.discountValue).toFixed(2)} off${freeDeliverySuffix}`;
 }
 
 function renderUsageLabel(coupon) {

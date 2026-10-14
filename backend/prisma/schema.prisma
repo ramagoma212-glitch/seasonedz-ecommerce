@@ -3120,6 +3120,19 @@ model Coupon {
 
   customerEligibility CouponCustomerEligibility @default(ALL)
 
+  // Milestone 197.1: an ADDITIONAL benefit, never a replacement for
+  // discountType/discountValue above (both remain required — see
+  // coupon.service.ts's own parseCouponInput() comment on why a
+  // zero-merchandise-discount "free delivery only" coupon is a
+  // deliberately deferred V1 limitation, not implemented here). A
+  // qualifying coupon with this set to true reduces the order's
+  // already-calculated delivery fee to R0 — never negative, never
+  // double-applied on top of the existing automatic free-delivery
+  // threshold (order.service.ts's own createOrder()). Defaults false
+  // so every coupon created before this milestone keeps behaving
+  // exactly as it always has.
+  freeDelivery Boolean @default(false)
+
   // Empty relations below mean "no restriction" (applies to every
   // eligible product) — never an empty-string/empty-array sentinel value
   // on the Coupon row itself, so "not configured yet" and "restricted to
@@ -3205,6 +3218,14 @@ model CouponRedemption {
 
   codeSnapshot           String
   discountAmountSnapshot Decimal @db.Decimal(10, 2)
+  // Milestone 197.1: whether THIS redemption actually granted free
+  // delivery — captured at redemption time, same snapshot discipline
+  // as codeSnapshot/discountAmountSnapshot above, so a later admin
+  // edit to Coupon.freeDelivery (or even the coupon's deletion) can
+  // never reinterpret a historical order's own receipt. Defaults false
+  // so every CouponRedemption row written before this milestone is
+  // correctly read as "no free delivery" without a backfill.
+  freeDeliverySnapshot Boolean @default(false)
 
   createdAt DateTime @default(now())
 

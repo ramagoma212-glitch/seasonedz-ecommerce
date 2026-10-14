@@ -131,6 +131,11 @@ function renderCouponForm(mode, coupon, products, categories) {
       </div>
       <p class="admin-product-form__hint">An inactive coupon can never be applied, even with the correct code.</p>
 
+      <div class="admin-product-form__checkboxes">
+        <label><input type="checkbox" id="couponFreeDelivery" ${coupon?.freeDelivery ? "checked" : ""} /> Include free delivery</label>
+      </div>
+      <p class="admin-product-form__hint">An additional benefit, on top of the discount above — not a replacement for it. A qualifying customer gets both the discount and R0 eligible delivery (Courier Guy Locker to Locker or Door to Door). Customer Collection is already free either way.</p>
+
       <div class="admin-product-form__row">
         <div class="form-field">
           <label class="form-field__label" for="couponDiscountType">Discount Type <span class="form-field__required">*</span></label>

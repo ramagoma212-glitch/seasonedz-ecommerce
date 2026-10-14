@@ -1507,6 +1507,19 @@ body.has-cookie-preferences-open {
   font-size: var(--font-size-sm);
 }
 
+/* Milestone 197.1: the coupon's actual benefits ("R30.00 discount +
+   free delivery") — empty/collapsed when there's nothing to show yet,
+   never a layout gap before JS fills it in. */
+.order-summary__coupon-benefits {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.order-summary__coupon-benefits:empty {
+  display: none;
+}
+
 /* Version 7, Milestone 171E: shown under a blocked "Proceed to
    Checkout" button (an unavailable cart item) — the one place this
    note needs to read as a real blocker, not a passive aside. */

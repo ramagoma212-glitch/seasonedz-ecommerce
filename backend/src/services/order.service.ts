@@ -421,6 +421,11 @@ export interface OrderOutput {
   // the coupon's current (possibly since-changed) configuration.
   couponCode: string | null;
   couponDiscountTotal: number;
+  // Milestone 197.1: same immutable-snapshot discipline as the two
+  // fields above — whether THIS order's coupon redemption (if any)
+  // actually granted free delivery, never re-derived from the coupon's
+  // current configuration.
+  couponFreeDelivery: boolean;
   // Version 7, Milestone 157: order composition, derived from `items`
   // on every response — lets every caller (order-confirmation,
   // account order detail, Track Order, admin order detail) branch on
@@ -501,6 +506,7 @@ function toOrderOutput(order: OrderWithRelations): OrderOutput {
     preorderDiscountTotal: order.items.reduce((sum, item) => sum + (item.preorderDiscountAmountApplied?.toNumber() ?? 0), 0),
     couponCode: order.couponRedemption?.codeSnapshot ?? null,
     couponDiscountTotal: order.couponRedemption?.discountAmountSnapshot.toNumber() ?? 0,
+    couponFreeDelivery: order.couponRedemption?.freeDeliverySnapshot ?? false,
     payment: order.payment
       ? {
           method: order.payment.method,
@@ -886,7 +892,20 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   const discountTotal = (preorderDiscount?.totalDiscountAmount ?? new Prisma.Decimal(0))
     .plus(appliedCoupon ? appliedCoupon.discountAmount : new Prisma.Decimal(0))
     .plus(referral ? referral.pricing.discountAmount : new Prisma.Decimal(0));
-  const total = subtotal.plus(giftWrapTotal).plus(deliveryFee).minus(discountTotal);
+  // Milestone 197.1: a coupon's free-delivery benefit is a separate perk
+  // from its merchandise discount above — it is never folded into
+  // discountTotal (which only ever reduces subtotal/giftWrapTotal-side
+  // value), it simply replaces the already-computed, authoritative
+  // `deliveryFee` with R0. Always >= 0 (deliveryFee itself can never be
+  // negative — see calculateDeliveryFee()); never double-applies (a
+  // delivery already R0 from the automatic threshold or Collection
+  // simply stays R0, never goes negative). The frontend's own
+  // freeDelivery=true/deliveryFee=0 is never trusted — this is resolved
+  // fresh from appliedCoupon, itself freshly resolved from the database
+  // two lines above, never from input.couponCode alone.
+  const couponGrantsFreeDelivery = appliedCoupon?.coupon?.freeDelivery ?? false;
+  const chargedDeliveryFee = couponGrantsFreeDelivery ? new Prisma.Decimal(0) : deliveryFee;
+  const total = subtotal.plus(giftWrapTotal).plus(chargedDeliveryFee).minus(discountTotal);
 
   const orderNumber = await generateOrderNumber();
 
@@ -961,7 +980,7 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         paymentMethod: input.paymentMethod,
         subtotal,
         giftWrapTotal,
-        deliveryFee,
+        deliveryFee: chargedDeliveryFee,
         discountTotal,
         total,
         containsPreorder,
@@ -1038,7 +1057,7 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
     // whole transaction, the same discipline as the preorder reservation
     // immediately above.
     if (appliedCoupon?.coupon) {
-      await redeemCoupon(tx, appliedCoupon.coupon.id, createdOrder.id, customerId, input.customer.email, appliedCoupon.code, appliedCoupon.discountAmount);
+      await redeemCoupon(tx, appliedCoupon.coupon.id, createdOrder.id, customerId, input.customer.email, appliedCoupon.code, appliedCoupon.discountAmount, couponGrantsFreeDelivery);
       // `createdOrder` was captured (with include: orderInclude) at the
       // tx.order.create() call above — BEFORE this CouponRedemption row
       // existed, so its own couponRedemption relation is still null at
@@ -1056,6 +1075,7 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         customerEmail: input.customer.email.trim().toLowerCase(),
         codeSnapshot: appliedCoupon.code,
         discountAmountSnapshot: appliedCoupon.discountAmount,
+        freeDeliverySnapshot: couponGrantsFreeDelivery,
         createdAt: new Date(),
       };
     }

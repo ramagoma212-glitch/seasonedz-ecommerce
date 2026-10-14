@@ -234,6 +234,7 @@ function renderBackendOrderConfirmation(order) {
           discountTotal: order.discountTotal,
           preorderDiscountTotal: order.preorderDiscountTotal,
           couponCode: order.couponCode,
+          couponFreeDelivery: order.couponFreeDelivery,
           deliveryFee: order.deliveryFee,
           deliveryMethodLabel: formatDeliveryMethodLabel(order.deliveryMethod),
           deliveryMethod: order.deliveryMethod,

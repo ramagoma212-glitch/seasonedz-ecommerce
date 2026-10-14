@@ -1347,9 +1347,19 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   // customer lookup — see checkoutPage.js), never re-guessed here.
   const isRegisteredCustomer = form.dataset.isRegisteredCustomer === "true";
 
+  // Milestone 197.1: a display-only mirror of order.service.ts's own
+  // authoritative chargedDeliveryFee override — never trusted as the
+  // real charge (the backend re-resolves the coupon and recalculates
+  // this fresh at actual order creation), only shown here so the
+  // customer sees the correct total BEFORE submitting. Read from the
+  // same dataset flag handleCouponApply()/handleCouponRemove() set,
+  // never a second, independently-guessed "is a coupon active" check.
+  const couponGrantsFreeDelivery = form.dataset.couponFreeDelivery === "true";
+
   const feeForMethod = (candidateMethod) => {
     if (!hasPhysicalItems) return 0;
     if (candidateMethod !== "COURIER_LOCKER" && candidateMethod !== "COURIER_DOOR") return 0;
+    if (couponGrantsFreeDelivery) return 0;
     const threshold = isRegisteredCustomer ? REGISTERED_FREE_DELIVERY_THRESHOLD : FREE_DELIVERY_THRESHOLD;
     const qualifiesForFree = physicalSubtotal >= threshold;
     if (qualifiesForFree) return 0;
@@ -1388,7 +1398,14 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   if (totalEl) totalEl.textContent = `R${(subtotal + giftWrapTotal + deliveryFee - discountTotal).toFixed(2)}`;
 
   const noteEl = summary.querySelector("[data-order-summary-delivery-note]");
-  if (noteEl) noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, { isRegisteredCustomer, deliveryMethod: method }).trim();
+  if (noteEl) {
+    noteEl.textContent = getDeliveryNote(deliveryFee, hasPhysicalItems, {
+      isRegisteredCustomer,
+      deliveryMethod: method,
+      couponFreeDelivery: couponGrantsFreeDelivery,
+      couponCode: form.dataset.couponCode || null,
+    }).trim();
+  }
 }
 
 // Milestone 197, Part 7: recomputes the order summary's discount row and
@@ -1489,6 +1506,13 @@ async function handleCouponApply(applyForm) {
 
     checkoutForm.dataset.couponCode = result.code;
     checkoutForm.dataset.couponDiscountTotal = result.discountAmount;
+    // Milestone 197.1: set BEFORE updateCheckoutDeliveryMethodUI() below,
+    // which reads this exact flag to decide whether the delivery row
+    // shows FREE — never a second, independently-guessed "is free
+    // delivery active" check.
+    checkoutForm.dataset.couponFreeDelivery = result.freeDelivery ? "true" : "false";
+    const selectedMethod = checkoutForm.querySelector('input[name="deliveryMethod"]:checked')?.value;
+    if (selectedMethod) updateCheckoutDeliveryMethodUI(checkoutForm, selectedMethod);
     refreshCheckoutDiscountDisplay(checkoutForm);
 
     applyForm.hidden = true;
@@ -1497,6 +1521,17 @@ async function handleCouponApply(applyForm) {
       appliedBlock.hidden = false;
       const codeEl = appliedBlock.querySelector("[data-coupon-applied-code]");
       if (codeEl) codeEl.textContent = result.code;
+      // Milestone 197.1, Part 12: names the coupon's ACTUAL configured
+      // benefits — never claims free delivery unless result.freeDelivery
+      // is genuinely true for this coupon.
+      const benefitsEl = appliedBlock.querySelector("[data-coupon-applied-benefits]");
+      if (benefitsEl) {
+        const discountAmount = Number(result.discountAmount) || 0;
+        const parts = [];
+        if (discountAmount > 0) parts.push(`R${discountAmount.toFixed(2)} discount`);
+        if (result.freeDelivery) parts.push("free delivery");
+        benefitsEl.textContent = parts.join(" + ");
+      }
     }
   } catch (error) {
     if (errorEl) {
@@ -1513,6 +1548,14 @@ function handleCouponRemove() {
 
   checkoutForm.dataset.couponCode = "";
   checkoutForm.dataset.couponDiscountTotal = "0";
+  // Milestone 197.1: both benefits disappear together — removing the
+  // coupon restores normal delivery calculation (or leaves it FREE if
+  // the order independently qualifies via the ordinary threshold,
+  // since updateCheckoutDeliveryMethodUI() below re-runs the exact same
+  // threshold check it always has, now simply without this override).
+  checkoutForm.dataset.couponFreeDelivery = "false";
+  const selectedMethod = checkoutForm.querySelector('input[name="deliveryMethod"]:checked')?.value;
+  if (selectedMethod) updateCheckoutDeliveryMethodUI(checkoutForm, selectedMethod);
   refreshCheckoutDiscountDisplay(checkoutForm);
 
   const errorEl = document.querySelector("[data-coupon-error]");
@@ -4496,6 +4539,7 @@ function readAdminCouponFormValues(form) {
   const code = form.querySelector("#couponCode")?.value.trim() || "";
   const description = form.querySelector("#couponDescription")?.value.trim() || "";
   const isActive = form.querySelector("#couponIsActive")?.checked ?? true;
+  const freeDelivery = form.querySelector("#couponFreeDelivery")?.checked ?? false;
   const discountType = form.querySelector("#couponDiscountType")?.value || "PERCENTAGE";
   const discountValueRaw = form.querySelector("#couponDiscountValue")?.value;
   const minimumOrderSubtotalRaw = form.querySelector("#couponMinimumOrderSubtotal")?.value;
@@ -4508,6 +4552,7 @@ function readAdminCouponFormValues(form) {
     code,
     description: description || null,
     isActive,
+    freeDelivery,
     discountType,
     discountValue: discountValueRaw === "" ? null : Number(discountValueRaw),
     minimumOrderSubtotal: minimumOrderSubtotalRaw === "" ? null : Number(minimumOrderSubtotalRaw),

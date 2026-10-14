@@ -1845,3 +1845,183 @@ test("an invalid/unknown coupon code never blocks checkout — the order is stil
   updateMany.restore();
   orderCreate.restore();
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 197.1: coupon free-delivery benefit — an ADDITIONAL perk, never
+// a replacement for the discount above, and never trusted from the client
+// (ValidatedOrderInput/order.validator.ts has no freeDelivery/deliveryFee
+// field at all — ValidatedOrderInput only ever supplies a deliveryMethod;
+// the authoritative fee is always calculateDeliveryFee() plus this
+// server-resolved coupon override, nothing the browser sends).
+// ---------------------------------------------------------------------------
+
+test("FREE DELIVERY A/B: a freeDelivery coupon zeroes a paid courier fee, on top of its own discount — the brief's own worked example (R300, 10%, free delivery -> R270)", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ freeDelivery: true }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDeliverySnapshot, true, "the redemption's own snapshot must record that this specific order got free delivery");
+    return {};
+  });
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  // R300 subtotal is well under the R600 free-delivery threshold, so any
+  // R0 delivery fee here can only have come from the coupon, never the
+  // automatic threshold.
+  const order = await createOrder(baseInput({ couponCode: "FESTIVECUP", deliveryMethod: "COURIER_DOOR" }), null);
+
+  assert.equal(order.subtotal, 300);
+  assert.equal(order.discountTotal, 30, "10% of R300 — the merchandise discount is unaffected by the free-delivery benefit");
+  assert.equal(order.deliveryFee, 0, "COURIER_DOOR would normally be R120 below the R600 threshold — the coupon zeroes it");
+  assert.equal(order.total, 270, "300 - 30 + 0, exactly the brief's own worked example");
+  assert.equal(order.couponFreeDelivery, true);
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("FREE DELIVERY C: a fixed-amount coupon with freeDelivery=true grants both benefits together", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ discountType: "FIXED_AMOUNT", discountValue: new Prisma.Decimal(50), freeDelivery: true }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "SAVE50FREESHIP", deliveryMethod: "COURIER_LOCKER" }), null);
+
+  assert.equal(order.discountTotal, 50);
+  assert.equal(order.deliveryFee, 0);
+  assert.equal(order.total, 250, "300 - 50 + 0");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("FREE DELIVERY D: an order that already automatically qualifies for free delivery never double-applies the coupon's own free-delivery benefit", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ freeDelivery: true }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(700) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  // R700 >= the R600 guest threshold, so COURIER_DOOR is already R0 before
+  // the coupon is even considered.
+  const order = await createOrder(baseInput({ couponCode: "FESTIVECUP", deliveryMethod: "COURIER_DOOR" }), null);
+
+  assert.equal(order.deliveryFee, 0, "still exactly R0 — never negative, never counted twice anywhere in discountTotal");
+  assert.equal(order.discountTotal, 70, "10% of R700 — the coupon's merchandise discount only, delivery was never part of discountTotal");
+  assert.equal(order.total, 630, "700 - 70 + 0");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("FREE DELIVERY E: Customer Collection stays R0 with a freeDelivery coupon — never negative, never a credit", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ freeDelivery: true }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "FESTIVECUP", deliveryMethod: "COLLECTION" }), null);
+
+  assert.equal(order.deliveryFee, 0);
+  assert.ok(order.deliveryFee >= 0, "never negative");
+  assert.equal(order.total, 270, "300 - 30 + 0 — the delivery method itself was never changed, only its charge");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("FREE DELIVERY F: a coupon WITHOUT freeDelivery charges the normal delivery fee even though its discount applies", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ freeDelivery: false }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async (args: { data: Record<string, unknown> }) => {
+    assert.equal(args.data.freeDeliverySnapshot, false);
+    return {};
+  });
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "WELCOME10", deliveryMethod: "COURIER_DOOR" }), null);
+
+  assert.equal(order.deliveryFee, 120, "the ordinary COURIER_DOOR fee below the R600 threshold — this coupon never touches delivery");
+  assert.equal(order.couponFreeDelivery, false);
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("FREE DELIVERY M (tamper safety): a client-claimed freeDelivery/deliveryFee on the order input is structurally impossible — ValidatedOrderInput carries no such field, and the fee charged is still the server-computed one", async () => {
+  // No coupon at all this time — proves the ONLY way delivery can ever
+  // become R0 below the threshold is a genuine, server-resolved,
+  // freeDelivery-enabled coupon; nothing the browser could ever submit.
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tamperedInput = { ...baseInput({ deliveryMethod: "COURIER_DOOR" }), freeDelivery: true, deliveryFee: 0 } as any;
+  const order = await createOrder(tamperedInput, null);
+
+  assert.equal(order.deliveryFee, 120, "the extraneous client fields are simply never read — calculateDeliveryFee() alone decides this");
+
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  orderCreate.restore();
+});

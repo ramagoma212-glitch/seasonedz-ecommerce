@@ -65,6 +65,7 @@ export interface CouponAdminInput {
   productIds?: unknown;
   categoryIds?: unknown;
   excludedProductIds?: unknown;
+  freeDelivery?: unknown;
 }
 
 interface ParsedCouponInput {
@@ -83,6 +84,7 @@ interface ParsedCouponInput {
   productIds: string[];
   categoryIds: string[];
   excludedProductIds: string[];
+  freeDelivery: boolean;
 }
 
 function parseOptionalDecimal(raw: unknown, fieldName: string, requirePositive: boolean): Prisma.Decimal | null {
@@ -189,6 +191,13 @@ function parseCouponInput(rawInput: CouponAdminInput, existing: ParsedCouponInpu
   const categoryIds = has("categoryIds") ? parseStringIdArray(rawInput.categoryIds) : (existing?.categoryIds ?? []);
   const excludedProductIds = has("excludedProductIds") ? parseStringIdArray(rawInput.excludedProductIds) : (existing?.excludedProductIds ?? []);
 
+  // Milestone 197.1: an additional benefit, not a third discount type —
+  // discountType/discountValue above remain required for every coupon
+  // (see this file's own header comment on why "free delivery only" is
+  // a deliberately deferred V1 limitation). Defaults to false/unchanged,
+  // same `has()` partial-update discipline as every other field here.
+  const freeDelivery = has("freeDelivery") ? Boolean(rawInput.freeDelivery) : (existing?.freeDelivery ?? false);
+
   return {
     code,
     description,
@@ -205,6 +214,7 @@ function parseCouponInput(rawInput: CouponAdminInput, existing: ParsedCouponInpu
     productIds,
     categoryIds,
     excludedProductIds,
+    freeDelivery,
   };
 }
 
@@ -254,7 +264,7 @@ export async function getCouponForAdmin(id: string): Promise<AdminCouponRow | nu
   return prisma.coupon.findUnique({ where: { id }, include: ADMIN_COUPON_INCLUDE });
 }
 
-function toParsedFromRow(row: { code: string; description: string | null; isActive: boolean; discountType: CouponDiscountType; discountValue: Prisma.Decimal; minimumOrderSubtotal: Prisma.Decimal | null; maximumDiscountAmount: Prisma.Decimal | null; startsAt: Date | null; expiresAt: Date | null; maxTotalUses: number | null; maxUsesPerCustomer: number | null; customerEligibility: CouponCustomerEligibility }): ParsedCouponInput {
+function toParsedFromRow(row: { code: string; description: string | null; isActive: boolean; discountType: CouponDiscountType; discountValue: Prisma.Decimal; minimumOrderSubtotal: Prisma.Decimal | null; maximumDiscountAmount: Prisma.Decimal | null; startsAt: Date | null; expiresAt: Date | null; maxTotalUses: number | null; maxUsesPerCustomer: number | null; customerEligibility: CouponCustomerEligibility; freeDelivery: boolean }): ParsedCouponInput {
   return { ...row, productIds: [], categoryIds: [], excludedProductIds: [] };
 }
 
@@ -276,6 +286,7 @@ export async function createCoupon(rawInput: CouponAdminInput): Promise<AdminCou
         maxTotalUses: parsed.maxTotalUses,
         maxUsesPerCustomer: parsed.maxUsesPerCustomer,
         customerEligibility: parsed.customerEligibility,
+        freeDelivery: parsed.freeDelivery,
       },
     });
     await writeCouponRelations(tx, coupon.id, parsed);
@@ -308,6 +319,7 @@ export async function updateCoupon(id: string, rawInput: CouponAdminInput): Prom
         maxTotalUses: parsed.maxTotalUses,
         maxUsesPerCustomer: parsed.maxUsesPerCustomer,
         customerEligibility: parsed.customerEligibility,
+        freeDelivery: parsed.freeDelivery,
       },
     });
     if (rawInput.productIds !== undefined || rawInput.categoryIds !== undefined || rawInput.excludedProductIds !== undefined) {
@@ -371,6 +383,12 @@ export interface CouponResolutionResult {
   coupon: Prisma.CouponGetPayload<Record<string, never>> | null;
   discountAmount: Prisma.Decimal;
   eligibleSubtotal: Prisma.Decimal;
+  // Milestone 197.1: a top-level convenience mirror of coupon.freeDelivery
+  // (same reasoning discountAmount already duplicates coupon.discountValue
+  // in effect) — ALWAYS false on an invalid/not-yet-qualifying result,
+  // regardless of what the coupon row itself has configured, so a caller
+  // can trust this field alone without re-checking `valid` first.
+  freeDelivery: boolean;
 }
 
 const GENERIC_NOT_FOUND: Omit<CouponResolutionResult, "code"> = {
@@ -379,6 +397,7 @@ const GENERIC_NOT_FOUND: Omit<CouponResolutionResult, "code"> = {
   coupon: null,
   discountAmount: new Prisma.Decimal(0),
   eligibleSubtotal: new Prisma.Decimal(0),
+  freeDelivery: false,
 };
 
 function calculateDiscountAmount(eligibleSubtotal: Prisma.Decimal, coupon: { discountType: CouponDiscountType; discountValue: Prisma.Decimal; maximumDiscountAmount: Prisma.Decimal | null }): Prisma.Decimal {
@@ -410,16 +429,16 @@ async function resolve(input: CouponResolutionInput): Promise<CouponResolutionRe
   if (!coupon) return { ...GENERIC_NOT_FOUND, code };
 
   if (!coupon.isActive) {
-    return { valid: false, message: "This coupon is no longer available.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0) };
+    return { valid: false, message: "This coupon is no longer available.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0), freeDelivery: false };
   }
   if (coupon.startsAt && now < coupon.startsAt) {
-    return { valid: false, message: "This coupon is not active yet.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0) };
+    return { valid: false, message: "This coupon is not active yet.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0), freeDelivery: false };
   }
   if (coupon.expiresAt && now >= coupon.expiresAt) {
-    return { valid: false, message: "This coupon has expired.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0) };
+    return { valid: false, message: "This coupon has expired.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0), freeDelivery: false };
   }
   if (coupon.customerEligibility === CouponCustomerEligibility.LOGGED_IN_ONLY && !input.customerId) {
-    return { valid: false, message: "Sign in to use this coupon.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0) };
+    return { valid: false, message: "Sign in to use this coupon.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal: new Prisma.Decimal(0), freeDelivery: false };
   }
 
   // Product/category restriction — an empty include list on the coupon
@@ -456,15 +475,15 @@ async function resolve(input: CouponResolutionInput): Promise<CouponResolutionRe
   }, new Prisma.Decimal(0));
 
   if (eligibleSubtotal.lessThanOrEqualTo(0)) {
-    return { valid: false, message: "This coupon is not valid for the products in your cart.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal };
+    return { valid: false, message: "This coupon is not valid for the products in your cart.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
   }
 
   if (coupon.minimumOrderSubtotal && eligibleSubtotal.lessThan(coupon.minimumOrderSubtotal)) {
-    return { valid: false, message: `Your order does not meet the R${coupon.minimumOrderSubtotal.toFixed(2)} minimum for this coupon.`, code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal };
+    return { valid: false, message: `Your order does not meet the R${coupon.minimumOrderSubtotal.toFixed(2)} minimum for this coupon.`, code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
   }
 
   if (coupon.maxTotalUses !== null && coupon.timesRedeemed >= coupon.maxTotalUses) {
-    return { valid: false, message: "This coupon has reached its usage limit.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal };
+    return { valid: false, message: "This coupon has reached its usage limit.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
   }
 
   if (coupon.maxUsesPerCustomer !== null) {
@@ -474,12 +493,12 @@ async function resolve(input: CouponResolutionInput): Promise<CouponResolutionRe
         ? await prisma.couponRedemption.count({ where: { couponId: coupon.id, customerEmail: input.customerEmail.trim().toLowerCase() } })
         : 0;
     if (priorRedemptions >= coupon.maxUsesPerCustomer) {
-      return { valid: false, message: "This coupon has reached its usage limit.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal };
+      return { valid: false, message: "This coupon has reached its usage limit.", code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
     }
   }
 
   const discountAmount = calculateDiscountAmount(eligibleSubtotal, coupon);
-  return { valid: true, message: "Coupon applied.", code, coupon, discountAmount, eligibleSubtotal };
+  return { valid: true, message: "Coupon applied.", code, coupon, discountAmount, eligibleSubtotal, freeDelivery: coupon.freeDelivery };
 }
 
 // Non-binding preview — safe to call on every cart/checkout render, same
@@ -517,7 +536,8 @@ export async function redeemCoupon(
   customerId: string | null,
   customerEmail: string,
   codeSnapshot: string,
-  discountAmountSnapshot: Prisma.Decimal
+  discountAmountSnapshot: Prisma.Decimal,
+  freeDeliverySnapshot: boolean
 ): Promise<void> {
   const coupon = await tx.coupon.findUnique({ where: { id: couponId }, select: { maxTotalUses: true } });
   if (!coupon) throw new CouponError("Coupon no longer exists.", 409);
@@ -541,6 +561,7 @@ export async function redeemCoupon(
       customerEmail: customerEmail.trim().toLowerCase(),
       codeSnapshot,
       discountAmountSnapshot,
+      freeDeliverySnapshot,
     },
   });
 }

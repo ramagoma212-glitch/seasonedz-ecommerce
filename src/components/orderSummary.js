@@ -39,10 +39,17 @@ import { escapeHtml } from "../js/search.js";
 // is unconditionally free with no subtotal threshold at all, so it
 // must never be described in terms of the R500/R600 courier
 // threshold it never needed to meet.
+// Milestone 197.1: `couponFreeDelivery`/`couponCode` let a genuinely
+// coupon-driven R0 delivery fee say so accurately, instead of (wrongly)
+// crediting the R500/R600 automatic threshold the order may not have
+// actually met. Checked before the threshold wording below, but after
+// the Collection case — Collection is unconditionally free on its own
+// regardless of any coupon, so a coupon that happens to also be applied
+// is never the real reason there and must never be credited for it.
 export function getDeliveryNote(
   deliveryFee,
   hasPhysicalItems,
-  { omitDeliveryUntilSelected = false, isRegisteredCustomer = false, deliveryMethod = null } = {}
+  { omitDeliveryUntilSelected = false, isRegisteredCustomer = false, deliveryMethod = null, couponFreeDelivery = false, couponCode = null } = {}
 ) {
   if (!hasPhysicalItems) {
     return "No delivery is needed. This order is digital download(s) only.";
@@ -55,6 +62,9 @@ export function getDeliveryNote(
   if (deliveryFee === 0) {
     if (deliveryMethod === "COLLECTION") {
       return "Customer Collection is free, with no minimum order.";
+    }
+    if (couponFreeDelivery) {
+      return couponCode ? `Free delivery applied with ${couponCode}.` : "Free delivery applied by your coupon.";
     }
     return isRegisteredCustomer
       ? "Registered customer benefit: free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R500 or more for registered customers."
@@ -147,7 +157,10 @@ function renderCouponBlock(couponCode) {
       </div>
     </form>
     <div class="order-summary__coupon" data-coupon-applied-block ${couponCode ? "" : "hidden"}>
-      <span class="order-summary__coupon-applied">Coupon <strong data-coupon-applied-code>${escapeHtml(couponCode || "")}</strong> applied</span>
+      <span class="order-summary__coupon-applied">
+        Coupon <strong data-coupon-applied-code>${escapeHtml(couponCode || "")}</strong> applied
+        <span class="order-summary__coupon-benefits" data-coupon-applied-benefits></span>
+      </span>
       <button type="button" class="btn btn--secondary btn--sm" data-action="remove-coupon">Remove</button>
     </div>
     <p class="form-field__error" data-coupon-error></p>
@@ -172,6 +185,7 @@ export function renderOrderSummary({
   isRegisteredCustomer = false,
   showCouponInput = false,
   couponCode = null,
+  couponFreeDelivery = false,
 }) {
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0) - discountTotal;
   const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
@@ -255,7 +269,7 @@ export function renderOrderSummary({
       </div>
 
       <p class="order-summary__note" data-order-summary-delivery-note>
-        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer, deliveryMethod })}
+        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer, deliveryMethod, couponFreeDelivery, couponCode })}
       </p>
 
       ${showCouponInput ? renderCouponBlock(couponCode) : ""}
