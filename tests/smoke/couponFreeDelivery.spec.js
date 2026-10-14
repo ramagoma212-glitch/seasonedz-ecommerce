@@ -95,6 +95,55 @@ test.describe("Admin coupon form: free delivery (Milestone 197.1)", () => {
     expect(submittedBody.freeDelivery).toBe(true);
   });
 
+  test("the Maximum Order Amount field exists and is included on create", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/products?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ products: [], total: 0, page: 1, limit: 50, totalPages: 1 }) }));
+    await page.route("**/api/categories", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ categories: [] }) }));
+
+    let submittedBody = null;
+    await page.route("**/api/admin/coupons", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      submittedBody = route.request().postDataJSON();
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: envelope({ id: "coupon-2", code: "FIRSTBUY", discountType: "PERCENTAGE", discountValue: 10, maximumOrderSubtotal: 500, isActive: true, timesRedeemed: 0, maxTotalUses: null }),
+      });
+    });
+
+    await page.goto("/admin/coupons/new");
+    await page.locator("#couponCode").fill("FIRSTBUY");
+    await page.locator("#couponDiscountValue").fill("10");
+    await page.locator("#couponMaximumOrderSubtotal").fill("500");
+    await page.locator('[data-admin-coupon-form] button[type="submit"]').click();
+
+    await expect.poll(() => submittedBody).toBeTruthy();
+    expect(submittedBody.maximumOrderSubtotal).toBe(500);
+  });
+
+  test("a maximum order amount at or below the minimum order amount is rejected client-side before submitting", async ({ page }) => {
+    await mockAdminAuth(page);
+    await page.route("**/api/admin/products?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ products: [], total: 0, page: 1, limit: 50, totalPages: 1 }) }));
+    await page.route("**/api/categories", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ categories: [] }) }));
+
+    let submitted = false;
+    await page.route("**/api/admin/coupons", (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      submitted = true;
+      return route.continue();
+    });
+
+    await page.goto("/admin/coupons/new");
+    await page.locator("#couponCode").fill("BADRANGE");
+    await page.locator("#couponDiscountValue").fill("10");
+    await page.locator("#couponMinimumOrderSubtotal").fill("500");
+    await page.locator("#couponMaximumOrderSubtotal").fill("200");
+    await page.locator('[data-admin-coupon-form] button[type="submit"]').click();
+
+    await expect(page.locator("[data-admin-coupon-form-banner]")).toContainText("Maximum order amount must be greater than the minimum order amount.");
+    expect(submitted).toBe(false);
+  });
+
   test("editing an existing free-delivery coupon shows the checkbox already checked", async ({ page }) => {
     await mockAdminAuth(page);
     await page.route("**/api/admin/products?**", (route) => route.fulfill({ status: 200, contentType: "application/json", body: envelope({ products: [], total: 0, page: 1, limit: 50, totalPages: 1 }) }));
@@ -111,6 +160,7 @@ test.describe("Admin coupon form: free delivery (Milestone 197.1)", () => {
           discountType: "PERCENTAGE",
           discountValue: 10,
           minimumOrderSubtotal: null,
+          maximumOrderSubtotal: 500,
           maximumDiscountAmount: null,
           startsAt: null,
           expiresAt: null,
@@ -128,6 +178,7 @@ test.describe("Admin coupon form: free delivery (Milestone 197.1)", () => {
 
     await page.goto("/admin/coupons/coupon-1/edit");
     await expect(page.locator("#couponFreeDelivery")).toBeChecked();
+    await expect(page.locator("#couponMaximumOrderSubtotal")).toHaveValue("500");
   });
 });
 
@@ -225,6 +276,23 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
 
     await expect(page.locator("[data-coupon-error]")).toHaveText("Coupon code not found.");
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+  });
+
+  test("a coupon configured with a maximum order amount is rejected once the cart exceeds it, and delivery stays unchanged", async ({ page }) => {
+    await addItemAndGoToCheckout(page);
+
+    await page.route("**/api/coupons/preview", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: envelope({ valid: false, message: "This coupon is only valid for orders up to R200.00.", code: "FIRSTBUY", discountAmount: 0, freeDelivery: false }),
+      })
+    );
+    await page.locator("#couponCodeInput").fill("FIRSTBUY");
+    await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
+
+    await expect(page.locator("[data-coupon-error]")).toHaveText("This coupon is only valid for orders up to R200.00.");
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
   });
 

@@ -158,6 +158,14 @@ function renderCouponForm(mode, coupon, products, categories) {
           <p class="admin-product-form__hint">Judged against the coupon-eligible part of the order only (excludes delivery, gift wrap, and anything the coupon doesn't cover).</p>
         </div>
         <div class="form-field">
+          <label class="form-field__label" for="couponMaximumOrderSubtotal">Maximum Order Amount <span class="form-field__optional">(optional)</span></label>
+          <input type="number" id="couponMaximumOrderSubtotal" class="form-field__input" min="0.01" step="0.01" value="${coupon?.maximumOrderSubtotal ?? ""}" />
+          <p class="admin-product-form__hint">Same eligible-subtotal basis as Minimum Order Amount, above. Must be greater than the minimum, if both are set.</p>
+        </div>
+      </div>
+
+      <div class="admin-product-form__row">
+        <div class="form-field">
           <label class="form-field__label" for="couponMaximumDiscountAmount">Maximum Discount <span class="form-field__optional">(optional, percentage only)</span></label>
           <input type="number" id="couponMaximumDiscountAmount" class="form-field__input" min="0.01" step="0.01" value="${coupon?.maximumDiscountAmount ?? ""}" />
           <p class="admin-product-form__hint">E.g. "10% off, up to R100". Ignored for a fixed-amount coupon, which already has its own cap.</p>

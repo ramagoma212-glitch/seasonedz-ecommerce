@@ -4543,6 +4543,7 @@ function readAdminCouponFormValues(form) {
   const discountType = form.querySelector("#couponDiscountType")?.value || "PERCENTAGE";
   const discountValueRaw = form.querySelector("#couponDiscountValue")?.value;
   const minimumOrderSubtotalRaw = form.querySelector("#couponMinimumOrderSubtotal")?.value;
+  const maximumOrderSubtotalRaw = form.querySelector("#couponMaximumOrderSubtotal")?.value;
   const maximumDiscountAmountRaw = form.querySelector("#couponMaximumDiscountAmount")?.value;
   const maxTotalUsesRaw = form.querySelector("#couponMaxTotalUses")?.value;
   const maxUsesPerCustomerRaw = form.querySelector("#couponMaxUsesPerCustomer")?.value;
@@ -4556,6 +4557,7 @@ function readAdminCouponFormValues(form) {
     discountType,
     discountValue: discountValueRaw === "" ? null : Number(discountValueRaw),
     minimumOrderSubtotal: minimumOrderSubtotalRaw === "" ? null : Number(minimumOrderSubtotalRaw),
+    maximumOrderSubtotal: maximumOrderSubtotalRaw === "" ? null : Number(maximumOrderSubtotalRaw),
     maximumDiscountAmount: maximumDiscountAmountRaw === "" ? null : Number(maximumDiscountAmountRaw),
     startsAt: readAdminDatetimeLocalField(form, "couponStartsAt"),
     expiresAt: readAdminDatetimeLocalField(form, "couponExpiresAt"),
@@ -4586,6 +4588,12 @@ function validateAdminCouponForm(values) {
   }
   if (values.minimumOrderSubtotal !== null && (Number.isNaN(values.minimumOrderSubtotal) || values.minimumOrderSubtotal <= 0)) {
     return "Minimum order amount must be greater than 0.";
+  }
+  if (values.maximumOrderSubtotal !== null && (Number.isNaN(values.maximumOrderSubtotal) || values.maximumOrderSubtotal <= 0)) {
+    return "Maximum order amount must be greater than 0.";
+  }
+  if (values.minimumOrderSubtotal !== null && values.maximumOrderSubtotal !== null && values.maximumOrderSubtotal <= values.minimumOrderSubtotal) {
+    return "Maximum order amount must be greater than the minimum order amount.";
   }
   if (values.maximumDiscountAmount !== null && (Number.isNaN(values.maximumDiscountAmount) || values.maximumDiscountAmount <= 0)) {
     return "Maximum discount must be greater than 0.";

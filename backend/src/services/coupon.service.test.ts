@@ -26,6 +26,7 @@ function baseCouponRow(overrides: Record<string, unknown> = {}) {
     discountType: "PERCENTAGE",
     discountValue: new Prisma.Decimal(10),
     minimumOrderSubtotal: null,
+    maximumOrderSubtotal: null,
     maximumDiscountAmount: null,
     startsAt: null,
     expiresAt: null,
@@ -202,6 +203,25 @@ test("minimum order subtotal is judged only against the coupon-eligible subtotal
   couponProduct.restore();
   couponCategory.restore();
   couponExcluded.restore();
+});
+
+test("maximum order subtotal is enforced — a cart above the cap is rejected", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ maximumOrderSubtotal: new Prisma.Decimal(500) }));
+  const restrictions = stubEmptyRestrictions();
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(600) }]);
+  assert.equal(result.valid, false);
+  assert.match(result.message, /R500\.00/);
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
+});
+
+test("maximum order subtotal: a cart at exactly the cap is still accepted (only strictly above it is rejected)", async () => {
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ maximumOrderSubtotal: new Prisma.Decimal(500) }));
+  const restrictions = stubEmptyRestrictions();
+  const result = await previewCoupon("WELCOME10", null, null, [{ productId: "p1", lineTotal: new Prisma.Decimal(500) }]);
+  assert.equal(result.valid, true);
+  findUnique.restore();
+  restrictions.forEach((r) => r.restore());
 });
 
 test("usage limit (total) is enforced", async () => {
@@ -479,6 +499,69 @@ test("admin: coupon code must be well-formed (letters/numbers/hyphen/underscore,
     () => createCoupon({ code: "a!", discountType: "PERCENTAGE", discountValue: 10 }),
     (error: unknown) => error instanceof CouponError
   );
+});
+
+test("admin: maximum order amount must be greater than the minimum order amount", async () => {
+  await assert.rejects(
+    () =>
+      createCoupon({
+        code: "BADRANGE",
+        discountType: "PERCENTAGE",
+        discountValue: 10,
+        minimumOrderSubtotal: 500,
+        maximumOrderSubtotal: 500,
+      }),
+    (error: unknown) => error instanceof CouponError && /greater than the minimum order amount/.test(error.message)
+  );
+  await assert.rejects(
+    () =>
+      createCoupon({
+        code: "BADRANGE2",
+        discountType: "PERCENTAGE",
+        discountValue: 10,
+        minimumOrderSubtotal: 500,
+        maximumOrderSubtotal: 200,
+      }),
+    (error: unknown) => error instanceof CouponError && /greater than the minimum order amount/.test(error.message)
+  );
+});
+
+test("admin: createCoupon persists an explicit maximumOrderSubtotal", async () => {
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const create = stub(prisma.coupon, "create", async (args: { data: Record<string, unknown> }) => {
+    assert.equal((args.data.maximumOrderSubtotal as Prisma.Decimal | null)?.toString(), "500");
+    return baseCouponRow({ id: "new-coupon", maximumOrderSubtotal: new Prisma.Decimal(500) });
+  });
+  const relationStubs = [
+    stub(prisma.couponProduct, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponCategory, "deleteMany", async () => ({ count: 0 })),
+    stub(prisma.couponExcludedProduct, "deleteMany", async () => ({ count: 0 })),
+  ];
+  const findUnique = stub(prisma.coupon, "findUnique", async () => baseCouponRow({ id: "new-coupon", maximumOrderSubtotal: new Prisma.Decimal(500) }));
+
+  const result = await createCoupon({ code: "CAPPED", discountType: "PERCENTAGE", discountValue: 10, maximumOrderSubtotal: 500 });
+  assert.equal(result.maximumOrderSubtotal?.toString(), "500");
+
+  transactionStub.restore();
+  create.restore();
+  relationStubs.forEach((r) => r.restore());
+  findUnique.restore();
+});
+
+test("admin: updateCoupon with no maximumOrderSubtotal field in the request leaves the existing value unchanged", async () => {
+  const existingRow = baseCouponRow({ id: "existing-coupon", maximumOrderSubtotal: new Prisma.Decimal(500) });
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const findUnique = stub(prisma.coupon, "findUnique", async () => existingRow);
+  const update = stub(prisma.coupon, "update", async (args: { data: Record<string, unknown> }) => {
+    assert.equal((args.data.maximumOrderSubtotal as Prisma.Decimal | null)?.toString(), "500");
+    return existingRow;
+  });
+
+  await updateCoupon("existing-coupon", { description: "just a description change" });
+
+  transactionStub.restore();
+  findUnique.restore();
+  update.restore();
 });
 
 test("admin: updateCoupon rejects a not-found coupon", async () => {

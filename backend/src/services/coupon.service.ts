@@ -56,6 +56,7 @@ export interface CouponAdminInput {
   discountType?: unknown;
   discountValue?: unknown;
   minimumOrderSubtotal?: unknown;
+  maximumOrderSubtotal?: unknown;
   maximumDiscountAmount?: unknown;
   startsAt?: unknown;
   expiresAt?: unknown;
@@ -75,6 +76,7 @@ interface ParsedCouponInput {
   discountType: CouponDiscountType;
   discountValue: Prisma.Decimal;
   minimumOrderSubtotal: Prisma.Decimal | null;
+  maximumOrderSubtotal: Prisma.Decimal | null;
   maximumDiscountAmount: Prisma.Decimal | null;
   startsAt: Date | null;
   expiresAt: Date | null;
@@ -169,6 +171,10 @@ function parseCouponInput(rawInput: CouponAdminInput, existing: ParsedCouponInpu
   if (!discountValue) throw new CouponError("Discount value is required.");
 
   const minimumOrderSubtotal = has("minimumOrderSubtotal") ? parseOptionalDecimal(rawInput.minimumOrderSubtotal, "Minimum order amount", true) : (existing?.minimumOrderSubtotal ?? null);
+  const maximumOrderSubtotal = has("maximumOrderSubtotal") ? parseOptionalDecimal(rawInput.maximumOrderSubtotal, "Maximum order amount", true) : (existing?.maximumOrderSubtotal ?? null);
+  if (minimumOrderSubtotal && maximumOrderSubtotal && maximumOrderSubtotal.lessThanOrEqualTo(minimumOrderSubtotal)) {
+    throw new CouponError("Maximum order amount must be greater than the minimum order amount.");
+  }
   const maximumDiscountAmount = has("maximumDiscountAmount") ? parseOptionalDecimal(rawInput.maximumDiscountAmount, "Maximum discount", true) : (existing?.maximumDiscountAmount ?? null);
   const startsAt = has("startsAt") ? parseOptionalDate(rawInput.startsAt, "Start date") : (existing?.startsAt ?? null);
   const expiresAt = has("expiresAt") ? parseOptionalDate(rawInput.expiresAt, "Expiry date") : (existing?.expiresAt ?? null);
@@ -205,6 +211,7 @@ function parseCouponInput(rawInput: CouponAdminInput, existing: ParsedCouponInpu
     discountType,
     discountValue,
     minimumOrderSubtotal,
+    maximumOrderSubtotal,
     maximumDiscountAmount,
     startsAt,
     expiresAt,
@@ -264,7 +271,7 @@ export async function getCouponForAdmin(id: string): Promise<AdminCouponRow | nu
   return prisma.coupon.findUnique({ where: { id }, include: ADMIN_COUPON_INCLUDE });
 }
 
-function toParsedFromRow(row: { code: string; description: string | null; isActive: boolean; discountType: CouponDiscountType; discountValue: Prisma.Decimal; minimumOrderSubtotal: Prisma.Decimal | null; maximumDiscountAmount: Prisma.Decimal | null; startsAt: Date | null; expiresAt: Date | null; maxTotalUses: number | null; maxUsesPerCustomer: number | null; customerEligibility: CouponCustomerEligibility; freeDelivery: boolean }): ParsedCouponInput {
+function toParsedFromRow(row: { code: string; description: string | null; isActive: boolean; discountType: CouponDiscountType; discountValue: Prisma.Decimal; minimumOrderSubtotal: Prisma.Decimal | null; maximumOrderSubtotal: Prisma.Decimal | null; maximumDiscountAmount: Prisma.Decimal | null; startsAt: Date | null; expiresAt: Date | null; maxTotalUses: number | null; maxUsesPerCustomer: number | null; customerEligibility: CouponCustomerEligibility; freeDelivery: boolean }): ParsedCouponInput {
   return { ...row, productIds: [], categoryIds: [], excludedProductIds: [] };
 }
 
@@ -280,6 +287,7 @@ export async function createCoupon(rawInput: CouponAdminInput): Promise<AdminCou
         discountType: parsed.discountType,
         discountValue: parsed.discountValue,
         minimumOrderSubtotal: parsed.minimumOrderSubtotal,
+        maximumOrderSubtotal: parsed.maximumOrderSubtotal,
         maximumDiscountAmount: parsed.maximumDiscountAmount,
         startsAt: parsed.startsAt,
         expiresAt: parsed.expiresAt,
@@ -313,6 +321,7 @@ export async function updateCoupon(id: string, rawInput: CouponAdminInput): Prom
         discountType: parsed.discountType,
         discountValue: parsed.discountValue,
         minimumOrderSubtotal: parsed.minimumOrderSubtotal,
+        maximumOrderSubtotal: parsed.maximumOrderSubtotal,
         maximumDiscountAmount: parsed.maximumDiscountAmount,
         startsAt: parsed.startsAt,
         expiresAt: parsed.expiresAt,
@@ -480,6 +489,10 @@ async function resolve(input: CouponResolutionInput): Promise<CouponResolutionRe
 
   if (coupon.minimumOrderSubtotal && eligibleSubtotal.lessThan(coupon.minimumOrderSubtotal)) {
     return { valid: false, message: `Your order does not meet the R${coupon.minimumOrderSubtotal.toFixed(2)} minimum for this coupon.`, code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
+  }
+
+  if (coupon.maximumOrderSubtotal && eligibleSubtotal.greaterThan(coupon.maximumOrderSubtotal)) {
+    return { valid: false, message: `This coupon is only valid for orders up to R${coupon.maximumOrderSubtotal.toFixed(2)}.`, code, coupon, discountAmount: new Prisma.Decimal(0), eligibleSubtotal, freeDelivery: false };
   }
 
   if (coupon.maxTotalUses !== null && coupon.timesRedeemed >= coupon.maxTotalUses) {

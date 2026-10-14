@@ -3094,6 +3094,14 @@ model Coupon {
   // line already received from the preorder discount — see that file).
   minimumOrderSubtotal Decimal? @db.Decimal(10, 2)
 
+  // Optional — null means no maximum. The mirror of minimumOrderSubtotal
+  // above, judged against the exact same coupon-eligible subtotal — caps
+  // how LARGE an order may be rather than how small, e.g. a first-time-
+  // buyer code the owner never wants applied to a big bulk order. Checked
+  // in coupon.service.ts's resolve(), after the minimum check, with its
+  // own specific rejection message.
+  maximumOrderSubtotal Decimal? @db.Decimal(10, 2)
+
   // Only meaningful for PERCENTAGE (ignored for FIXED_AMOUNT, since a
   // fixed discount is already its own cap) — e.g. "10% off, up to R100".
   maximumDiscountAmount Decimal? @db.Decimal(10, 2)
