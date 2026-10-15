@@ -1,5 +1,5 @@
-import { AffiliateStatus, FulfilmentStatus, OrderAffiliateCommissionStatus, OrderStatus, PaymentStatus, Prisma, ProductStatus, ProductType, DeliveryMethod } from "@prisma/client";
-import type { PaymentMethod, Product } from "@prisma/client";
+import { AffiliateStatus, FulfilmentStatus, OrderAffiliateCommissionStatus, OrderStatus, PaymentMethod, PaymentStatus, Prisma, ProductStatus, ProductType, DeliveryMethod } from "@prisma/client";
+import type { Product } from "@prisma/client";
 import { prisma } from "../config/prisma.js";
 import { calculateDeliveryFee, calculateGiftWrapFee } from "../utils/money.js";
 import { generateOrderNumber } from "../utils/orderNumber.js";
@@ -14,6 +14,7 @@ import { isActivePreorder, isActivePreorderDiscountEligible } from "./preorder.s
 import { getPreorderProgrammeSettings } from "./preorderProgrammeSettings.service.js";
 import { hasActivePreorderDiscountRedemption, reservePreorderDiscount } from "./preorderDiscountRedemption.service.js";
 import { resolveCouponForOrder, redeemCoupon } from "./coupon.service.js";
+import { scheduleProductReviewRequestForDigitalOrder } from "./productReviewRequest.service.js";
 
 // A business-rule failure (product not found/inactive/out of stock,
 // insufficient stock, etc.) — distinct from an unexpected error, so
@@ -907,6 +908,24 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   const chargedDeliveryFee = couponGrantsFreeDelivery ? new Prisma.Decimal(0) : deliveryFee;
   const total = subtotal.plus(giftWrapTotal).plus(chargedDeliveryFee).minus(discountTotal);
 
+  // A fully-discounted order (e.g. a 100%-off coupon + free delivery)
+  // has nothing left to collect — total can never go negative (see the
+  // non-negative guards on discountTotal/chargedDeliveryFee above), so
+  // lte(0) in practice only ever means exactly 0. PayFast cannot be
+  // initiated for a R0 order (payfast.service.ts's own
+  // `order.total.lte(0)` guard), and there is no real Bank Transfer/
+  // Cash on Delivery to confirm either, so neither of those would ever
+  // resolve. PaymentMethod.MANUAL already exists for exactly this —
+  // previously reserved/unreachable (see adminPaymentConfirmation.
+  // service.ts's own comment) because no client input could ever
+  // produce it through a non-zero total; this is the one place that
+  // deliberately activates it, decided here from the server's own
+  // authoritative total, never from input.paymentMethod — a client
+  // cannot reach this branch by sending paymentMethod="manual" on a
+  // real priced cart, since the condition is the total, not the input.
+  const isZeroTotalOrder = total.lte(0);
+  const paidAt = isZeroTotalOrder ? new Date() : null;
+
   const orderNumber = await generateOrderNumber();
 
   // timeout raised from Prisma's 5s default — each query in this
@@ -974,10 +993,16 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         deliveryNotes: input.deliveryAddress?.deliveryNotes ?? null,
         deliveryMethod: input.deliveryMethod as DeliveryMethod,
         collectionCity: input.collectionCity,
-        status: OrderStatus.PENDING,
-        paymentStatus: PaymentStatus.PENDING,
+        // A zero-total order is genuinely complete the moment it's
+        // created — there is nothing left to confirm, so it jumps
+        // straight past PENDING, the same way payfast.service.ts's own
+        // verified-ITN branch and adminPaymentConfirmation.service.ts's
+        // manual confirmation both move status/paymentStatus together
+        // once a real payment is confirmed.
+        status: isZeroTotalOrder ? OrderStatus.CONFIRMED : OrderStatus.PENDING,
+        paymentStatus: isZeroTotalOrder ? PaymentStatus.PAID : PaymentStatus.PENDING,
         fulfilmentStatus: FulfilmentStatus.NOT_STARTED,
-        paymentMethod: input.paymentMethod,
+        paymentMethod: isZeroTotalOrder ? PaymentMethod.MANUAL : input.paymentMethod,
         subtotal,
         giftWrapTotal,
         deliveryFee: chargedDeliveryFee,
@@ -1012,10 +1037,11 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
         },
         payment: {
           create: {
-            method: input.paymentMethod,
-            status: PaymentStatus.PENDING,
+            method: isZeroTotalOrder ? PaymentMethod.MANUAL : input.paymentMethod,
+            status: isZeroTotalOrder ? PaymentStatus.PAID : PaymentStatus.PENDING,
             amount: total,
-            provider: null,
+            provider: isZeroTotalOrder ? "ZERO_TOTAL_NO_PAYMENT_REQUIRED" : null,
+            paidAt,
           },
         },
         // Version 7, Milestone 157: a digital-only order has nothing to
@@ -1207,6 +1233,16 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
 
     return createdOrder;
   }, { timeout: 20000 });
+
+  // Strictly after the transaction above has committed — same
+  // post-commit discipline payfast.service.ts's own COMPLETE branch and
+  // adminPaymentConfirmation.service.ts already follow for this exact
+  // hook. Only ever actually schedules anything for a 100%-digital,
+  // registered-customer order (the function's own internal checks);
+  // never awaited, so it can never fail or delay this response.
+  if (isZeroTotalOrder) {
+    void scheduleProductReviewRequestForDigitalOrder(order.orderNumber, paidAt as Date).catch(() => {});
+  }
 
   return toOrderOutput(order);
 }

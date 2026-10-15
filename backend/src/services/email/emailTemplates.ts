@@ -161,7 +161,15 @@ function deliveryFulfilmentNote(order: OrderEmailData): string {
 // directly, which is both honest and safe regardless of when real
 // banking details are eventually added (a future milestone, via
 // Render env if needed — never hardcoded).
-function paymentInstructions(paymentMethod: string): string {
+// Milestone 197.1B: a fully-discounted (R0) order is already PAID the
+// moment it's created (see order.service.ts's own isZeroTotalOrder
+// comment) — there is genuinely nothing left to pay, so this is
+// checked before paymentMethod at all, regardless of which method
+// produced it.
+function paymentInstructions(paymentMethod: string, paymentStatus: string): string {
+  if (paymentStatus === "PAID") {
+    return "No payment is required. This order is already fully paid.";
+  }
   switch (paymentMethod) {
     case "BANK_TRANSFER":
       return "Seasonedz Group will confirm payment details and next steps with you directly.";
@@ -199,6 +207,9 @@ function enquiryTypeIntro(type: string): string {
 // expectation for what happens once payment clears.
 function digitalItemsNoticeForOrderCreated(order: OrderEmailData): string {
   if (!order.hasDigitalItems) return "";
+  if (order.paymentStatus === "PAID") {
+    return "\n\nThis order includes a digital download item. Log in to My Account to download it, or check your email for a secure download link if you checked out as a guest.";
+  }
   return "\n\nThis order includes a digital download item. It will be available to download once your payment is confirmed.";
 }
 
@@ -215,7 +226,7 @@ Order Total: ${formatRand(order.total)}
 Payment Method: ${humanizeEnum(order.paymentMethod)}
 Payment Status: ${humanizeEnum(order.paymentStatus)}
 
-${paymentInstructions(order.paymentMethod)}${digitalItemsNoticeForOrderCreated(order)}
+${paymentInstructions(order.paymentMethod, order.paymentStatus)}${digitalItemsNoticeForOrderCreated(order)}
 
 Delivery Method: ${formatDeliveryMethodLabel(order.deliveryMethod)} (${order.deliveryFee === 0 ? "FREE" : formatRand(order.deliveryFee)})
 ${formatDeliveryNote(order)}
@@ -243,7 +254,7 @@ export function renderPaymentPendingEmail(order: OrderEmailData): RenderedEmail 
 
 We're still waiting on payment for your Seasonedz Group order ${order.orderNumber}, for ${formatRand(order.total)}.
 
-${paymentInstructions(order.paymentMethod)}
+${paymentInstructions(order.paymentMethod, order.paymentStatus)}
 
 If you've already paid, please let us know so we can match it to your order. If your plans have changed, just reply and we'll help sort it out.
 

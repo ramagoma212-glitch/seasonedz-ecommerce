@@ -2025,3 +2025,136 @@ test("FREE DELIVERY M (tamper safety): a client-claimed freeDelivery/deliveryFee
   updateMany.restore();
   orderCreate.restore();
 });
+
+// ---------------------------------------------------------------------------
+// Milestone 197.1B: zero-total checkout (a 100% discount + free-delivery
+// coupon, e.g. the real production LUTENDO01 creator coupon). A fully
+// discounted order has nothing left to collect, so the server marks it
+// paid at creation time via PaymentMethod.MANUAL — never from client
+// input, only from the server's own computed total — and never invokes
+// PayFast for it (payfast.service.ts's own order.total.lte(0) guard,
+// unchanged by this milestone).
+// ---------------------------------------------------------------------------
+
+function fakeOrderRowWithPayment(data: Record<string, unknown>, items: Record<string, unknown>[]) {
+  const paymentCreate = (data.payment as { create: Record<string, unknown> } | undefined)?.create ?? null;
+  return fakeOrderRow({
+    status: data.status,
+    paymentStatus: data.paymentStatus,
+    paymentMethod: data.paymentMethod,
+    subtotal: data.subtotal,
+    deliveryFee: data.deliveryFee,
+    discountTotal: data.discountTotal,
+    total: data.total,
+    items,
+    payment: paymentCreate
+      ? { method: paymentCreate.method, status: paymentCreate.status, amount: paymentCreate.amount, provider: paymentCreate.provider, paidAt: paymentCreate.paidAt }
+      : null,
+  });
+}
+
+test("ZERO TOTAL A: a 100% discount + free delivery coupon at exactly its R250 cap produces a R0 order, already PAID via MANUAL — never PENDING, never PayFast, regardless of the client's own paymentMethod selection", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ code: "LUTENDO01", discountType: "PERCENTAGE", discountValue: new Prisma.Decimal(100), freeDelivery: true, maximumOrderSubtotal: new Prisma.Decimal(250), maxTotalUses: 1 }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(250) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const couponUpdateMany = stub(prisma.coupon, "updateMany", async () => ({ count: 1 }));
+  const couponRedemptionCreate = stub(prisma.couponRedemption, "create", async () => ({}));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRowWithPayment(data, items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })));
+  });
+
+  // The client submitted "payfast" — the server must ignore that
+  // entirely once its own total comes out to R0.
+  const order = await createOrder(baseInput({ couponCode: "LUTENDO01", deliveryMethod: "COURIER_DOOR", paymentMethod: "PAYFAST" as ValidatedOrderInput["paymentMethod"] }), "customer-1");
+
+  assert.equal(order.subtotal, 250);
+  assert.equal(order.discountTotal, 250, "100% of R250");
+  assert.equal(order.deliveryFee, 0, "free delivery benefit");
+  assert.equal(order.total, 0);
+  assert.equal(order.status, "CONFIRMED");
+  assert.equal(order.paymentStatus, "PAID");
+  assert.equal(order.paymentMethod, "MANUAL", "never PAYFAST, even though that is what the client submitted");
+  assert.equal(order.payment?.method, "MANUAL");
+  assert.equal(order.payment?.status, "PAID");
+  assert.equal(order.payment?.provider, "ZERO_TOTAL_NO_PAYMENT_REQUIRED");
+  assert.ok(order.payment?.paidAt instanceof Date);
+  assert.equal(couponUpdateMany.fn.mock.callCount(), 1, "the one-time global use is still consumed on this genuinely successful order");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  couponUpdateMany.restore();
+  couponRedemptionCreate.restore();
+  orderCreate.restore();
+});
+
+test("ZERO TOTAL B: the same coupon on a cart just OVER its R250.01 cap is silently not applied — normal priced order, normal PENDING, never MANUAL/PAID", async () => {
+  const coupon = stubCouponLookup(baseCoupon({ code: "LUTENDO01", discountType: "PERCENTAGE", discountValue: new Prisma.Decimal(100), freeDelivery: true, maximumOrderSubtotal: new Prisma.Decimal(250), maxTotalUses: 1 }));
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(250.01) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRowWithPayment(data, items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })));
+  });
+
+  const order = await createOrder(baseInput({ couponCode: "LUTENDO01", deliveryMethod: "COURIER_DOOR", paymentMethod: "BANK_TRANSFER" as ValidatedOrderInput["paymentMethod"] }), "customer-1");
+
+  assert.equal(order.couponCode, null, "a coupon over its own cap is never applied — the order still succeeds, just without it");
+  assert.equal(order.discountTotal, 0);
+  assert.equal(order.total, 250.01 + 120, "full price plus the ordinary COURIER_DOOR fee — no discount, no free delivery");
+  assert.equal(order.status, "PENDING");
+  assert.equal(order.paymentStatus, "PENDING");
+  assert.equal(order.paymentMethod, "BANK_TRANSFER");
+
+  coupon.restore();
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  orderCreate.restore();
+});
+
+test("ZERO TOTAL C (security): a client directly submitting paymentMethod=MANUAL on a normal, non-zero-total cart (no coupon) never becomes PAID — the override is decided purely from the server's own total, never from client input", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(300) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRowWithPayment(data, items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })));
+  });
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", paymentMethod: "MANUAL" as ValidatedOrderInput["paymentMethod"] }), null);
+
+  assert.equal(order.total, 300, "a genuinely non-zero total — this order was never eligible for the zero-total override");
+  assert.equal(order.paymentMethod, "MANUAL", "stored exactly as submitted — the validator already allows it, unchanged by this milestone");
+  assert.equal(order.paymentStatus, "PENDING", "critically never PAID — a client cannot buy PAID status merely by naming MANUAL");
+
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  orderCreate.restore();
+});
+
+test("ZERO TOTAL D: a normal non-zero PayFast order is completely unaffected by this milestone — still PENDING, still PAYFAST", async () => {
+  const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, isPreorderEnabled: false, stockQuantity: 10, price: new Prisma.Decimal(400) }));
+  const transactionStub = stub(prisma, "$transaction", async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+  const updateMany = stub(prisma.product, "updateMany", async () => ({ count: 1 }));
+  const orderCreate = stub(prisma.order, "create", async ({ data }: { data: Record<string, unknown> }) => {
+    const items = (data.items as { create: Record<string, unknown>[] }).create;
+    return fakeOrderRowWithPayment(data, items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })));
+  });
+
+  const order = await createOrder(baseInput({ deliveryMethod: "COLLECTION", paymentMethod: "PAYFAST" as ValidatedOrderInput["paymentMethod"] }), null);
+
+  assert.equal(order.total, 400);
+  assert.equal(order.paymentMethod, "PAYFAST");
+  assert.equal(order.paymentStatus, "PENDING", "exactly as before this milestone — PayFast's own ITN is still the only thing that can ever mark this PAID");
+
+  findUnique.restore();
+  transactionStub.restore();
+  updateMany.restore();
+  orderCreate.restore();
+});

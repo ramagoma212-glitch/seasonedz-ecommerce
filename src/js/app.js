@@ -1310,8 +1310,13 @@ function updateCheckoutDeliveryMethodUI(form, method) {
       if (!requiresAddressFields) clearFieldError(form, name);
     });
 
-    const fullOnlyWrapper = addressFields.querySelector("[data-address-full-only]");
-    if (fullOnlyWrapper) fullOnlyWrapper.hidden = !requiresFullAddress;
+    // Two separate wrappers share this attribute (street/suburb, and
+    // postal code further down) — querySelectorAll, not querySelector,
+    // or the second one (postal code) would stay hidden for COURIER_DOOR
+    // forever, even though its own field inside is live and required.
+    addressFields.querySelectorAll("[data-address-full-only]").forEach((wrapper) => {
+      wrapper.hidden = !requiresFullAddress;
+    });
     ["street", "suburb", "postalCode"].forEach((name) => {
       const field = addressFields.querySelector(`[name="${name}"]`);
       if (field) field.required = requiresFullAddress;
@@ -1748,7 +1753,15 @@ async function handleCheckoutSubmit(form) {
     clearCart();
     updateHeaderCounters();
 
-    if (data.paymentMethod === "payfast") {
+    // Milestone 197.1B: the server, not this form's own selection,
+    // decides whether an order actually needs PayFast — a fully
+    // discounted (R0) order is created already paid (see
+    // order.service.ts's own isZeroTotalOrder), with paymentMethod
+    // overridden server-side regardless of what was submitted here.
+    // Checking the response (not `data.paymentMethod`) means a R0
+    // LUTENDO01-style order goes straight to its confirmation, never
+    // attempting (and failing) a PayFast initiation call first.
+    if (data.paymentMethod === "payfast" && response.data.paymentMethod === "PAYFAST") {
       // Version 7, Milestone 172B.4: deliberately NOT cleared here — a
       // PayFast order is only PENDING at this point, not yet a
       // genuinely successful/confirmed order (payment could still fail

@@ -313,3 +313,19 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await expect(page.locator("[data-order-summary-delivery-note]")).toHaveText("Customer Collection is free, with no minimum order.");
   });
 });
+
+// Milestone 197.1B: a 100% discount + free delivery coupon (e.g. the real
+// LUTENDO01 creator coupon) produces a R0 order, which order.service.ts's
+// own isZeroTotalOrder override now marks PAID via PaymentMethod.MANUAL
+// instead of leaving it PENDING forever — see order.service.test.ts's
+// ZERO TOTAL A-D for the authoritative, server-side proof of that. No
+// frontend test accompanies it here: VITE_PAYFAST_ENABLED=false in this
+// project's own .env disables the PayFast radio in every local build
+// (src/js/orders.js), so a test cannot select PayFast at checkout at all
+// in this environment, the one precondition this scenario needs.
+// app.js's own checkout-submit handler was still hardened to check the
+// order-creation response's real paymentMethod (never trusting its own
+// form selection) before ever attempting a PayFast redirect — and even
+// without that, payfast.service.ts's pre-existing order.total.lte(0)
+// guard plus redirectToPayfast()'s own catch-all fallback to order-
+// confirmation already prevented a stuck or broken checkout either way.
