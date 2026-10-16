@@ -1461,7 +1461,13 @@ function getCheckoutCouponEligibleItems(form) {
   return getCart()
     .filter((item) => !excludedIds.has(item.productId))
     .map((item) => ({
-      productId: item.productId,
+      // item.productId is the cart's own internal id, which is really
+      // the product SLUG (see mappers.js's mapApiProductToFrontendShape)
+      // — the backend's /api/coupons/preview never had the real database
+      // id to match against, which silently zeroed every real coupon
+      // application. productSlug is what order creation already sends
+      // and already resolves correctly server-side.
+      productSlug: item.slug,
       quantity: item.quantity,
       ...(item.variantId ? { variantId: item.variantId } : {}),
     }));

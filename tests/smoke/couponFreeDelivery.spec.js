@@ -314,6 +314,38 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
   });
 });
 
+// Milestone 197.1C: regression coverage for a real production bug —
+// every other test in this file mocks **/api/coupons/preview outright,
+// which is exactly how this slipped through undetected: the real
+// checkout page used to send `productId: item.productId`, but a cart
+// item's `productId` is actually the product SLUG (see mappers.js's
+// mapApiProductToFrontendShape — a carry-over from this site's
+// pre-backend static data, where id and slug were always the same
+// string). The backend expected a real database id, so every real
+// "Apply Coupon" click silently matched zero products and failed with
+// "This coupon is not valid for the products in your cart", for every
+// coupon, on every order. This test is the one place in the suite that
+// inspects the REAL request body the page builds, instead of mocking
+// past it.
+test.describe("Checkout: the coupon preview request uses the real product identifier (Milestone 197.1C)", () => {
+  test("applying a coupon sends productSlug (the real, resolvable identifier), never productId (which is actually just the slug again)", async ({ page }) => {
+    await addItemAndGoToCheckout(page);
+
+    let capturedBody = null;
+    await page.route("**/api/coupons/preview", (route) => {
+      capturedBody = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: "application/json", body: envelope({ valid: true, message: "Coupon applied.", code: "FESTIVECUP", discountAmount: 30, freeDelivery: false }) });
+    });
+    await page.locator("#couponCodeInput").fill("FESTIVECUP");
+    await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
+
+    await expect.poll(() => capturedBody).toBeTruthy();
+    expect(capturedBody.items).toHaveLength(1);
+    expect(capturedBody.items[0].productSlug).toBe(MOCK_PRODUCT.slug);
+    expect(capturedBody.items[0]).not.toHaveProperty("productId");
+  });
+});
+
 // Milestone 197.1B: a 100% discount + free delivery coupon (e.g. the real
 // LUTENDO01 creator coupon) produces a R0 order, which order.service.ts's
 // own isZeroTotalOrder override now marks PAID via PaymentMethod.MANUAL

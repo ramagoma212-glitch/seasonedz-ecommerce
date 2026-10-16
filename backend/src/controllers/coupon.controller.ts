@@ -13,7 +13,7 @@ import { prisma } from "../config/prisma.js";
 import { previewCoupon, type CouponEligibleLine } from "../services/coupon.service.js";
 
 interface PreviewCouponItem {
-  productId?: unknown;
+  productSlug?: unknown;
   variantId?: unknown;
   quantity?: unknown;
 }
@@ -24,26 +24,37 @@ interface PreviewCouponItem {
 // body for money" discipline order.service.ts's own verifyItems() already
 // applies. A malformed/unknown line is silently skipped, never a 400 —
 // this is a best-effort estimate, not a binding calculation.
+//
+// Keyed by productSlug, not a raw product id — the frontend's own
+// product model (src/js/api/mappers.js's mapApiProductToFrontendShape)
+// deliberately uses the slug as its internal `id` everywhere (a
+// carry-over from when this site had only static demo data, where id
+// and slug were always the same string), so it never actually has the
+// database's real cuid to send here. order.service.ts's own
+// verifyItems() already resolves every real order's items by slug for
+// exactly this reason — this mirrors that proven path instead of
+// requiring an id the client structurally cannot provide.
 async function resolveEligibleLines(rawItems: unknown): Promise<CouponEligibleLine[]> {
   if (!Array.isArray(rawItems)) return [];
   const lines: CouponEligibleLine[] = [];
 
   for (const raw of rawItems as PreviewCouponItem[]) {
-    const productId = typeof raw?.productId === "string" ? raw.productId : null;
+    const productSlug = typeof raw?.productSlug === "string" ? raw.productSlug : null;
     const variantId = typeof raw?.variantId === "string" ? raw.variantId : null;
     const quantity = Number(raw?.quantity);
-    if (!productId || !Number.isInteger(quantity) || quantity <= 0) continue;
+    if (!productSlug || !Number.isInteger(quantity) || quantity <= 0) continue;
+
+    const product = await prisma.product.findUnique({ where: { slug: productSlug }, select: { id: true, price: true, status: true } });
+    if (!product || product.status !== "ACTIVE") continue;
 
     if (variantId) {
-      const variant = await prisma.productVariant.findFirst({ where: { id: variantId, productId, isActive: true }, select: { price: true } });
+      const variant = await prisma.productVariant.findFirst({ where: { id: variantId, productId: product.id, isActive: true }, select: { price: true } });
       if (!variant) continue;
-      lines.push({ productId, lineTotal: variant.price.times(quantity) });
+      lines.push({ productId: product.id, lineTotal: variant.price.times(quantity) });
       continue;
     }
 
-    const product = await prisma.product.findUnique({ where: { id: productId }, select: { price: true, status: true } });
-    if (!product || product.status !== "ACTIVE") continue;
-    lines.push({ productId, lineTotal: product.price.times(quantity) });
+    lines.push({ productId: product.id, lineTotal: product.price.times(quantity) });
   }
 
   return lines;
