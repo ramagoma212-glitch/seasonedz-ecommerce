@@ -936,8 +936,13 @@ async function main() {
       // this override never reaches structured data.
       const seoContent = getProductSeoContent(product.slug);
       const pageTitle = seoContent?.pageTitle || product.name;
+      // Milestone 204: mirrors productDetails.js's own description
+      // resolution exactly — description-only, so the raw pre-JS
+      // <meta name="description"> a crawler sees first always agrees
+      // with what the client-side render sets once JS runs.
+      const pageDescription = seoContent?.metaDescription || product.shortDescription;
       const jsonLdBlocks = [buildProductJsonLd(product, canonicalUrl), buildBreadcrumbJsonLd(buildProductBreadcrumbTrail(product))];
-      writeRouteFile(routePath, shellHtml, { title: pageTitle, description: product.shortDescription, ogImage: product.image, jsonLdBlocks });
+      writeRouteFile(routePath, shellHtml, { title: pageTitle, description: pageDescription, ogImage: product.image, jsonLdBlocks });
     } else {
       // Local-fallback build: file still generated (HTTP 200 fix
       // preserved), generic metadata only — see isEnrichedProduct().

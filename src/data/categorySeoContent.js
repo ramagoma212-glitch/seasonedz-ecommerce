@@ -96,8 +96,18 @@ export const CATEGORY_SEO_CONTENT = {
   // renaming the underlying category record itself.
   bundles: {
     pageTitle: "Colouring Book Bundles",
+    // Milestone 204: real Search Console data showed this page at
+    // average position 4.06 (top of page 1) across 70 impressions but
+    // only 2 clicks (2.86% CTR) over the last 3 months. Same real
+    // facts as the description this replaces ("Shop colouring book
+    // bundles with books, markers and crayons for kids, Bible learning
+    // and mindful colouring. Available from Seasonedz Group South
+    // Africa."), reordered to lead with this category's own real
+    // differentiator (already stated in its body copy below: nothing
+    // extra to buy, ready to colour straight away) instead of a flat
+    // "Shop X with Y" list.
     metaDescription:
-      "Shop colouring book bundles with books, markers and crayons for kids, Bible learning and mindful colouring. Available from Seasonedz Group South Africa.",
+      "Colouring book bundles with the markers or crayons each one is meant to be used with, ready to colour straight away. Shipped countrywide in South Africa by Seasonedz Group.",
     // Every product named below is a real, currently live item in this
     // category (checked against the live catalogue before writing
     // this) — the school-starter-colouring-pack product is referred to

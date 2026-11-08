@@ -479,7 +479,12 @@ export async function renderProductDetails({ slug, query } = {}) {
   // unchanged — never this override.
   const seoContent = getProductSeoContent(product.slug);
   const pageTitle = seoContent?.pageTitle || product.name;
-  setPageMeta({ title: pageTitle, description: product.shortDescription });
+  // Milestone 204: an optional, SEO-only description override — same
+  // narrow scope as pageTitle above (see productSeoContent.js's own
+  // header comment). Falls back to the real shortDescription exactly
+  // as before for every product without one.
+  const pageDescription = seoContent?.metaDescription || product.shortDescription;
+  setPageMeta({ title: pageTitle, description: pageDescription });
   const breadcrumbTrail = buildBreadcrumbTrail(product);
   setPageStructuredData([buildProductStructuredData(product, selectedVariant), buildBreadcrumbStructuredData(breadcrumbTrail)]);
   // Milestone 188: view_item reports the initially-resolved variant's

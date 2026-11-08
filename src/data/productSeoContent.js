@@ -12,6 +12,20 @@
 // search-result-facing title is ever allowed to differ from the real
 // product name — never the reverse.
 //
+// `metaDescription` is a third, independent optional override, added
+// Milestone 204 after real Search Console data showed specific
+// product pages ranking well (top-10 position) but getting almost no
+// clicks — mirrors `pageTitle`'s own narrow scope exactly: ONLY ever
+// replaces <meta name="description">/og:description/twitter:description
+// (client-side setPageMeta() and the static build's own route
+// description). The on-page short description paragraph
+// (product-details__short-desc), Product JSON-LD, cart/checkout/
+// order/email snapshots and the Merchant feed description all keep
+// reading product.shortDescription directly, completely unchanged —
+// never this override. Every fact in an override below already
+// appears in that same product's real shortDescription or elsewhere
+// in this site's own existing copy; nothing here is invented.
+//
 // `relatedSlugs` is a second, independent optional override: an
 // explicit, hand-curated list of other real product slugs to show in
 // "You May Also Like" instead of the default same-category logic
@@ -30,6 +44,22 @@ export const productSeoContent = {
   },
   "mindfulness-colouring-book-for-adults": {
     pageTitle: "Mindfulness Colouring Book for Adults",
+    // Milestone 204: real Search Console data showed this page at
+    // average position 4.37 (top of page 1) across 75 impressions but
+    // only 1 click (1.33% CTR) over the last 3 months — well below
+    // what a page-1 position typically earns. The real shortDescription
+    // this replaces, for comparison: "Enjoy mindful creativity with
+    // the Seasonedz Mindfulness Colouring Book for Adults, an A4 book
+    // of 45 designs across 92 single sided pages for quiet, screen
+    // free creative time." Same facts, reordered to lead with the
+    // concrete specifics (A4, 45 designs, 92 pages) and the real
+    // "ships countrywide in South Africa" claim already used elsewhere
+    // on this site (see categorySeoContent.js's own bundles copy and
+    // llms.txt) — not a guaranteed fix, since the exact query driving
+    // these impressions isn't in this export, but a reasonable,
+    // evidence-backed thing to try.
+    metaDescription:
+      "An A4 adult colouring book with 45 designs across 92 pages, for quiet, screen free time. Ships countrywide in South Africa from Seasonedz Group.",
     // Milestone 196B, Part 9: this product is the only one in the
     // Mindfulness Colouring category, so the default same-category
     // related-products logic always returns nothing. These are the
@@ -74,6 +104,18 @@ export const productSeoContent = {
   // above already follows — no fact changed.
   "acrylic-marker-set-24-colours": {
     pageTitle: "Acrylic Paint Marker Set, Non-Bleed",
+    // Milestone 204: real Search Console data showed this page at
+    // average position 8.89 (bottom of page 1) across 76 impressions
+    // and 0 clicks over the last 3 months. The real shortDescription
+    // this replaces, for comparison: "Create bold art on paper,
+    // canvas, wood, stone and glass with acrylic paint markers in 24
+    // or 60 colour sets. Water based, non-toxic, quick drying and
+    // packed in a reusable carry case." Same facts, adds the real
+    // "ships countrywide in South Africa" claim already used elsewhere
+    // on this site — see this file's own header comment above for why
+    // this is a reasonable try, not a guaranteed fix.
+    metaDescription:
+      "Acrylic paint markers for paper, canvas, wood, stone and glass. Water based, non-toxic and quick drying, available in 24 or 60 colours. Ships countrywide in South Africa.",
   },
 };
 

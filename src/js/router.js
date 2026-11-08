@@ -175,7 +175,16 @@ const routeDefs = [
     // shop-intent-led and category-specific here — so the two never
     // read as duplicates of each other in a SERP.
     title: "Shop Colouring Books, Markers & Crayons",
-    description: "Browse educational colouring books, Bible colouring books, mindfulness colouring books, markers and crayons from Seasonedz Group.",
+    // Milestone 204: real Search Console data showed this page at
+    // average position 4.08 (top of page 1) across 165 impressions
+    // but only 5 clicks (3.03% CTR) over the last 3 months. Same real
+    // facts as the description this replaces ("Browse educational
+    // colouring books, Bible colouring books, mindfulness colouring
+    // books, markers and crayons from Seasonedz Group."), reordered to
+    // lead with what's in the range and add the real "ships
+    // countrywide in South Africa" claim already used elsewhere on
+    // this site, instead of a flat "Browse X, Y, Z" list.
+    description: "Educational, Bible and mindfulness colouring books, plus acrylic markers and crayons, shipped countrywide in South Africa by Seasonedz Group.",
     skeleton: "product-grid",
   },
   // Version 7, Milestone 171I: real, path-based category landing pages
