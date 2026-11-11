@@ -255,38 +255,20 @@ function renderPaymentMethods() {
   `;
 }
 
-// Version 6, Milestone 54: a dedicated delivery note, separate from
-// the payment notice above — Seasonedz Group confirms and arranges
-// delivery manually after the order is placed; no instant delivery or
-// automatic tracking is promised. Version 7, Milestone 114 names The
-// Courier Guy explicitly (Seasonedz Group's real courier), without
-// implying any customer-facing quote/booking or live tracking exists.
-function renderDeliveryNote() {
-  return `
-    <div class="demo-notice">
-      <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-      <div>
-        <strong>Delivery is arranged after your order is confirmed.</strong>
-        <p>
-          Choose Courier Guy Locker to Locker (R100), Courier Guy Door
-          to Door (R120), or free Customer Collection in Pretoria or
-          Thohoyandou. Locker and Door to Door are both free on orders
-          of R600 or more. Seasonedz Group will confirm your order and
-          arrange delivery or collection; tracking details are shared
-          once a courier order has been packed and booked.
-        </p>
-        ${renderContactSupportNote("Need help with delivery?")}
-      </div>
-    </div>
-  `;
-}
-
+// Milestone 205 follow-up: merged what used to be two separate notice
+// boxes (payment + delivery) into one, per explicit owner feedback that
+// two stacked boxes repeated themselves and were hard to scan. Also
+// deliberately drops every specific fee/threshold number this notice
+// used to hardcode (Locker/Door fees, the free-delivery threshold) —
+// those already show live, correctly, in the delivery method selector
+// right below this notice (see renderDeliveryMethods()); repeating them
+// here in prose was exactly what went stale and silently showed the
+// pre-Milestone-205 R100/R120/R600 figures after the real fees changed.
 // Wording stays accurate regardless of whether PayFast is currently
-// selectable (see PAYMENT_METHODS in js/orders.js) — Bank Transfer and
-// Cash/Card on Delivery place a real order but take no online charge;
-// PayFast, when available, is a real redirect to PayFast. Delivery is
-// currently arranged manually, and real courier tracking doesn't
-// exist yet either way.
+// selectable (see PAYMENT_METHODS in js/orders.js) — only Bank Transfer
+// and PayFast exist as payment methods; there is no Cash/Card on
+// Delivery option to mention. Delivery is still arranged manually, and
+// real-time courier tracking doesn't exist yet either way.
 function renderDemoNotice() {
   return `
     <div class="demo-notice">
@@ -299,9 +281,16 @@ function renderDemoNotice() {
           available and selected, you'll be redirected to PayFast's own
           payment page to complete a real payment.
         </p>
+        <p>
+          Delivery is arranged after your order is confirmed — choose
+          your preferred option below. Seasonedz Group will confirm
+          your order and arrange delivery or collection; tracking
+          details are shared once a courier order has been packed and
+          booked.
+        </p>
+        ${renderContactSupportNote("Need help with your order?")}
       </div>
     </div>
-    ${renderDeliveryNote()}
   `;
 }
 
