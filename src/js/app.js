@@ -77,7 +77,7 @@ import {
 } from "./api/customerApi.js";
 import { disconnectProvider } from "./api/socialAuthApi.js";
 import { requestGuestDownload } from "./api/guestDownloadApi.js";
-import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
+import { FREE_DELIVERY_THRESHOLD, COURIER_LOCKER_FEE, COURIER_DOOR_FEE, getDeliveryMethodLabel } from "../config/delivery.js";
 import { getDeliveryNote } from "../components/orderSummary.js";
 import { escapeHtml } from "./search.js";
 import { getConsent, needsConsentPrompt, acceptAllConsent, rejectNonEssentialConsent, saveConsent } from "./consent.js";
@@ -142,6 +142,7 @@ let createAdminAffiliate,
   updateAdminAffiliateProductSetting,
   deleteAdminAffiliateProductSetting;
 let createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon;
+let updateAdminDeliverySettings;
 let createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport;
 let createAdminOutreachCampaign,
   updateAdminOutreachCampaign,
@@ -244,6 +245,7 @@ function ensureAdminModulesLoaded() {
         deleteAdminAffiliateProductSetting,
       } = bundle.adminReferralsApi);
       ({ createAdminCoupon, updateAdminCoupon, activateAdminCoupon, deactivateAdminCoupon, deleteAdminCoupon } = bundle.adminCouponApi);
+      ({ updateAdminDeliverySettings } = bundle.adminDeliveryApi);
       ({ createAdminOutreachContact, updateAdminOutreachContact, setAdminOutreachContactStatus, deleteAdminOutreachContact, previewAdminOutreachImport, commitAdminOutreachImport } = bundle.adminOutreachContactApi);
       ({ recordAdminOutreachActivity, setAdminOutreachFollowUp, completeAdminOutreachFollowUp, recordAdminOutreachCatalogueSent, linkAdminOutreachOrder, markAdminOutreachCustomer, markAdminOutreachRepeatCustomer, createAdminQuotation, updateAdminQuotation, duplicateAdminQuotation, sendAdminQuotation, transitionAdminQuotation, reconcileAdminQuotation } = bundle.adminOutreachCrmApi);
       ({ previewAdminFollowUp, sendAdminFollowUp, reconcileAdminFollowUp } = bundle.adminOutreachCrmApi);
@@ -407,6 +409,7 @@ function mountApp() {
       setupAdminAffiliateProductSettingActions();
       setupAdminAffiliateApplicationActions();
       setupAdminReferralSettingsForm();
+      setupAdminDeliverySettingsForm();
       setupAdminPreorderSettingsForm();
       setupAdminCommissionFilterForm();
       setupAdminCommissionActions();
@@ -1361,12 +1364,15 @@ function updateCheckoutDeliveryMethodUI(form, method) {
   // never a second, independently-guessed "is a coupon active" check.
   const couponGrantsFreeDelivery = form.dataset.couponFreeDelivery === "true";
 
+  // Milestone 205: one universal threshold now — isRegisteredCustomer
+  // no longer changes this (kept above only because
+  // handleCouponApply()/handleCouponRemove() still read it for
+  // unrelated reasons elsewhere in this function).
   const feeForMethod = (candidateMethod) => {
     if (!hasPhysicalItems) return 0;
     if (candidateMethod !== "COURIER_LOCKER" && candidateMethod !== "COURIER_DOOR") return 0;
     if (couponGrantsFreeDelivery) return 0;
-    const threshold = isRegisteredCustomer ? REGISTERED_FREE_DELIVERY_THRESHOLD : FREE_DELIVERY_THRESHOLD;
-    const qualifiesForFree = physicalSubtotal >= threshold;
+    const qualifiesForFree = physicalSubtotal >= FREE_DELIVERY_THRESHOLD;
     if (qualifiesForFree) return 0;
     return candidateMethod === "COURIER_LOCKER" ? COURIER_LOCKER_FEE : COURIER_DOOR_FEE;
   };
@@ -6267,6 +6273,82 @@ async function handleAdminReferralSettingsFormSubmit(form) {
   try {
     await updateReferralSettings(values);
     setPendingAdminMessage("Referral programme settings updated successfully.");
+    rerenderCurrentRoute();
+  } catch (error) {
+    let message = "Something went wrong. Please try again shortly.";
+    if (isUnauthenticated(error)) {
+      redirectToAdminLogin();
+      return;
+    } else if (error instanceof ApiError && error.status === 400) {
+      message = error.message;
+    } else if (error instanceof ApiUnavailableError) {
+      message = "We could not connect to the admin system right now. Please try again shortly.";
+    }
+
+    if (banner) {
+      banner.textContent = message;
+      banner.hidden = false;
+    }
+  } finally {
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
+// Milestone 205: admin delivery settings form — mirrors
+// setupAdminReferralSettingsForm()/handleAdminReferralSettingsFormSubmit()
+// exactly.
+function setupAdminDeliverySettingsForm() {
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("[data-admin-delivery-settings-form]");
+    if (!form) return;
+
+    event.preventDefault();
+    handleAdminDeliverySettingsFormSubmit(form);
+  });
+}
+
+function readAdminDeliverySettingsFormValues(form) {
+  return {
+    courierLockerFee: Number(form.querySelector("#deliverySettingsLockerFee")?.value),
+    courierDoorFee: Number(form.querySelector("#deliverySettingsDoorFee")?.value),
+    freeDeliveryThreshold: Number(form.querySelector("#deliverySettingsThreshold")?.value),
+  };
+}
+
+// Client-side validation is a UX convenience only — the backend
+// (deliverySettings.service.ts) independently re-validates every field
+// regardless and remains the final authority.
+function validateAdminDeliverySettingsForm(values) {
+  if (!Number.isFinite(values.courierLockerFee) || values.courierLockerFee < 0) return "Locker to Locker fee must be a non-negative number.";
+  if (!Number.isFinite(values.courierDoorFee) || values.courierDoorFee < 0) return "Door to Door fee must be a non-negative number.";
+  if (!Number.isFinite(values.freeDeliveryThreshold) || values.freeDeliveryThreshold < 0) return "Free delivery threshold must be a non-negative number.";
+  return null;
+}
+
+async function handleAdminDeliverySettingsFormSubmit(form) {
+  const banner = form.querySelector("[data-admin-delivery-settings-banner]");
+  const submitButton = form.querySelector('button[type="submit"]');
+
+  if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+
+  const values = readAdminDeliverySettingsFormValues(form);
+  const validationError = validateAdminDeliverySettingsForm(values);
+  if (validationError) {
+    if (banner) {
+      banner.textContent = validationError;
+      banner.hidden = false;
+    }
+    return;
+  }
+
+  if (submitButton) submitButton.disabled = true;
+
+  try {
+    await updateAdminDeliverySettings(values);
+    setPendingAdminMessage("Delivery settings updated successfully.");
     rerenderCurrentRoute();
   } catch (error) {
     let message = "Something went wrong. Please try again shortly.";

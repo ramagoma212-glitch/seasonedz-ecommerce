@@ -189,7 +189,7 @@ test.describe("Product page: payment methods and delivery accordion", () => {
     const triggers = accordion.locator(".home-faq__trigger");
     await expect(triggers).toHaveCount(4);
     await expect(triggers.nth(0)).toContainText("Delivery Options");
-    await expect(triggers.nth(1)).toContainText("Free delivery on orders of R600 or more");
+    await expect(triggers.nth(1)).toContainText("Free delivery on orders of R350.00 or more");
     await expect(triggers.nth(2)).toContainText("Free Collection");
     await expect(triggers.nth(3)).toContainText("Returns & Exchanges");
 
@@ -201,8 +201,8 @@ test.describe("Product page: payment methods and delivery accordion", () => {
     await expect(triggers.nth(0)).toHaveAttribute("aria-expanded", "true");
     const firstPanel = page.locator(`#${await triggers.nth(0).getAttribute("aria-controls")}`);
     await expect(firstPanel).toBeVisible();
-    await expect(firstPanel).toContainText("Courier Guy Locker to Locker: R100");
-    await expect(firstPanel).toContainText("Courier Guy Door to Door: R120");
+    await expect(firstPanel).toContainText("Courier Guy Locker to Locker: R60.00");
+    await expect(firstPanel).toContainText("Courier Guy Door to Door: R90.00");
   });
 
   test("Returns & Exchanges row links to the real Returns Policy page", async ({ page }) => {
@@ -500,36 +500,35 @@ test.describe("Checkout and footer payment trust (Milestone 168E)", () => {
   }
 });
 
-// Shipping Policy consistency fix (small SEO/copy improvement before
-// Milestone 184): the page used to state a single universal R600
-// threshold for every customer, guest or signed in — stale since
-// Milestone 180, Part A introduced a lower R500 threshold for
-// registered customers (src/config/delivery.js's own
-// REGISTERED_FREE_DELIVERY_THRESHOLD). These checks read the real
-// rendered page text directly, so a future edit that quietly drops one
-// of the two thresholds (or reverts to the old single-threshold
-// wording) fails here rather than only being caught by a human re-read.
-test.describe("Shipping Policy page: registered vs guest thresholds (consistency fix)", () => {
-  test("states both the R500 registered and R600 guest free-delivery thresholds, never a single universal figure", async ({ page }) => {
+// Milestone 205 ("Website Fixes" developer brief, Task 1/2): the page
+// used to state two separate registered/guest thresholds (R500/R600,
+// Milestone 180, Part A) — removed in favour of one universal,
+// admin-editable threshold that applies identically to every customer.
+// These checks read the real rendered page text directly (falling back
+// to config/delivery.js's own constants when no backend is attached in
+// this test project — see shippingPolicy.js's getDeliveryFeesSafely()),
+// so a future edit that quietly reintroduces a two-tier split fails
+// here rather than only being caught by a human re-read.
+test.describe("Shipping Policy page: universal free-delivery threshold (Milestone 205)", () => {
+  test("states one universal R350 free-delivery threshold for every customer, never a registered-vs-guest split", async ({ page }) => {
     await page.goto("/shipping-policy");
     const bodyText = await page.locator(".policy-page").innerText();
 
-    expect(bodyText).toContain("Registered customers receive free Locker or Door delivery when");
-    expect(bodyText).toContain("R500");
-    expect(bodyText).toContain("Guest customers receive free Locker or Door delivery when");
-    expect(bodyText).toContain("R600");
-    // The old, now-stale wording this fix replaces — must never reappear.
-    expect(bodyText).not.toContain("applies to every customer, guest or signed in");
+    expect(bodyText).toContain("Every customer, guest or signed in, gets free Locker or Door delivery");
+    expect(bodyText).toContain("R350.00");
+    // The old, two-tier wording this removed — must never reappear.
+    expect(bodyText).not.toContain("Registered customers receive free Locker or Door delivery when");
+    expect(bodyText).not.toContain("Guest customers receive free Locker or Door delivery when");
   });
 
-  test("states the real R100 Locker / R120 Door fees and free Customer Collection", async ({ page }) => {
+  test("states the real R60 Locker / R90 Door fees and free Customer Collection", async ({ page }) => {
     await page.goto("/shipping-policy");
     const bodyText = await page.locator(".policy-page").innerText();
 
     expect(bodyText).toContain("Courier Guy Locker to Locker");
-    expect(bodyText).toContain("R100");
+    expect(bodyText).toContain("R60.00");
     expect(bodyText).toContain("Courier Guy Door to Door");
-    expect(bodyText).toContain("R120");
+    expect(bodyText).toContain("R90.00");
     expect(bodyText).toContain("Customer Collection");
     expect(bodyText).toMatch(/Customer Collection[\s\S]{0,20}always free/);
     expect(bodyText).toContain("Pretoria");
@@ -540,8 +539,8 @@ test.describe("Shipping Policy page: registered vs guest thresholds (consistency
     await page.goto("/shipping-policy");
     const bodyText = await page.locator(".policy-page").innerText();
 
-    expect(bodyText).toContain("Gift wrapping does not count toward the free-delivery threshold");
-    expect(bodyText).toContain("Digital products do not count toward the free-delivery threshold");
+    expect(bodyText).toContain("Gift wrapping does not count toward it");
+    expect(bodyText).toContain("digital products don't count either, since they are not physically delivered");
   });
 
   // Regression guard for the explicit "keep the Merchant structured data

@@ -472,6 +472,7 @@ const routeDefs = [
   { pattern: "/admin/referrals/affiliate-products/:id/edit", render: lazyPage(() => import("../pages/adminReferralAffiliateProductForm.js"), (m) => m.renderAdminReferralAffiliateProductEdit), title: "Edit Affiliate Product", noindex: true },
   { pattern: "/admin/referrals/affiliate-products", render: lazyPage(() => import("../pages/adminReferralAffiliateProducts.js"), (m) => m.renderAdminReferralAffiliateProducts), title: "Affiliate Products", noindex: true },
   { pattern: "/admin/referrals/settings", render: lazyPage(() => import("../pages/adminReferralSettings.js"), (m) => m.renderAdminReferralSettings), title: "Referral Programme Settings", noindex: true },
+  { pattern: "/admin/delivery-settings", render: lazyPage(() => import("../pages/adminDeliverySettings.js"), (m) => m.renderAdminDeliverySettings), title: "Delivery Settings", noindex: true },
   { pattern: "/admin/referrals", render: lazyPage(() => import("../pages/adminReferralsOverview.js"), (m) => m.renderAdminReferralsOverview), title: "Referrals", noindex: true },
 
   // Content Studio Phase 2: Brand Knowledge Foundation only — no

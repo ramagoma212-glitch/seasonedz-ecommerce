@@ -187,13 +187,13 @@ test.describe("Checkout Order Summary: no delivery fee before selection (Milesto
     await page.goto("/checkout");
   }
 
-  test("before any delivery method is selected: no R100/R120 fee, Total excludes delivery, neutral row text, nothing pre-checked", async ({ page }) => {
+  test("before any delivery method is selected: no R60/R90 fee, Total excludes delivery, neutral row text, nothing pre-checked", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
 
     const deliveryRow = page.locator(".order-summary__row", { hasText: "Delivery" });
     await expect(deliveryRow.getByText("Select a delivery option")).toBeVisible();
-    await expect(deliveryRow.getByText("R100.00")).toHaveCount(0);
-    await expect(deliveryRow.getByText("R120.00")).toHaveCount(0);
+    await expect(deliveryRow.getByText("R60.00")).toHaveCount(0);
+    await expect(deliveryRow.getByText("R90.00")).toHaveCount(0);
     // Never a misleading "already free" either.
     await expect(deliveryRow.getByText("FREE")).toHaveCount(0);
 
@@ -206,18 +206,18 @@ test.describe("Checkout Order Summary: no delivery fee before selection (Milesto
     await expect(page.locator("[data-collection-fields]")).toBeHidden();
   });
 
-  test("selecting Courier Guy Locker to Locker below R600 adds exactly R100", async ({ page }) => {
+  test("selecting Courier Guy Locker to Locker below R350 adds exactly R60", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
 
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R60.00")).toBeVisible();
   });
 
-  test("selecting Courier Guy Door to Door below R600 adds exactly R120", async ({ page }) => {
+  test("selecting Courier Guy Door to Door below R350 adds exactly R90", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
 
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
   test("selecting Customer Collection is always FREE, regardless of subtotal", async ({ page }) => {
@@ -287,22 +287,23 @@ test.describe("Checkout Order Summary: no delivery fee before selection (Milesto
     await addButtons.nth(1).click();
     await page.goto("/checkout");
 
-    // Combined subtotal is R700 (>= R600), but the qualifying PHYSICAL
-    // subtotal alone is only R100 — the R600-priced digital item must
-    // never help the physical delivery qualify for free shipping.
+    // Combined subtotal is R700 (>= the R350 threshold), but the
+    // qualifying PHYSICAL subtotal alone is only R100 — the R600-priced
+    // digital item must never help the physical delivery qualify for
+    // free shipping.
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Select a delivery option")).toBeVisible();
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
   test("switching between delivery methods updates the fee and Total live, never keeping a stale amount", async ({ page }) => {
     await addPhysicalItemAndGoToCheckout(page);
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R60.00")).toBeVisible();
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
     // The old Locker fee row is gone — replaced, not appended.
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" })).toHaveCount(0);
 
@@ -313,14 +314,14 @@ test.describe("Checkout Order Summary: no delivery fee before selection (Milesto
 });
 
 test.describe("Cart page: no delivery pre-charge (Milestone 171F)", () => {
-  test("physical cart below R600: no Delivery row at all, Total equals Subtotal exactly", async ({ page }) => {
+  test("physical cart below R350: no Delivery row at all, Total equals Subtotal exactly", async ({ page }) => {
     await page.goto(`/product/${PHYSICAL_SLUG}`);
     await page.locator('[data-action="add-to-cart"]').click();
     await page.goto("/cart");
 
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toHaveCount(0);
-    await expect(page.locator(".order-summary__row", { hasText: "R100.00" })).toHaveCount(0);
-    await expect(page.locator(".order-summary__row", { hasText: "R120.00" })).toHaveCount(0);
+    await expect(page.locator(".order-summary__row", { hasText: "R60.00" })).toHaveCount(0);
+    await expect(page.locator(".order-summary__row", { hasText: "R90.00" })).toHaveCount(0);
     await expect(page.locator(".order-summary__row", { hasText: "FREE" })).toHaveCount(0);
 
     const subtotalText = (await page.locator(".order-summary__row", { hasText: "Subtotal" }).locator("span").nth(1).textContent())?.trim();
@@ -397,37 +398,39 @@ test.describe("Cart page: no delivery pre-charge (Milestone 171F)", () => {
     expect(totalText).toBe(`R${(physicalProduct.price + digitalProduct.price).toFixed(2)}`);
   });
 
-  test("checkout still correctly adds the selected delivery fee after the cart-page fix — full R480 -> R580/R600/R480 flow", async ({ page }) => {
-    const product = mockProduct({ id: "mock-171f-checkout", slug: "mock-171f-checkout", name: "171F Checkout Book", price: 480, stockQuantity: 5, stockStatus: "In Stock" });
+  test("checkout still correctly adds the selected delivery fee after the cart-page fix — full R200 -> R260/R290/R200 flow", async ({ page }) => {
+    const product = mockProduct({ id: "mock-171f-checkout", slug: "mock-171f-checkout", name: "171F Checkout Book", price: 200, stockQuantity: 5, stockStatus: "In Stock" });
     await mockCatalog(page, [product]);
 
     await page.goto("/shop");
     await page.locator('[data-action="add-to-cart"]').click();
     await page.goto("/cart");
-    await expect(page.locator(".order-summary__row--total")).toContainText("480.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText("200.00");
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" })).toHaveCount(0);
 
     await page.goto("/checkout");
-    await expect(page.locator(".order-summary__row--total")).toContainText("480.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText("200.00");
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
-    await expect(page.locator(".order-summary__row--total")).toContainText("580.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText("260.00");
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row--total")).toContainText("600.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText("290.00");
 
     await page.locator('input[name="deliveryMethod"][value="COLLECTION"]').check();
-    await expect(page.locator(".order-summary__row--total")).toContainText("480.00");
+    await expect(page.locator(".order-summary__row--total")).toContainText("200.00");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Milestone 180, Part A: registered customer R500 free-delivery threshold.
-// "Registered" is mocked purely via GET /api/customers/me — this project
-// has no precedent for driving a real authenticated customer session in
-// Playwright (same discipline adminAffiliate.spec.js's own header
-// comment already established for admin sessions), and this file
-// follows it. Never submits checkout or creates a real order.
+// Milestone 205: one universal R350 free-delivery threshold — replaces
+// the Milestone 180, Part A registered-vs-guest R500/R600 split this
+// section used to test. "Registered" is mocked purely via GET
+// /api/customers/me — this project has no precedent for driving a real
+// authenticated customer session in Playwright (same discipline
+// adminAffiliate.spec.js's own header comment already established for
+// admin sessions), and this file follows it. Never submits checkout or
+// creates a real order.
 // ---------------------------------------------------------------------------
 
 const MOCK_CUSTOMER = { id: "customer-1", firstName: "Thandiwe", lastName: "Nkosi", email: "thandiwe@example.com", phone: "+27821234567" };
@@ -448,10 +451,10 @@ async function addPriced(page, price) {
   await page.locator('[data-action="add-to-cart"]').click();
 }
 
-test.describe("Registered customer delivery benefit — cart page (Milestone 180, Part A)", () => {
-  test("registered customer at R520: Locker/Door both FREE at checkout — below R600 guest threshold, at/above R500 registered one", async ({ page }) => {
+test.describe("Universal free-delivery threshold — cart and checkout (Milestone 205)", () => {
+  test("registered customer at R360: Locker/Door both FREE at checkout — at/above the R350 threshold", async ({ page }) => {
     await mockRegisteredCustomer(page);
-    await addPriced(page, 520);
+    await addPriced(page, 360);
     await page.goto("/checkout");
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
@@ -461,54 +464,37 @@ test.describe("Registered customer delivery benefit — cart page (Milestone 180
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
-  test("a GUEST at the exact same R520 subtotal is still charged the normal fee — the two thresholds never leak into each other", async ({ page }) => {
+  test("a GUEST at the exact same R360 subtotal also gets FREE delivery — registered and guest no longer differ", async ({ page }) => {
     await mockGuest(page);
-    await addPriced(page, 520);
+    await addPriced(page, 360);
     await page.goto("/checkout");
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("FREE")).toBeVisible();
   });
 
-  test("registered customer below even R500 (R490) is still charged the normal fee", async ({ page }) => {
+  test("below R350 (R340), both registered and guest are charged the normal fee", async ({ page }) => {
     await mockRegisteredCustomer(page);
-    await addPriced(page, 490);
+    await addPriced(page, 340);
     await page.goto("/checkout");
-
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
-  test("cart page: registered customer below R500 sees the exact remaining-amount nudge", async ({ page }) => {
-    await mockRegisteredCustomer(page);
-    await addPriced(page, 450);
-    await page.goto("/cart");
-
-    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("You are R50.00 away from free delivery.");
-  });
-
-  test("cart page: registered customer at/above R500 sees the free-delivery-from-R500 message", async ({ page }) => {
-    await mockRegisteredCustomer(page);
-    await addPriced(page, 520);
-    await page.goto("/cart");
-
-    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("Free delivery from R500 on eligible physical products.");
-  });
-
-  test("cart page: guest between R500 and R600 sees the sign-in nudge — the exact zone where registering would already unlock free delivery", async ({ page }) => {
+  test("cart page: a customer below R350 sees the exact remaining-amount progress message", async ({ page }) => {
     await mockGuest(page);
-    await addPriced(page, 550);
+    await addPriced(page, 300);
     await page.goto("/cart");
 
-    await expect(page.locator("[data-cart-delivery-prompt]")).toContainText("Sign in or create an account to get free delivery from R500 on eligible physical products.");
+    await expect(page.locator("[data-cart-free-delivery-progress]")).toContainText("Add R50.00 more for free delivery");
   });
 
-  test("cart page: guest already at/above the R600 guest threshold sees no extra nudge — they already have free delivery", async ({ page }) => {
+  test("cart page: a customer at/above R350 sees no free-delivery progress message — they already qualify", async ({ page }) => {
     await mockGuest(page);
-    await addPriced(page, 650);
+    await addPriced(page, 360);
     await page.goto("/cart");
 
-    await expect(page.locator("[data-cart-delivery-prompt]")).toHaveCount(0);
+    await expect(page.locator("[data-cart-free-delivery-progress]")).toHaveCount(0);
   });
 
   test("Customer Collection stays FREE regardless of registered status or subtotal", async ({ page }) => {

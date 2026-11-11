@@ -5,11 +5,12 @@
 
 import { getCartSummary, getUnavailableCartItems, addToCart } from "../js/cart.js";
 import { renderCartItem } from "../components/cartItem.js";
-import { renderOrderSummary, getRegistrationDeliveryPrompt } from "../components/orderSummary.js";
+import { renderOrderSummary } from "../components/orderSummary.js";
 import { renderEmptyState } from "../components/filterBar.js";
 import { renderCartCompositionNotice } from "../components/cartCompositionNotice.js";
 import { getCatalog } from "../js/api/productsApi.js";
 import { getCurrentCustomer, recoverCheckoutIntent } from "../js/api/customerApi.js";
+import { getPublicDeliverySettings } from "../js/api/deliveryApi.js";
 import { previewPreorderDiscount as previewPreorderDiscountApi } from "../js/api/ordersApi.js";
 import { getLatestPreorderReleaseAt, preorderShipTogetherNotice } from "../js/preorder.js";
 import { renderPreorderDiscountNotice } from "../components/preorderDiscountNotice.js";
@@ -39,6 +40,37 @@ async function isRegisteredCustomerSafely() {
   } catch {
     return false;
   }
+}
+
+// Milestone 205, Task 1 Part 4: best-effort, same discipline as every
+// other fetch on this page — a slow/failed request just means the
+// progress bar below falls back to config/delivery.js's own constants
+// (getCartSummary's own default), never a broken cart page.
+async function getDeliverySettingsSafely() {
+  try {
+    const response = await getPublicDeliverySettings();
+    return response?.data || null;
+  } catch {
+    return null;
+  }
+}
+
+// Milestone 205, Task 1 Part 4: "Add R___ more for free delivery" —
+// null (renders nothing) once the cart already qualifies, or for a
+// digital-only cart. Never shown once a delivery method has actually
+// been charged (that's checkout's job) — this is specifically the
+// cart-page nudge the brief asks for.
+function renderFreeDeliveryProgress(amountToFreeDelivery, freeDeliveryThreshold) {
+  if (!amountToFreeDelivery) return "";
+  const progressPercent = Math.max(0, Math.min(100, ((freeDeliveryThreshold - amountToFreeDelivery) / freeDeliveryThreshold) * 100));
+  return `
+    <div class="free-delivery-progress" data-cart-free-delivery-progress>
+      <p class="free-delivery-progress__message">Add R${amountToFreeDelivery.toFixed(2)} more for free delivery</p>
+      <div class="free-delivery-progress__track" role="progressbar" aria-valuenow="${Math.round(progressPercent)}" aria-valuemin="0" aria-valuemax="100">
+        <div class="free-delivery-progress__fill" style="width: ${progressPercent}%"></div>
+      </div>
+    </div>
+  `;
 }
 
 // Version 7, Milestone 174C, brief section 35: /cart?recover=<token>
@@ -84,7 +116,12 @@ export async function renderCartPage() {
   // the delivery-fee estimate below and the registration prompt use
   // the exact same server-verified fact, never two separate guesses.
   const isRegisteredCustomer = await isRegisteredCustomerSafely();
-  const { items, subtotal, giftWrapTotal, deliveryFee, physicalSubtotal, composition } = getCartSummary(null, isRegisteredCustomer);
+  const deliverySettings = await getDeliverySettingsSafely();
+  const { items, subtotal, giftWrapTotal, deliveryFee, composition, amountToFreeDelivery, freeDeliveryThreshold } = getCartSummary(
+    null,
+    isRegisteredCustomer,
+    deliverySettings
+  );
 
   if (!items.length) {
     return `
@@ -157,12 +194,6 @@ export async function renderCartPage() {
   }));
   const latestPreorderReleaseAt = getLatestPreorderReleaseAt(preorderDisplayItems);
 
-  // Version 7, Milestone 180, Part A, section 12: a soft, easy-to-ignore
-  // nudge, never a popup or a requirement — null (nothing rendered) for
-  // a digital-only cart or a guest already getting free delivery under
-  // the ordinary R600 threshold. See orderSummary.js's own comment.
-  const registrationPrompt = getRegistrationDeliveryPrompt({ isRegisteredCustomer, physicalSubtotal, hasPhysicalItems: composition.hasPhysical });
-
   return `
     <section class="container cart-page">
       <h1 class="stub-page__title">Your Cart</h1>
@@ -178,16 +209,7 @@ export async function renderCartPage() {
           : ""
       }
       ${renderPreorderDiscountNotice({ isRegisteredCustomer, hasEligibleItems: hasEligiblePreorderItems, preview: preorderPreview, dataAttribute: "data-cart-preorder-discount-notice" })}
-      ${
-        registrationPrompt
-          ? `
-        <div class="demo-notice" data-cart-delivery-prompt>
-          <span class="demo-notice__icon" aria-hidden="true">&#8505;</span>
-          <div><p>${registrationPrompt}</p></div>
-        </div>
-      `
-          : ""
-      }
+      ${renderFreeDeliveryProgress(amountToFreeDelivery, freeDeliveryThreshold)}
 
       <div class="cart-layout">
         <div class="cart-items">
@@ -216,7 +238,16 @@ export async function renderCartPage() {
           <a class="cart-page__continue" href="/shop">&larr; Continue Shopping</a>
         </div>
 
-        ${renderOrderSummary({ subtotal, giftWrapTotal, deliveryFee, hasPhysicalItems: composition.hasPhysical, checkoutBlocked: unavailableLineIds.size > 0, omitDeliveryUntilSelected: true, isRegisteredCustomer })}
+        ${renderOrderSummary({
+          subtotal,
+          giftWrapTotal,
+          deliveryFee,
+          hasPhysicalItems: composition.hasPhysical,
+          checkoutBlocked: unavailableLineIds.size > 0,
+          omitDeliveryUntilSelected: true,
+          isRegisteredCustomer,
+          freeDeliveryThreshold,
+        })}
       </div>
     </section>
   `;

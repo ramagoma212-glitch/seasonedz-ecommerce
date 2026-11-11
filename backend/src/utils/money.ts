@@ -3,27 +3,37 @@
 // same type Product.price etc. are already stored and read as.
 
 import { Prisma } from "@prisma/client";
-import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD, type DeliveryMethodValue } from "../config/delivery.js";
+import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD, type DeliveryMethodValue } from "../config/delivery.js";
 import { GIFT_WRAP_FEE_PER_ITEM } from "../config/giftWrap.js";
 
-const courierLockerFee = new Prisma.Decimal(COURIER_LOCKER_FEE);
-const courierDoorFee = new Prisma.Decimal(COURIER_DOOR_FEE);
-const freeDeliveryThreshold = new Prisma.Decimal(FREE_DELIVERY_THRESHOLD);
-const registeredFreeDeliveryThreshold = new Prisma.Decimal(REGISTERED_FREE_DELIVERY_THRESHOLD);
+const defaultCourierLockerFee = new Prisma.Decimal(COURIER_LOCKER_FEE);
+const defaultCourierDoorFee = new Prisma.Decimal(COURIER_DOOR_FEE);
+const defaultFreeDeliveryThreshold = new Prisma.Decimal(FREE_DELIVERY_THRESHOLD);
 const giftWrapFeePerItem = new Prisma.Decimal(GIFT_WRAP_FEE_PER_ITEM);
 
+// Milestone 205: the real, current fee/threshold amounts a caller
+// should pass in, sourced from services/deliverySettings.service.ts's
+// getDeliverySettings() (the admin-editable DeliverySettings table).
+// Optional so every pre-Milestone-205 call site and test that never
+// passes a 5th argument keeps reading the config/delivery.ts fallback
+// constants above, completely unchanged.
+export interface DeliveryRates {
+  courierLockerFee: Prisma.Decimal;
+  courierDoorFee: Prisma.Decimal;
+  freeDeliveryThreshold: Prisma.Decimal;
+}
+
 // Version 7, Milestone 168C: three owner-approved fulfilment methods
-// and a R600 guest threshold (see config/delivery.ts's header comment
-// for the full rule).
+// and a universal free-delivery threshold (see config/delivery.ts's
+// header comment for the full rule).
 //
-// Version 7, Milestone 180, Part A: `isRegisteredCustomer` reintroduces
-// a lower R500 threshold for a genuinely authenticated customer only —
-// the caller is responsible for that boolean being derived from a
-// server-verified Customer session (order.service.ts's createOrder()
-// passes `customerId !== null`, where customerId itself already comes
-// only from the signed session cookie, never client-claimed input) —
-// this function has no way to verify that itself, it only trusts the
-// boolean it's given, so every call site matters.
+// Version 7, Milestone 180, Part A reintroduced a separate, lower
+// threshold for a genuinely authenticated customer; Milestone 205
+// removed that distinction again (owner-approved — see the "Website
+// Fixes" developer brief, Task 1) — `isRegisteredCustomer` is kept in
+// this signature only so every existing call site compiles unchanged,
+// but it no longer affects which threshold applies: there is only one
+// threshold now, for every customer.
 //
 // `physicalSubtotal` must be the QUALIFYING subtotal only — physical
 // products' line totals, excluding gift wrapping and excluding any
@@ -37,10 +47,15 @@ export function calculateDeliveryFee(
   method: DeliveryMethodValue,
   physicalSubtotal: Prisma.Decimal,
   hasPhysicalItems = true,
-  isRegisteredCustomer = false
+  isRegisteredCustomer = false,
+  rates?: DeliveryRates
 ): Prisma.Decimal {
+  void isRegisteredCustomer; // Milestone 205: no longer changes the outcome — see this function's own comment above.
   if (!hasPhysicalItems) return new Prisma.Decimal(0);
-  const threshold = isRegisteredCustomer ? registeredFreeDeliveryThreshold : freeDeliveryThreshold;
+
+  const courierLockerFee = rates?.courierLockerFee ?? defaultCourierLockerFee;
+  const courierDoorFee = rates?.courierDoorFee ?? defaultCourierDoorFee;
+  const threshold = rates?.freeDeliveryThreshold ?? defaultFreeDeliveryThreshold;
   const qualifiesForFree = physicalSubtotal.gte(threshold);
 
   switch (method) {

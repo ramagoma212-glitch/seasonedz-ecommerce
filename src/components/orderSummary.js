@@ -2,18 +2,19 @@
 // order total. Reused by the cart page, checkout page and order
 // confirmation page.
 
-import { FREE_DELIVERY_THRESHOLD, REGISTERED_FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
+import { FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 import { preorderAvailabilityText } from "../js/preorder.js";
 import { escapeHtml } from "../js/search.js";
 //
-// Version 7, Milestone 168C: delivery fee now depends on which of the
-// three owner-approved fulfilment methods was chosen (Courier Guy
-// Locker to Locker R100, Courier Guy Door to Door R120, Customer
-// Collection R0), free at a R600 qualifying PHYSICAL product subtotal
-// — see src/js/cart.js/src/config/delivery.js for the shared
-// constants. The registered-customer-only free-delivery gate from
-// Milestone 131 is removed: every customer (guest or registered) gets
-// free delivery at the threshold now.
+// Milestone 205 ("Website Fixes" developer brief, Task 1): one
+// universal free-delivery threshold applies to every customer now —
+// the former registered-vs-guest R500/R600 split (Milestone 180) was
+// removed, not just renamed. `isRegisteredCustomer` is kept as a
+// parameter only for call-site compatibility; it no longer changes
+// this function's wording. `freeDeliveryThreshold` is an optional
+// override (the real, admin-configured value — see js/cart.js's own
+// getCartSummary()), falling back to config/delivery.js's own constant
+// when a caller doesn't fetch it live.
 //
 // Version 7, Milestone 152B (preserved): `hasPhysicalItems` picks an
 // honest "no delivery needed" note instead of implying a discount
@@ -28,35 +29,38 @@ import { escapeHtml } from "../js/search.js";
 // exists at checkout) gets its own wording instead of "below", which
 // would point at a selector that doesn't exist on that page.
 //
-// Version 7, Milestone 180, Part A: `isRegisteredCustomer` — a signed-
-// in customer sees the true reason their delivery is free (or how far
-// R500 is), rather than the guest-only R600 wording. Never clutters
-// the guest path: a guest sees exactly the same wording as before this
-// milestone.
 // Milestone 198.2 pre-launch audit fix: `deliveryMethod` (the raw
 // COLLECTION/COURIER_LOCKER/COURIER_DOOR value) lets the free-delivery
 // case tell Collection apart from the two courier methods — Collection
 // is unconditionally free with no subtotal threshold at all, so it
-// must never be described in terms of the R500/R600 courier
-// threshold it never needed to meet.
+// must never be described in terms of the courier threshold it never
+// needed to meet.
 // Milestone 197.1: `couponFreeDelivery`/`couponCode` let a genuinely
 // coupon-driven R0 delivery fee say so accurately, instead of (wrongly)
-// crediting the R500/R600 automatic threshold the order may not have
-// actually met. Checked before the threshold wording below, but after
-// the Collection case — Collection is unconditionally free on its own
+// crediting the automatic threshold the order may not have actually
+// met. Checked before the threshold wording below, but after the
+// Collection case — Collection is unconditionally free on its own
 // regardless of any coupon, so a coupon that happens to also be applied
 // is never the real reason there and must never be credited for it.
 export function getDeliveryNote(
   deliveryFee,
   hasPhysicalItems,
-  { omitDeliveryUntilSelected = false, isRegisteredCustomer = false, deliveryMethod = null, couponFreeDelivery = false, couponCode = null } = {}
+  {
+    omitDeliveryUntilSelected = false,
+    isRegisteredCustomer = false,
+    deliveryMethod = null,
+    couponFreeDelivery = false,
+    couponCode = null,
+    freeDeliveryThreshold = FREE_DELIVERY_THRESHOLD,
+  } = {}
 ) {
+  void isRegisteredCustomer; // Milestone 205: no longer changes this wording — see this function's own comment above.
   if (!hasPhysicalItems) {
     return "No delivery is needed. This order is digital download(s) only.";
   }
   if (deliveryFee === null) {
     return omitDeliveryUntilSelected
-      ? "Delivery options are selected at checkout. Free Courier Guy delivery on qualifying physical product orders of R600 or more (R500 or more for registered customers). Customer Collection is free."
+      ? `Delivery options are selected at checkout. Free Courier Guy delivery on qualifying physical product orders of R${freeDeliveryThreshold.toFixed(2)} or more. Customer Collection is free.`
       : "Select a delivery method below to see your delivery fee.";
   }
   if (deliveryFee === 0) {
@@ -66,37 +70,9 @@ export function getDeliveryNote(
     if (couponFreeDelivery) {
       return couponCode ? `Free delivery applied with ${couponCode}.` : "Free delivery applied by your coupon.";
     }
-    return isRegisteredCustomer
-      ? "Registered customer benefit: free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R500 or more for registered customers."
-      : "Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R600 or more.";
+    return `Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R${freeDeliveryThreshold.toFixed(2)} or more.`;
   }
-  return isRegisteredCustomer
-    ? "Spend R500 or more on qualifying products to get free Courier Guy delivery as a registered customer, or choose free Customer Collection in Pretoria or Thohoyandou."
-    : "Spend R600 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.";
-}
-
-// Milestone 180, Part A, section 12: cart-page-only messaging that
-// encourages account creation without ever forcing it — a soft nudge,
-// never a popup or a blocking gate. Deliberately separate from
-// getDeliveryNote() above (which is shared by the confirmation page
-// too, where a "you are RXX away" progress message would make no
-// sense after a purchase has already happened) — only ever called from
-// cartPage.js. Returns null when there's nothing useful to say (a
-// digital-only cart, or a guest who already has free delivery under
-// the ordinary R600 threshold and so has no reason to be nudged).
-export function getRegistrationDeliveryPrompt({ isRegisteredCustomer, physicalSubtotal, hasPhysicalItems }) {
-  if (!hasPhysicalItems) return null;
-
-  if (isRegisteredCustomer) {
-    if (physicalSubtotal >= REGISTERED_FREE_DELIVERY_THRESHOLD) {
-      return "Free delivery from R500 on eligible physical products.";
-    }
-    const remaining = REGISTERED_FREE_DELIVERY_THRESHOLD - physicalSubtotal;
-    return `You are R${remaining.toFixed(2)} away from free delivery.`;
-  }
-
-  if (physicalSubtotal >= FREE_DELIVERY_THRESHOLD) return null;
-  return "Sign in or create an account to get free delivery from R500 on eligible physical products.";
+  return `Spend R${freeDeliveryThreshold.toFixed(2)} or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.`;
 }
 
 // Version 7, Milestone 159: `giftWrapTotal` defaults to 0 so every
@@ -186,6 +162,7 @@ export function renderOrderSummary({
   showCouponInput = false,
   couponCode = null,
   couponFreeDelivery = false,
+  freeDeliveryThreshold = FREE_DELIVERY_THRESHOLD,
 }) {
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0) - discountTotal;
   const hideDeliveryRow = deliveryFee === null && omitDeliveryUntilSelected;
@@ -269,7 +246,7 @@ export function renderOrderSummary({
       </div>
 
       <p class="order-summary__note" data-order-summary-delivery-note>
-        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer, deliveryMethod, couponFreeDelivery, couponCode })}
+        ${getDeliveryNote(deliveryFee, hasPhysicalItems, { omitDeliveryUntilSelected, isRegisteredCustomer, deliveryMethod, couponFreeDelivery, couponCode, freeDeliveryThreshold })}
       </p>
 
       ${showCouponInput ? renderCouponBlock(couponCode) : ""}

@@ -217,7 +217,7 @@ test.describe("Admin coupon list: free delivery indicator (Milestone 197.1)", ()
 test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () => {
   test("a valid freeDelivery coupon zeroes the delivery row and shows the benefit, matching the brief's own worked example", async ({ page }) => {
     await addItemAndGoToCheckout(page);
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
 
     await page.route("**/api/coupons/preview", (route) =>
       route.fulfill({ status: 200, contentType: "application/json", body: envelope({ valid: true, message: "Coupon applied.", code: "FESTIVECUP", discountAmount: 30, freeDelivery: true }) })
@@ -246,9 +246,9 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await page.locator('[data-action="remove-coupon"]').click();
 
     const deliveryRow = page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" });
-    await expect(deliveryRow.getByText("R120.00")).toBeVisible();
-    // R300 subtotal + R120 delivery, no discount — both benefits gone together.
-    await expect(page.locator("[data-order-summary-total-value]")).toHaveText("R420.00");
+    await expect(deliveryRow.getByText("R90.00")).toBeVisible();
+    // R300 subtotal + R90 delivery, no discount — both benefits gone together.
+    await expect(page.locator("[data-order-summary-total-value]")).toHaveText("R390.00");
   });
 
   test("a coupon WITHOUT the free-delivery benefit never shows FREE and never says so", async ({ page }) => {
@@ -261,7 +261,7 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
 
     const deliveryRow = page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" });
-    await expect(deliveryRow.getByText("R120.00")).toBeVisible();
+    await expect(deliveryRow.getByText("R90.00")).toBeVisible();
     await expect(page.locator("[data-coupon-applied-benefits]")).toHaveText("R30.00 discount");
     await expect(page.locator("[data-coupon-applied-benefits]")).not.toContainText("free delivery");
   });
@@ -276,7 +276,7 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
 
     await expect(page.locator("[data-coupon-error]")).toHaveText("Coupon code not found.");
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
   test("a coupon configured with a maximum order amount is rejected once the cart exceeds it, and delivery stays unchanged", async ({ page }) => {
@@ -293,7 +293,7 @@ test.describe("Checkout: applying a free-delivery coupon (Milestone 197.1)", () 
     await page.locator('[data-coupon-apply-form] button[type="submit"]').click();
 
     await expect(page.locator("[data-coupon-error]")).toHaveText("This coupon is only valid for orders up to R200.00.");
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
   test("a free-delivery coupon on Customer Collection leaves it at FREE, never a negative amount shown", async ({ page }) => {

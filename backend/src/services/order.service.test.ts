@@ -22,6 +22,25 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// Milestone 205: createOrder() now reads the real, admin-editable
+// DeliverySettings row (via deliverySettings.service.ts's
+// getDeliveryRates()) for every single order it creates. Stubbed ONCE,
+// file-wide, never restored — every test in this file wants the exact
+// same fixed rates regardless of whatever the admin has actually
+// configured on the real, live DeliverySettings row; a unit test must
+// never depend on that current production value to pass. Tests that
+// assert a specific delivery fee below use these exact numbers.
+export const TEST_DELIVERY_SETTINGS = {
+  id: "test-delivery-settings",
+  courierLockerFee: new Prisma.Decimal(60),
+  courierDoorFee: new Prisma.Decimal(90),
+  freeDeliveryThreshold: new Prisma.Decimal(350),
+  updatedByAdminUserId: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+stub(prisma.deliverySettings, "findFirst", async () => TEST_DELIVERY_SETTINGS);
+
 function baseInput(overrides: Partial<ValidatedOrderInput> = {}): ValidatedOrderInput {
   return {
     customer: { firstName: "Thandiwe", lastName: "Nkosi", email: "thandiwe@example.com", phone: "+27821234567" },
@@ -201,7 +220,8 @@ test("even after passing the initial stock check, the transaction's own atomic d
 });
 
 // ---------------------------------------------------------------------------
-// Registered customer R500 free-delivery threshold (Milestone 180, Part A)
+// Universal R350 free-delivery threshold, admin-editable (Milestone 205;
+// replaced the registered-vs-guest R500/R600 split from Milestone 180)
 // ---------------------------------------------------------------------------
 
 function stubSimpleOrderCreation(price: number) {
@@ -221,8 +241,11 @@ function stubSimpleOrderCreation(price: number) {
   };
 }
 
-test("a registered (authenticated) customer at R520 eligible physical subtotal gets FREE delivery — below the R600 guest threshold but at/above the R500 registered one", async () => {
-  const stubs = stubSimpleOrderCreation(520);
+// Milestone 205: the registered-vs-guest threshold split (Milestone
+// 180) was removed — one admin-configured threshold (R350 in the
+// stub above) applies identically to every customer now.
+test("a customer at R360 eligible physical subtotal gets FREE Door delivery — at/above the universal R350 threshold", async () => {
+  const stubs = stubSimpleOrderCreation(360);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), "customer-1");
 
@@ -230,38 +253,26 @@ test("a registered (authenticated) customer at R520 eligible physical subtotal g
   stubs.restore();
 });
 
-test("a GUEST at the exact same R520 eligible physical subtotal is still charged the normal Door fee — the two thresholds never leak into each other", async () => {
-  const stubs = stubSimpleOrderCreation(520);
+test("a GUEST at the exact same R360 eligible physical subtotal also gets FREE Door delivery — registered/guest no longer differ", async () => {
+  const stubs = stubSimpleOrderCreation(360);
 
   const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), null);
 
-  assert.equal(order.deliveryFee, 120);
+  assert.equal(order.deliveryFee, 0);
   stubs.restore();
 });
 
-test("a registered customer below even the lower R500 threshold (R499) is still charged the normal fee", async () => {
-  const stubs = stubSimpleOrderCreation(499);
+test("a customer below the R350 threshold (R340) is charged the normal Locker fee, registered or not", async () => {
+  const stubs = stubSimpleOrderCreation(340);
 
-  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_LOCKER" }), "customer-1");
-
-  assert.equal(order.deliveryFee, 100);
+  const registeredOrder = await createOrder(baseInput({ deliveryMethod: "COURIER_LOCKER" }), "customer-1");
+  assert.equal(registeredOrder.deliveryFee, 60);
   stubs.restore();
-});
 
-test("registered-customer eligibility is derived only from the already-verified customerId parameter — never from anything in the request body itself", async () => {
-  // ValidatedOrderInput (order.validator.ts's own output type) has no
-  // registeredCustomer-shaped field at all to smuggle a claim through in
-  // the first place — this test asserts the actual, load-bearing
-  // property: passing customerId=null behaves as guest even though the
-  // rest of the input is identical to the registered-customer test
-  // above, proving the boolean genuinely comes from the second
-  // parameter alone.
-  const stubs = stubSimpleOrderCreation(520);
-
-  const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), null);
-
-  assert.equal(order.deliveryFee, 120, "customerId null must always mean guest, regardless of anything else in the input");
-  stubs.restore();
+  const guestStubs = stubSimpleOrderCreation(340);
+  const guestOrder = await createOrder(baseInput({ deliveryMethod: "COURIER_LOCKER" }), null);
+  assert.equal(guestOrder.deliveryFee, 60);
+  guestStubs.restore();
 });
 
 // ---------------------------------------------------------------------------
@@ -631,7 +642,7 @@ test("Milestone 181A: gift wrap does not count toward the R200 minimum either �
   stubs.restore();
 });
 
-test("Part I: the registered R500 free-delivery threshold is judged on the ORIGINAL pre-preorder-discount subtotal", async () => {
+test("Part I: the free-delivery threshold is judged on the ORIGINAL pre-preorder-discount subtotal", async () => {
   // R500 physical subtotal before discount qualifies for free delivery
   // even though the actual discounted amount (R450) is below it.
   const settings = stubPreorderProgrammeSettings();
@@ -641,7 +652,7 @@ test("Part I: the registered R500 free-delivery threshold is judged on the ORIGI
 
   const order = await createOrder(baseInput({ deliveryMethod: "COURIER_DOOR" }), "customer-1");
 
-  assert.equal(order.deliveryFee, 0, "still FREE — R500 pre-discount physical subtotal meets the registered threshold");
+  assert.equal(order.deliveryFee, 0, "still FREE — R500 pre-discount physical subtotal meets the R350 universal threshold");
   assert.equal(order.preorderDiscountTotal, 50, "10% of R500");
 
   settings.restore();
@@ -1344,9 +1355,9 @@ test("no referralAttribution at all behaves exactly as before this milestone —
   stubs.restore();
 });
 
-test("the R600 free-delivery threshold is judged against the ORIGINAL pre-discount physical subtotal, not the post-discount total", async () => {
+test("the R350 free-delivery threshold is judged against the ORIGINAL pre-discount physical subtotal, not the post-discount total", async () => {
   // R620 product, COURIER_DOOR: pre-discount R620 already clears the
-  // R600 threshold (free delivery), even though the 5% referral
+  // R350 threshold (free delivery), even though the 5% referral
   // discount brings the customer's actual paid subtotal down to R589 —
   // an explicit required case from the milestone brief.
   const findUnique = stub(prisma.product, "findUnique", async () => ({ ...PHYSICAL_PRODUCT_BASE, price: new Prisma.Decimal("620.00"), stockQuantity: 10 }));
@@ -1870,14 +1881,14 @@ test("FREE DELIVERY A/B: a freeDelivery coupon zeroes a paid courier fee, on top
     return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
   });
 
-  // R300 subtotal is well under the R600 free-delivery threshold, so any
+  // R300 subtotal is well under the R350 free-delivery threshold, so any
   // R0 delivery fee here can only have come from the coupon, never the
   // automatic threshold.
   const order = await createOrder(baseInput({ couponCode: "FESTIVECUP", deliveryMethod: "COURIER_DOOR" }), null);
 
   assert.equal(order.subtotal, 300);
   assert.equal(order.discountTotal, 30, "10% of R300 — the merchandise discount is unaffected by the free-delivery benefit");
-  assert.equal(order.deliveryFee, 0, "COURIER_DOOR would normally be R120 below the R600 threshold — the coupon zeroes it");
+  assert.equal(order.deliveryFee, 0, "COURIER_DOOR would normally be R90 below the R350 threshold — the coupon zeroes it");
   assert.equal(order.total, 270, "300 - 30 + 0, exactly the brief's own worked example");
   assert.equal(order.couponFreeDelivery, true);
 
@@ -1929,7 +1940,7 @@ test("FREE DELIVERY D: an order that already automatically qualifies for free de
     return fakeOrderRow({ subtotal: data.subtotal, deliveryFee: data.deliveryFee, discountTotal: data.discountTotal, total: data.total, items: items.map((item, i) => fakeOrderItemRow({ id: `oi-${i}`, ...item })) });
   });
 
-  // R700 >= the R600 guest threshold, so COURIER_DOOR is already R0 before
+  // R700 >= the R350 threshold, so COURIER_DOOR is already R0 before
   // the coupon is even considered.
   const order = await createOrder(baseInput({ couponCode: "FESTIVECUP", deliveryMethod: "COURIER_DOOR" }), null);
 
@@ -1990,7 +2001,7 @@ test("FREE DELIVERY F: a coupon WITHOUT freeDelivery charges the normal delivery
 
   const order = await createOrder(baseInput({ couponCode: "WELCOME10", deliveryMethod: "COURIER_DOOR" }), null);
 
-  assert.equal(order.deliveryFee, 120, "the ordinary COURIER_DOOR fee below the R600 threshold — this coupon never touches delivery");
+  assert.equal(order.deliveryFee, 90, "the ordinary COURIER_DOOR fee below the R350 threshold — this coupon never touches delivery");
   assert.equal(order.couponFreeDelivery, false);
 
   coupon.restore();
@@ -2018,7 +2029,7 @@ test("FREE DELIVERY M (tamper safety): a client-claimed freeDelivery/deliveryFee
   const tamperedInput = { ...baseInput({ deliveryMethod: "COURIER_DOOR" }), freeDelivery: true, deliveryFee: 0 } as any;
   const order = await createOrder(tamperedInput, null);
 
-  assert.equal(order.deliveryFee, 120, "the extraneous client fields are simply never read — calculateDeliveryFee() alone decides this");
+  assert.equal(order.deliveryFee, 90, "the extraneous client fields are simply never read — calculateDeliveryFee() alone decides this");
 
   findUnique.restore();
   transactionStub.restore();
@@ -2105,7 +2116,7 @@ test("ZERO TOTAL B: the same coupon on a cart just OVER its R250.01 cap is silen
 
   assert.equal(order.couponCode, null, "a coupon over its own cap is never applied — the order still succeeds, just without it");
   assert.equal(order.discountTotal, 0);
-  assert.equal(order.total, 250.01 + 120, "full price plus the ordinary COURIER_DOOR fee — no discount, no free delivery");
+  assert.equal(order.total, 250.01 + 90, "full price plus the ordinary COURIER_DOOR fee — no discount, no free delivery");
   assert.equal(order.status, "PENDING");
   assert.equal(order.paymentStatus, "PENDING");
   assert.equal(order.paymentMethod, "BANK_TRANSFER");

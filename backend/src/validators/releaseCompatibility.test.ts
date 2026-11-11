@@ -60,7 +60,7 @@ test("STATE B: proves WHY a new frontend must never ship before the backend — 
   const newFrontendShows = calculateDeliveryFee("COURIER_DOOR", new Prisma.Decimal(physicalSubtotal), true).toNumber();
   const oldBackendWouldCharge = oldBackendRuleForComparisonOnly(physicalSubtotal, false); // guest
 
-  assert.equal(newFrontendShows, 0, "new frontend correctly shows FREE at R620 (>= the universal R600 threshold)");
+  assert.equal(newFrontendShows, 0, "new frontend correctly shows FREE at R620 (>= the current free-delivery threshold, R600 at the time this scenario happened)");
   assert.equal(oldBackendWouldCharge, 80, "old backend would still charge R80 (guests never got free delivery under the old rule)");
   assert.notEqual(
     newFrontendShows,
@@ -69,7 +69,7 @@ test("STATE B: proves WHY a new frontend must never ship before the backend — 
   );
 });
 
-test("STATE B: a registered customer at R610 would also see a mismatch (shown FREE, old backend still charges R80 below its R650 gate)", () => {
+test("STATE B: a registered customer at R610 would also see a mismatch (shown FREE, old backend still charges R80 below the then-R650 registered-only gate)", () => {
   const physicalSubtotal = 610;
   const newFrontendShows = calculateDeliveryFee("COURIER_DOOR", new Prisma.Decimal(physicalSubtotal), true).toNumber();
   const oldBackendWouldCharge = oldBackendRuleForComparisonOnly(physicalSubtotal, true); // registered

@@ -23,6 +23,23 @@ function stub<T extends object, K extends keyof T>(obj: T, key: K, impl: (...arg
   return { fn, restore: () => { obj[key] = original; } };
 }
 
+// Milestone 205: createOrder() now reads the real, admin-editable
+// DeliverySettings row (via deliverySettings.service.ts's
+// getDeliveryRates()) for every single order it creates. Stubbed ONCE,
+// file-wide, never restored — same discipline as
+// order.service.test.ts's own identical file-wide stub (see that
+// file's own comment): this test must never depend on whatever the
+// admin has actually configured on the real, live DeliverySettings row.
+stub(prisma.deliverySettings, "findFirst", async () => ({
+  id: "test-delivery-settings",
+  courierLockerFee: new Prisma.Decimal(60),
+  courierDoorFee: new Prisma.Decimal(90),
+  freeDeliveryThreshold: new Prisma.Decimal(350),
+  updatedByAdminUserId: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}));
+
 // createOrderHandler() fires both notifications fire-and-forget
 // (`void notificationEngine.enqueueAndSendNow(...).catch(...)`), never
 // awaited into the response — the chains keep running (through

@@ -300,21 +300,17 @@ test.describe("Customer account smoke checks", () => {
   // anymore (see checkoutPage.js's own comment) — every test below now
   // explicitly checks Courier Guy Door to Door first, matching the
   // real required customer action, before asserting on its fee.
-  // Version 7, Milestone 180, Part A: a registered (logged-in) customer
-  // now has their OWN, lower R500 threshold, with wording that credits
-  // it explicitly ("Registered customer benefit") — see
-  // orderSummary.js's own getDeliveryNote(). R750 clears both the R500
-  // registered and R600 guest thresholds either way, so the FEE outcome
-  // here is unchanged; only the wording updates to match.
-  test("logged-in checkout shows free delivery when subtotal is R600 or more", async ({ page }) => {
+  // Milestone 205: the registered-vs-guest R500/R600 split (Milestone
+  // 180, Part A) was removed — one universal R350 threshold applies to
+  // every customer, with generic wording that no longer credits
+  // "registered customer benefit" specifically.
+  test("logged-in checkout shows free delivery when subtotal is R350 or more", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 250, quantity: 3 }); // subtotal R750
 
     await page.goto("/checkout");
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(
-      page.getByText("Registered customer benefit: free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R500 or more for registered customers.")
-    ).toBeVisible();
+    await expect(page.getByText("Free delivery applied. Courier Guy Locker to Locker and Door to Door are free on orders of R350.00 or more.")).toBeVisible();
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
 
     // No auth token ever touches localStorage — only the plain cart
@@ -323,48 +319,43 @@ test.describe("Customer account smoke checks", () => {
     expect(localStorageKeys.every((key) => !key.toLowerCase().includes("session") && !key.toLowerCase().includes("token"))).toBe(true);
   });
 
-  // Version 7, Milestone 180, Part A: R200 is below even the lower R500
-  // registered threshold, so the FEE outcome (R120) is unchanged for a
-  // registered customer here too — only the wording now names the
-  // R500 registered threshold instead of R600.
-  test("logged-in checkout shows R120 Door to Door delivery when subtotal is below R500", async ({ page }) => {
+  test("logged-in checkout shows R90 Door to Door delivery when subtotal is below R350", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 100, quantity: 2 }); // subtotal R200
 
     await page.goto("/checkout");
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
     await expect(
-      page.getByText("Spend R500 or more on qualifying products to get free Courier Guy delivery as a registered customer, or choose free Customer Collection in Pretoria or Thohoyandou.")
+      page.getByText("Spend R350.00 or more on qualifying products to get free Courier Guy delivery, or choose free Customer Collection in Pretoria or Thohoyandou.")
     ).toBeVisible();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
   // Version 7, Milestone 168C: gift wrapping must NOT count towards the
   // free-delivery threshold — only the qualifying physical product
   // subtotal decides eligibility (see js/cart.js's
   // getCartPhysicalSubtotal()).
-  // Version 7, Milestone 180, Part A: updated from R590 to R490 — R590
-  // is now BELOW R600 but AT/ABOVE the new R500 registered threshold, so
-  // a logged-in customer at R590 now correctly gets free delivery (see
-  // the new dedicated test immediately below this one). R490 stays
-  // below R500 either way, preserving this test's original "still
-  // charged, gift wrap doesn't help" intent for a registered customer.
-  test("R490 products + R30 gift wrap, registered customer: still charged delivery (qualifying subtotal alone decides, R490 < R500)", async ({ page }) => {
+  // Milestone 205: updated from R490 to R300 — R490 is now AT/ABOVE the
+  // new universal R350 threshold (it would get free delivery), so R300
+  // is the value that preserves this test's original "still charged,
+  // gift wrap doesn't help" intent.
+  test("R300 products + R30 gift wrap, logged-in customer: still charged delivery (qualifying subtotal alone decides, R300 < R350)", async ({ page }) => {
     await mockLoggedInCustomer(page);
-    await setSyntheticCart(page, { price: 490, quantity: 1, giftWrap: true }); // subtotal R490, gift wrap R30
+    await setSyntheticCart(page, { price: 300, quantity: 1, giftWrap: true }); // subtotal R300, gift wrap R30
 
     await page.goto("/checkout");
-    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("490.00");
+    await expect(page.locator(".order-summary__row", { hasText: "Subtotal" })).toContainText("300.00");
     await expect(page.locator(".order-summary__row", { hasText: "Gift wrapping" })).toContainText("30.00");
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
   });
 
-  // Version 7, Milestone 180, Part A: the exact case the new registered
-  // threshold changes — R590 is below the R600 guest threshold but
-  // at/above the new R500 registered one, and gift wrap (R30, on top)
-  // must still never count towards it either way.
-  test("R590 products + R30 gift wrap, registered customer: free delivery (Milestone 180 Part A — below R600 guest threshold, at/above R500 registered one)", async ({ page }) => {
+  // Milestone 205: R590 is at/above the universal R350 threshold, so
+  // both a logged-in customer AND a guest now get free delivery at this
+  // subtotal — gift wrap (R30, on top) must still never count towards
+  // it either way. This directly proves registered/guest no longer
+  // differ (the whole point of the Milestone 180 split this replaces).
+  test("R590 products + R30 gift wrap, logged-in customer: free delivery (at/above the R350 threshold)", async ({ page }) => {
     await mockLoggedInCustomer(page);
     await setSyntheticCart(page, { price: 590, quantity: 1, giftWrap: true }); // subtotal R590, gift wrap R30
 
@@ -375,16 +366,12 @@ test.describe("Customer account smoke checks", () => {
     await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
-  // Version 7, Milestone 180, Part A: the same R590 subtotal for a
-  // GUEST (never logged in) must still be charged — the two thresholds
-  // never leak into each other. Directly mirrors the registered-customer
-  // test immediately above, same price, opposite login state.
-  test("R590 products + R30 gift wrap, GUEST: still charged delivery — the R500 registered threshold never applies to a guest", async ({ page }) => {
+  test("R590 products + R30 gift wrap, GUEST: also free delivery — registered and guest no longer differ", async ({ page }) => {
     await setSyntheticCart(page, { price: 590, quantity: 1, giftWrap: true }); // subtotal R590, gift wrap R30
 
     await page.goto("/checkout");
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("FREE")).toBeVisible();
   });
 
   test("R600 products + R30 gift wrap: free delivery (qualifying subtotal itself already reaches R600)", async ({ page }) => {
@@ -423,10 +410,10 @@ test.describe("Customer account smoke checks", () => {
     await expect(page.locator(".order-summary__row", { hasText: "Delivery" }).getByText("Select a delivery option")).toBeVisible();
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_DOOR"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R120.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Door to Door" }).getByText("R90.00")).toBeVisible();
 
     await page.locator('input[name="deliveryMethod"][value="COURIER_LOCKER"]').check();
-    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R100.00")).toBeVisible();
+    await expect(page.locator(".order-summary__row", { hasText: "Courier Guy Locker to Locker" }).getByText("R60.00")).toBeVisible();
     await expect(page.locator('[data-delivery-address-fields]')).toBeVisible();
 
     await page.locator('input[name="deliveryMethod"][value="COLLECTION"]').check();

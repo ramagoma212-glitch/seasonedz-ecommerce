@@ -30,6 +30,8 @@ import welcomeGiftRoutes from "./welcomeGift.routes.js";
 import adminWelcomeGiftRoutes from "./adminWelcomeGift.routes.js";
 import couponRoutes from "./coupon.routes.js";
 import adminCouponRoutes from "./adminCoupon.routes.js";
+import deliveryRoutes from "./delivery.routes.js";
+import adminDeliveryRoutes from "./adminDelivery.routes.js";
 import adminOutreachContactRoutes from "./adminOutreachContact.routes.js";
 import adminOutreachQuotationRoutes from "./adminOutreachQuotation.routes.js";
 import adminOutreachCampaignRoutes from "./adminOutreachCampaign.routes.js";
@@ -39,6 +41,7 @@ const router = Router();
 
 router.use("/health", healthRoutes);
 router.use("/preorder", preorderRoutes);
+router.use("/delivery", deliveryRoutes);
 router.use("/products", productRoutes);
 router.use("/categories", categoryRoutes);
 router.use("/orders", orderRoutes);
@@ -77,6 +80,7 @@ router.use("/admin/affiliate", adminAffiliateRoutes);
 // requireAdminAuth applied at the router level, see
 // adminReferrals.routes.ts's own header comment.
 router.use("/admin/referrals", adminReferralsRoutes);
+router.use("/admin/delivery-settings", adminDeliveryRoutes);
 // Milestone 197: admin-managed coupon codes — requireAdminAuth applied
 // at the router level, see adminCoupon.routes.ts's own header comment.
 // /coupons (public, preview-only) is a completely separate router/path.

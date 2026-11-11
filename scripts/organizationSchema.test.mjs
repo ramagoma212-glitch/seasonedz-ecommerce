@@ -66,18 +66,23 @@ test("index.html's Organization JSON-LD still declares no LocalBusiness, rating,
   }
 });
 
-test("robots.txt still allows the real search crawlers and keeps the private-route disallows", () => {
+// Milestone 205, Task 6: the named Googlebot/Bingbot/OAI-SearchBot
+// blocks this test used to require were removed as internal-notes
+// cleanup — see public/robots.txt's own history. They were always
+// functionally redundant with the wildcard "User-agent: *" rule, which
+// covers every crawler (named or not) identically; this test now
+// checks the simplified, single-block file.
+test("robots.txt has a single wildcard block, no internal comments, and keeps the private-route disallows", () => {
   const robotsTxt = readFileSync(join(REPO_ROOT, "public", "robots.txt"), "utf8");
-  for (const agent of ["User-agent: *", "User-agent: Googlebot", "User-agent: Bingbot", "User-agent: OAI-SearchBot"]) {
-    assert.ok(robotsTxt.includes(agent), `robots.txt missing ${agent}`);
-  }
-  // GPTBot is a training crawler, not a search crawler — this milestone
+  assert.ok(robotsTxt.includes("User-agent: *"), "robots.txt missing User-agent: *");
+  // GPTBot is a training crawler, not a search crawler — this project
   // deliberately makes no owner-level training-data decision, so no
   // explicit GPTBot rule should exist in either direction.
   assert.ok(!/User-agent:\s*GPTBot/i.test(robotsTxt), "robots.txt must not add an explicit GPTBot rule without an owner decision");
+  assert.ok(!/User-agent:\s*(Googlebot|Bingbot|OAI-SearchBot)/i.test(robotsTxt), "robots.txt should no longer have named crawler blocks — Task 6 cleanup removed them as redundant with the wildcard");
+  assert.ok(!robotsTxt.includes("#"), "robots.txt should have no comments — Task 6 cleanup removed the internal milestone notes");
   for (const disallow of ["Disallow: /admin", "Disallow: /cart", "Disallow: /checkout"]) {
-    const occurrences = robotsTxt.split(disallow).length - 1;
-    assert.ok(occurrences >= 4, `${disallow} should appear under every user-agent block (wildcard + 3 named), found ${occurrences}`);
+    assert.ok(robotsTxt.includes(disallow), `robots.txt missing ${disallow}`);
   }
   assert.ok(robotsTxt.includes("Sitemap: https://www.seasonedzgroup.co.za/sitemap.xml"));
 });

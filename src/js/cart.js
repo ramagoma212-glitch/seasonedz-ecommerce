@@ -9,7 +9,7 @@
 // is accepted.
 
 import { getStorageItem, setStorageItem, clearStorageItem } from "./storage.js";
-import { calculateDeliveryFee as calculateDeliveryFeeForMethod } from "../config/delivery.js";
+import { calculateDeliveryFee as calculateDeliveryFeeForMethod, FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 
 const CART_KEY = "seasonedz_cart";
 
@@ -260,7 +260,13 @@ export function getCartPhysicalSubtotal(items) {
 // existing call site that doesn't pass it keeps behaving exactly as
 // before (guest-shaped estimate). Callers derive the real value from
 // an actual logged-in-customer lookup, never a guess.
-export function getCartSummary(deliveryMethod = null, isRegisteredCustomer = false) {
+// Milestone 205: `rates` is a new, optional 3rd parameter — the real,
+// admin-configured {courierLockerFee, courierDoorFee,
+// freeDeliveryThreshold} from js/api/deliveryApi.js's
+// getPublicDeliverySettings(), once a caller has fetched it. Every
+// existing call site that omits it keeps reading the config/delivery.js
+// fallback constants, unchanged.
+export function getCartSummary(deliveryMethod = null, isRegisteredCustomer = false, rates = null) {
   const items = getCart();
   const itemCount = items.reduce((total, item) => total + item.quantity, 0);
   const subtotal = items.reduce((total, item) => total + item.price * item.quantity, 0);
@@ -269,11 +275,30 @@ export function getCartSummary(deliveryMethod = null, isRegisteredCustomer = fal
   const physicalSubtotal = getCartPhysicalSubtotal(items);
   const deliveryFee = composition.hasPhysical
     ? deliveryMethod
-      ? calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical, isRegisteredCustomer)
+      ? calculateDeliveryFeeForMethod(deliveryMethod, physicalSubtotal, composition.hasPhysical, isRegisteredCustomer, rates)
       : null
     : 0;
   const total = subtotal + giftWrapTotal + (deliveryFee ?? 0);
-  return { items, itemCount, subtotal, giftWrapTotal, physicalSubtotal, deliveryFee, deliveryMethod, total, composition, isRegisteredCustomer };
+  const freeDeliveryThreshold = rates?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD;
+  // Milestone 205, Task 1 Part 4: how much more physical merchandise
+  // would push this cart to the free-delivery threshold — null once
+  // already qualifying (never negative), and always null for a
+  // digital-only cart (nothing to qualify).
+  const amountToFreeDelivery = composition.hasPhysical ? Math.max(0, freeDeliveryThreshold - physicalSubtotal) || null : null;
+  return {
+    items,
+    itemCount,
+    subtotal,
+    giftWrapTotal,
+    physicalSubtotal,
+    deliveryFee,
+    deliveryMethod,
+    total,
+    composition,
+    isRegisteredCustomer,
+    freeDeliveryThreshold,
+    amountToFreeDelivery,
+  };
 }
 
 export function isInCart(productId) {

@@ -1331,6 +1331,9 @@ model AdminUser {
   // Milestone 181, Part D: same singleton-settings audit-trail pattern
   // as affiliateProgrammeSettingsUpdates above.
   preorderProgrammeSettingsUpdates PreorderProgrammeSettings[] @relation("PreorderProgrammeSettingsUpdatedBy")
+  // Milestone 205: same singleton-settings audit-trail pattern as
+  // affiliateProgrammeSettingsUpdates/preorderProgrammeSettingsUpdates above.
+  deliverySettingsUpdates DeliverySettings[] @relation("DeliverySettingsUpdatedBy")
   // Version 7, Milestone 176: audit trail entries this admin generated
   // reviewing an affiliate application — SetNull (not Cascade), same
   // "deleting an admin must never delete the audit history of what they
@@ -1889,6 +1892,36 @@ model PreorderProgrammeSettings {
   // of what they changed.
   updatedByAdminUserId String?
   updatedByAdminUser   AdminUser? @relation("PreorderProgrammeSettingsUpdatedBy", fields: [updatedByAdminUserId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Milestone 205: the one authoritative, admin-editable source of truth
+// for delivery fees and the free-delivery threshold — replaces the
+// plain config/delivery.ts constants that used to be the only way to
+// change these amounts (a code change + redeploy). Same deterministic-
+// singleton pattern as AffiliateProgrammeSettings/
+// PreorderProgrammeSettings above: getDeliverySettings() creates this
+// row with the owner-approved Milestone 205 defaults on first read if
+// it doesn't exist yet; no generic POST/create route, only GET/PATCH.
+//
+// Milestone 205 also removes the former registered-vs-guest threshold
+// distinction (was R600 guest / R500 registered) — one threshold now
+// applies to every customer, so there is deliberately no second
+// "registered" column here.
+model DeliverySettings {
+  id String @id @default(cuid())
+
+  courierLockerFee      Decimal @default(60.00) @db.Decimal(10, 2)
+  courierDoorFee        Decimal @default(90.00) @db.Decimal(10, 2)
+  freeDeliveryThreshold Decimal @default(350.00) @db.Decimal(10, 2)
+
+  // Same audit-trail intent as the other settings models above —
+  // SetNull so deleting an AdminUser can never delete the record of
+  // what they changed.
+  updatedByAdminUserId String?
+  updatedByAdminUser   AdminUser? @relation("DeliverySettingsUpdatedBy", fields: [updatedByAdminUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

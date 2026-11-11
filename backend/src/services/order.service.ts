@@ -7,6 +7,7 @@ import { GIFT_WRAP_FEE_PER_ITEM } from "../config/giftWrap.js";
 import type { ValidatedOrderInput } from "../validators/order.validator.js";
 import { verifyReferralCapture, captureAgeInDays } from "../utils/referralAttributionToken.js";
 import { getReferralProgrammeSettings } from "./referralProgrammeSettings.service.js";
+import { getDeliveryRates } from "./deliverySettings.service.js";
 import { isSelfReferral, type CheckoutIdentity } from "./referralAffiliate.service.js";
 import { calculateReferralPricing, roundHalfUpToCents, type ReferralPricingResult } from "./referralPricing.service.js";
 import { calculateProductCommissions, type AffiliateProductSettingSnapshot, type OrderItemForCommission } from "./affiliateProductCommission.service.js";
@@ -817,20 +818,19 @@ export async function createOrder(input: ValidatedOrderInput, customerId: string
   const physicalSubtotal = verifiedItems
     .filter((item) => item.productType === ProductType.PHYSICAL)
     .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
-  // Milestone 180, Part A: authentication is authoritative — this is
-  // the exact same customerId already derived upstream from the signed
-  // session cookie (see this function's own header comment), never
-  // from an email, a client-claimed flag, localStorage, or a query
-  // parameter. A guest (customerId null) always gets the ordinary
-  // guest threshold, no exceptions.
+  // Milestone 205: the registered-customer R500/guest R600 split from
+  // Milestone 180 was removed — one admin-configured threshold applies
+  // to every customer now (see deliverySettings.service.ts). isRegisteredCustomer
+  // is still passed through for API compatibility, but no longer
+  // changes the outcome.
   const isRegisteredCustomer = customerId !== null;
+  const deliveryRates = await getDeliveryRates();
   // Milestone 181, Part I: this reads `physicalSubtotal` exactly as
   // computed above — the ORIGINAL, pre-any-discount physical subtotal.
-  // The registered-customer R500/guest R600 threshold from Milestone
-  // 180 is completely unaffected by whether a preorder discount later
-  // applies to any line; nothing below this point ever changes
-  // `deliveryFee` again.
-  const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems, isRegisteredCustomer);
+  // The free-delivery threshold is completely unaffected by whether a
+  // preorder discount later applies to any line; nothing below this
+  // point ever changes `deliveryFee` again.
+  const deliveryFee = calculateDeliveryFee(input.deliveryMethod, physicalSubtotal, hasPhysicalItems, isRegisteredCustomer, deliveryRates);
 
   // Milestone 181, Part B/M: order-level preorder facts, independent of
   // discount eligibility — a guest browsing a preorder item still needs

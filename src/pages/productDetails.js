@@ -39,6 +39,7 @@ import { GIFT_WRAP_FEE_PER_ITEM, GIFT_MESSAGE_MAX_LENGTH } from "../js/cart.js";
 import { withBase } from "../js/paths.js";
 import { preorderAvailabilityText } from "../js/preorder.js";
 import { getPublicPreorderSettings } from "../js/api/preorderApi.js";
+import { getPublicDeliverySettings } from "../js/api/deliveryApi.js";
 import { trackViewItem } from "../js/analytics.js";
 import { findVariantForSelection, isValueSelectable, buildVariantLabel } from "../js/variantSelector.js";
 import { resolveGalleryImages, buildGalleryInner } from "../js/productGallery.js";
@@ -518,6 +519,27 @@ export async function renderProductDetails({ slug, query } = {}) {
     }
   }
 
+  // Milestone 205, Task 1 Part 5: best-effort, same "never block the
+  // page" discipline as the preorder-settings fetch above — a
+  // slow/failed request just means the delivery line under the price
+  // doesn't show for this page load, never a broken product page.
+  // DIGITAL products have nothing to deliver, so this is skipped
+  // entirely for them.
+  let deliveryLineText = null;
+  let deliverySettings = null;
+  if (product.productType !== "DIGITAL") {
+    try {
+      const deliveryResponse = await getPublicDeliverySettings();
+      deliverySettings = deliveryResponse?.data || null;
+      if (deliverySettings) {
+        deliveryLineText = `Locker delivery R${deliverySettings.courierLockerFee.toFixed(2)} &middot; Free over R${deliverySettings.freeDeliveryThreshold.toFixed(2)}`;
+      }
+    } catch {
+      deliveryLineText = null;
+      deliverySettings = null;
+    }
+  }
+
   const wishlisted = isInWishlist(product.id);
   // Milestone 188: for a variable product, "out of stock" (and
   // therefore whether Add to Cart can even render) depends entirely on
@@ -567,6 +589,7 @@ export async function renderProductDetails({ slug, query } = {}) {
             `
             }
           </div>
+          ${deliveryLineText ? `<p class="product-details__delivery-line" data-product-delivery-line>${deliveryLineText}</p>` : ""}
 
           ${renderVariantSelector(product, initialSelection)}
 
@@ -632,6 +655,11 @@ export async function renderProductDetails({ slug, query } = {}) {
             }
           </div>
           ${
+            product.productType !== "DIGITAL"
+              ? `<p class="product-details__trust-line" data-product-trust-line>Secure payment with PayFast &middot; Dispatched in 1 to 2 days &middot; Easy returns</p>`
+              : ""
+          }
+          ${
             outOfStock && product.productType !== "DIGITAL"
               ? `
           <button type="button" class="btn btn--secondary btn--block" data-action="notify-when-in-stock" data-product-id="${product.id}">
@@ -661,7 +689,7 @@ export async function renderProductDetails({ slug, query } = {}) {
 
           ${renderPaymentMethodsBlock()}
 
-          ${product.productType !== "DIGITAL" ? renderProductDeliveryAccordion() : ""}
+          ${product.productType !== "DIGITAL" ? renderProductDeliveryAccordion(deliverySettings) : ""}
 
           ${renderProductMarketplaceBlock()}
 

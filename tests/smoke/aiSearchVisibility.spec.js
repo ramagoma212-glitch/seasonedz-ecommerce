@@ -6,14 +6,21 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Static discovery files are actually served (Milestone 203)", () => {
-  test("robots.txt is served with the named search-crawler blocks", async ({ request }) => {
+  // Milestone 205, Task 6: the named Googlebot/Bingbot/OAI-SearchBot
+  // blocks this test used to assert were removed as internal-notes
+  // cleanup — they were always functionally redundant with the
+  // wildcard "User-agent: *" rule below, which covers every crawler
+  // identically. This test now asserts the simplified, single-block
+  // file that replaced them.
+  test("robots.txt is served with the single wildcard block, no internal comments", async ({ request }) => {
     const response = await request.get("/robots.txt");
     expect(response.status()).toBe(200);
     const body = await response.text();
-    expect(body).toContain("User-agent: Googlebot");
-    expect(body).toContain("User-agent: Bingbot");
-    expect(body).toContain("User-agent: OAI-SearchBot");
+    expect(body).toContain("User-agent: *");
+    expect(body).toContain("Disallow: /admin");
     expect(body).toContain("Sitemap: https://www.seasonedzgroup.co.za/sitemap.xml");
+    expect(body).not.toContain("User-agent: Googlebot");
+    expect(body).not.toContain("#");
   });
 
   test("llms.txt is served and names the real business", async ({ request }) => {

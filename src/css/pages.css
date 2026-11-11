@@ -445,6 +445,21 @@
   text-decoration: line-through;
 }
 
+/* Milestone 205, Task 1 Part 5 */
+.product-details__delivery-line {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-sm);
+}
+
+/* Milestone 205, Task 2 */
+.product-details__trust-line {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin: var(--space-sm) 0 0;
+}
+
 .product-details__stock {
   font-weight: 700;
   color: var(--color-success);

@@ -3,31 +3,45 @@
 // handled by admin staff rather than shown live to customers (the
 // delivery fee logic itself lives in src/config/delivery.js on the
 // frontend and backend/src/config/delivery.ts on the backend — both
-// use the same three-method rule: Courier Guy Locker to Locker R100,
-// Door to Door R120, both free at a R600 qualifying subtotal;
-// Customer Collection always free — Version 7, Milestone 168C,
-// superseding the old R80/registered-customer-free-from-R650 rule).
-// Version 7, Milestone 114 names The Courier Guy explicitly, since
-// Seasonedz Group now has a real account with them — still no
-// customer-facing quote, booking, or live tracking.
+// read the real, admin-editable DeliverySettings row, falling back to
+// Courier Guy Locker to Locker R60, Door to Door R90, both free at a
+// R350 qualifying subtotal for every customer; Customer Collection
+// always free — Milestone 205, "Website Fixes" developer brief Task 2,
+// superseding the Milestone 168C/180 R100/R120, R600-guest/R500-
+// registered rule).
 //
-// Shipping Policy consistency fix (small SEO/copy improvement before
-// Milestone 184): Milestone 180, Part A reintroduced a lower R500
-// free-delivery threshold for authenticated/registered customers (see
-// REGISTERED_FREE_DELIVERY_THRESHOLD in both config files above), but
-// this page's own wording was never updated at the time and kept
-// stating a single universal R600 threshold for every customer — this
-// section now states both thresholds correctly. The Merchant Listing
-// structured data (index.html's Organization block) deliberately keeps
-// only the R600 guest figure — that's the real, universally-available
-// rate a schema.org consumer (with no concept of "logged in") can
-// state without misrepresenting anything; this page, which a real
-// signed-in customer actually reads, is the right place for the full
-// R500-vs-R600 picture.
+// Milestone 205, Task 2: replaced the old "small team, arranged
+// manually" / "not live, real-time" framing (which read as risky to a
+// first-time buyer) with the owner-approved reassurance copy below.
+// Courier fulfilment is still genuinely manual behind the scenes (see
+// config/delivery.ts's own comment) — this doesn't claim a live
+// automated tracking system exists, only that dispatch is prompt and a
+// tracking number reaches the customer once it exists.
 
 import { renderContactSupportNote } from "../components/contactSupportNote.js";
+import { getPublicDeliverySettings } from "../js/api/deliveryApi.js";
+import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD } from "../config/delivery.js";
 
-export function renderShippingPolicy() {
+// Milestone 205: best-effort, same "never block the page" discipline
+// as every other public-settings fetch on this site — a slow/failed
+// request just means this policy page falls back to
+// config/delivery.js's own constants, never a broken page.
+async function getDeliveryFeesSafely() {
+  try {
+    const response = await getPublicDeliverySettings();
+    const settings = response?.data;
+    if (settings) {
+      return { lockerFee: settings.courierLockerFee, doorFee: settings.courierDoorFee, threshold: settings.freeDeliveryThreshold };
+    }
+  } catch {
+    // Falls through to the fallback below.
+  }
+  return { lockerFee: COURIER_LOCKER_FEE, doorFee: COURIER_DOOR_FEE, threshold: FREE_DELIVERY_THRESHOLD };
+}
+
+export async function renderShippingPolicy() {
+  const { lockerFee, doorFee, threshold } = await getDeliveryFeesSafely();
+
   return `
     <section class="stub-page container">
       <h1 class="stub-page__title">Shipping Policy</h1>
@@ -36,13 +50,18 @@ export function renderShippingPolicy() {
       </p>
 
       <div class="info-page__body policy-page">
-        <h2>How Delivery Currently Works</h2>
+        <h2>How Delivery Works</h2>
         <p>
-          Delivery is available across South Africa. Seasonedz Group is
-          a small team, so delivery is currently arranged manually
-          rather than through a live, automated courier system. We use
-          The Courier Guy for courier deliveries where applicable.
-          Every order is packed, booked and tracked by hand.
+          Delivery is available across South Africa. Orders are
+          dispatched within 1 to 2 working days via The Courier Guy.
+          You'll receive your tracking number on WhatsApp and email once
+          your order ships. Delivery usually takes 2 to 4 working
+          days in main centres, and can take longer to outlying areas.
+        </p>
+        <p>
+          Once your order is placed, you can also look it up on our
+          <a href="/track-order">Track Order</a> page using your order
+          number to see its current processing status.
         </p>
 
         <h2>Delivery Options and Fees</h2>
@@ -50,56 +69,21 @@ export function renderShippingPolicy() {
           Choose your preferred option at checkout:
         </p>
         <ul>
-          <li><strong>Courier Guy Locker to Locker:</strong> R100 below your applicable free-delivery threshold.</li>
-          <li><strong>Courier Guy Door to Door:</strong> R120 below your applicable free-delivery threshold.</li>
+          <li><strong>Courier Guy Locker to Locker:</strong> R${lockerFee.toFixed(2)} below the free-delivery threshold.</li>
+          <li><strong>Courier Guy Door to Door:</strong> R${doorFee.toFixed(2)} below the free-delivery threshold.</li>
           <li><strong>Customer Collection:</strong> always free, available in Pretoria or Thohoyandou by arrangement.</li>
         </ul>
 
-        <h2>Free-Delivery Thresholds</h2>
+        <h2>Free Delivery</h2>
         <p>
-          Registered customers receive free Locker or Door delivery when
-          eligible physical products total R500 or more. Guest customers
-          receive free Locker or Door delivery when eligible physical
-          products total R600 or more. Signing in before you check out
-          can lower the amount you need to spend to qualify for free
-          delivery.
-        </p>
-        <p>
-          Only eligible physical products count toward these thresholds.
-          Gift wrapping does not count toward the free-delivery
-          threshold. Digital products do not count toward the
-          free-delivery threshold, since they are not physically
+          Every customer, guest or signed in, gets free Locker or Door
+          delivery once eligible physical products total R${threshold.toFixed(2)}
+          or more. Only eligible physical products count toward this
+          threshold. Gift wrapping does not count toward it, and digital
+          products don't count either, since they are not physically
           delivered. Your selected delivery method and fee, based on
-          your actual cart and sign-in status, are shown at checkout
-          before you place your order.
-        </p>
-
-        <h2>Delivery Times</h2>
-        <p>
-          We aim to process and prepare orders promptly, but delivery times
-          will vary depending on your location. Please treat any delivery
-          timing as a general guide rather than a guaranteed date.
-        </p>
-
-        <h2>Manual Courier Arrangement</h2>
-        <p>
-          Your order is prepared for delivery once payment is confirmed.
-          For PayFast, that's once payment is verified; for bank transfer
-          or cash/card on delivery, once Seasonedz Group has confirmed
-          your order. We then book delivery with The Courier Guy where
-          applicable; this is currently handled manually by Seasonedz
-          Group rather than automatically.
-        </p>
-
-        <h2>Tracking Updates</h2>
-        <p>
-          Once your order is placed, you can look it up on our
-          <a href="/track-order">Track Order</a> page using your order
-          number to see its current processing status. Courier tracking
-          details (once your order is dispatched, such as a waybill or
-          tracking number) will be shared with you manually by Seasonedz
-          Group directly. This is not live, real-time courier tracking.
-          Seasonedz Group updates it by hand.
+          your actual cart, are shown at checkout before you place your
+          order.
         </p>
 
         <h2>Delivery Support</h2>

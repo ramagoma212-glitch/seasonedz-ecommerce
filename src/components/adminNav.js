@@ -38,6 +38,9 @@ const NAV_LINKS = [
   { key: "referrals", href: "/admin/referrals", label: "Referrals" },
   // Milestone 197: admin-managed coupon-code discount system.
   { key: "coupons", href: "/admin/coupons", label: "Coupons" },
+  // Milestone 205: delivery fees and the free-delivery threshold —
+  // previously hardcoded config/*.ts constants, now admin-editable.
+  { key: "delivery", href: "/admin/delivery-settings", label: "Delivery" },
   // Milestone 198: B2B outreach contact/campaign management —
   // Contacts/Campaigns/Suppression List/Sending History live under this
   // one flat link, with their own local sub-navigation
