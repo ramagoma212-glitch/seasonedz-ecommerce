@@ -148,10 +148,14 @@
       accurate choice, not a fabricated number.
 
       hasShippingService models the two real, nationally-available
-      Courier Guy rates from src/config/delivery.js (mirrored in
-      src/pages/shippingPolicy.js's own customer-facing text): R100
-      Locker-to-Locker and R120 Door-to-Door, both free at a R600+
-      qualifying subtotal, South Africa (ZA) only. Two deliberate
+      Courier Guy rates from src/config/delivery.js — now admin-editable
+      (see backend/src/services/deliverySettings.service.ts); the
+      figures below are its current, owner-approved defaults and must
+      be kept in sync by hand if those are ever changed (this file
+      can't fetch live): R60 Locker-to-Locker and R90 Door-to-Door,
+      both free at a R350+ qualifying subtotal, applied identically to
+      every customer (the former registered-vs-guest split was removed
+      — Milestone 205). South Africa (ZA) only. Two deliberate
       omissions, not oversights: (1) Customer Collection is left out —
       it's free in-person pickup "by arrangement" in Pretoria/
       Thohoyandou specifically, not a nationally-shippable rate, and
@@ -161,14 +165,7 @@
       the site has never quantified one anywhere (shippingPolicy.js
       explicitly calls delivery timing "a general guide rather than a
       guaranteed date"), so there is nothing real to report and
-      schema.org has no field for "no estimate given". This markup also
-      can't express Milestone 180's registered-customer R500 threshold
-      (versus this R600 guest one) — schema.org's ShippingConditions has
-      no "customer account status" dimension — so it deliberately states
-      only the real, universally-applicable guest rate rather than
-      inventing a blended one; the lower registered threshold remains a
-      real, undiscovered-by-crawlers bonus rather than a misrepresented
-      global rate.
+      schema.org has no field for "no estimate given".
 
       Milestone 200: added `address` and `areaServed` — the exact same
       registered-office address already publicly displayed on every
@@ -237,19 +234,19 @@
             {
               "@type": "ShippingConditions",
               "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
-              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 599.99 },
-              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 100 }
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 349.99 },
+              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 60 }
             },
             {
               "@type": "ShippingConditions",
               "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
-              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 599.99 },
-              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 120 }
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 0, "maxValue": 349.99 },
+              "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 90 }
             },
             {
               "@type": "ShippingConditions",
               "shippingDestination": { "@type": "DefinedRegion", "addressCountry": "ZA" },
-              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 600 },
+              "orderValue": { "@type": "MonetaryAmount", "currency": "ZAR", "minValue": 350 },
               "shippingRate": { "@type": "MonetaryAmount", "currency": "ZAR", "value": 0 }
             }
           ]

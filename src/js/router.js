@@ -299,7 +299,13 @@ const routeDefs = [
     pattern: "/shipping-policy",
     render: renderShippingPolicy,
     title: "Shipping Policy",
-    description: "Delivery available nationwide through The Courier Guy. Locker to Locker R100, Door to Door R120, both free from R600, plus free Customer Collection in Pretoria or Thohoyandou.",
+    // Milestone 205 follow-up: this static snapshot must be kept in
+    // sync with config/delivery.js's own fallback constants by hand —
+    // the page's own body text already fetches the real, live values
+    // (see shippingPolicy.js), but a <head> meta description can't be
+    // async, so this one static copy is unavoidable. The original
+    // Milestone 205 pass updated the live body text but missed this.
+    description: "Delivery available nationwide through The Courier Guy. Locker to Locker R60, Door to Door R90, both free from R350, plus free Customer Collection in Pretoria or Thohoyandou.",
   },
   {
     // Owner content update (24 August 2026): title/description brought

@@ -546,7 +546,14 @@ test.describe("Shipping Policy page: universal free-delivery threshold (Mileston
   // Regression guard for the explicit "keep the Merchant structured data
   // unchanged" instruction — this fix only ever touches customer-facing
   // copy on this one page, never index.html's Organization block.
-  test("Merchant Listing structured data (Organization hasShippingService/hasMerchantReturnPolicy) is unaffected by the Shipping Policy copy fix", async ({ page }) => {
+  // Milestone 205 follow-up: this test used to assert the OLD R100/R120/
+  // R600 figures as "unaffected" by the Milestone 205 fee change — that
+  // was itself the bug this follow-up fixes. index.html's own
+  // Organization structured data is a static snapshot (can't fetch
+  // live), so it must be kept in sync by hand with the real fees —
+  // this test now guards the CURRENT real numbers instead of
+  // accidentally locking in stale ones.
+  test("Merchant Listing structured data (Organization hasShippingService/hasMerchantReturnPolicy) states the current real fees and threshold", async ({ page }) => {
     await page.goto("/shipping-policy");
     const scripts = await page.locator('script[type="application/ld+json"]').allInnerTexts();
     const organization = scripts.map((raw) => JSON.parse(raw)).find((entry) => entry["@type"] === "Organization");
@@ -557,9 +564,9 @@ test.describe("Shipping Policy page: universal free-delivery threshold (Mileston
     });
 
     const rates = organization.hasShippingService.shippingConditions.map((c) => c.shippingRate.value).sort((a, b) => a - b);
-    expect(rates).toEqual([0, 100, 120]);
+    expect(rates).toEqual([0, 60, 90]);
     const freeCondition = organization.hasShippingService.shippingConditions.find((c) => c.shippingRate.value === 0);
-    expect(freeCondition.orderValue.minValue).toBe(600);
+    expect(freeCondition.orderValue.minValue).toBe(350);
     for (const condition of organization.hasShippingService.shippingConditions) {
       expect(condition.shippingDestination.addressCountry).toBe("ZA");
       expect(condition.shippingRate.currency).toBe("ZAR");

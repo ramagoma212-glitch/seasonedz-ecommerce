@@ -28,19 +28,19 @@ export const faqs = [
     category: "Delivery",
     question: "How much does delivery cost, and when is it free?",
     answer:
-      "Courier Guy Locker to Locker is R100 and Courier Guy Door to Door is R120. Both are free on orders of R600 or more in qualifying products (R500 or more for registered customers). Customer Collection in Pretoria or Thohoyandou is always free, by arrangement. See our Shipping Policy for full details.",
+      "Courier Guy Locker to Locker and Courier Guy Door to Door both carry a delivery fee, free once your qualifying products reach a set amount — the same rule for every customer, guest or signed in. Customer Collection in Pretoria or Thohoyandou is always free, by arrangement. See our Shipping Policy page for the current fees and free-delivery threshold.",
   },
   {
     category: "Delivery",
     question: "How is my order delivered?",
     answer:
-      "Delivery is currently arranged manually by Seasonedz Group. Once your order and payment are confirmed, we pack your order, book delivery with The Courier Guy where applicable and arrange delivery ourselves.",
+      "Orders are dispatched within 1 to 2 working days via The Courier Guy. You'll receive your tracking number on WhatsApp and email once your order ships, and delivery usually takes 2 to 4 working days in main centres.",
   },
   {
     category: "Delivery",
     question: "Can I track my delivery?",
     answer:
-      "You can look up your order on our Track Order page using your order number. This is not live, real-time courier tracking. Once your order is dispatched via The Courier Guy where applicable, Seasonedz Group will share tracking details, such as a waybill or tracking number, with you manually.",
+      "Yes — once your order ships, you'll receive your tracking number on WhatsApp and email. You can also look up your order anytime on our Track Order page using your order number.",
   },
   {
     category: "Delivery",
@@ -115,6 +115,6 @@ export const faqs = [
     category: "Order Tracking",
     question: "How can I track my order?",
     answer:
-      "Use our Track Order page with the order number from your confirmation page. Note that this is a manually-updated status, not live courier tracking.",
+      "You'll receive your tracking number on WhatsApp and email once your order ships. You can also use our Track Order page with the order number from your confirmation page to see its current status.",
   },
 ];

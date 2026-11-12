@@ -370,12 +370,13 @@ test.describe("Google branded search appearance (Milestone 171G)", () => {
       expect(condition).not.toHaveProperty("transitTime");
     }
 
-    // Real rates from src/config/delivery.js: R100 Locker, R120 Door,
-    // both free at the real R600 guest threshold — never invented.
+    // Real rates from src/config/delivery.js (Milestone 205): R60
+    // Locker, R90 Door, both free at the real R350 universal
+    // threshold, identical for every customer — never invented.
     const rates = conditions.map((c) => c.shippingRate.value).sort((a, b) => a - b);
-    expect(rates).toEqual([0, 100, 120]);
+    expect(rates).toEqual([0, 60, 90]);
     const freeCondition = conditions.find((c) => c.shippingRate.value === 0);
-    expect(freeCondition.orderValue.minValue).toBe(600);
+    expect(freeCondition.orderValue.minValue).toBe(350);
   });
 
   test("no stale seasonedzgroup.com or github.io references anywhere in the homepage's rendered HTML", async ({ page }) => {

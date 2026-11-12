@@ -147,11 +147,16 @@ function formatDeliveryNote(order: OrderEmailData): string {
 // Version 7, Milestone 168C: replaces the old one-size-fits-all
 // "Delivery is arranged manually..." courier line — Customer
 // Collection orders must never see courier/tracking wording (Part 32).
+// Milestone 205 follow-up: the "arranged manually by our small team"
+// framing reads as risky to a first-time buyer, same concern the
+// owner's own developer brief raised about the shipping policy page —
+// this email line had the identical wording and was missed in that
+// original pass. Matches shippingPolicy.js's own current copy.
 function deliveryFulfilmentNote(order: OrderEmailData): string {
   if (order.deliveryMethod === "COLLECTION") {
     return "Collection is by arrangement. We'll be in touch to confirm collection details once your order is confirmed.";
   }
-  return "Delivery is arranged manually by our small team once your order is confirmed. We'll be in touch with tracking details once it's packed and booked.";
+  return "Orders are dispatched within 1 to 2 working days via The Courier Guy. You'll receive your tracking number on WhatsApp and email once your order ships.";
 }
 
 // Version 7, Milestone 117: the BANK_TRANSFER line no longer implies
