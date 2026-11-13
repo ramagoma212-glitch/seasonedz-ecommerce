@@ -12,6 +12,9 @@ export function renderBlog() {
         Ideas and tips on educational colouring, mindfulness, Bible
         learning and creativity in the classroom.
       </p>
+      <p class="stub-page__text">
+        Looking for presents? <a href="/christmas-gift-guide">Read our Christmas colouring gift guide</a>.
+      </p>
 
       <div class="grid grid--3 blog-grid">
         ${blogPosts.map((post, index) => renderBlogCard(post, { eager: index < 3 })).join("")}

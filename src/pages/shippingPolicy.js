@@ -26,7 +26,7 @@ import { COURIER_LOCKER_FEE, COURIER_DOOR_FEE, FREE_DELIVERY_THRESHOLD } from ".
 // as every other public-settings fetch on this site — a slow/failed
 // request just means this policy page falls back to
 // config/delivery.js's own constants, never a broken page.
-async function getDeliveryFeesSafely() {
+export async function getDeliveryFeesSafely() {
   try {
     const response = await getPublicDeliverySettings();
     const settings = response?.data;

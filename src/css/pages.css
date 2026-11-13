@@ -1961,3 +1961,47 @@
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
+
+/* Christmas gift guide */
+.gift-guide h2 {
+  margin-top: var(--space-2xl);
+  margin-bottom: var(--space-md);
+}
+
+.gift-guide__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.gift-guide__note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-light);
+}
+
+.gift-guide__table-wrap {
+  overflow-x: auto;
+  margin-bottom: var(--space-md);
+}
+
+.gift-guide__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.gift-guide__table th,
+.gift-guide__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-xs) var(--space-sm);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.gift-guide__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+}

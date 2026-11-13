@@ -302,6 +302,7 @@ function renderGiftingSection(products) {
         <h2 id="gifting-section-heading">Thoughtful Gifts Made With Purpose</h2>
         <p>Choose a meaningful colouring book for someone special. Optional gift wrapping can be added before completing your purchase.</p>
         <p class="gifting-section__disclosure">Gift wrapping is optional and charged separately.</p>
+        <p><a href="/christmas-gift-guide">See our Christmas gift guide, sorted by price</a></p>
       </div>
       <div class="product-grid gifting-grid" id="gifting-grid">
         ${cards}

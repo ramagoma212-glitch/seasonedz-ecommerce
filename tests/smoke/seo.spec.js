@@ -36,6 +36,7 @@ const CORE_STATIC_ROUTES = [
   "/wholesale",
   "/distributor",
   "/blog",
+  "/christmas-gift-guide",
 ];
 
 test.describe("SEO smoke checks", () => {

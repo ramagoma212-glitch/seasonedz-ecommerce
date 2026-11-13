@@ -165,6 +165,7 @@ export async function renderShop({ query, showLongFormContent = false } = {}) {
       <p class="stub-page__text">
         ${categoryIntro(activeCategory)}
       </p>
+      ${activeCategory ? "" : `<p class="stub-page__text">Shopping for Christmas? <a href="/christmas-gift-guide">See our gift guide, sorted by price</a>.</p>`}
 
       <div class="shop-layout">
         ${renderFilterToggle()}

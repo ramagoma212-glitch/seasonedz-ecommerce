@@ -83,6 +83,7 @@ const PUBLIC_STATIC_ROUTES = [
   "/wholesale",
   "/distributor",
   "/blog",
+  "/christmas-gift-guide",
 ];
 
 const SITE_URL = "https://www.seasonedzgroup.co.za";

@@ -368,6 +368,13 @@ const routeDefs = [
     title: "Become a Distributor",
     description: "Become a Seasonedz Group distributor and bring our colouring books and creative supplies to your community.",
   },
+  {
+    pattern: "/christmas-gift-guide",
+    render: lazyPage(() => import("../pages/christmasGiftGuide.js"), (m) => m.renderChristmasGiftGuide),
+    title: "Christmas Colouring Gifts from R80",
+    description: "Colouring gifts for kids, families and adults, sorted by price, R80 to R250. Bible, ABC and mindfulness books, markers and bundles. Delivered across SA.",
+    skeleton: "product-grid",
+  },
   { pattern: "/blog", render: renderBlog, title: "Blog" },
   { pattern: "/blog/:slug", render: renderBlogPost, title: "Blog" },
   // Version 7, Milestones 58-59: admin auth + read-only dashboard.
