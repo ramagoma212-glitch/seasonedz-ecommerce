@@ -1773,7 +1773,9 @@ async function handleCheckoutSubmit(form) {
     // Checking the response (not `data.paymentMethod`) means a R0
     // LUTENDO01-style order goes straight to its confirmation, never
     // attempting (and failing) a PayFast initiation call first.
-    if (data.paymentMethod === "payfast" && response.data.paymentMethod === "PAYFAST") {
+    // POST /api/orders responds with { orderNumber, order }, so the
+    // server-decided payment method lives on response.data.order.
+    if (data.paymentMethod === "payfast" && response.data.order?.paymentMethod === "PAYFAST") {
       // Version 7, Milestone 172B.4: deliberately NOT cleared here — a
       // PayFast order is only PENDING at this point, not yet a
       // genuinely successful/confirmed order (payment could still fail
@@ -1781,7 +1783,7 @@ async function handleCheckoutSubmit(form) {
       // instead, so pages/paymentSuccess.js can clear it once (and
       // only once) this exact order is confirmed PAID.
       markReferralAttributionPendingOrder(orderNumber);
-      await redirectToPayfast(orderNumber);
+      await redirectToPayfast(orderNumber, form);
       return;
     }
 
@@ -1810,15 +1812,32 @@ async function handleCheckoutSubmit(form) {
 // The order already exists (created above) by the time this runs —
 // only the backend ever builds PayFast's fields/signature
 // (POST /api/payments/payfast/initiate); this just submits exactly
-// what it returns (see js/payfastRetry.js). If initiation itself fails
-// (e.g. the backend's own PAYFAST_ENABLED was turned off after this
-// page loaded), the order still exists, so the customer is sent to its
-// real order confirmation rather than left on a dead end.
-async function redirectToPayfast(orderNumber) {
+// what it returns (see js/payfastRetry.js). If initiation fails, the
+// order already exists and the cart is cleared, so the form is replaced
+// with a visible error whose retry button re-initiates this same order
+// rather than letting a resubmit create a duplicate.
+async function redirectToPayfast(orderNumber, form) {
   try {
     await retryPayfastPayment(orderNumber, "checkout");
-  } catch {
-    navigateTo(`/order-confirmation?order=${encodeURIComponent(orderNumber)}`);
+  } catch (error) {
+    const message =
+      error instanceof ApiError
+        ? error.message
+        : "We could not connect to PayFast right now.";
+    const safeOrder = escapeHtml(orderNumber);
+    const panel = document.createElement("div");
+    panel.className = "checkout-payfast-error";
+    panel.setAttribute("data-checkout-payfast-error", "");
+    panel.innerHTML = `
+      <p class="form-banner form-banner--error" role="alert">Your order ${safeOrder} was created, but we could not open PayFast. ${escapeHtml(message)} You have not been charged.</p>
+      <p>
+        <button type="button" class="btn btn--primary" data-action="retry-payfast" data-payfast-context="checkout" data-order-number="${safeOrder}">Try PayFast Again</button>
+        <span class="form-banner form-banner--error" data-retry-error hidden></span>
+      </p>
+      <p><a href="/order-confirmation?order=${encodeURIComponent(orderNumber)}">View order ${safeOrder}</a></p>
+    `;
+    form.replaceWith(panel);
+    panel.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
@@ -1845,7 +1864,9 @@ async function handleRetryPayfast(buttonEl) {
   buttonEl.textContent = "Redirecting to PayFast…";
 
   try {
-    await retryPayfastPayment(orderNumber, "retry");
+    // "checkout" only for the first-attempt failure panel above, whose
+    // order is still PENDING with no PayFast attempt ever opened.
+    await retryPayfastPayment(orderNumber, buttonEl.dataset.payfastContext === "checkout" ? "checkout" : "retry");
     // On success the browser navigates away to PayFast — nothing left
     // to update here.
   } catch (error) {
